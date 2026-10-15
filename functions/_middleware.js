@@ -19,7 +19,8 @@ form{width:100%;max-width:340px}h1{font-size:22px}input,button{width:100%;font-s
 button{background:#2a78d6;color:#fff;border:0;font-weight:700}p{color:#d03b3b;font-size:14px}</style></head>
 <body><form method="post"><h1>🚦 밸류 신호등</h1><input type="password" name="pw" placeholder="비밀번호" autocomplete="current-password" autofocus required>
 <button type="submit">들어가기</button>${msg ? `<p>${msg}</p>` : ""}</form></body></html>`,
-    { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
+    // 401 로 보내면 일부 휴대폰 브라우저가 자체 오류 화면을 띄워서 200 으로 보낸다
+    { status: 200, headers:{ "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
   );
 }
 
