@@ -1,0 +1,27 @@
+# 보유종목 목록. 종목을 추가하려면 아래 형식으로 한 덩어리를 복사해서 고치면 돼요.
+#
+#  - name: 종목 이름
+#    market: KR            # KR(한국) 또는 US(미국)
+#    code: "000270"        # 한국은 6자리 종목코드, 미국은 티커(예: MSFT)
+#    methods: [PER]        # PER / PBR / DIV(배당) 중 골라서
+#    avg_price:            # 평단가 (비워두면 표시 안 함)
+#    quantity:             # 수량 (비워두면 표시 안 함)
+#    splits: []            # 액면분할 기록 (예: [{date: "2018-05-04", ratio: 50}])
+#    note: ""              # 화면에 같이 보여줄 메모
+
+holdings:
+  - name: 기아
+    market: KR
+    code: "000270"
+    methods: [PER, PBR, DIV]
+    avg_price:
+    quantity:
+    splits: []
+
+  - name: 현대로템
+    market: KR
+    code: "064350"
+    methods: [PER]
+    avg_price:
+    quantity:
+    splits: []

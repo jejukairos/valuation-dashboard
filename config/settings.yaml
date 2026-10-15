@@ -1,0 +1,40 @@
+# 판정 기준값. 숫자만 바꾸면 다음 갱신부터 적용돼요.
+
+# 1. 금리 vs 주식 신호등 (비율 = 주식 선행 PER ÷ 채권 환산 PER)
+bond_signal:
+  green_max: 0.50   # 이 값 이하 → 🟢 매력
+  yellow_max: 0.75  # 이 값 이하 → 🟡 중립, 넘으면 🔴 위험
+
+# 2. 종목 판정
+stock_signal:
+  cheap_gap: -0.20      # 현재가가 적정가보다 20% 이상 낮으면 🟢
+  expensive_gap: 0.10   # 현재가가 적정가보다 10% 이상 높으면 🔴
+  band_low: 20          # 10년 밴드 하위 20% 이하 → 🟢
+  band_high: 80         # 10년 밴드 상위 20% 이상 → 🔴
+
+# 카드의 "적정가" 계산법
+fair_value:
+  eps_year: 27E         # 어느 해 추정치를 쓸지 (26E / 27E / 28E)
+  multiple: avg10       # avg5 / avg10 / low10 / high10 (5년·10년 평균, 10년 하단·상단)
+
+# 밴드 하단·상단의 정의 (백분위). 10 → 하위 10%, 90 → 상위 10%
+band:
+  low_pct: 10
+  high_pct: 90
+
+# PBR 종목: 요구수익률 = 국고채 3년 + 이 값(%p)
+pbr:
+  risk_premium: 5.0
+
+# 리레이팅 경고: 현재 PER 이 10년 밴드 이 위치(%) 이상인데
+# 28E EPS 가 최근 실적 대비 이만큼(%) 이상 늘지 않으면 ⚠
+rerating:
+  band_pos: 85
+  eps_growth: 20
+
+# 한국 시장 선행 PER: 코스피 시가총액 상위 몇 개 종목으로 계산할지
+kospi_forward:
+  top_n: 50
+
+# 크롤링 요청 사이 대기(초)
+request_delay: 1.0

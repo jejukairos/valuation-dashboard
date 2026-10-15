@@ -1,0 +1,223 @@
+"""매일 실행: 수집 → 계산 → site/data/*.json 저장.
+실패한 항목은 직전 값을 그대로 쓰고 '실패 목록'에 남긴다."""
+import sys
+import traceback
+
+import pandas as pd
+
+import compute as C
+import kr_stock
+import market
+import rates
+from common import DATA, REPORT, SETTINGS, load_yaml, now_kst, read_json, rnd, write_json
+
+
+def keep_prev(new, prev, label):
+    """새 값이 없으면 직전 값을 쓰고 '이전 데이터' 표시."""
+    if new:
+        return new
+    if prev:
+        p = dict(prev)
+        p["stale"] = True
+        print(f"  ↺ {label}: 직전 데이터 사용")
+        return p
+    return None
+
+
+def asof_series(hist):
+    s = pd.Series({pd.Timestamp(d): v for d, v in hist})
+    return s.sort_index()
+
+
+def market_signal(name, per, per_label, per_source, rate, rate_label):
+    if per is None or rate is None:
+        return {"name": name, "signal": "na", "reason": "PER 또는 금리 데이터 없음"}
+    bond_per = 100 / rate
+    ratio = per / bond_per
+    return {"name": name, "per": rnd(per), "per_label": per_label, "per_source": per_source,
+            "rate": rnd(rate, 3), "rate_label": rate_label, "bond_per": rnd(bond_per),
+            "ratio": rnd(ratio, 3), "signal": C.bond_signal(ratio),
+            "earnings_yield": rnd(100 / per), "premium": rnd(100 / per - rate)}
+
+
+def premium_hist(per_hist, rate_hist):
+    if not per_hist or not rate_hist:
+        return []
+    r = asof_series(rate_hist)
+    out = []
+    for d, pe in per_hist:
+        ts = pd.Timestamp(d)
+        if ts < r.index[0] or not pe:
+            continue
+        rv = r[:ts].iloc[-1]
+        out.append([d, round(100 / pe - rv, 2)])
+    return out
+
+
+def kr_stock_detail(h, rate_kr3y):
+    code = h["code"]
+    name = h["name"]
+    methods = [m.upper() for m in h.get("methods", ["PER"])]
+    now = kr_stock.naver_now(code)
+    px = kr_stock.price_history(code)
+    price = now.get("price") or float(px.iloc[-1])
+    pw = C.weekly_close(px)
+    hist, wise = kr_stock.merged_history(code, h.get("splits") or [])
+    bands = {}
+    for key, label in (("eps", "PER"), ("bps", "PBR"), ("dps", "DIV")):
+        if label in methods or (label == "PBR" and "PER" in methods):
+            b = C.build_band(pw, hist, key, invert=(key == "dps"))
+            if b:
+                bands[label] = b
+    det = {"name": name, "code": code, "market": "KR", "methods": methods, "price": price,
+           "price_date": px.index[-1].strftime("%Y-%m-%d"), "market_cap": now.get("market_cap"),
+           "currency": "KRW", "naver": now, "note": h.get("note", ""),
+           "avg_price": h.get("avg_price"), "quantity": h.get("quantity"),
+           "history": [{"year": y, **{k: (rnd(v, 2) if isinstance(v, float) else v) for k, v in r.items()}}
+                       for y, r in sorted(hist.items())],
+           "bands": bands, "sources": {"price": "네이버 증권", "consensus": "와이즈리포트(네이버 종목분석)",
+                                       "history": "OpenDART 사업보고서 + 와이즈리포트"}}
+    fairs = []
+    ey = SETTINGS["fair_value"]["eps_year"]
+    mkey = SETTINGS["fair_value"]["multiple"]
+    yr = 2000 + int(ey[:2])
+    pick = {"avg5": ("5y", "avg"), "avg10": ("10y", "avg"), "low10": ("10y", "low"), "high10": ("10y", "high")}[mkey]
+
+    def mult(label):
+        b = bands.get(label)
+        p = (b or {}).get("periods", {}).get(pick[0]) or (b or {}).get("periods", {}).get("all")
+        return (p or {}).get(pick[1])
+
+    if "PER" in methods and "PER" in bands:
+        det["per"] = C.per_section(price, hist, bands["PER"])
+        e = hist.get(yr, {}).get("eps")
+        if e and mult("PER"):
+            fairs.append(("PER", e * mult("PER")))
+    if "PBR" in methods and "PBR" in bands:
+        det["pbr"] = C.pbr_section(price, hist, bands["PBR"], rate_kr3y)
+        b = hist.get(yr, {}).get("bps")
+        if b and mult("PBR"):
+            fairs.append(("PBR", b * mult("PBR")))
+    if "DIV" in methods and "DIV" in bands:
+        det["div"] = C.div_section(price, hist, bands["DIV"], rate_kr3y)
+        if methods == ["DIV"]:
+            d = hist.get(now_kst().year, {}).get("dps")
+            y10 = (bands["DIV"]["periods"].get("10y") or {}).get("avg")
+            if d and y10:
+                fairs.append(("배당", d / (y10 / 100)))
+    fair = sum(v for _, v in fairs) / len(fairs) if fairs else None
+    poss = [(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("pos")
+            for k in ("PER", "PBR") if k in bands and k in methods]
+    poss = [p for p in poss if p is not None]
+    if not poss and "DIV" in bands:
+        poss = [(bands["DIV"]["periods"].get("10y") or {}).get("pos_cheap")]
+    band_pos = sum(poss) / len(poss) if poss and poss[0] is not None else None
+    verdict, why, gap = C.judge(price, fair, band_pos)
+    f_eps = C.fwd12(hist, "eps")
+    fwd_per = price / f_eps if f_eps and f_eps > 0 else None
+    bond_per = 100 / rate_kr3y if rate_kr3y else None
+    ratio = fwd_per / bond_per if (fwd_per and bond_per) else None
+    # 출처 교차확인: 네이버 추정 EPS vs 와이즈리포트 올해 추정 EPS
+    checks = []
+    w_eps = hist.get(now_kst().year, {}).get("eps")
+    if now.get("fwd_eps") and w_eps:
+        diff = now["fwd_eps"] / w_eps - 1
+        checks.append({"item": f"{C.ylabel(now_kst().year)} EPS", "a": now["fwd_eps"], "a_src": "네이버 증권",
+                       "b": w_eps, "b_src": "와이즈리포트", "warn": abs(diff) >= 0.10})
+    det["card"] = {
+        "name": name, "code": code, "market": "KR", "price": price, "market_cap": now.get("market_cap"),
+        "currency": "KRW", "verdict": verdict, "why": why, "fair": rnd(fair, 0), "gap": rnd(gap, 4),
+        "fair_basis": " + ".join(f"{n}" for n, _ in fairs) + (f" ({ey} × {mkey})" if fairs else ""),
+        "band_pos": rnd(band_pos, 1), "fwd_per": rnd(fwd_per), "bond_per": rnd(bond_per),
+        "bond_ratio": rnd(ratio, 3), "bond_signal": C.bond_signal(ratio), "bond_label": "국고채 3년",
+        "div_signal": det.get("div", {}).get("signal") if "DIV" in methods else None,
+        "div_yield": det.get("div", {}).get("cur_yield") if "DIV" in methods else None,
+        "methods": methods, "avg_price": h.get("avg_price"), "quantity": h.get("quantity"),
+        "short_history": any(b.get("short_history") for b in bands.values()),
+        "band_start": min((b["start"] for b in bands.values()), default=None),
+        "rerating_warning": det.get("per", {}).get("rerating_warning"), "checks": checks,
+    }
+    return det
+
+
+def main():
+    t0 = now_kst()
+    print(f"[{t0:%Y-%m-%d %H:%M} KST] 수집 시작")
+    prev = read_json(DATA / "dashboard.json", {}) or {}
+    prev_rates = prev.get("rates", {})
+    prev_mkt = prev.get("market", {})
+
+    print("■ 금리")
+    r = rates.collect()
+    for k in r:
+        r[k] = keep_prev(r[k], prev_rates.get(k), k)
+    print("■ 시장")
+    m = market.collect()
+    for k in ("sp500_trailing", "sp500_forward", "kospi_forward"):
+        m[k] = keep_prev(m[k], prev_mkt.get(k), k)
+    if m.get("kospi_trailing", {}).get("error") and prev_mkt.get("kospi_trailing", {}).get("per"):
+        m["kospi_trailing"] = dict(prev_mkt["kospi_trailing"], stale=True)
+
+    us10 = (r.get("us10y") or {}).get("latest")
+    kr3 = (r.get("kr3y") or {}).get("latest")
+    spf = m.get("sp500_forward") or {}
+    spt = m.get("sp500_trailing") or {}
+    if spf.get("value"):
+        us_sig = market_signal("미국", spf["value"], "S&P500 선행 12개월 PER", spf.get("source"), us10, "미국채 10년")
+    elif spt.get("hist"):
+        us_sig = market_signal("미국", spt["hist"][-1][1], "S&P500 후행 PER (선행 없음)", spt.get("source"), us10, "미국채 10년")
+    else:
+        us_sig = market_signal("미국", None, "", "", us10, "미국채 10년")
+    kf = m.get("kospi_forward") or {}
+    kt = m.get("kospi_trailing") or {}
+    if kf.get("value"):
+        kr_sig = market_signal("한국", kf["value"], "코스피 선행 12개월 PER", kf.get("source"), kr3, "국고채 3년")
+    elif kt.get("per"):
+        kr_sig = market_signal("한국", kt["per"], "코스피 후행 PER (선행 없음)", kt.get("source"), kr3, "국고채 3년")
+    else:
+        kr_sig = market_signal("한국", None, "", "", kr3, "국고채 3년")
+    us_sig["premium_hist"] = premium_hist(spt.get("hist", [])[-12 * 20:], (r.get("us10y") or {}).get("hist"))
+    us_sig["premium_hist_label"] = "S&P500 후행 PER 기준 (월별)"
+    kr_sig["premium_hist"] = premium_hist(kf.get("hist", []), (r.get("kr3y") or {}).get("hist")) or \
+        premium_hist(kt.get("hist", []), (r.get("kr3y") or {}).get("hist"))
+    kr_sig["premium_hist_label"] = "코스피 선행 PER 기준 (갱신할 때마다 쌓임)"
+
+    print("■ 보유종목")
+    cards = []
+    prev_cards = {c["code"]: c for c in prev.get("stocks", [])}
+    for i, h in enumerate(load_yaml("stocks.yaml")["holdings"]):
+        code = str(h["code"])
+        try:
+            if h.get("market", "KR") == "KR":
+                det = kr_stock_detail(h, kr3)
+            else:
+                raise RuntimeError("미국 종목은 3단계에서 추가 예정")
+            det["card"]["order"] = i
+            write_json(DATA / "stocks" / f"{code}.json", det)
+            cards.append(det["card"])
+            REPORT.success(f"{h['name']} 종목 계산")
+        except Exception as e:  # noqa: BLE001
+            traceback.print_exc()
+            REPORT.fail(f"{h['name']} 종목", f"{type(e).__name__}: {e}")
+            if code in prev_cards:
+                c = dict(prev_cards[code], stale=True, order=i)
+                cards.append(c)
+
+    out = {
+        "updated_at": t0.strftime("%Y-%m-%d %H:%M"),
+        "rates": r, "market": m, "signals": {"us": us_sig, "kr": kr_sig},
+        "stocks": cards,
+        "status": {"failures": REPORT.failures, "blocked": REPORT.blocked, "ok": len(REPORT.ok),
+                   "finished_at": now_kst().strftime("%Y-%m-%d %H:%M")},
+        "settings": {"bond_signal": SETTINGS["bond_signal"], "stock_signal": SETTINGS["stock_signal"],
+                     "fair_value": SETTINGS["fair_value"], "band": SETTINGS["band"]},
+    }
+    write_json(DATA / "dashboard.json", out)
+    print(f"완료: 성공 {len(REPORT.ok)} / 실패 {len(REPORT.failures)}")
+    # 절반 넘게 실패하면 GitHub 이 실패 메일을 보내도록 오류 코드로 끝낸다
+    if len(REPORT.failures) > max(3, len(REPORT.ok)):
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

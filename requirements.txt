@@ -1,0 +1,6 @@
+requests==2.34.2
+pandas==2.3.3
+lxml
+pyyaml
+yfinance==1.7.0
+pykrx==1.2.9

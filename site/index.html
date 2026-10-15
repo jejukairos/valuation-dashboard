@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>밸류 신호등</title>
+<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="밸류 신호등">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <h1>🚦 밸류 신호등</h1>
+  <div class="updated"><div id="updated">불러오는 중…</div><button id="statusChip" class="status-chip ok" hidden></button></div>
+</header>
+<main class="wrap">
+  <div id="failBox"></div>
+
+  <h2>1. 금리 vs 주식 신호등</h2>
+  <p class="sub" id="ruleLine"></p>
+  <div class="grid g2" id="marketSignals"></div>
+
+  <h2>2. 보유종목 신호등</h2>
+  <div class="toolbar">
+    <div class="seg" id="sortSeg">
+      <button data-sort="cheap" class="on">가장 싼 순</button>
+      <button data-sort="mine">내 목록 순</button>
+    </div>
+  </div>
+  <div class="grid g3" id="stockCards"></div>
+
+  <h2>5. S&amp;P500 PER 밴드</h2>
+  <div class="card" id="spBand"></div>
+
+  <footer id="footer"></footer>
+</main>
+
+<section class="sheet" id="sheet" aria-modal="true" role="dialog">
+  <div class="sheet-head"><button class="back" id="backBtn">← 목록</button><div class="t" id="sheetTitle"></div></div>
+  <div class="wrap" id="sheetBody"></div>
+</section>
+
+<script src="app.js"></script>
+<script>
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>

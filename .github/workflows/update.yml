@@ -1,0 +1,43 @@
+name: 데이터 갱신
+
+on:
+  schedule:
+    - cron: "30 22 * * 0-4"   # 평일 07:30 KST (미국장 마감 후) = 전날 22:30 UTC
+    - cron: "30 9 * * 1-5"    # 평일 18:30 KST (한국장 마감·컨센서스 반영 후)
+  workflow_dispatch: {}       # GitHub 화면에서 "Run workflow" 로 바로 실행
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 수집
+        env:
+          ECOS_KEY: ${{ secrets.ECOS_KEY }}
+          DART_KEY: ${{ secrets.DART_KEY }}
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+          PYTHONIOENCODING: utf-8
+        run: python collector/main.py
+      - name: 저장 (실패해도 일부 결과는 저장)
+        if: always()
+        run: |
+          git config user.name "valuation-bot"
+          git config user.email "valuation-bot@users.noreply.github.com"
+          git add site/data cache
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "데이터 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          git push
