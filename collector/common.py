@@ -43,7 +43,7 @@ class Http:
             if wait > 0:
                 time.sleep(wait)
             try:
-                r = self.s.get(url, timeout=timeout, **kw)
+                r = self._get_deadline(url, timeout, **kw)
                 self.last = time.time()
                 if r.status_code == 200:
                     return r
@@ -55,6 +55,20 @@ class Http:
                 err = type(e).__name__
             time.sleep(2 * (i + 1))
         raise RuntimeError(f"{url.split('?')[0]} 접속 실패 ({err})")
+
+    def _get_deadline(self, url, timeout, **kw):
+        """느리게 조금씩 오는 응답도 전체 시간(timeout×2)을 넘기면 끊는다."""
+        start = time.time()
+        r = self.s.get(url, timeout=timeout, stream=True, **kw)
+        chunks = []
+        for c in r.iter_content(65536):
+            chunks.append(c)
+            if time.time() - start > timeout * 2:
+                r.close()
+                raise requests.Timeout("전체 응답 시간 초과")
+        r._content = b"".join(chunks)
+        r._content_consumed = True
+        return r
 
 
 HTTP = Http()

@@ -31,7 +31,7 @@ jobs:
           KRX_ID: ${{ secrets.KRX_ID }}
           KRX_PW: ${{ secrets.KRX_PW }}
           PYTHONIOENCODING: utf-8
-        run: python collector/main.py
+        run: python -u collector/main.py
       - name: 저장 (실패해도 일부 결과는 저장)
         if: always()
         run: |

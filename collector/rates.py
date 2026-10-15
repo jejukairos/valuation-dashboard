@@ -4,7 +4,7 @@ import os
 
 import pandas as pd
 
-from common import HTTP, REPORT, now_kst
+from common import CACHE, HTTP, REPORT, now_kst, read_json, write_json
 
 START = "2006-01-01"
 
@@ -47,13 +47,21 @@ def ecos(code, name):
     key = os.environ.get("ECOS_KEY")
     if not key:
         raise RuntimeError("ECOS_KEY 가 없어요 (GitHub Secrets 확인)")
+    # 지난 값은 cache 에 보관하고, 최근 분만 새로 받는다 (해외 서버에서 ECOS 가 느려서)
+    path = CACHE / f"ecos_{code}.json"
+    old = read_json(path, {})
     end = now_kst().strftime("%Y%m%d")
-    url = f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/100000/817Y002/D/20060101/{end}/{code}"
+    start = (pd.Timestamp(max(old)) - pd.Timedelta(days=20)).strftime("%Y%m%d") if old else "20060101"
+    url = f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/10000/817Y002/D/{start}/{end}/{code}"
     j = HTTP.get(url, timeout=60).json()
     rows = j.get("StatisticSearch", {}).get("row")
     if not rows:
         raise RuntimeError(f"ECOS 응답 이상: {str(j)[:120]}")
-    s = pd.Series([float(x["DATA_VALUE"]) for x in rows], index=pd.to_datetime([x["TIME"] for x in rows]))
+    for x in rows:
+        old[f"{x['TIME'][:4]}-{x['TIME'][4:6]}-{x['TIME'][6:]}"] = float(x["DATA_VALUE"])
+    write_json(path, old)
+    s = pd.Series(old)
+    s.index = pd.to_datetime(s.index)
     return pack(s, f"한국은행 ECOS ({name})")
 
 
