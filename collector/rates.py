@@ -28,7 +28,7 @@ def pack(series, source):
 
 def us10y():
     try:
-        r = HTTP.get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd={START}", timeout=90, tries=2)
+        r = HTTP.get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd={START}", timeout=25, tries=1)
         df = pd.read_csv(io.StringIO(r.text))
         df.columns = ["date", "v"]
         s = pd.Series(pd.to_numeric(df["v"], errors="coerce").values, index=pd.to_datetime(df["date"]))
@@ -53,16 +53,33 @@ def ecos(code, name):
     end = now_kst().strftime("%Y%m%d")
     start = (pd.Timestamp(max(old)) - pd.Timedelta(days=20)).strftime("%Y%m%d") if old else "20060101"
     url = f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/10000/817Y002/D/{start}/{end}/{code}"
-    j = HTTP.get(url, timeout=60).json()
-    rows = j.get("StatisticSearch", {}).get("row")
-    if not rows:
-        raise RuntimeError(f"ECOS 응답 이상: {str(j)[:120]}")
-    for x in rows:
-        old[f"{x['TIME'][:4]}-{x['TIME'][4:6]}-{x['TIME'][6:]}"] = float(x["DATA_VALUE"])
+    source = f"한국은행 ECOS ({name})"
+    try:
+        j = HTTP.get(url, timeout=20, tries=2).json()
+        rows = j.get("StatisticSearch", {}).get("row")
+        if not rows:
+            raise RuntimeError(f"ECOS 응답 이상: {str(j)[:120]}")
+        for x in rows:
+            old[f"{x['TIME'][:4]}-{x['TIME'][4:6]}-{x['TIME'][6:]}"] = float(x["DATA_VALUE"])
+    except Exception as e:  # noqa: BLE001 - 해외 서버에서 ECOS 가 자주 막혀서 네이버로 대체
+        if not old:
+            raise
+        REPORT.block("한국은행 ECOS", f"접속 실패 → 네이버 증권 채권금리로 최근 값 대체 ({str(e)[-60:]})")
+        ric = NAVER_BOND[code]
+        j = HTTP.get(f"https://m.stock.naver.com/front-api/marketIndex/prices?category=bond&reutersCode={ric}&page=1&pageSize=30").json()
+        last_ecos = max(old)
+        for x in j.get("result", []):
+            d = x["localTradedAt"][:10]
+            if d > last_ecos:
+                old[d] = float(x["closePrice"])
+        source = f"한국은행 ECOS ({name}) + 최근값 네이버 증권"
     write_json(path, old)
     s = pd.Series(old)
     s.index = pd.to_datetime(s.index)
-    return pack(s, f"한국은행 ECOS ({name})")
+    return pack(s, source)
+
+
+NAVER_BOND = {"010200000": "KR3YT%3DRR", "010210000": "KR10YT%3DRR"}
 
 
 def collect():
