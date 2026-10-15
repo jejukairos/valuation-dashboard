@@ -25,6 +25,15 @@ button{background:#2a78d6;color:#fff;border:0;font-weight:700}p{color:#d03b3b;fo
 }
 
 export async function onRequest(ctx) {
+  // 접속 점검용 (보유종목 정보 없음): 휴대폰이 서버에 닿는지 확인
+  if (new URL(ctx.request.url).pathname === "/ping") {
+    const h = ctx.request.headers;
+    const cf = ctx.request.cf || {};
+    return new Response(
+      `OK - 서버에 잘 닿았어요\n시각: ${new Date().toISOString()}\n데이터센터: ${cf.colo || "?"}\n통신사: ${cf.asOrganization || "?"}\nHTTP: ${cf.httpProtocol || "?"}\n브라우저: ${h.get("user-agent") || "?"}\n`,
+      { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } }
+    );
+  }
   const pw = ctx.env.SITE_PASSWORD || ctx.env.SITE_Password || ctx.env.site_password;
   if (!pw) return page("관리자 설정 필요: Cloudflare 에 SITE_PASSWORD 가 없어요.");
   const good = await token(pw);
