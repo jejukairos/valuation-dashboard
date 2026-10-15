@@ -24,7 +24,7 @@ button{background:#2a78d6;color:#fff;border:0;font-weight:700}p{color:#d03b3b;fo
 }
 
 export async function onRequest(ctx) {
-  const pw = ctx.env.SITE_PASSWORD;
+  const pw = ctx.env.SITE_PASSWORD || ctx.env.SITE_Password || ctx.env.site_password;
   if (!pw) return page("관리자 설정 필요: Cloudflare 에 SITE_PASSWORD 가 없어요.");
   const good = await token(pw);
   const cookie = ctx.request.headers.get("cookie") || "";
