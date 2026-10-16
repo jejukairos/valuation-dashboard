@@ -181,9 +181,9 @@ def kospi_forward():
     per = cap_sum / fwd_ni
     fwd_eq = w0 * eq[y0] + (1 - w0) * eq[y0 + 1]
     level = None
-    try:
-        j = HTTP.get("https://m.stock.naver.com/api/index/KOSPI/integration").json()
-        level = num({x["code"]: x["value"] for x in j.get("totalInfos", [])}.get("lastClosePrice"))
+    try:  # 코스피 지수 최근 종가 (일별 시세의 마지막 줄)
+        from kr_stock import price_history
+        level = float(price_history("KOSPI", start=(now - pd.Timedelta(days=20)).strftime("%Y%m%d")).iloc[-1])
     except Exception:  # noqa: BLE001
         pass
     lab = lambda y: f"{str(y)[2:]}E"  # noqa: E731

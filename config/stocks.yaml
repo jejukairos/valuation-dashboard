@@ -4,25 +4,149 @@
 #    market: KR            # KR(한국) 또는 US(미국)
 #    code: "000270"        # 한국은 6자리 종목코드, 미국은 티커(예: MSFT)
 #    methods: [PER]        # PER / PBR / DIV(배당) 중 골라서
+#    per_basis: forward    # (선택) 조정 PER: 이익이 급증한 종목은 1년 뒤 실적 기준으로 밴드 계산
+#    fair_methods: [PBR]   # (선택) 적정가 계산에 쓸 방식만 따로 (비우면 methods 전부)
+#    data_code: "005930"   # (선택) 우선주처럼 실적·배당을 다른 코드(보통주)에서 가져올 때
+#    splits: []            # (선택) 액면분할 기록 (예: [{date: "2018-05-04", ratio: 50}])
 #    avg_price:            # 평단가 (비워두면 표시 안 함)
 #    quantity:             # 수량 (비워두면 표시 안 함)
-#    splits: []            # 액면분할 기록 (예: [{date: "2018-05-04", ratio: 50}])
 #    note: ""              # 화면에 같이 보여줄 메모
 
 holdings:
-  - name: 기아
+  # ---------- 한국 ----------
+  - name: 삼양식품
     market: KR
-    code: "000270"
-    methods: [PER, PBR, DIV]
+    code: "003230"
+    methods: [PER]
     avg_price:
     quantity:
-    splits: []
+
+  - name: 에이피알
+    market: KR
+    code: "278470"
+    methods: [PER]
+    avg_price:
+    quantity:
+
+  - name: 달바글로벌
+    market: KR
+    code: "483650"
+    methods: [PER]
+    note: "2025년 상장이라 가능한 기간만으로 밴드를 계산해요."
+    avg_price:
+    quantity:
+
+  - name: 한화에어로스페이스
+    market: KR
+    code: "012450"
+    methods: [PER]
+    avg_price:
+    quantity:
 
   - name: 현대로템
     market: KR
     code: "064350"
     methods: [PER]
-    per_basis: forward    # 조정 PER: 이익이 급증한 종목이라 1년 뒤 실적 기준으로 밴드 계산
+    per_basis: forward
     avg_price:
     quantity:
-    splits: []
+
+  - name: 롯데쇼핑
+    market: KR
+    code: "023530"
+    methods: [PBR, PER]
+    avg_price:
+    quantity:
+
+  - name: 현대차
+    market: KR
+    code: "005380"
+    methods: [PBR, PER, DIV]
+    avg_price:
+    quantity:
+
+  - name: 기아
+    market: KR
+    code: "000270"
+    methods: [PBR, PER, DIV]
+    avg_price:
+    quantity:
+
+  - name: 삼성전자
+    market: KR
+    code: "005930"
+    methods: [PBR, PER, DIV]
+    fair_methods: [PBR]   # 메모리 반도체는 이익 변동이 커서 적정가는 PBR 로만
+    splits: [{date: "2018-05-04", ratio: 50}]
+    avg_price:
+    quantity:
+
+  - name: SK하이닉스
+    market: KR
+    code: "000660"
+    methods: [PBR, PER, DIV]
+    fair_methods: [PBR]   # 메모리 반도체는 이익 변동이 커서 적정가는 PBR 로만
+    avg_price:
+    quantity:
+
+  - name: 삼성전자우
+    market: KR
+    code: "005935"
+    data_code: "005930"
+    methods: [DIV]
+    splits: [{date: "2018-05-04", ratio: 50}]
+    note: "배당금은 보통주 기준이에요 (우선주 배당은 보통주와 거의 같아요)."
+    avg_price:
+    quantity:
+
+  - name: NAVER
+    market: KR
+    code: "035420"
+    methods: [PER]
+    splits: [{date: "2018-10-12", ratio: 5}]
+    avg_price:
+    quantity:
+
+  - name: 감성코퍼레이션
+    market: KR
+    code: "036620"
+    methods: [PER, DIV]
+    note: "의류 브랜드(스노우피크 어패럴) 회사 — PER + 배당 기준 적정가."
+    avg_price:
+    quantity:
+
+  # ---------- 미국 ----------
+  - name: 메타
+    market: US
+    code: META
+    methods: [PER]
+    avg_price:
+    quantity:
+
+  - name: 알파벳
+    market: US
+    code: GOOG
+    methods: [PER]
+    avg_price:
+    quantity:
+
+  - name: 마이크로소프트
+    market: US
+    code: MSFT
+    methods: [PER]
+    avg_price:
+    quantity:
+
+  - name: 엔비디아
+    market: US
+    code: NVDA
+    methods: [PER]
+    avg_price:
+    quantity:
+
+  - name: 테슬라
+    market: US
+    code: TSLA
+    methods: [PER]
+    avg_price:
+    quantity:

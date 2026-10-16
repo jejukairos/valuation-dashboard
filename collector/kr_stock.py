@@ -155,7 +155,7 @@ def dart_history(stock_code, splits=()):
     now = now_kst()
     last_fy = now.year - 1 if now.month >= 4 else now.year - 2
     years = list(range(last_fy, 2015, -3))
-    if cache.get("last_fy") == last_fy and cache.get("data"):
+    if cache.get("last_fy") == last_fy and cache.get("data") and cache.get("v") == 2:
         return {int(k): v for k, v in cache["data"].items()}
 
     cc = corp_code(stock_code)
@@ -167,16 +167,30 @@ def dart_history(stock_code, splits=()):
             y = ry - off
             eps = ni = eq = None
             for r in rows:
-                aid = r.get("account_id", "")
+                # 옛 보고서는 'ifrs_', 최근 보고서는 'ifrs-full_' 로 시작한다
+                aid = r.get("account_id", "").split("_", 1)[-1]
                 v = _amt(r.get(f"{col}_amount"))
                 if v is None:
                     continue
-                if eps is None and aid == "ifrs-full_BasicEarningsLossPerShare":
+                if eps is None and aid == "BasicEarningsLossPerShare":
                     eps = v
-                elif ni is None and aid == "ifrs-full_ProfitLossAttributableToOwnersOfParent":
+                elif ni is None and aid == "ProfitLossAttributableToOwnersOfParent":
                     ni = v
-                elif eq is None and aid == "ifrs-full_EquityAttributableToOwnersOfParent":
+                elif eq is None and aid == "EquityAttributableToOwnersOfParent":
                     eq = v
+            if ni is None:  # 계정 이름으로 한 번 더 (지배기업 소유주 귀속 순이익)
+                for r in rows:
+                    nm = r.get("account_nm", "").replace(" ", "")
+                    if r.get("sj_div") in ("IS", "CIS") and "지배기업" in nm and ("소유주" in nm or "귀속" in nm) \
+                            and "포괄" not in nm and _amt(r.get(f"{col}_amount")) is not None:
+                        ni = _amt(r.get(f"{col}_amount"))
+                        break
+            if eq is None:
+                for r in rows:
+                    nm = r.get("account_nm", "").replace(" ", "")
+                    if r.get("sj_div") == "BS" and "지배기업" in nm and "지분" in nm and _amt(r.get(f"{col}_amount")) is not None:
+                        eq = _amt(r.get(f"{col}_amount"))
+                        break
             if eps is None:
                 for r in rows:
                     if "기본주당" in r.get("account_nm", "") and _amt(r.get(f"{col}_amount")) is not None:
@@ -217,7 +231,7 @@ def dart_history(stock_code, splits=()):
             rec["roe"] = rec["ni"] / base * 100
     if not data:
         raise RuntimeError("DART 재무 데이터 없음")
-    write_json(path, {"last_fy": last_fy, "data": data})
+    write_json(path, {"last_fy": last_fy, "data": data, "v": 2})
     return data
 
 

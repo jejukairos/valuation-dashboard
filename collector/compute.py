@@ -49,8 +49,14 @@ def build_band(price_w, hist, key, invert=False, shift=0):
     이익이 빠르게 늘던 시기에 지난 실적 PER 이 부풀려지는 것을 바로잡는다.
     반환: 주간 날짜·가격·주당값·배수 배열 + 기간별 통계."""
     dates, prices, base, mult = [], [], [], []
+    # 각 실적을 '언제부터 쓸 수 있었는지' (결산 후 보고서 제출 시점). 한국 12월 결산 = 다음 해 4월 1일
+    avail = sorted((rec.get("avail") or f"{y + 1}-04-01", y) for y, rec in hist.items() if not rec.get("estimate"))
     for d, p in price_w.items():
-        fy = fy_for(d) + shift
+        ds = d.strftime("%Y-%m-%d")
+        known = [y for a, y in avail if a <= ds]
+        if not known:
+            continue
+        fy = max(known) + shift
         rec = hist.get(fy)
         if not rec or (rec.get("estimate") and not shift) or rec.get(key) is None:
             continue
@@ -67,6 +73,7 @@ def build_band(price_w, hist, key, invert=False, shift=0):
         return None
     end = pd.Timestamp(dates[-1])
     out = {"dates": dates, "price": prices, "base": base, "mult": mult, "periods": {}}
+    cap = BAND.get("per_cap") if key == "eps" else None
     for label, years in (("all", None), ("10y", 10), ("5y", 5)):
         if years:
             cut = (end - pd.DateOffset(years=years)).strftime("%Y-%m-%d")
@@ -74,6 +81,8 @@ def build_band(price_w, hist, key, invert=False, shift=0):
         else:
             vals = mult
             cut = dates[0]
+        if cap:  # 이익이 거의 없던 시기의 비정상적인 PER 은 통계에서 뺀다
+            vals = [m for m in vals if m is None or m <= cap]
         st = stats(vals)
         if st:
             st["from"] = max(cut, dates[0])
@@ -198,6 +207,9 @@ def div_section(price, hist, band, kr3y):
                      "dps": rnd(d_pay, 0)})
     yields = [("하방 (10년 최고 수익률)", p10.get("high")), ("10년 평균", p10.get("avg")),
               ("상방 (10년 최저 수익률)", p10.get("low"))]
+    no_history = not p10.get("avg")  # 배당을 막 시작해 과거 배당수익률이 없으면 목표 수익률로 계산
+    if no_history:
+        yields = [(f"수익률 {y}%", y) for y in SETTINGS.get("dividend", {}).get("target_yields", [6, 5, 4, 3])]
     for s in scen:
         s["prices"] = [round(s["dps"] / (yv / 100)) if s["dps"] and yv else None for _, yv in yields]
     dps_years = [{"year": y, "dps": hist[y].get("dps"), "estimate": bool(hist[y].get("estimate")),
@@ -205,13 +217,18 @@ def div_section(price, hist, band, kr3y):
                  for y in sorted(hist) if hist[y].get("dps") is not None]
     avg = p10.get("avg")
     verdict = None
-    if cur_yield is not None and avg:
+    fy = hist.get(ys[0], {}).get("dps")
+    if no_history and fy and kr3y is not None:
+        y = fy / price * 100
+        verdict = (f"배당 이력이 짧아 10년 비교 불가 · 올해 예상 배당수익률 {y:.1f}% "
+                   f"{'>' if y > kr3y else '<'} 국고채 3년 {kr3y:.2f}% → {'매력' if y > kr3y else '비매력'}")
+    elif cur_yield is not None and avg:
         verdict = ("10년 평균보다 배당수익률이 높아요 → 매력" if cur_yield > avg else
                    "10년 평균보다 배당수익률이 낮아요 → 비매력")
     return {"cur_yield": rnd(cur_yield), "dps_last": dps_last, "dps_last_year": la,
             "fwd_yield": rnd(hist.get(ys[0], {}).get("dps", 0) / price * 100) if hist.get(ys[0], {}).get("dps") else None,
             "yield_labels": [n for n, _ in yields], "yield_values": [v for _, v in yields],
-            "scenarios": scen, "dps_years": dps_years, "payout_avg": rnd(payout_avg, 1),
+            "scenarios": scen, "dps_years": dps_years, "payout_avg": rnd(payout_avg, 1), "no_history": no_history,
             "vs_bond": rnd(cur_yield - kr3y) if (cur_yield is not None and kr3y is not None) else None,
             "verdict": verdict, "signal": ("green" if verdict and "매력" in verdict and "비매력" not in verdict else
                                            "red" if verdict else "na")}

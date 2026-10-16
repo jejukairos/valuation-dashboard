@@ -20,6 +20,7 @@ function n(v, d = 0) {
   return Number(v).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 function won(v) { return v == null ? "N/A" : n(v) + "원"; }
+function money(v, cur) { return v == null ? "N/A" : cur === "USD" ? "$" + n(v, 2) : n(v) + "원"; }
 function bigWon(v) {
   if (v == null) return "N/A";
   if (v >= 1e12) return n(v / 1e12, 1) + "조원";
@@ -147,16 +148,16 @@ function stockCard(c) {
   let mine = "";
   if (c.avg_price && c.quantity) {
     const r = (c.price / c.avg_price - 1) * 100;
-    mine = `<div class="sub">내 평단 ${won(c.avg_price)} · ${n(c.quantity)}주 · 수익률 ${pct(r, 1, true)}</div>`;
+    mine = `<div class="sub">내 평단 ${money(c.avg_price, c.currency)} · ${n(c.quantity)}주 · 수익률 ${pct(r, 1, true)}</div>`;
   }
   return `<button class="card stock" data-code="${esc(c.code)}">
-    <div class="row1"><span class="name">${esc(c.name)}</span><span class="price">${won(c.price)}</span></div>
-    <div class="sub">시가총액 ${bigWon(c.market_cap)} ${c.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""}</div>
+    <div class="row1"><span class="name">${esc(c.name)}</span><span class="price">${money(c.price, c.currency)}</span></div>
+    <div class="sub">시가총액 ${bigWon(c.market_cap)}${c.market_cap_usd ? ` ($${n(c.market_cap_usd / 1e9, 0)}B)` : ""} ${c.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""}</div>
     <div class="row2">${lamp(c.verdict)}<div>
       <div class="verdict ${c.verdict}">${L.stock}</div>
       <div class="why">${esc(c.why)}</div></div></div>
     <div class="kv">
-      <div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${won(c.fair)}</div>
+      <div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)}</div>
       <div class="k">괴리율 (현재가 ÷ 적정가 − 1)</div><div class="v">${gap}</div>
     </div>
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
@@ -226,7 +227,7 @@ function wireBand(id, band, kind) {
     drawBand(id, band, kind, b.dataset.p);
   });
 }
-function matrixTable(rows, cols, price, rowHead, what) {
+function matrixTable(rows, cols, price, rowHead, what, cur) {
   const near = (v) => v && Math.abs(v / price - 1) < 0.05;
   return `<div class="tbl-wrap"><table><thead><tr><th>${esc(rowHead)}</th>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>
     ${rows.map((r) => `<tr><td>${esc(r.label)} <span class="src">${r.mult == null ? "" : n(r.mult, 2) + "배"}</span></td>${cols.map((c) => {
@@ -235,7 +236,7 @@ function matrixTable(rows, cols, price, rowHead, what) {
       const up = (v / price - 1) * 100;
       return `<td class="${up >= 0 ? "cheap" : "dear"} ${near(v) ? "near" : ""}">${n(v)}<br><span class="src">${pct(up, 0, true)}</span></td>`;
     }).join("")}</tr>`).join("")}</tbody></table></div>
-    <div class="note">칸 아래 %는 ${what ? `현재 ${what} ${n(price, 2)}` : `현재가 ${won(price)}`} 대비 차이 (초록 = 지금보다 높음, 빨강 = 낮음). 파란 테두리 = 지금과 5% 이내.</div>`;
+    <div class="note">칸 아래 %는 ${what ? `현재 ${what} ${n(price, 2)}` : `현재가 ${money(price, cur)}`} 대비 차이 (초록 = 지금보다 높음, 빨강 = 낮음). 파란 테두리 = 지금과 5% 이내.</div>`;
 }
 
 function detailHTML(d) {
@@ -243,8 +244,8 @@ function detailHTML(d) {
   const L = LIGHT[c.verdict] || LIGHT.na;
   let h = `<div class="card" style="margin-top:12px"><div class="light">${lamp(c.verdict)}<div>
       <div class="verdict ${c.verdict}">${L.stock} <span class="sub">${esc(c.why)}</span></div>
-      <div class="big">${won(d.price)}</div><div class="sub">${esc(d.price_date)} 종가 · 시가총액 ${bigWon(d.market_cap)} <span class="src">${esc(d.sources.price)}</span></div></div></div>
-    <div class="kv"><div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${won(c.fair)} (${c.gap == null ? "N/A" : pct(c.gap * 100, 0, true)})</div>
+      <div class="big">${money(d.price, d.currency)}</div><div class="sub">${esc(d.price_date)} 종가 · 시가총액 ${bigWon(d.market_cap)} <span class="src">${esc(d.sources.price)}</span></div></div></div>
+    <div class="kv"><div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)} (${c.gap == null ? "N/A" : pct(c.gap * 100, 0, true)})</div>
     <div class="k">12개월 선행 PER</div><div class="v">${times(c.fwd_per, 2)}</div>
     <div class="k">${esc(c.bond_label)} 채권 환산 PER</div><div class="v">${times(c.bond_per, 1)}</div>
     <div class="k">금리 대비 비율</div><div class="v">${LIGHT[c.bond_signal].emoji} ${n(c.bond_ratio, 2)}</div></div>`;
@@ -259,8 +260,8 @@ function detailHTML(d) {
     const p = d.per;
     const cols = Object.keys(p.eps);
     h += `<h3>PER 밴드</h3><div class="card">${bandBlock("band-per", d.bands.PER, "PER")}
-      <h3>선행 PER</h3><div class="kv">${cols.map((k) => `<div class="k">${k} PER <span class="src">EPS ${k} ${n(p.eps[k])}원 · 와이즈리포트</span></div><div class="v">${times(p.fwd_per[k], 2)}</div>`).join("")}</div>
-      <h3>적정주가 시나리오 (EPS × PER)</h3>${matrixTable(p.matrix, cols, d.price, "PER ↓ · EPS →")}
+      <h3>선행 PER</h3><div class="kv">${cols.map((k) => `<div class="k">${k} PER <span class="src">EPS ${k} ${money(p.eps[k], d.currency)} · ${esc(d.sources.consensus)}</span></div><div class="v">${times(p.fwd_per[k], 2)}</div>`).join("")}</div>
+      <h3>적정주가 시나리오 (EPS × PER)</h3>${matrixTable(p.matrix, cols, d.price, "PER ↓ · EPS →", null, d.currency)}
       ${p.rerating_warning ? `<div class="warnbox">${esc(p.rerating_warning)}</div>` : ""}</div>`;
   }
   if (d.pbr && d.bands.PBR) {
@@ -289,12 +290,12 @@ function detailHTML(d) {
       <div class="chart-title">연도별 주당배당금(DPS) <span class="src">옅은 막대 = 추정</span></div>
       <div class="chart-box"><canvas id="dps-chart"></canvas></div>
       <h3>배당으로 본 적정주가 (배당금 ÷ 배당수익률)</h3>
-      <div class="tbl-wrap"><table><thead><tr><th>배당금 가정</th>${v.yield_labels.map((l, i) => `<th>${esc(l.split(" ")[0])}<br><span class="src">${pct(v.yield_values[i], 2)}</span></th>`).join("")}</tr></thead>
+      <div class="tbl-wrap"><table><thead><tr><th>배당금 가정</th>${v.yield_labels.map((l, i) => `<th>${esc(v.no_history ? l : l.split(" ")[0])}<br><span class="src">${pct(v.yield_values[i], 2)}</span></th>`).join("")}</tr></thead>
       <tbody>${v.scenarios.map((s) => `<tr><td>${esc(s.label)}<br><span class="src">${s.dps == null ? "N/A" : n(s.dps) + "원"}</span></td>${s.prices.map((p) => p == null ? "<td>N/A</td>" : `<td class="${p >= d.price ? "cheap" : "dear"}">${n(p)}<br><span class="src">${pct((p / d.price - 1) * 100, 0, true)}</span></td>`).join("")}</tr>`).join("")}</tbody></table></div>
       <div class="note">하방 = 10년 중 배당수익률이 가장 높았던 수준(상위 10%)까지 주가가 내려간 경우, 상방 = 가장 낮았던 수준(하위 10%)까지 오른 경우예요.</div></div>`;
   }
   h += `<h3>연도별 실적</h3><div class="card"><div class="tbl-wrap"><table><thead><tr><th>연도</th><th>EPS</th><th>BPS</th><th>DPS</th><th>ROE</th><th>배당성향</th><th>출처</th></tr></thead><tbody>
-    ${d.history.map((r) => `<tr><td>${r.year}${r.estimate ? "E" : ""}</td><td>${n(r.eps)}</td><td>${n(r.bps)}</td><td>${n(r.dps)}</td><td>${pct(r.roe)}</td><td>${pct(r.payout)}</td><td class="src">${esc(r.src)}</td></tr>`).join("")}
+    ${d.history.map((r) => `<tr><td>${r.year}${r.estimate ? "E" : ""}</td><td>${n(r.eps, d.currency === "USD" ? 2 : 0)}</td><td>${n(r.bps)}</td><td>${n(r.dps)}</td><td>${pct(r.roe)}</td><td>${pct(r.payout)}</td><td class="src">${esc(r.src)}</td></tr>`).join("")}
     </tbody></table></div><div class="note">출처: 가격 ${esc(d.sources.price)} · 추정치 ${esc(d.sources.consensus)} · 과거 실적 ${esc(d.sources.history)}</div></div>
     <div class="note">평단가·수량은 <b>config/stocks.yaml</b> 의 avg_price, quantity 에 넣으면 표시돼요.</div>`;
   return h;

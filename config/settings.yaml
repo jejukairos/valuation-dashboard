@@ -21,10 +21,17 @@ fair_value:
 band:
   low_pct: 10
   high_pct: 90
+  per_cap: 100          # 이익이 거의 없던 시기의 PER(100배 초과)은 평균·상단·하단 계산에서 뺌
+  per_basis: forward    # PER 밴드 기준: forward = 1년 뒤 실적 기준(증권사 12개월 선행 PER 밴드와 비슷), trailing = 지난 실적
+                        # 종목별로 바꾸려면 stocks.yaml 에 per_basis: trailing
 
 # PBR 종목: 요구수익률 = 국고채 3년 + 이 값(%p)
 pbr:
   risk_premium: 5.0
+
+# 배당 이력이 짧은 종목(배당을 막 시작)의 배당 적정가 계산에 쓸 목표 배당수익률(%)
+dividend:
+  target_yields: [6, 5, 4, 3]
 
 # 리레이팅 경고: 현재 PER 이 10년 밴드 이 위치(%) 이상인데
 # 28E EPS 가 최근 실적 대비 이만큼(%) 이상 늘지 않으면 ⚠
