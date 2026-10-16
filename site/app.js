@@ -89,7 +89,7 @@ function marketCard(sig, rateObj, extraRate, key) {
     return `<div class="card"><div class="light">${lamp("na")}<div><div class="verdict na">${esc(sig.name)} · N/A</div>
       <div class="sub">${esc(sig.reason || "")}</div></div></div></div>`;
   }
-  const stale = sig.stale ? `<div class="stale">⚠ 직전 데이터</div>` : "";
+  const stale = sig.stale || rateObj?.stale ? `<div class="stale">⚠ ${esc(sig.rate_label)} 금리는 이번에 못 받아서 직전 값(${esc(rateObj?.date || "")})이에요</div>` : "";
   return `<div class="card">
     <div class="light">${lamp(sig.signal)}<div>
       <div class="verdict ${sig.signal}">${esc(sig.name)} · ${L.market}</div>

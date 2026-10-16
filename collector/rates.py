@@ -65,7 +65,9 @@ def ecos(code, name):
         if not old:
             raise
         REPORT.block("한국은행 ECOS", f"접속 실패 → 네이버 증권 채권금리로 최근 값 대체 ({str(e)[-60:]})")
-        ric = NAVER_BOND[code]
+        ric = NAVER_BOND.get(code)
+        if not ric:
+            raise RuntimeError(f"한국은행 ECOS 접속 실패, 대체 출처도 못 씀 ({str(e)[-60:]})")
         j = HTTP.get(f"https://m.stock.naver.com/front-api/marketIndex/prices?category=bond&reutersCode={ric}&page=1&pageSize=30").json()
         last_ecos = max(old)
         for x in j.get("result", []):
