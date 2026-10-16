@@ -38,6 +38,15 @@ s+='쿠키 사용: '+navigator.cookieEnabled+'\\n';o.textContent=s;})();</script
       { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
     );
   }
+  if (new URL(ctx.request.url).pathname === "/ping-files") {
+    // 공개돼도 괜찮은 파일(아이콘·화면 틀)이 실제로 올라가 있는지만 확인
+    const out = [];
+    for (const p of ["/icon.svg", "/index.html", "/site/index.html"]) {
+      const r = await ctx.next(new Request(new URL(p, ctx.request.url), { method: "HEAD" }));
+      out.push(`${p} → ${r.status}`);
+    }
+    return new Response(out.join("\n"), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+  }
   if (new URL(ctx.request.url).pathname === "/ping") {
     const h = ctx.request.headers;
     const cf = ctx.request.cf || {};
