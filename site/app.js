@@ -320,23 +320,24 @@ function drawDetailCharts(d) {
 /* ---------- 4. 동종업계 비교 ---------- */
 let PEERS = null;
 const FLAG = { KR: "🇰🇷", US: "🇺🇸", EU: "🇪🇺", JP: "🇯🇵" };
-async function peersBlock(code) {
+async function peersBlock(code, noPbr) {
   if (!PEERS) {
     try { PEERS = await (await fetch("data/peers.json?t=" + encodeURIComponent(DASH.updated_at))).json(); }
     catch (e) { return ""; }
   }
   const gs = PEERS.groups.filter((g) => g.holdings.includes(code));
+  // 미국 빅테크는 PBR 비교가 의미 없어서 PBR 열과 ROE-PBR 산점도를 뺀다
   return gs.map((g, gi) => {
-    const warns = g.rows.filter((r) => r.warn).map((r) => `${esc(r.name)}: ${esc(r.warn)}`);
+    const warns = g.rows.filter((r) => r.warn && !noPbr).map((r) => `${esc(r.name)}: ${esc(r.warn)}`);
     return `<h3>동종업계 비교 · ${esc(g.name)}</h3><div class="card">
-      <div class="tbl-wrap"><table class="compact"><thead><tr><th>회사</th><th>시총<br>(조원)</th><th>선행<br>PER</th><th>PBR</th><th>ROE</th><th>배당</th></tr></thead><tbody>
+      <div class="tbl-wrap"><table class="compact"><thead><tr><th>회사</th><th>시총<br>(조원)</th><th>선행<br>PER</th>${noPbr ? "" : "<th>PBR</th>"}<th>ROE</th><th>배당</th></tr></thead><tbody>
       ${g.rows.map((r) => `<tr${r.code === code ? ' class="me"' : ""}><td>${FLAG[r.market] || ""} ${esc(r.name)}${r.stale ? " ⚠" : ""}</td>
-        <td>${r.cap_krw == null ? "N/A" : n(r.cap_krw / 1e12, 1)}</td><td>${times(r.fwd_per)}</td><td>${times(r.pbr, 2)}</td>
+        <td>${r.cap_krw == null ? "N/A" : n(r.cap_krw / 1e12, 1)}</td><td>${times(r.fwd_per)}</td>${noPbr ? "" : `<td>${times(r.pbr, 2)}</td>`}
         <td>${pct(r.roe)}</td><td>${pct(r.div, 2)}</td></tr>`).join("")}
       </tbody></table></div>
-      <div class="chart-title">ROE(가로) vs PBR(세로) <span class="src">오른쪽 아래일수록 'ROE 에 비해 PBR 이 낮음'</span></div>
+      ${noPbr ? `<div class="note">미국 빅테크는 PBR 이 의미가 적어서 PBR 비교는 뺐어요.</div>` : `<div class="chart-title">ROE(가로) vs PBR(세로) <span class="src">오른쪽 아래일수록 'ROE 에 비해 PBR 이 낮음'</span></div>
       <div class="chart-box tall"><canvas id="peer-scatter-${gi}"></canvas></div>
-      <div id="peer-legend-${gi}"></div>
+      <div id="peer-legend-${gi}"></div>`}
       <div class="note src">시총은 원화 환산(환율: 달러 ${n(PEERS.fx.USD, 0)} · 유로 ${n(PEERS.fx.EUR, 0)} · 엔 ${n(PEERS.fx.JPY, 2)}원) · 한국: 네이버 증권(선행 PER = 올해 추정), ROE 는 최근 연간 실적 · 해외: 야후 파이낸스(선행 PER = 향후 12개월, ROE = 최근 12개월) · ${esc(PEERS.updated_at)}
       ${warns.length ? "<br>" + warns.join("<br>") : ""}</div></div>`;
   }).join("");
@@ -384,7 +385,7 @@ async function openStock(code) {
   sheet.scrollTop = 0;
   try {
     const d = await (await fetch(`data/stocks/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json();
-    const peerHtml = await peersBlock(code);
+    const peerHtml = await peersBlock(code, d.market === "US");
     $("#sheetBody").innerHTML = detailHTML(d) + peerHtml;
     drawDetailCharts(d);
     drawPeers(code);

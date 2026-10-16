@@ -4,7 +4,12 @@ on:
   schedule:
     - cron: "30 22 * * 0-4"   # 평일 07:30 KST (미국장 마감 후) = 전날 22:30 UTC
     - cron: "30 9 * * 1-5"    # 평일 18:30 KST (한국장 마감·컨센서스 반영 후)
-  workflow_dispatch: {}       # GitHub 화면에서 "Run workflow" 로 바로 실행
+  workflow_dispatch:          # GitHub 화면에서 "Run workflow" 로 바로 실행
+    inputs:
+      test_fail:
+        description: "실패 알림 시험 (금리 수집을 일부러 실패시킴)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -31,6 +36,7 @@ jobs:
           KRX_ID: ${{ secrets.KRX_ID || secrets.KRX_JEJUKAIROS21 }}
           KRX_PW: ${{ secrets.KRX_PW }}
           SEC_CONTACT: ${{ secrets.SEC_CONTACT }}
+          TEST_FAIL: ${{ inputs.test_fail }}
           PYTHONIOENCODING: utf-8
         run: python -u collector/main.py
       - name: 저장 (실패해도 일부 결과는 저장)

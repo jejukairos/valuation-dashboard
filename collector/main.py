@@ -1,5 +1,6 @@
 """매일 실행: 수집 → 계산 → site/data/*.json 저장.
 실패한 항목은 직전 값을 그대로 쓰고 '실패 목록'에 남긴다."""
+import os
 import sys
 import traceback
 
@@ -192,6 +193,11 @@ def main():
     prev_rates = prev.get("rates", {})
     prev_mkt = prev.get("market", {})
 
+    test_fail = os.environ.get("TEST_FAIL") == "true"
+    if test_fail:  # 실패 알림 시험: 한국은행 키를 일부러 틀리게 해서 금리 수집을 실패시킨다
+        print("※ 실패 시험 모드")
+        os.environ["ECOS_KEY"] = "TEST-INVALID-KEY"
+        rates.NAVER_BOND.clear()
     print("■ 금리")
     r = rates.collect()
     for k in r:
@@ -273,7 +279,7 @@ def main():
     write_json(DATA / "dashboard.json", out)
     print(f"완료: 성공 {len(REPORT.ok)} / 실패 {len(REPORT.failures)}")
     # 절반 넘게 실패하면 GitHub 이 실패 메일을 보내도록 오류 코드로 끝낸다
-    if len(REPORT.failures) > max(3, len(REPORT.ok)):
+    if len(REPORT.failures) > max(3, len(REPORT.ok)) or test_fail:
         sys.exit(1)
 
 
