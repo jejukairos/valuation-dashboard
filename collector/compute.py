@@ -43,14 +43,16 @@ def pct_rank(values, cur):
     return round(sum(1 for x in v if x < cur) / len(v) * 100, 1)
 
 
-def build_band(price_w, hist, key, invert=False):
+def build_band(price_w, hist, key, invert=False, shift=0):
     """key: eps → PER, bps → PBR, dps → 배당수익률.
+    shift=1 이면 '조정 PER': 그 시점 기준 1년 뒤 실적(아직 안 나온 해는 추정치)으로 나눈다.
+    이익이 빠르게 늘던 시기에 지난 실적 PER 이 부풀려지는 것을 바로잡는다.
     반환: 주간 날짜·가격·주당값·배수 배열 + 기간별 통계."""
     dates, prices, base, mult = [], [], [], []
     for d, p in price_w.items():
-        fy = fy_for(d)
+        fy = fy_for(d) + shift
         rec = hist.get(fy)
-        if not rec or rec.get("estimate") or rec.get(key) is None:
+        if not rec or (rec.get("estimate") and not shift) or rec.get(key) is None:
             continue
         b = rec[key]
         if key == "dps":
@@ -80,6 +82,7 @@ def build_band(price_w, hist, key, invert=False):
                 st["pos_cheap"] = round(100 - st["pos"], 1)
         out["periods"][label] = st
     out["start"] = dates[0]
+    out["basis"] = "forward" if shift else "trailing"
     out["short_history"] = (pd.Timestamp(dates[-1]) - pd.Timestamp(dates[0])).days < 365 * 9.5
     return out
 

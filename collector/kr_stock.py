@@ -58,7 +58,7 @@ def naver_now(code):
 # ---------- 와이즈리포트 (네이버 종목분석) ----------
 ROWS = {
     "eps": "EPS", "bps": "BPS", "dps": "현금DPS", "roe": "ROE", "payout": "현금배당성향",
-    "ni": "당기순이익(지배)", "per": "PER", "pbr": "PBR", "shares": "발행주식수(보통주)",
+    "ni": "당기순이익(지배)", "equity": "자본총계(지배)", "per": "PER", "pbr": "PBR", "shares": "발행주식수(보통주)",
 }
 
 
@@ -86,8 +86,8 @@ def wise_annual(code):
         rec = {"estimate": "(E)" in str(c), "fy_month": int(ym.group(2))}
         for k, label in ROWS.items():
             hit = names[names.str.startswith(label.replace(" ", ""))]
-            if k == "ni":
-                hit = names[names == "당기순이익(지배)"]
+            if k in ("ni", "equity"):
+                hit = names[names == label]
             if len(hit):
                 rec[k] = num(tb.iloc[hit.index[0], ci])
         out[y] = rec

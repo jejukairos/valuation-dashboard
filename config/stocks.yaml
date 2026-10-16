@@ -22,6 +22,7 @@ holdings:
     market: KR
     code: "064350"
     methods: [PER]
+    per_basis: forward    # 조정 PER: 이익이 급증한 종목이라 1년 뒤 실적 기준으로 밴드 계산
     avg_price:
     quantity:
     splits: []

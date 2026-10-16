@@ -66,7 +66,8 @@ def kr_stock_detail(h, rate_kr3y):
     bands = {}
     for key, label in (("eps", "PER"), ("bps", "PBR"), ("dps", "DIV")):
         if label in methods or (label == "PBR" and "PER" in methods):
-            b = C.build_band(pw, hist, key, invert=(key == "dps"))
+            shift = 1 if (key == "eps" and h.get("per_basis") == "forward") else 0
+            b = C.build_band(pw, hist, key, invert=(key == "dps"), shift=shift)
             if b:
                 bands[label] = b
     det = {"name": name, "code": code, "market": "KR", "methods": methods, "price": price,
@@ -127,7 +128,8 @@ def kr_stock_detail(h, rate_kr3y):
     det["card"] = {
         "name": name, "code": code, "market": "KR", "price": price, "market_cap": now.get("market_cap"),
         "currency": "KRW", "verdict": verdict, "why": why, "fair": rnd(fair, 0), "gap": rnd(gap, 4),
-        "fair_basis": " + ".join(f"{n}" for n, _ in fairs) + (f" ({ey} × {mkey})" if fairs else ""),
+        "fair_basis": " + ".join(f"{n}" for n, _ in fairs) + (f" ({ey} × {mkey})" if fairs else "")
+                      + (" · 조정 PER" if h.get("per_basis") == "forward" else ""),
         "band_pos": rnd(band_pos, 1), "fwd_per": rnd(fwd_per), "bond_per": rnd(bond_per),
         "bond_ratio": rnd(ratio, 3), "bond_signal": C.bond_signal(ratio), "bond_label": "국고채 3년",
         "div_signal": det.get("div", {}).get("signal") if "DIV" in methods else None,
@@ -210,7 +212,8 @@ def main():
         "status": {"failures": REPORT.failures, "blocked": REPORT.blocked, "ok": len(REPORT.ok),
                    "finished_at": now_kst().strftime("%Y-%m-%d %H:%M")},
         "settings": {"bond_signal": SETTINGS["bond_signal"], "stock_signal": SETTINGS["stock_signal"],
-                     "fair_value": SETTINGS["fair_value"], "band": SETTINGS["band"]},
+                     "fair_value": SETTINGS["fair_value"], "band": SETTINGS["band"],
+                     "index_scenarios": SETTINGS.get("index_scenarios", {})},
     }
     write_json(DATA / "dashboard.json", out)
     print(f"완료: 성공 {len(REPORT.ok)} / 실패 {len(REPORT.failures)}")

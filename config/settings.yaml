@@ -36,5 +36,11 @@ rerating:
 kospi_forward:
   top_n: 50
 
+# 지수 적정 수준 시나리오 표에 쓸 배수 (EPS × PER, BPS × PBR)
+index_scenarios:
+  kospi_per: [8, 9, 10, 11, 12]
+  kospi_pbr: [0.8, 0.9, 1.0, 1.1, 1.2, 1.4]
+  sp500_per: [16, 18, 20, 22]
+
 # 크롤링 요청 사이 대기(초)
 request_delay: 1.0
