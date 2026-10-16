@@ -215,7 +215,7 @@ function drawBand(id, band, kind, period) {
   const nm = kind === "DIV" ? "배당수익률" : kind;
   $(`#${id}-stats`).innerHTML =
     `현재 ${nm} <b>${n(cur, 2)}${unit}</b> · 평균 ${n(st.avg, 2)}${unit} · 하단 ${n(st.low, 2)} · 상단 ${n(st.high, 2)} (최저 ${n(st.min, 2)} / 최고 ${n(st.max, 2)}) · 밴드 위치 <b>${n(st.pos, 0)}%</b>
-    <br><span class="src">기간 ${esc(st.from)} ~ · 주간 종가 기준 · ${band.basis === "forward" ? "<b>조정 PER</b>: 각 시점의 1년 뒤 실적(최근은 추정치)으로 계산" : "직전 연도 확정 실적 사용"} · 하단/상단 = 하위 ${DASH.settings.band.low_pct}% / 상위 ${100 - DASH.settings.band.high_pct}% 지점</span>`;
+    <br><span class="src">기간 ${esc(st.from)} ~ · 주간 종가 기준 · ${band.basis === "forward" ? "<b>선행 PER</b>: 각 시점의 1년 뒤 실적(최근은 추정치)으로 계산" : "직전 연도 확정 실적 사용"} · 하단/상단 = 하위 ${DASH.settings.band.low_pct}% / 상위 ${100 - DASH.settings.band.high_pct}% 지점</span>`;
 }
 function wireBand(id, band, kind) {
   const seg = document.getElementById(`${id}-seg`);
@@ -252,7 +252,7 @@ function detailHTML(d) {
   if (c.short_history) h += `<div class="warnbox">📅 ${esc((c.band_start || "").slice(0, 4))}년부터의 데이터만 있어요. 10년 평균은 가능한 기간으로 계산했어요.</div>`;
   if (c.rerating_warning) h += `<div class="warnbox">${esc(c.rerating_warning)}</div>`;
   for (const x of c.checks || []) {
-    h += `<div class="note">${x.warn ? "⚠ " : "✓ "}${esc(x.item)}: ${n(x.a)} <span class="src">${esc(x.a_src)}</span> / ${n(x.b)} <span class="src">${esc(x.b_src)}</span>${x.warn ? " — 10% 이상 차이" : " — 일치"}</div>`;
+    h += `<div class="note">${x.warn ? "⚠ " : "✓ "}${esc(x.item)}: ${n(x.a, x.dg || 0)} <span class="src">${esc(x.a_src)}</span> / ${n(x.b, x.dg || 0)} <span class="src">${esc(x.b_src)}</span>${x.warn ? " — 10% 이상 차이" : " — 일치"}</div>`;
   }
   h += `</div>`;
 
@@ -280,7 +280,7 @@ function detailHTML(d) {
   }
   if (d.div && d.bands.DIV) {
     const v = d.div;
-    h += `<h3>배당</h3><div class="card">${bandBlock("band-div", d.bands.DIV, "DIV")}
+    h += `<h3>배당</h3><div class="card">${v.no_history ? `<div class="warnbox">배당을 시작한 지 얼마 안 돼서 과거 배당수익률 밴드는 없어요. 대신 목표 배당수익률로 적정주가를 계산했어요.</div>` : bandBlock("band-div", d.bands.DIV, "DIV")}
       <div class="kv">
         <div class="k">현재 배당수익률 <span class="src">${v.dps_last_year}년 배당금 ${n(v.dps_last)}원 기준</span></div><div class="v">${pct(v.cur_yield, 2)}</div>
         <div class="k">올해 예상 배당수익률 <span class="src">컨센서스</span></div><div class="v">${pct(v.fwd_yield, 2)}</div>
@@ -291,8 +291,8 @@ function detailHTML(d) {
       <div class="chart-box"><canvas id="dps-chart"></canvas></div>
       <h3>배당으로 본 적정주가 (배당금 ÷ 배당수익률)</h3>
       <div class="tbl-wrap"><table><thead><tr><th>배당금 가정</th>${v.yield_labels.map((l, i) => `<th>${esc(v.no_history ? l : l.split(" ")[0])}<br><span class="src">${pct(v.yield_values[i], 2)}</span></th>`).join("")}</tr></thead>
-      <tbody>${v.scenarios.map((s) => `<tr><td>${esc(s.label)}<br><span class="src">${s.dps == null ? "N/A" : n(s.dps) + "원"}</span></td>${s.prices.map((p) => p == null ? "<td>N/A</td>" : `<td class="${p >= d.price ? "cheap" : "dear"}">${n(p)}<br><span class="src">${pct((p / d.price - 1) * 100, 0, true)}</span></td>`).join("")}</tr>`).join("")}</tbody></table></div>
-      <div class="note">하방 = 10년 중 배당수익률이 가장 높았던 수준(상위 10%)까지 주가가 내려간 경우, 상방 = 가장 낮았던 수준(하위 10%)까지 오른 경우예요.</div></div>`;
+      <tbody>${v.scenarios.filter((s) => s.dps).map((s) => `<tr><td>${esc(s.label)}<br><span class="src">${s.dps == null ? "N/A" : n(s.dps) + "원"}</span></td>${s.prices.map((p) => p == null ? "<td>N/A</td>" : `<td class="${p >= d.price ? "cheap" : "dear"}">${n(p)}<br><span class="src">${pct((p / d.price - 1) * 100, 0, true)}</span></td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <div class="note">${v.no_history ? "배당금 ÷ 목표 배당수익률 = 그 수익률이 되는 주가예요. 목표 수익률은 config/settings.yaml 의 dividend.target_yields 에서 바꿀 수 있어요." : "하방 = 10년 중 배당수익률이 가장 높았던 수준(상위 10%)까지 주가가 내려간 경우, 상방 = 가장 낮았던 수준(하위 10%)까지 오른 경우예요."}</div></div>`;
   }
   h += `<h3>연도별 실적</h3><div class="card"><div class="tbl-wrap"><table><thead><tr><th>연도</th><th>EPS</th><th>BPS</th><th>DPS</th><th>ROE</th><th>배당성향</th><th>출처</th></tr></thead><tbody>
     ${d.history.map((r) => `<tr><td>${r.year}${r.estimate ? "E" : ""}</td><td>${n(r.eps, d.currency === "USD" ? 2 : 0)}</td><td>${n(r.bps)}</td><td>${n(r.dps)}</td><td>${pct(r.roe)}</td><td>${pct(r.payout)}</td><td class="src">${esc(r.src)}</td></tr>`).join("")}
@@ -304,7 +304,7 @@ function drawDetailCharts(d) {
   if (d.per && d.bands.PER) wireBand("band-per", d.bands.PER, "PER");
   if (d.pbr && d.bands.PBR) wireBand("band-pbr", d.bands.PBR, "PBR");
   if (d.div && d.bands.DIV) {
-    wireBand("band-div", d.bands.DIV, "DIV");
+    if (!d.div.no_history) wireBand("band-div", d.bands.DIV, "DIV");
     const C = themeColors();
     const ys = d.div.dps_years;
     makeChart(document.getElementById("dps-chart"), ys.map((y) => y.year + (y.estimate ? "E" : "")),
