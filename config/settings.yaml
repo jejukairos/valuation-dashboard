@@ -34,7 +34,7 @@ rerating:
 
 # 한국 시장 선행 PER: 코스피 시가총액 상위 몇 개 종목으로 계산할지
 kospi_forward:
-  top_n: 50
+  top_n: 150   # 50개면 대형주 쏠림으로 PER 이 약 7% 낮게 나와서 150개로 (우산 자료와 1% 이내 일치)
 
 # 지수 적정 수준 시나리오 표에 쓸 배수 (EPS × PER, BPS × PBR)
 index_scenarios:

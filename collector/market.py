@@ -179,6 +179,7 @@ def kospi_forward():
         raise RuntimeError(f"컨센서스가 있는 종목이 너무 적음 ({used}/{len(stocks)})")
     fwd_ni = w0 * ni[y0] + (1 - w0) * ni[y0 + 1]
     per = cap_sum / fwd_ni
+    fwd_eq = w0 * eq[y0] + (1 - w0) * eq[y0 + 1]
     level = None
     try:
         j = HTTP.get("https://m.stock.naver.com/api/index/KOSPI/integration").json()
@@ -201,6 +202,10 @@ def kospi_forward():
     write_json(path, h)
     return {"value": round(per, 2), "date": date, "used": used, "total": len(stocks), "missing": missing[:20],
             "level": level, "years": years,
+            "fwd_pbr": round(eq_cap / fwd_eq, 2) if fwd_eq else None,
+            "fwd_roe": round(fwd_ni / fwd_eq * 100, 1) if fwd_eq else None,
+            "fwd_ni_jo": round(fwd_ni / 1e4, 1), "cap_jo": round(cap_sum / 1e4),
+            "ni_jo": {lab(y): round(ni[y] / 1e4, 1) for y in ys},
             "pbr_now": round(eq_cap / eq_last, 3) if eq_last else None,
             "source": f"직접 계산 · 시총 상위 {len(stocks)}개 중 {used}개 컨센서스 합산",
             "method": ("코스피 지수 EPS = 지수 ÷ PER (PER = 시가총액 합 ÷ 지배순이익 합). "
