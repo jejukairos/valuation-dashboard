@@ -5,9 +5,9 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const LIGHT = {
-  green: { emoji: "🟢", market: "매력 구간", stock: "쌈" },
+  green: { emoji: "🟢", market: "매력 구간", stock: "저평가" },
   yellow: { emoji: "🟡", market: "중립", stock: "적정" },
-  red: { emoji: "🔴", market: "위험 구간", stock: "비쌈" },
+  red: { emoji: "🔴", market: "위험 구간", stock: "고평가" },
   na: { emoji: "⚪", market: "N/A", stock: "N/A" },
 };
 let DASH = null;
@@ -342,7 +342,12 @@ function spBand() {
   const f = DASH.market.sp500_forward;
   const el = $("#spBand");
   if (!t || !t.hist) { el.innerHTML = `<div class="empty">N/A — S&P500 PER 데이터를 받지 못했어요.</div>`; return; }
-  el.innerHTML = `<div class="seg" id="sp-seg"><button data-y="0">역사적</button><button data-y="10" class="on">10년</button><button data-y="5">5년</button></div>
+  const tcur = t.hist[t.hist.length - 1];
+  el.innerHTML = `<div class="tiles">
+      <div class="tile"><div class="tl">선행 12개월 PER</div><div class="tv">${f ? times(f.value) : "N/A"}</div><div class="src">FactSet · ${esc(f?.date || "")}</div></div>
+      <div class="tile"><div class="tl">후행 PER (차트 기준)</div><div class="tv">${times(tcur[1])}</div><div class="src">multpl · ${esc(tcur[0])}</div></div>
+    </div>
+    <div class="seg" id="sp-seg"><button data-y="0">역사적</button><button data-y="10" class="on">10년</button><button data-y="5">5년</button></div>
     <div class="chart-box tall"><canvas id="sp-chart"></canvas></div><div id="sp-legend"></div><div class="note" id="sp-stats"></div>
     <div class="kv" style="margin-top:14px">
       <div class="k">선행 12개월 PER <span class="src">${esc(f?.source || "")} · ${esc(f?.date || "")}</span></div><div class="v">${f ? times(f.value) : "N/A"}</div>

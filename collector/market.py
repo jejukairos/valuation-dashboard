@@ -96,7 +96,7 @@ def kospi_forward():
     h[date] = round(per, 2)
     write_json(path, h)
     return {"value": round(per, 2), "date": date, "used": used, "total": len(stocks), "missing": missing[:20],
-            "source": f"네이버·와이즈리포트 컨센서스로 직접 계산 (코스피 시총 상위 {len(stocks)}개 중 {used}개 합산)",
+            "source": f"직접 계산 · 시총 상위 {len(stocks)}개 중 {used}개 컨센서스 합산",
             "hist": sorted([[k, v] for k, v in h.items()])}
 
 
