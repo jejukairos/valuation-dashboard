@@ -278,6 +278,15 @@ def main():
             if od:
                 c["new_orders"] = sum(1 for x in od["contracts"] if x.get("new"))
 
+    print("■ 주요 주주 지분")
+    import holders
+    hd = holders.collect()
+    write_json(DATA / "holders.json", hd)
+    for c in cards:  # 최근 30일 안에 5% 이상 주주(국민연금 등)의 0.5%p 이상 지분 변동 공시가 있으면 카드에 표시
+        rc = (hd["companies"].get(c["code"]) or {}).get("recent") or []
+        if rc:
+            c["holder_changes"] = [{"name": x["name"], "chg": x["chg_ratio"], "date": x["date"]} for x in rc]
+
     print("■ 동종업계")
     import peers
     write_json(DATA / "peers.json", peers.collect())

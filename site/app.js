@@ -150,6 +150,9 @@ function stockCard(c) {
   if (c.short_history) pills.push(`<span class="pill">📅 ${esc((c.band_start || "").slice(0, 4))}년부터 데이터 (10년 미만)</span>`);
   if (c.rerating_warning) pills.push(`<span class="pill yellow">⚠ 리레이팅 반영 가능성</span>`);
   if (c.new_orders) pills.push(`<span class="pill green">🆕 새 수주 공시 ${c.new_orders}건</span>`);
+  for (const x of c.holder_changes || []) {
+    pills.push(`<span class="pill ${x.chg < 0 ? "red" : "green"}">👥 ${esc(x.name.replace("공단", ""))} 지분 ${x.chg < 0 ? "▼" : "▲"}${n(Math.abs(x.chg), 2)}%p (${esc(x.date.slice(5))})</span>`);
+  }
   if ((c.checks || []).some((x) => x.warn)) pills.push(`<span class="pill yellow">⚠ 출처 간 10%↑ 차이</span>`);
   let mine = "";
   if (c.avg_price && c.quantity) {
@@ -372,6 +375,50 @@ function drawOrders(code) {
     { type: "bar", zero: true, fmt: (v) => n(v, 2) + "조원", yfmt: (v) => n(v, 0), xlen: 4 });
 }
 
+/* ---------- 주요 주주(국민연금 등) 지분 변화 ---------- */
+let HOLDERS = null;
+async function holdersBlock(code) {
+  if (HOLDERS === null) {
+    try { HOLDERS = await (await fetch("data/holders.json?t=" + encodeURIComponent(DASH.updated_at))).json(); }
+    catch (e) { HOLDERS = { companies: {} }; }
+  }
+  const h = HOLDERS.companies[code];
+  if (!h || !Object.keys(h.series).length) return "";
+  const sgn = (v) => (v > 0 ? "▲" : v < 0 ? "▼" : "") + n(Math.abs(v), 2) + "%p";
+  return `<h3>주요 주주 지분 변화 <span class="src">5% 이상 주주 · 1%p 이상 변동 시 공시</span></h3><div class="card">
+    <div class="chart-box tall"><canvas id="holders-chart"></canvas></div><div id="holders-legend"></div>
+    <div class="note src">지분 30% 넘는 최대주주는 차트에서 빼고 아래 표에만 보여 줘요.</div>
+    <div class="chart-title">최근 지분 변동</div>
+    <div class="tbl-wrap"><table class="compact orders"><thead><tr><th>공시일</th><th>주주 · 사유</th><th>변동</th></tr></thead><tbody>
+    ${h.changes.slice(0, 12).map((x) => `<tr><td>${esc(x.date.slice(2))}</td>
+      <td style="white-space:normal"><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a><br><span class="src">${esc(x.reason)}</span></td>
+      <td class="${x.chg_ratio < 0 ? "dear" : "cheap"}">${sgn(x.chg_ratio)}<br><span class="src">보유 ${n(x.ratio, 2)}%</span></td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="note src">${esc(HOLDERS.source)} · ${esc(HOLDERS.updated_at)}</div></div>`;
+}
+function drawHolders(code) {
+  const h = HOLDERS && HOLDERS.companies[code];
+  const cv = document.getElementById("holders-chart");
+  if (!h || !cv) return;
+  const C = themeColors();
+  const pal = [C.s1, C.s3, C.s4, C.s7];
+  const labels = [...new Set(Object.values(h.series).flat().map((x) => x.date))].sort();
+  // 최대주주처럼 30% 넘는 주주는 선이 너무 위에 있어 다른 주주 변화가 안 보여서 차트에서는 뺀다(표에는 나옴)
+  const lastRatio = (nm) => (h.series[nm].at(-1) || {}).ratio || 0;
+  let names = Object.keys(h.series).filter((nm) => lastRatio(nm) < 30);
+  if (!names.length) names = Object.keys(h.series);
+  names.sort((a, b) => (a.includes("국민연금") ? -1 : b.includes("국민연금") ? 1 : lastRatio(b) - lastRatio(a)));
+  let pi = 0;
+  const ds = names.slice(0, 5).map((nm) => {
+    const rows = h.series[nm];
+    const data = labels.map((d) => { const r = rows.filter((x) => x.date <= d).pop(); return r ? r.ratio : null; });
+    const nps = nm.includes("국민연금");
+    return { label: nm, data, borderColor: nps ? C.s2 : pal[pi++ % pal.length], borderWidth: nps ? 3 : 2, stepped: "before", spanGaps: true };
+  });
+  makeChart(cv, labels, ds, { fmt: (v) => n(v, 2) + "%", yfmt: (v) => n(v, 0) + "%", xlen: 7 });
+  document.getElementById("holders-legend").innerHTML = legend(ds.map((d) => [d.label, d.borderColor, false]));
+}
+
 /* ---------- 4. 동종업계 비교 ---------- */
 let PEERS = null;
 const FLAG = { KR: "🇰🇷", US: "🇺🇸", EU: "🇪🇺", JP: "🇯🇵" };
@@ -393,7 +440,7 @@ async function peersBlock(code, noPbr) {
       ${noPbr ? `<div class="note">미국 빅테크는 PBR 이 의미가 적어서 PBR 비교는 뺐어요.</div>` : `<div class="chart-title">ROE(가로) vs PBR(세로) <span class="src">오른쪽 아래일수록 'ROE 에 비해 PBR 이 낮음'</span></div>
       <div class="chart-box tall"><canvas id="peer-scatter-${gi}"></canvas></div>
       <div id="peer-legend-${gi}"></div>`}
-      <div class="note src">시총은 원화 환산(환율: 달러 ${n(PEERS.fx.USD, 0)} · 유로 ${n(PEERS.fx.EUR, 0)} · 엔 ${n(PEERS.fx.JPY, 2)}원) · 한국: 네이버 증권(선행 PER = 올해 추정), ROE 는 최근 연간 실적 · 해외: 야후 파이낸스(선행 PER = 향후 12개월, ROE = 최근 12개월) · ${esc(PEERS.updated_at)}
+      <div class="note src">시총은 원화 환산(환율: 달러 ${n(PEERS.fx.USD, 0)} · 유로 ${n(PEERS.fx.EUR, 0)} · 엔 ${n(PEERS.fx.JPY, 2)}원) · 한국: 네이버 증권·와이즈리포트(선행 PER = 12개월 선행), ROE 는 최근 연간 실적 · 해외: 야후 파이낸스(선행 PER = 향후 12개월, ROE = 최근 12개월) · ${esc(PEERS.updated_at)}
       ${warns.length ? "<br>" + warns.join("<br>") : ""}</div></div>`;
   }).join("");
 }
@@ -442,9 +489,11 @@ async function openStock(code) {
     const d = await (await fetch(`data/stocks/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json();
     const peerHtml = await peersBlock(code, d.market === "US");
     const orderHtml = await ordersBlock(code);
-    $("#sheetBody").innerHTML = detailHTML(d) + orderHtml + peerHtml;
+    const holderHtml = await holdersBlock(code);
+    $("#sheetBody").innerHTML = detailHTML(d) + orderHtml + holderHtml + peerHtml;
     drawDetailCharts(d);
     drawOrders(code);
+    drawHolders(code);
     drawPeers(code);
   } catch (e) {
     $("#sheetBody").innerHTML = `<div class="empty">상세 데이터를 불러오지 못했어요.</div>`;
