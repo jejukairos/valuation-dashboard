@@ -210,6 +210,10 @@ def main():
                 c = dict(prev_cards[code], stale=True, order=i)
                 cards.append(c)
 
+    print("■ PBR 계산기")
+    import pbr_watch
+    write_json(DATA / "pbr_watch.json", pbr_watch.collect())
+
     out = {
         "updated_at": t0.strftime("%Y-%m-%d %H:%M"),
         "rates": r, "market": m, "signals": {"us": us_sig, "kr": kr_sig},

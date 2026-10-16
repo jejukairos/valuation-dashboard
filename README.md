@@ -11,6 +11,7 @@
 | 파일 | 내용 |
 |---|---|
 | `config/stocks.yaml` | 보유종목, 평가 방식(PER/PBR/DIV), 평단가·수량 |
+| `config/pbr_watch.yaml` | PBR 계산기 탭 종목·배수·메모 |
 | `config/settings.yaml` | 신호등 기준값(0.5 / 0.75), 적정가 계산법, 밴드 정의 |
 
 ## 비밀 정보 (코드에 없음)

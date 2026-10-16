@@ -333,7 +333,7 @@ function closeSheet() {
 }
 function route() {
   const m = location.hash.match(/^#stock\/(\w+)/);
-  if (m) openStock(m[1]); else closeSheet();
+  if (m) openStock(m[1]); else { closeSheet(); showView(); }
 }
 
 /* ---------- 5. S&P500 PER 밴드 ---------- */
@@ -443,6 +443,72 @@ function kospiCard() {
     <h3>코스피 시나리오: BPS × PBR</h3>${matrixTable(pbrRows, ys, lvl, "PBR ↓ · BPS →", "지수")}
     <div class="note">시나리오 배수는 config/settings.yaml 의 index_scenarios 에서 바꿀 수 있어요.</div>`;
   if (hasBand) wireHBand("kp", t.pbr_hist, "코스피 PBR", "배", 2, 10);
+}
+
+/* ---------- PBR 계산기 탭 ---------- */
+let PBR = null;
+async function loadPBR() {
+  if (!PBR) {
+    try { PBR = await (await fetch("data/pbr_watch.json?t=" + Date.now(), { cache: "no-store" })).json(); }
+    catch (e) { $("#pbrCards").innerHTML = `<div class="empty">PBR 계산기 데이터를 불러오지 못했어요.</div>`; return; }
+  }
+  const base = PBR.base_year;
+  $("#pbrIntro").innerHTML = `연도별 추정 BPS(주당순자산) × PBR 배수로 가격을 계산해요. <b>${esc(base)}</b> 열이 기준 연도예요. 갱신 ${esc(PBR.updated_at)}`;
+  $("#pbrCards").innerHTML = PBR.items.map((it, i) => pbrCard(it, base, i)).join("") || `<div class="empty">config/pbr_watch.yaml 에 종목을 넣어 주세요.</div>`;
+  PBR.items.forEach((it, i) => {
+    const inp = document.getElementById(`calc-${i}`);
+    const out = document.getElementById(`calc-out-${i}`);
+    const run = () => {
+      const p = Number(String(inp.value).replace(/[^\d.]/g, ""));
+      if (!p) { out.textContent = ""; return; }
+      const parts = Object.entries(it.bps).map(([y, b]) => `${y} ${b ? (p / b).toFixed(2) + "배" : "N/A"}`);
+      out.innerHTML = `<b>${n(p)}원</b> = ${parts.join(" · ")} <span class="src">(지금보다 ${pct((p / it.price - 1) * 100, 1, true)})</span>`;
+    };
+    inp.addEventListener("input", run);
+  });
+}
+const mfmt = (m) => m.toFixed(Math.round(m * 100) % 10 ? 2 : 1);
+function pbrCard(it, base, i) {
+  const ys = Object.keys(it.bps);
+  const cls = (y) => (y === base ? "base" : "");
+  const pbrVals = it.rows.map((r) => r.mult);
+  const lo = Math.min(...pbrVals), hi = Math.max(...pbrVals);
+  const pbrCell = (v) => (v == null ? "N/A" : `<span class="${v <= lo ? "pill green" : v >= hi ? "pill red" : ""}">${v.toFixed(2)}배</span>`);
+  const b0 = it.bps[base];
+  const sum = [];
+  if (b0) {
+    sum.push(`지금 <b>${n(it.price)}원</b> = ${esc(base)} PBR <b>${(it.price / b0).toFixed(2)}배</b>`);
+    for (const r of [...it.rows].sort((a, b) => b.mult - a.mult)) {
+      const p = r.prices[base];
+      if (!p) continue;
+      const c = r.chg[base];
+      sum.push(`${esc(base)} PBR <b>${mfmt(r.mult)}배</b> = ${n(p)}원 <span class="${c < 0 ? "verdict red" : "verdict green"}" style="font-size:13px">(지금보다 ${pct(c, 0, true)})</span>`);
+    }
+  }
+  const band = it.band10 ? `<div class="note">10년 PBR 밴드: 하단 ${it.band10.low} · 평균 ${it.band10.avg} · 상단 ${it.band10.high}배 · 지금 위치 <b>${n(it.band10.pos, 0)}%</b> <span class="src">(직전 연도 실적 기준)</span></div>` : "";
+  return `<div class="card">
+    <div class="stock"><div class="row1"><span class="name">${esc(it.name)}</span><span class="price">${won(it.price)}</span></div></div>
+    <div class="sub">${esc(it.date)} 기준 ${it.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""} · 최근 실적(${it.bps_last.year}) BPS ${n(it.bps_last.bps)} → PBR ${times(it.bps_last.pbr, 2)}</div>
+    <div class="tbl-wrap"><table><thead><tr><th>구분</th>${ys.map((y) => `<th class="${cls(y)}">${y}</th>`).join("")}</tr></thead><tbody>
+      <tr><td>BPS</td>${ys.map((y) => `<td class="${cls(y)}">${n(it.bps[y])}</td>`).join("")}</tr>
+      <tr><td>현재 PBR</td>${ys.map((y) => `<td class="${cls(y)}">${pbrCell(it.pbr[y])}</td>`).join("")}</tr>
+      ${it.rows.map((r) => `<tr><td>PBR ${mfmt(r.mult)}</td>${ys.map((y) => `<td class="${cls(y)} ${r.chg[y] != null && Math.abs(r.chg[y]) < 10 ? "hot" : ""}">${r.prices[y] == null ? "N/A" : n(r.prices[y])}<br><span class="src">${pct(r.chg[y], 0, true)}</span></td>`).join("")}</tr>`).join("")}
+    </tbody></table></div>
+    ${it.auto_multiples ? `<div class="note">배수는 10년 PBR 밴드의 하단·평균·상단을 자동으로 넣었어요.</div>` : ""}
+    ${sum.length ? `<ul class="summary">${sum.map((s) => `<li>${s}</li>`).join("")}</ul>` : ""}
+    ${band}
+    <div class="calc"><input id="calc-${i}" inputmode="numeric" placeholder="가격을 넣어 보세요 (예: 200000)" aria-label="${esc(it.name)} 가격 입력"></div>
+    <div class="calc-out" id="calc-out-${i}"></div>
+    ${it.memo ? `<div class="memo">📝 ${esc(it.memo)}</div>` : ""}
+    <div class="note src">${esc(it.source)} · 굵은 칸 = 지금 가격과 10% 이내 · 표의 %는 지금 가격 대비</div>
+  </div>`;
+}
+function showView() {
+  const isPbr = location.hash === "#pbr";
+  $("#pbrView").hidden = !isPbr;
+  $("#mainView").hidden = isPbr;
+  document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", (a.dataset.view === "pbr") === isPbr));
+  if (isPbr) loadPBR();
 }
 
 /* ---------- 전체 ---------- */
