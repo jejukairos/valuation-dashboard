@@ -24,7 +24,13 @@ def kr_row(p):
     w = wise_annual(p["code"])
     actual = [y for y, r in w.items() if not r.get("estimate") and r.get("roe") is not None]
     roe = w[max(actual)]["roe"] if actual else None
-    return {"cap_krw": now.get("market_cap"), "fwd_per": now.get("fwd_per"), "pbr": now.get("pbr"),
+    # 보유종목 카드와 같은 '12개월 선행 PER'(올해·내년 추정 EPS 를 남은 기간 비율로 섞음)으로 맞춘다
+    t = now_kst()
+    a, b = w.get(t.year, {}).get("eps"), w.get(t.year + 1, {}).get("eps")
+    w0 = max(0.0, (12 - (t.month - 1) - t.day / 31) / 12)
+    f12 = (w0 * a + (1 - w0) * b) if (a is not None and b is not None) else None
+    fwd_per = now["price"] / f12 if (f12 and f12 > 0 and now.get("price")) else now.get("fwd_per")
+    return {"cap_krw": now.get("market_cap"), "fwd_per": fwd_per, "pbr": now.get("pbr"),
             "roe": roe, "div": now.get("div_yield"), "currency": "KRW",
             "src": f"네이버 증권 · ROE {max(actual)}년 와이즈리포트" if actual else "네이버 증권"}
 
