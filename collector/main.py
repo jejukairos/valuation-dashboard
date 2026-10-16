@@ -180,9 +180,14 @@ def main():
         kr_sig = market_signal("한국", None, "", "", kr3, "국고채 3년")
     us_sig["premium_hist"] = premium_hist(spt.get("hist", [])[-12 * 20:], (r.get("us10y") or {}).get("hist"))
     us_sig["premium_hist_label"] = "S&P500 후행 PER 기준 (월별)"
-    kr_sig["premium_hist"] = premium_hist(kf.get("hist", []), (r.get("kr3y") or {}).get("hist")) or \
-        premium_hist(kt.get("hist", []), (r.get("kr3y") or {}).get("hist"))
-    kr_sig["premium_hist_label"] = "코스피 선행 PER 기준 (갱신할 때마다 쌓임)"
+    # 선행 PER 이력이 충분히 쌓이기 전에는 KRX 후행 PER(2000년~)로 긴 추이를 보여준다
+    kr3_hist = (r.get("kr3y") or {}).get("hist")
+    if len(kf.get("hist", [])) < 30 and kt.get("hist"):
+        kr_sig["premium_hist"] = premium_hist(kt["hist"][-52 * 20:], kr3_hist)
+        kr_sig["premium_hist_label"] = "코스피 후행 PER 기준 (KRX, 주간)"
+    else:
+        kr_sig["premium_hist"] = premium_hist(kf.get("hist", []), kr3_hist)
+        kr_sig["premium_hist_label"] = "코스피 선행 PER 기준 (갱신할 때마다 쌓임)"
 
     print("■ 보유종목")
     cards = []
