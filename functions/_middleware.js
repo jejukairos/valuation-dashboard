@@ -26,6 +26,18 @@ button{background:#2a78d6;color:#fff;border:0;font-weight:700}p{color:#d03b3b;fo
 
 export async function onRequest(ctx) {
   // 접속 점검용 (보유종목 정보 없음): 휴대폰이 서버에 닿는지 확인
+  if (new URL(ctx.request.url).pathname === "/check") {
+    return new Response(
+      `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>점검</title></head>
+<body style="font:16px system-ui;padding:16px;word-break:break-all"><h3>접속 점검</h3><pre id="o">확인 중…</pre>
+<p><a href="/?t=${Date.now()}" style="font-size:20px">👉 대시보드 열기</a></p>
+<script>(async()=>{const o=document.getElementById('o');let s='';
+try{const r=await fetch('/?t='+Date.now(),{cache:'no-store',credentials:'include'});const t=await r.text();s+='첫 화면 응답: '+r.status+' / 길이 '+t.length+' / 비밀번호칸 '+(t.includes('type="password"'))+'\\n';}catch(e){s+='첫 화면 오류: '+e+'\\n';}
+try{const g=navigator.serviceWorker?await navigator.serviceWorker.getRegistrations():[];s+='서비스워커: '+g.length+'개\\n';}catch(e){s+='서비스워커 확인 실패\\n';}
+s+='쿠키 사용: '+navigator.cookieEnabled+'\\n';o.textContent=s;})();</script></body></html>`,
+      { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
+    );
+  }
   if (new URL(ctx.request.url).pathname === "/ping") {
     const h = ctx.request.headers;
     const cf = ctx.request.cf || {};
