@@ -317,6 +317,63 @@ function drawDetailCharts(d) {
       { type: "bar", zero: true, fmt: (v) => n(v) + "원", yfmt: (v) => n(v), xlen: 6 });
   }
 }
+/* ---------- 4. 동종업계 비교 ---------- */
+let PEERS = null;
+const FLAG = { KR: "🇰🇷", US: "🇺🇸", EU: "🇪🇺", JP: "🇯🇵" };
+async function peersBlock(code) {
+  if (!PEERS) {
+    try { PEERS = await (await fetch("data/peers.json?t=" + encodeURIComponent(DASH.updated_at))).json(); }
+    catch (e) { return ""; }
+  }
+  const gs = PEERS.groups.filter((g) => g.holdings.includes(code));
+  return gs.map((g, gi) => {
+    const warns = g.rows.filter((r) => r.warn).map((r) => `${esc(r.name)}: ${esc(r.warn)}`);
+    return `<h3>동종업계 비교 · ${esc(g.name)}</h3><div class="card">
+      <div class="tbl-wrap"><table class="compact"><thead><tr><th>회사</th><th>시총<br>(조원)</th><th>선행<br>PER</th><th>PBR</th><th>ROE</th><th>배당</th></tr></thead><tbody>
+      ${g.rows.map((r) => `<tr${r.code === code ? ' class="me"' : ""}><td>${FLAG[r.market] || ""} ${esc(r.name)}${r.stale ? " ⚠" : ""}</td>
+        <td>${r.cap_krw == null ? "N/A" : n(r.cap_krw / 1e12, 1)}</td><td>${times(r.fwd_per)}</td><td>${times(r.pbr, 2)}</td>
+        <td>${pct(r.roe)}</td><td>${pct(r.div, 2)}</td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="chart-title">ROE(가로) vs PBR(세로) <span class="src">오른쪽 아래일수록 'ROE 에 비해 PBR 이 낮음'</span></div>
+      <div class="chart-box tall"><canvas id="peer-scatter-${gi}"></canvas></div>
+      <div id="peer-legend-${gi}"></div>
+      <div class="note src">시총은 원화 환산(환율: 달러 ${n(PEERS.fx.USD, 0)} · 유로 ${n(PEERS.fx.EUR, 0)} · 엔 ${n(PEERS.fx.JPY, 2)}원) · 한국: 네이버 증권(선행 PER = 올해 추정), ROE 는 최근 연간 실적 · 해외: 야후 파이낸스(선행 PER = 향후 12개월, ROE = 최근 12개월) · ${esc(PEERS.updated_at)}
+      ${warns.length ? "<br>" + warns.join("<br>") : ""}</div></div>`;
+  }).join("");
+}
+function drawPeers(code) {
+  if (!PEERS) return;
+  const C = themeColors();
+  PEERS.groups.filter((g) => g.holdings.includes(code)).forEach((g, gi) => {
+    const cv = document.getElementById(`peer-scatter-${gi}`);
+    if (!cv) return;
+    const pts = (f) => g.rows.filter((r) => r.roe != null && r.pbr != null && f(r)).map((r) => ({ x: r.roe, y: r.pbr, name: r.name }));
+    const ds = [
+      { label: "국내", data: pts((r) => r.market === "KR" && r.code !== code), backgroundColor: C.s1, pointRadius: 6, pointHoverRadius: 8 },
+      { label: "해외", data: pts((r) => r.market !== "KR" && r.code !== code), backgroundColor: C.s3, pointRadius: 6, pointHoverRadius: 8 },
+      { label: "내 종목", data: pts((r) => r.code === code), backgroundColor: C.s2, pointRadius: 10, pointHoverRadius: 12, borderColor: C.surface, borderWidth: 2 },
+    ];
+    const ys = ds.flatMap((d) => d.data.map((p) => p.y)).filter((v) => v > 0);
+    const logY = ys.length && Math.max(...ys) / Math.min(...ys) > 15; // 차이가 너무 크면 로그 눈금
+    if (charts.has(cv.id)) charts.get(cv.id).destroy();
+    charts.set(cv.id, new Chart(cv, {
+      type: "scatter", data: { datasets: ds },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: C.surface, titleColor: C.ink, bodyColor: C.ink, borderColor: C.grid, borderWidth: 1,
+            callbacks: { label: (c) => ` ${c.raw.name}: ROE ${c.raw.x.toFixed(1)}% · PBR ${c.raw.y.toFixed(2)}배` } } },
+        scales: {
+          x: { title: { display: true, text: "ROE (%)", color: C.muted }, grid: { color: C.grid }, ticks: { color: C.muted } },
+          y: { type: logY ? "logarithmic" : "linear", title: { display: true, text: logY ? "PBR (배, 로그 눈금)" : "PBR (배)", color: C.muted },
+            grid: { color: C.grid }, ticks: { color: C.muted, callback: (v) => (logY && ![0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50].includes(v) ? "" : v) } },
+        },
+      },
+    }));
+    document.getElementById(`peer-legend-${gi}`).innerHTML = `<div class="legend">${ds.map((d) => `<span><i style="display:inline-block;width:10px;height:10px;border-radius:50%;border:0;background:${d.backgroundColor}"></i>${d.label}</span>`).join("")}</div>`;
+  });
+}
+
 async function openStock(code) {
   const sheet = $("#sheet");
   sheet.classList.add("open");
@@ -327,8 +384,10 @@ async function openStock(code) {
   sheet.scrollTop = 0;
   try {
     const d = await (await fetch(`data/stocks/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json();
-    $("#sheetBody").innerHTML = detailHTML(d);
+    const peerHtml = await peersBlock(code);
+    $("#sheetBody").innerHTML = detailHTML(d) + peerHtml;
     drawDetailCharts(d);
+    drawPeers(code);
   } catch (e) {
     $("#sheetBody").innerHTML = `<div class="empty">상세 데이터를 불러오지 못했어요.</div>`;
   }

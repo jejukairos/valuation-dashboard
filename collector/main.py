@@ -252,6 +252,10 @@ def main():
                 c = dict(prev_cards[code], stale=True, order=i)
                 cards.append(c)
 
+    print("■ 동종업계")
+    import peers
+    write_json(DATA / "peers.json", peers.collect())
+
     print("■ PBR 계산기")
     import pbr_watch
     write_json(DATA / "pbr_watch.json", pbr_watch.collect())

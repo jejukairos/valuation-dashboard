@@ -79,6 +79,10 @@ header.top { flex-wrap: wrap; }
 
 /* PBR 계산기 */
 td.base, th.base { background: var(--warn-bg); }
+tr.me td { background: var(--warn-bg); font-weight: 700; }
+table.compact { font-size: 12px; }
+table.compact th, table.compact td { padding: 5px 3px; }
+table.compact td:first-child { white-space: normal; min-width: 5.5em; }
 td.hot { font-weight: 700; }
 .calc { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
 .calc input { flex: 1; min-width: 0; font: inherit; font-size: 17px; padding: 10px 12px; border-radius: 10px;

@@ -1,0 +1,121 @@
+# 동종업계 비교 그룹. 보유종목 상세 화면 맨 아래에 나와요.
+# holdings: 이 그룹 표를 보여줄 내 보유종목 코드
+# peers: 비교할 회사 (market: KR = 네이버·와이즈리포트, 그 외 = 야후 티커)
+#   해외 티커 예: 미국 LMT, 독일 RHM.DE, 영국 BA.L, 프랑스 OR.PA, 이탈리아 MONC.MI, 스위스 NESN.SW, 일본 7203.T
+
+groups:
+  - name: 방산
+    holdings: ["012450", "064350"]
+    peers:
+      - {name: 한화에어로스페이스, market: KR, code: "012450"}
+      - {name: 현대로템, market: KR, code: "064350"}
+      - {name: LIG넥스원, market: KR, code: "079550"}
+      - {name: 한화시스템, market: KR, code: "272210"}
+      - {name: 한국항공우주, market: KR, code: "047810"}
+      - {name: 록히드마틴, market: US, code: LMT}
+      - {name: 제너럴다이내믹스, market: US, code: GD}
+      - {name: 라인메탈, market: EU, code: RHM.DE}
+      - {name: BAE시스템즈, market: EU, code: BA.L}
+
+  - name: 반도체
+    holdings: ["005930", "000660", "005935", NVDA]
+    peers:
+      - {name: 삼성전자, market: KR, code: "005930"}
+      - {name: SK하이닉스, market: KR, code: "000660"}
+      - {name: 한미반도체, market: KR, code: "042700"}
+      - {name: DB하이텍, market: KR, code: "000990"}
+      - {name: 리노공업, market: KR, code: "058470"}
+      - {name: 마이크론, market: US, code: MU}
+      - {name: 엔비디아, market: US, code: NVDA}
+      - {name: TSMC, market: US, code: TSM}
+      - {name: ASML, market: EU, code: ASML.AS}
+      - {name: 인피니언, market: EU, code: IFX.DE}
+
+  - name: 자동차
+    holdings: ["005380", "000270", TSLA]
+    peers:
+      - {name: 현대차, market: KR, code: "005380"}
+      - {name: 기아, market: KR, code: "000270"}
+      - {name: 현대모비스, market: KR, code: "012330"}
+      - {name: HL만도, market: KR, code: "204320"}
+      - {name: 현대위아, market: KR, code: "011210"}
+      - {name: GM, market: US, code: GM}
+      - {name: 포드, market: US, code: F}
+      - {name: 테슬라, market: US, code: TSLA}
+      - {name: 폭스바겐, market: EU, code: VOW3.DE}
+      - {name: 스텔란티스, market: EU, code: STLAM.MI}
+      - {name: 도요타, market: JP, code: 7203.T}
+
+  - name: 화장품
+    holdings: ["278470", "483650"]
+    peers:
+      - {name: 에이피알, market: KR, code: "278470"}
+      - {name: 달바글로벌, market: KR, code: "483650"}
+      - {name: 아모레퍼시픽, market: KR, code: "090430"}
+      - {name: LG생활건강, market: KR, code: "051900"}
+      - {name: 코스맥스, market: KR, code: "192820"}
+      - {name: 한국콜마, market: KR, code: "161890"}
+      - {name: 실리콘투, market: KR, code: "257720"}
+      - {name: 에스티로더, market: US, code: EL}
+      - {name: e.l.f., market: US, code: ELF}
+      - {name: 로레알, market: EU, code: OR.PA}
+      - {name: 바이어스도르프, market: EU, code: BEI.DE}
+
+  - name: 식품
+    holdings: ["003230"]
+    peers:
+      - {name: 삼양식품, market: KR, code: "003230"}
+      - {name: 농심, market: KR, code: "004370"}
+      - {name: 오리온, market: KR, code: "271560"}
+      - {name: CJ제일제당, market: KR, code: "097950"}
+      - {name: 오뚜기, market: KR, code: "007310"}
+      - {name: 닛신식품, market: JP, code: 2897.T}
+      - {name: 몬델리즈, market: US, code: MDLZ}
+      - {name: 제너럴밀스, market: US, code: GIS}
+      - {name: 네슬레, market: EU, code: NESN.SW}
+
+  - name: 유통
+    holdings: ["023530"]
+    peers:
+      - {name: 롯데쇼핑, market: KR, code: "023530"}
+      - {name: 이마트, market: KR, code: "139480"}
+      - {name: 신세계, market: KR, code: "004170"}
+      - {name: 현대백화점, market: KR, code: "069960"}
+      - {name: BGF리테일, market: KR, code: "282330"}
+      - {name: GS리테일, market: KR, code: "007070"}
+      - {name: 월마트, market: US, code: WMT}
+      - {name: 코스트코, market: US, code: COST}
+      - {name: 테스코, market: EU, code: TSCO.L}
+      - {name: 까르푸, market: EU, code: CA.PA}
+
+  - name: 인터넷
+    holdings: ["035420", META, GOOG]
+    peers:
+      - {name: NAVER, market: KR, code: "035420"}
+      - {name: 카카오, market: KR, code: "035720"}
+      - {name: 알파벳, market: US, code: GOOG}
+      - {name: 메타, market: US, code: META}
+      - {name: 프로서스, market: EU, code: PRX.AS}
+
+  - name: 소프트웨어
+    holdings: [MSFT]
+    peers:
+      - {name: 마이크로소프트, market: US, code: MSFT}
+      - {name: 오라클, market: US, code: ORCL}
+      - {name: 세일즈포스, market: US, code: CRM}
+      - {name: 어도비, market: US, code: ADBE}
+      - {name: SAP, market: EU, code: SAP.DE}
+      - {name: 삼성에스디에스, market: KR, code: "018260"}
+
+  - name: 의류
+    holdings: ["036620"]
+    peers:
+      - {name: 감성코퍼레이션, market: KR, code: "036620"}
+      - {name: F&F, market: KR, code: "383220"}
+      - {name: 영원무역, market: KR, code: "111770"}
+      - {name: 한섬, market: KR, code: "020000"}
+      - {name: 더네이쳐홀딩스, market: KR, code: "298540"}
+      - {name: 나이키, market: US, code: NKE}
+      - {name: 룰루레몬, market: US, code: LULU}
+      - {name: 몽클레르, market: EU, code: MONC.MI}
+      - {name: 아디다스, market: EU, code: ADS.DE}
