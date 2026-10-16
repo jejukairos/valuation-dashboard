@@ -28,7 +28,7 @@ jobs:
         env:
           ECOS_KEY: ${{ secrets.ECOS_KEY }}
           DART_KEY: ${{ secrets.DART_KEY }}
-          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_ID: ${{ secrets.KRX_ID || secrets.KRX_JEJUKAIROS21 }}
           KRX_PW: ${{ secrets.KRX_PW }}
           PYTHONIOENCODING: utf-8
         run: python -u collector/main.py
