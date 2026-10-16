@@ -30,6 +30,7 @@ jobs:
           DART_KEY: ${{ secrets.DART_KEY }}
           KRX_ID: ${{ secrets.KRX_ID || secrets.KRX_JEJUKAIROS21 }}
           KRX_PW: ${{ secrets.KRX_PW }}
+          SEC_CONTACT: ${{ secrets.SEC_CONTACT }}
           PYTHONIOENCODING: utf-8
         run: python -u collector/main.py
       - name: 저장 (실패해도 일부 결과는 저장)

@@ -135,12 +135,17 @@ function drawMarketCharts() {
 }
 
 /* ---------- 2. 종목 카드 ---------- */
+/* 종목별 금리 비교는 차이가 클 때(주식 선행 PER 이 채권 환산 PER 이상)만 보여준다 */
+function bondAlert(c) {
+  const lim = DASH.settings.bond_signal.stock_alert_above ?? 1.0;
+  return c.bond_ratio != null && c.bond_ratio >= lim;
+}
 function stockCard(c) {
   const L = LIGHT[c.verdict] || LIGHT.na;
   const gap = c.gap == null ? "N/A" : pct(c.gap * 100, 0, true);
   const pos = c.band_pos;
   const pills = [];
-  if (c.bond_signal) pills.push(`<span class="pill ${c.bond_signal}">${LIGHT[c.bond_signal].emoji} 금리 대비 ${n(c.bond_ratio, 2)} (선행 PER ${times(c.fwd_per)} ÷ ${esc(c.bond_label)} ${times(c.bond_per, 1)})</span>`);
+  if (bondAlert(c)) pills.push(`<span class="pill red">⚠ 금리 대비 비쌈: 선행 PER ${times(c.fwd_per)} > ${esc(c.bond_label)} 환산 PER ${times(c.bond_per, 1)}</span>`);
   if (c.div_signal) pills.push(`<span class="pill ${c.div_signal === "na" ? "" : c.div_signal}">${LIGHT[c.div_signal]?.emoji || ""} 배당 ${pct(c.div_yield, 2)}</span>`);
   if (c.short_history) pills.push(`<span class="pill">📅 ${esc((c.band_start || "").slice(0, 4))}년부터 데이터 (10년 미만)</span>`);
   if (c.rerating_warning) pills.push(`<span class="pill yellow">⚠ 리레이팅 반영 가능성</span>`);
@@ -247,8 +252,8 @@ function detailHTML(d) {
       <div class="big">${money(d.price, d.currency)}</div><div class="sub">${esc(d.price_date)} 종가 · 시가총액 ${bigWon(d.market_cap)} <span class="src">${esc(d.sources.price)}</span></div></div></div>
     <div class="kv"><div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)} (${c.gap == null ? "N/A" : pct(c.gap * 100, 0, true)})</div>
     <div class="k">12개월 선행 PER</div><div class="v">${times(c.fwd_per, 2)}</div>
-    <div class="k">${esc(c.bond_label)} 채권 환산 PER</div><div class="v">${times(c.bond_per, 1)}</div>
-    <div class="k">금리 대비 비율</div><div class="v">${LIGHT[c.bond_signal].emoji} ${n(c.bond_ratio, 2)}</div></div>`;
+    </div>`;
+  if (bondAlert(c)) h += `<div class="warnbox">⚠ 금리 대비 비쌈: 선행 PER ${times(c.fwd_per, 1)}가 ${esc(c.bond_label)} 금리로 환산한 PER ${times(c.bond_per, 1)}보다 높아요 (주식 이익수익률이 채권 금리보다 낮음).</div>`;
   if (c.short_history) h += `<div class="warnbox">📅 ${esc((c.band_start || "").slice(0, 4))}년부터의 데이터만 있어요. 10년 평균은 가능한 기간으로 계산했어요.</div>`;
   if (c.rerating_warning) h += `<div class="warnbox">${esc(c.rerating_warning)}</div>`;
   for (const x of c.checks || []) {

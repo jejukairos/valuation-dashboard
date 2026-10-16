@@ -4,6 +4,7 @@
 bond_signal:
   green_max: 0.50   # 이 값 이하 → 🟢 매력
   yellow_max: 0.75  # 이 값 이하 → 🟡 중립, 넘으면 🔴 위험
+  stock_alert_above: 1.0  # 종목 카드: 선행 PER ÷ 채권 환산 PER 이 이 값 이상일 때만 "금리 대비 비쌈" 표시
 
 # 2. 종목 판정
 stock_signal:

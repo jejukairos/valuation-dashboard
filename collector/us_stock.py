@@ -46,12 +46,23 @@ def sec_eps(t):
     contact = os.environ.get("SEC_CONTACT")
     if not contact:
         raise RuntimeError("SEC 연락처(SEC_CONTACT)가 없어 SEC 생략")
-    ua = {"User-Agent": f"personal-valuation-dashboard {contact}"}
-    m = HTTP.get("https://www.sec.gov/files/company_tickers.json", headers=ua).json()
+    import time
+
+    import requests
+    ua = {"User-Agent": f"personal-valuation-dashboard {contact}", "Accept-Encoding": "gzip, deflate"}
+
+    def get(url):  # SEC 는 브라우저 흉내 없이 연락처만 담은 요청을 원한다 (초당 10회 이하)
+        time.sleep(0.3)
+        r = requests.get(url, headers=ua, timeout=40)
+        if r.status_code != 200:
+            raise RuntimeError(f"SEC 접속 실패 (HTTP {r.status_code})")
+        return r.json()
+
+    m = get("https://www.sec.gov/files/company_tickers.json")
     cik = next((v["cik_str"] for v in m.values() if v["ticker"].upper() == t.upper()), None)
     if not cik:
         raise RuntimeError("SEC CIK 없음")
-    facts = HTTP.get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{int(cik):010d}.json", headers=ua).json()
+    facts = get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{int(cik):010d}.json")
     gaap = facts.get("facts", {}).get("us-gaap", {})
     rows = (gaap.get("EarningsPerShareDiluted") or gaap.get("EarningsPerShareBasic") or {}).get("units", {}).get("USD/shares", [])
     best = {}
