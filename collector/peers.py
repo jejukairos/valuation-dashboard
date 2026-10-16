@@ -3,7 +3,7 @@ from common import DATA, REPORT, load_yaml, now_kst, read_json, rnd
 from kr_stock import naver_now, wise_annual
 
 FX_TICKERS = {"USD": "KRW=X", "EUR": "EURKRW=X", "GBP": "GBPKRW=X", "JPY": "JPYKRW=X",
-              "CHF": "CHFKRW=X", "TWD": "TWDKRW=X"}
+              "CHF": "CHFKRW=X", "TWD": "TWDKRW=X", "SEK": "SEKKRW=X", "NOK": "NOKKRW=X"}
 
 
 def fx_rates():

@@ -4,7 +4,7 @@
 #   해외 티커 예: 미국 LMT, 독일 RHM.DE, 영국 BA.L, 프랑스 OR.PA, 이탈리아 MONC.MI, 스위스 NESN.SW, 일본 7203.T
 
 groups:
-  - name: 방산
+  - name: 방산 (국내·미국)
     holdings: ["012450", "064350"]
     peers:
       - {name: 한화에어로스페이스, market: KR, code: "012450"}
@@ -14,8 +14,36 @@ groups:
       - {name: 한국항공우주, market: KR, code: "047810"}
       - {name: 록히드마틴, market: US, code: LMT}
       - {name: 제너럴다이내믹스, market: US, code: GD}
+
+  - name: 방산 (유럽)
+    holdings: ["012450", "064350"]
+    peers:
+      - {name: 한화에어로스페이스, market: KR, code: "012450"}
+      - {name: 현대로템, market: KR, code: "064350"}
       - {name: 라인메탈, market: EU, code: RHM.DE}
       - {name: BAE시스템즈, market: EU, code: BA.L}
+      - {name: 레오나르도, market: EU, code: LDO.MI}
+      - {name: 탈레스, market: EU, code: HO.PA}
+      - {name: 사브, market: EU, code: SAAB-B.ST}
+      - {name: 콩스베르그, market: EU, code: KOG.OL}
+      - {name: 헨솔트, market: EU, code: HAG.DE}
+      - {name: 렌크, market: EU, code: R3NK.DE}
+      - {name: TKMS, market: EU, code: TKMS.DE}
+      - {name: CSG, market: EU, code: CSG.AS}
+      - {name: 인드라, market: EU, code: IDR.MC}
+      - {name: 핀칸티에리, market: EU, code: FCT.MI}
+      - {name: 아비오, market: EU, code: AVIO.MI}
+      - {name: 테온, market: EU, code: THEON.AS}
+      - {name: 켐링, market: EU, code: CHG.L}
+      - {name: 키네틱, market: EU, code: QQ.L}
+      - {name: 밥콕, market: EU, code: BAB.L}
+      - {name: 다쏘항공, market: EU, code: AM.PA}
+      - {name: 에어버스, market: EU, code: AIR.PA}
+      - {name: 사프란, market: EU, code: SAF.PA}
+      - {name: 롤스로이스, market: EU, code: RR.L}
+      - {name: MTU 에어로엔진, market: EU, code: MTX.DE}
+      - {name: 엑소센스, market: EU, code: EXENS.PA}
+      - {name: 유텔샛, market: EU, code: ETL.PA}
 
   - name: 반도체
     holdings: ["005930", "000660", "005935", NVDA]
