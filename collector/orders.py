@@ -83,12 +83,102 @@ def parse_doc(rcept_no):
         "contract_date": _date(_after(body, "계약(수주)일자") or _after(body, "계약(수주)일") or _after(body, "계약일자")
                                or _after(body, "해지일자")),
         "orig_filed": _date(_after(t, "정정관련 공시서류제출일")),
+        "pay_terms": _after(body, "대금지급 조건 등") or _after(body, "대금지급 조건"),
         "reason": _after(t, "정정사유") or _after(t, "해지사유"),
     }
     if out["amount"] is None and not out["name"]:
         raise RuntimeError("본문 양식을 못 읽음")
     write_json(path, out)
     return out
+
+
+def _quarter(d):
+    """'2026-04-23' → '2Q26'"""
+    try:
+        t = pd.Timestamp(d)
+        return f"{(t.month - 1) // 3 + 1}Q{str(t.year)[2:]}"
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def auto_backlog(code):
+    """최근 분기·반기·사업보고서의 '수주상황(요약)' 표에서 사업별 수주잔고(백만원)를 읽는다."""
+    cc = corp_code(code)
+    j = HTTP.get("https://opendart.fss.or.kr/api/list.json",
+                 params={"crtfc_key": dart_key(), "corp_code": cc, "pblntf_ty": "A",
+                         "bgn_de": (now_kst() - pd.Timedelta(days=200)).strftime("%Y%m%d"),
+                         "end_de": now_kst().strftime("%Y%m%d"), "page_count": 20}).json()
+    reps = [x for x in j.get("list", []) if re.search("분기보고서|반기보고서|사업보고서", x["report_nm"])]
+    if not reps:
+        raise RuntimeError("최근 정기보고서 없음")
+    rep = reps[0]
+    path = ODIR / f"backlog_{rep['rcept_no']}.json"
+    cached = read_json(path)
+    if cached:
+        return cached
+    r = HTTP.get("https://opendart.fss.or.kr/api/document.xml",
+                 params={"crtfc_key": dart_key(), "rcept_no": rep["rcept_no"]}, timeout=90)
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    t = z.read(z.namelist()[0]).decode("utf-8", "ignore")
+    c = re.sub(r"(\|\s*)+", "| ", _clean(t))
+    k = c.find("수주상황(요약)")
+    if k < 0:
+        raise RuntimeError("보고서에 '수주상황(요약)' 표가 없음")
+    seg = c[k:k + 6000]
+    asof = re.search(r"기준일 : \| (\d{4})년 (\d{2})월", seg)
+    rows = []
+    owner = ""
+    for m in re.finditer(r"(?:\| ([^|]{2,40}?) )?\| ([가-힣A-Za-z ]{1,15}) \| 상세내역 참조 \| 상세내역 참조 \| 상세내역 참조 "
+                         r"\| - \| ([\d,]+) \| - \| ([\d,]+) \| - \| ([\d,]+)", seg):
+        if m.group(1) and not re.match(r"^[\d,\-]+$", m.group(1).strip()):
+            owner = m.group(1).strip()
+        rows.append({"company": owner, "segment": m.group(2).strip(),
+                     "total": _num(m.group(3)), "delivered": _num(m.group(4)), "backlog": _num(m.group(5))})
+    tot = re.search(r"합 계 \| - \| ([\d,]+) \| - \| ([\d,]+) \| - \| ([\d,]+)", seg)
+    if not rows:
+        raise RuntimeError("수주잔고 표를 못 읽음")
+    out = {"as_of": f"{asof.group(1)}-{asof.group(2)}" if asof else rep["rcept_dt"][:6],
+           "report": rep["report_nm"].strip(), "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={rep['rcept_no']}",
+           "unit": "백만원", "rows": rows, "total": _num(tot.group(3)) if tot else sum(x["backlog"] for x in rows)}
+    write_json(path, out)
+    return out
+
+
+def backlog_view(cfg, code, by_year):
+    """수주잔고 + 비율(잔고÷매출, 올해 신규수주÷매출). 금액은 모두 억원으로 맞춘다."""
+    from kr_stock import wise_annual
+    b = cfg.get("backlog")
+    if not b:
+        return None
+    if b == "auto":
+        a = auto_backlog(code)
+        def short(c):  # '한화시스템㈜ 및 종속회사' → '한화시스템'
+            c = re.sub(r"㈜|\(주\)|주식회사", "", c or "")
+            c = re.split(r"\s*및\s*| Pte| Ltd|,", c)[0].strip()
+            return c
+        segs = {}
+        for x in a["rows"]:
+            if x["backlog"] and x["backlog"] >= 10000:  # 100억원 미만 작은 항목은 생략
+                segs[f"{short(x['company'])} {x['segment']}".strip()] = x["backlog"] / 100
+        view = {"as_of": a["as_of"], "segments": segs, "total": a["total"] / 100, "source": f"DART {a['report']}",
+                "url": a["url"]}
+    else:
+        last = sorted(b, key=lambda x: (x["as_of"][-2:], x["as_of"][0]))[-1]
+        view = {"as_of": last["as_of"], "segments": last.get("segments", {}), "total": last.get("total"),
+                "source": last.get("source", "직접 입력"), "history": b}
+    w = wise_annual(code)
+    y = now_kst().year
+    s_last = (w.get(y - 1) or {}).get("sales")
+    s_now = (w.get(y) or {}).get("sales")
+    new_this_year = by_year.get(str(y), 0) / 1e8
+    tot = view["total"]
+    view.update({
+        "sales_last": s_last, "sales_now": s_now, "sales_last_year": y - 1,
+        "backlog_to_sales_last": round(tot / s_last, 2) if (tot and s_last) else None,
+        "backlog_to_sales_now": round(tot / s_now, 2) if (tot and s_now) else None,
+        "new_orders_this_year": round(new_this_year), "book_to_bill": round(new_this_year / s_now, 2) if s_now else None,
+    })
+    return view
 
 
 def company(cfg):
@@ -128,7 +218,7 @@ def company(cfg):
         prev = contracts.get(key)
         rec = {**(prev or {}), **{k: v for k, v in d.items() if v is not None},
                "filed": key, "last_update": filed, "url": url, "title": title,
-               "corrected": bool(prev) or "정정" in title}
+               "corrected": bool(prev) or "정정" in title, "quarter": _quarter(filed)}
         if prev and prev.get("amount") and d.get("amount") and prev["amount"] != d["amount"]:
             rec["first_amount"] = prev.get("first_amount", prev["amount"])
         contracts[key] = rec
@@ -152,7 +242,13 @@ def company(cfg):
         r["new"] = (today - pd.Timestamp(r["last_update"])).days <= 7
     last12 = sum(r["amount"] for r in rows if r.get("amount") and not r.get("cancelled")
                  and pd.Timestamp(r.get("contract_date") or r["filed"]) >= today - pd.DateOffset(years=1))
+    backlog = None
+    try:
+        backlog = backlog_view(cfg, code, by_year)
+    except Exception as e:  # noqa: BLE001
+        REPORT.fail(f"수주잔고 {cfg['name']}", f"{type(e).__name__}: {e}")
     return {"code": code, "name": cfg["name"], "since": start, "contracts": rows, "by_year": by_year,
+            "backlog": backlog, "memo": cfg.get("memo", ""),
             "last12": last12, "count": len(rows), "unreadable": unreadable, "updated_at": now_kst().strftime("%Y-%m-%d %H:%M"),
             "source": "OpenDART 단일판매·공급계약 체결 공시 (정정 공시는 최신 금액으로 반영)"}
 
