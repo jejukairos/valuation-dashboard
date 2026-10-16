@@ -4,7 +4,7 @@ import re
 
 import pandas as pd
 
-from common import HTTP, REPORT, now_kst, num
+from common import CACHE, HTTP, REPORT, num, read_json
 
 
 def _label(end):
@@ -91,18 +91,31 @@ def history(t):
     """{화면 연도: {eps, estimate, src, avail, fy_end}}"""
     tk = _ticker(t)
     hist = {}
+    eps = {}
+    # 1) 지난 실적: SEC 10-K (서버에서는 SEC 가 막아서, 한 번 받아 둔 파일을 쓴다)
     try:
-        eps = sec_eps(t)
-        src = "SEC EDGAR (10-K)"
-    except Exception as e:  # noqa: BLE001
-        REPORT.block("SEC EDGAR", str(e)[:120])
+        eps = {e: (v, "SEC EDGAR (10-K)") for e, v in sec_eps(t).items()}
+    except Exception:  # noqa: BLE001
+        saved = (read_json(CACHE / "us_eps_sec.json", {}) or {}).get(t.upper(), {})
+        splits = _splits(t)
+        for e, r in saved.items():
+            v = float(r["val"])
+            for sd, ratio in splits:  # 분할 전에 제출된 값은 분할 비율만큼 나눈다
+                if pd.Timestamp(r["filed"]) < sd and pd.Timestamp(e) < sd:
+                    v /= ratio
+            eps[e] = (v, "SEC EDGAR (10-K, 저장본)")
+    # 2) 최근 실적: 야후 (새 연간 실적이 나오면 자동으로 추가)
+    try:
         inc = tk.income_stmt
         row = [r for r in inc.index if "Diluted EPS" in r]
-        eps = {str(c.date()): float(v) for c, v in inc.loc[row[0]].items() if v == v} if row else {}
-        src = "야후 (최근 4~5년)"
-    for e, v in eps.items():
+        for c, v in (inc.loc[row[0]].items() if row else []):
+            if v == v and str(c.date()) not in eps:
+                eps[str(c.date())] = (float(v), "야후 파이낸스")
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("야후 재무제표", str(e)[:80])
+    for e, (v, src) in eps.items():
         y = _label(e)
-        hist[y] = {"eps": v, "src": src, "estimate": False, "fy_end": e,
+        hist[y] = {"eps": round(v, 4), "src": src, "estimate": False, "fy_end": e,
                    "avail": (pd.Timestamp(e) + pd.Timedelta(days=75)).strftime("%Y-%m-%d")}
     # 추정치: 0y = 진행 중인 회계연도, +1y = 그다음 해
     est = tk.earnings_estimate
