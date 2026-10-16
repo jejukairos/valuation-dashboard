@@ -218,6 +218,9 @@ def main():
         m[k] = keep_prev(m[k], prev_mkt.get(k), k)
     if m.get("kospi_trailing", {}).get("error") and prev_mkt.get("kospi_trailing", {}).get("per"):
         m["kospi_trailing"] = dict(prev_mkt["kospi_trailing"], stale=True)
+    m["kospi_fwd_bands"] = keep_prev(attempt("코스피 선행 PER·PBR 밴드", market.kospi_fwd_bands,
+                                             m.get("kospi_forward"), m.get("kospi_trailing")),
+                                     prev_mkt.get("kospi_fwd_bands"), "kospi_fwd_bands")
 
     us10 = (r.get("us10y") or {}).get("latest")
     kr3 = (r.get("kr3y") or {}).get("latest")
@@ -304,7 +307,8 @@ def main():
         "settings": {"bond_signal": SETTINGS["bond_signal"], "stock_signal": SETTINGS["stock_signal"],
                      "fair_value": SETTINGS["fair_value"], "band": SETTINGS["band"],
                      "index_scenarios": SETTINGS.get("index_scenarios", {}),
-                     "kospi_pbr_marks": SETTINGS.get("kospi_pbr_marks", [])},
+                     "kospi_pbr_marks": SETTINGS.get("kospi_pbr_marks", []),
+                     "kospi_bands": SETTINGS.get("kospi_bands", {}), "kospi_notes": SETTINGS.get("kospi_notes", [])},
     }
     write_json(DATA / "dashboard.json", out)
     print(f"완료: 성공 {len(REPORT.ok)} / 실패 {len(REPORT.failures)}")

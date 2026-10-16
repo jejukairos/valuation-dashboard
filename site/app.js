@@ -604,8 +604,11 @@ function kospiCard() {
       <div class="tile"><div class="tl">12개월 선행 순이익</div><div class="tv">${k.fwd_ni_jo == null ? "N/A" : n(k.fwd_ni_jo, 1) + "조"}</div><div class="src">26E ${n(k.ni_jo?.[ys[0]], 0)}조 · 27E ${n(k.ni_jo?.[ys[1]], 0)}조</div></div>
       <div class="tile"><div class="tl">PBR (지난 실적)</div><div class="tv">${times(hasBand ? t.pbr : k.pbr_now, 2)}</div><div class="src">${hasBand ? "KRX · " + esc(t.date) : "직접 계산"}</div></div>
     </div>
-    <h3>PBR 밴드 (10년)</h3>
-    ${hasBand ? hBandHTML("kp") + kospiMarksTable() : `<div class="warnbox">코스피 PBR 10년 이력은 한국거래소(KRX) 자료에만 있어요. KRX 계정을 연결하면 여기에 밴드 차트가 나와요.</div>`}
+    ${(DASH.settings.kospi_notes || []).length ? `<div class="memo">📝 <b>증권사 코멘트 메모</b>${DASH.settings.kospi_notes.map((x) => `<br>· ${esc(x.text)} <span class="src">(${esc(x.source)}, ${esc(x.date)})</span>`).join("")}</div>` : ""}
+    ${DASH.market.kospi_fwd_bands ? fwdBandHTML("kfpbr", "12개월 선행 PBR 밴드") + fwdBandHTML("kfper", "12개월 선행 PER 밴드") : ""}
+    ${hasBand ? kospiMarksTable() : ""}
+    <h3>PBR 밴드 (지난 실적 기준, KRX)</h3>
+    ${hasBand ? hBandHTML("kp") : `<div class="warnbox">코스피 PBR 10년 이력은 한국거래소(KRX) 자료에만 있어요. KRX 계정을 연결하면 여기에 밴드 차트가 나와요.</div>`}
     <h3>연도별 EPS·BPS·PER·PBR <span class="src">코스피 ${n(lvl, 2)} 기준</span></h3>
     <div class="tbl-wrap"><table><thead><tr><th></th>${ys.map((y) => `<th>${y}</th>`).join("")}</tr></thead><tbody>
       <tr><td>EPS (지수 포인트)</td>${ys.map((y) => `<td>${n(Y.eps[y], 0)}</td>`).join("")}</tr>
@@ -619,6 +622,41 @@ function kospiCard() {
     <h3>코스피 시나리오: BPS × PBR</h3>${matrixTable(pbrRows, ys, lvl, "PBR ↓ · BPS →", "지수")}
     <div class="note">시나리오 배수는 config/settings.yaml 의 index_scenarios 에서 바꿀 수 있어요.</div>`;
   if (hasBand) wireHBand("kp", t.pbr_hist, "코스피 PBR", "배", 2, 10, DASH.settings.kospi_pbr_marks || []);
+  if (DASH.market.kospi_fwd_bands) {
+    const kb = DASH.settings.kospi_bands || {};
+    wireFwdBand("kfpbr", "f_bps", kb.pbr || [0.7, 0.8, 0.9, 1.0, 1.1], "PBR");
+    wireFwdBand("kfper", "f_eps", kb.per || [5, 6, 7, 8], "PER");
+  }
+}
+
+/* 코스피 12개월 선행 PER·PBR 밴드 (지수 선 + '선행 EPS·BPS × 배수' 선) */
+function fwdBandHTML(id, title) {
+  return `<h3>${title}</h3><div class="seg" id="${id}-seg"><button data-y="0">전체</button><button data-y="10">10년</button><button data-y="5" class="on">5년</button></div>
+    <div class="chart-box tall"><canvas id="${id}-chart"></canvas></div><div id="${id}-legend"></div><div class="note" id="${id}-stats"></div>`;
+}
+function wireFwdBand(id, key, mults, unitName) {
+  const B = DASH.market.kospi_fwd_bands;
+  const draw = (years) => {
+    const C = themeColors();
+    const i0 = sliceYears(B.dates, years);
+    const dates = B.dates.slice(i0), lv = B.level.slice(i0), f = B[key].slice(i0);
+    const cols = [C.s3, C.muted, C.s7, "#d03b3b", C.s4, C.s2];
+    const ds = [{ label: "코스피", data: lv, borderColor: C.s1, borderWidth: 2 },
+      ...mults.map((m, i) => ({ label: `${m}배`, data: f.map((x) => (x ? Math.round(x * m) : null)), borderColor: cols[i % cols.length],
+        borderDash: m === 1 ? [6, 3] : [], borderWidth: m === 1 ? 2 : 1.5 }))];
+    makeChart(document.getElementById(`${id}-chart`), dates, ds, { fmt: (v) => n(v, 0), yfmt: (v) => n(v, 0) });
+    $(`#${id}-legend`).innerHTML = legend(ds.map((d) => [d.label, d.borderColor, !!d.borderDash?.length]));
+    const cur = lv[lv.length - 1], fc = f[f.length - 1];
+    $(`#${id}-stats`).innerHTML = `지금 코스피 ${n(cur, 0)} = 선행 ${unitName} <b>${n(cur / fc, 2)}배</b> · ` +
+      mults.map((m) => `${m}배 = <b>${n(fc * m, 0)}</b>`).join(" · ") + `<br><span class="src">${esc(B.note)}</span>`;
+  };
+  draw(5);
+  const seg = document.getElementById(`${id}-seg`);
+  seg.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    seg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    draw(Number(b.dataset.y));
+  });
 }
 
 /* 금리 신호등 한국 카드 안에 넣는 코스피 PBR 요약 */
@@ -632,7 +670,8 @@ function kospiPbrBrief() {
   const ms = kospiMarks();
   return `<div class="memo" style="margin-top:12px">
     <b>코스피 PBR ${n(t.pbr, 2)}배</b> · 10년 밴드 ${n(pos, 0)}% 위치
-    ${ms.map((m) => `<br>· PBR ${m.value}배${m.label.startsWith("PBR") ? "" : ` (${esc(m.label.split(" (")[0])})`} = 코스피 <b>${n(m.level, 0)}</b> <span class="nowrap">(지금보다 ${pct(m.chg, 0, true)})</span>`).join("")}
+    · 선행 PBR ${n(DASH.market.kospi_forward?.fwd_pbr, 2)}배
+    ${ms.map((m) => `<br>· PBR ${m.value}배${m.label.startsWith("PBR") ? "" : ` (${esc(m.label.split(" (")[0])})`} = 코스피 선행 기준 <b>${m.level_f ? n(m.level_f, 0) : "N/A"}</b> <span class="nowrap">(${pct(m.chg_f, 0, true)})</span> · 지난 실적 기준 ${n(m.level, 0)}`).join("")}
     <br><a href="#kospiBand" onclick="document.getElementById('kospiBand').scrollIntoView({behavior:'smooth'});return false;">PBR 밴드 차트 보기 ↓</a></div>`;
 }
 
@@ -641,20 +680,25 @@ function kospiMarks() {
   const t = DASH.market.kospi_trailing || {};
   const lvl = DASH.market.kospi_forward?.level;
   if (!t.pbr || !lvl) return [];
+  const fp = DASH.market.kospi_forward?.fwd_pbr;
   return (DASH.settings.kospi_pbr_marks || []).map((m) => {
-    const at = (lvl * m.value) / t.pbr;
-    return { ...m, level: at, chg: (at / lvl - 1) * 100 };
+    const at = (lvl * m.value) / t.pbr;            // 지난 실적(KRX) PBR 기준
+    const af = fp ? (lvl * m.value) / fp : null;     // 12개월 선행 PBR 기준 (증권사 차트와 같은 기준)
+    return { ...m, level: at, chg: (at / lvl - 1) * 100, level_f: af, chg_f: af ? (af / lvl - 1) * 100 : null };
   });
 }
 function kospiMarksTable() {
   const ms = kospiMarks();
   if (!ms.length) return "";
   const t = DASH.market.kospi_trailing;
-  return `<h3>내 기준선: 코스피가 얼마면? <span class="src">지금 PBR ${n(t.pbr, 2)}배 · KRX ${esc(t.date)}</span></h3>
-    <div class="tbl-wrap"><table><thead><tr><th>기준</th><th>PBR</th><th>코스피</th><th>지금 대비</th></tr></thead><tbody>
-    ${ms.map((m) => `<tr><td style="white-space:normal">${esc(m.label)}</td><td>${m.value}배</td><td>${n(m.level, 0)}</td><td class="${m.chg < 0 ? "dear" : "cheap"}">${pct(m.chg, 1, true)}</td></tr>`).join("")}
+  const fp = DASH.market.kospi_forward?.fwd_pbr;
+  return `<h3>내 기준선: 코스피가 얼마면? <span class="src">지금 선행 PBR ${n(fp, 2)}배 · 지난 실적 PBR ${n(t.pbr, 2)}배</span></h3>
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th>기준</th><th>PBR</th><th>선행 기준<br>코스피</th><th>지난 실적 기준<br>코스피</th></tr></thead><tbody>
+    ${ms.map((m) => `<tr><td style="white-space:normal">${esc(m.label)}</td><td>${m.value}배</td>
+      <td>${m.level_f ? n(m.level_f, 0) : "N/A"}<br><span class="src">${pct(m.chg_f, 1, true)}</span></td>
+      <td>${n(m.level, 0)}<br><span class="src">${pct(m.chg, 1, true)}</span></td></tr>`).join("")}
     </tbody></table></div>
-    <div class="note">지난 실적 기준 PBR(KRX). 자본(BPS)이 지금과 같다고 보고 계산했어요. 기준선은 config/settings.yaml 의 kospi_pbr_marks 에서 바꿀 수 있어요.</div>`;
+    <div class="note">선행 기준 = 12개월 선행 BPS(직접 계산, 증권사 차트와 같은 방식) · 지난 실적 기준 = KRX PBR. 자본(BPS)이 그대로라고 보고 계산했어요. 기준선은 config/settings.yaml 의 kospi_pbr_marks 에서 바꿀 수 있어요.</div>`;
 }
 
 /* ---------- PBR 계산기 탭 ---------- */

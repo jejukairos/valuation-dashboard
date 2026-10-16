@@ -231,6 +231,54 @@ def kospi_trailing():
             "pbr_hist": [[d.strftime("%Y-%m-%d"), round(float(v), 3)] for d, v in w["PBR"].items() if v > 0]}
 
 
+def kospi_fwd_bands(kf, kt):
+    """키움·FnGuide 식 '12개월 선행 PER·PBR 밴드' 를 무료 자료로 근사.
+    KRX 후행 PER·PBR 과 코스피 지수로 지수 EPS·BPS 를 거꾸로 구하고,
+    각 시점의 '선행' 값은 1년 뒤 실제 값(최근 1년은 지금 컨센서스 선행값으로 이어 붙임)을 쓴다."""
+    from kr_stock import price_history
+    if not (kf and kf.get("level") and kt and kt.get("hist") and kt.get("pbr_hist")):
+        raise RuntimeError("코스피 선행값 또는 KRX 이력이 없음")
+    lv = price_history("KOSPI", start="20000101")
+    lw = lv.resample("W-FRI").last().dropna()
+    per = pd.Series({pd.Timestamp(d): v for d, v in kt["hist"]})
+    pbr = pd.Series({pd.Timestamp(d): v for d, v in kt["pbr_hist"]})
+    df = pd.DataFrame({"level": lw, "per": per, "pbr": pbr}).dropna()
+    df = df[(df["per"] > 0) & (df["pbr"] > 0)]
+    # 지수 기준 후행 EPS·BPS (KRX 값이 가끔 튀어서 4주 중앙값으로 다듬음)
+    eps = (df["level"] / df["per"]).rolling(4, min_periods=1, center=True).median()
+    bps = (df["level"] / df["pbr"]).rolling(4, min_periods=1, center=True).median()
+    level_now = kf["level"]
+    f_eps_now = level_now / kf["value"]
+    f_bps_now = level_now / kf["fwd_pbr"] if kf.get("fwd_pbr") else None
+    out = {"dates": [], "level": [], "f_eps": [], "f_bps": []}
+    idx = list(df.index)
+    last = idx[-1]
+    cut = last - pd.Timedelta(days=364)
+    # 1년 전 시점의 '선행' 값 = 지금의 후행 값 → 거기서 지금 컨센서스 선행값까지 이어 붙여야 끊기지 않는다
+    anchor_e = eps.iloc[-1]
+    anchor_b = bps.iloc[-1]
+    for d in idx:
+        fwd = d + pd.Timedelta(days=364)
+        if fwd <= last:  # 1년 뒤 실제 후행 값 = 그때의 '선행' 값으로 봄
+            fe = eps[eps.index >= fwd].iloc[0]
+            fb = bps[bps.index >= fwd].iloc[0]
+        else:  # 최근 1년: 1년 전 값에서 지금 컨센서스 선행값까지 시간 비율로 이어 붙임
+            w = (d - cut).days / max(1, (last - cut).days)
+            fe = anchor_e + (f_eps_now - anchor_e) * w
+            fb = anchor_b + ((f_bps_now or anchor_b) - anchor_b) * w
+        out["dates"].append(d.strftime("%Y-%m-%d"))
+        out["level"].append(round(float(df.loc[d, "level"]), 2))
+        out["f_eps"].append(round(float(fe), 2))
+        out["f_bps"].append(round(float(fb), 2))
+    out["dates"].append(kf["date"])
+    out["level"].append(round(level_now, 2))
+    out["f_eps"].append(round(f_eps_now, 2))
+    out["f_bps"].append(round(f_bps_now, 2) if f_bps_now else None)
+    out["note"] = ("KRX 후행 PER·PBR 로 지수 EPS·BPS 를 구하고, 과거 각 시점의 선행값은 1년 뒤 실제 값으로, "
+                   "최근 1년은 지금 컨센서스 선행값까지 이어 붙여 근사했어요 (FnGuide 선행 밴드와 다를 수 있음)")
+    return out
+
+
 def collect():
     from common import attempt
     return {
