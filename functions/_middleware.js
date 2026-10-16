@@ -24,6 +24,22 @@ button{background:#2a78d6;color:#fff;border:0;font-weight:700}p{color:#d03b3b;fo
   );
 }
 
+// Cloudflare 의 "Build output directory" 가 site 가 아니라 저장소 맨 위(/)로 돼 있어도
+// 화면 파일(site/ 폴더)을 찾아서 보여준다.
+async function serveSite(ctx) {
+  const url = new URL(ctx.request.url);
+  const res = await ctx.next();
+  if (res.status !== 404 || url.pathname.startsWith("/site/")) return res;
+  const alt = new URL(url);
+  alt.pathname = "/site" + (url.pathname === "/" ? "/index.html" : url.pathname);
+  let r = await ctx.next(new Request(alt, ctx.request));
+  // /site/index.html → /site/ 같은 자동 이동은 안에서 따라간다 (주소창은 그대로)
+  for (let i = 0; i < 3 && r.status >= 300 && r.status < 400 && r.headers.get("location"); i++) {
+    r = await ctx.next(new Request(new URL(r.headers.get("location"), alt), ctx.request));
+  }
+  return r;
+}
+
 export async function onRequest(ctx) {
   // 접속 점검용 (보유종목 정보 없음): 휴대폰이 서버에 닿는지 확인
   if (new URL(ctx.request.url).pathname === "/check") {
@@ -41,9 +57,12 @@ s+='쿠키 사용: '+navigator.cookieEnabled+'\\n';o.textContent=s;})();</script
   if (new URL(ctx.request.url).pathname === "/ping-files") {
     // 공개돼도 괜찮은 파일(아이콘·화면 틀)이 실제로 올라가 있는지만 확인
     const out = [];
-    for (const p of ["/icon.svg", "/index.html", "/site/index.html"]) {
-      const r = await ctx.next(new Request(new URL(p, ctx.request.url), { method: "HEAD" }));
-      out.push(`${p} → ${r.status}`);
+    for (const p of ["/", "/icon.svg", "/style.css"]) {
+      const fake = { ...ctx, request: new Request(new URL(p, ctx.request.url), { method: "GET" }),
+        next: (req) => ctx.next(req || new Request(new URL(p, ctx.request.url))) };
+      const r = await serveSite(fake);
+      const body = await r.text();
+      out.push(`${p} → ${r.status} (${body.length}자${body.includes("밸류 신호등") ? ", 화면 틀 확인" : ""})`);
     }
     return new Response(out.join("\n"), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
   }
@@ -60,7 +79,7 @@ s+='쿠키 사용: '+navigator.cookieEnabled+'\\n';o.textContent=s;})();</script
   const good = await token(pw);
   const cookie = ctx.request.headers.get("cookie") || "";
   if (cookie.split(/;\s*/).includes(`${COOKIE}=${good}`)) {
-    const res = await ctx.next();
+    const res = await serveSite(ctx);
     const out = new Response(res.body, res);
     out.headers.set("cache-control", "private, no-cache");
     return out;
