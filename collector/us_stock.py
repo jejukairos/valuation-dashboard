@@ -137,7 +137,7 @@ def history(t):
 def finviz_next_eps(t):
     """Finviz 의 'EPS next Y'(내년 EPS 추정, 달러)."""
     txt = HTTP.get(f"https://finviz.com/quote.ashx?t={t}").text
-    m = re.search(r"EPS next Y</td>\s*<td[^>]*>(?:<[^>]+>)*\s*(-?[\d.]+)\s*<", txt)
+    m = re.search(r"EPS next Y(?:</div>)?</td>\s*<td[^>]*>(?:<[^>]+>)*\s*(-?[\d.]+)\s*<", txt)
     if not m:
         m = re.search(r"EPS next Y.{0,300}?>(-?\d+\.\d+)<", txt, re.S)
     return num(m.group(1)) if m else None

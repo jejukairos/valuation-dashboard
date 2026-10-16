@@ -44,18 +44,15 @@ def parse_won_hangeul(s):
 def naver_now(code):
     j = HTTP.get(f"https://m.stock.naver.com/api/stock/{code}/integration").json()
     info = {x["code"]: x["value"] for x in j.get("totalInfos", [])}
-    # integration 의 lastClosePrice 는 오늘 한국거래소 종가가 아닐 때가 있어서(5단계 검증에서 발견),
-    # 현재가는 basic 의 closePrice(정규장 종가·장중 현재가)를 쓰고 시가총액도 그 가격으로 맞춘다
-    stale = num(info.get("lastClosePrice"))
-    price = stale
+    # integration 의 lastClosePrice 는 오늘 한국거래소 종가가 아닐 때가 있고(5단계 검증에서 발견),
+    # basic 의 값은 저녁에 넥스트레이드 시간외 가격이 섞인다 → 일별 시세의 마지막 종가(한국거래소 정규장)를 쓴다
+    price = num(info.get("lastClosePrice"))
     try:
-        b = HTTP.get(f"https://m.stock.naver.com/api/stock/{code}/basic").json()
-        price = num(b.get("closePrice")) or stale
+        start = (now_kst() - pd.Timedelta(days=14)).strftime("%Y%m%d")
+        price = float(price_history(code, start=start).iloc[-1])
     except Exception:  # noqa: BLE001
         pass
     cap = parse_won_hangeul(info.get("marketValue"))
-    if cap and stale and price and stale != price:
-        cap = cap * price / stale
     return {
         "name": j.get("stockName"),
         "price": price,
