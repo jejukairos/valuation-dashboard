@@ -98,11 +98,11 @@ function marketCard(sig, rateObj, extraRate, key) {
     <div class="kv">
       <div class="k">${esc(sig.per_label)}</div><div class="v">${times(sig.per)}<span class="src">${esc(sig.per_source)}</span></div>
       <div class="k">${esc(sig.rate_label)}</div><div class="v">${pct(sig.rate, 2)}<span class="src">${esc(rateObj?.source || "")} · ${esc(rateObj?.date || "")}</span></div>
-      <div class="k">채권 환산 PER (1 ÷ 금리)</div><div class="v">${times(sig.bond_per)}</div>
-      <div class="k">주식 이익수익률 (1 ÷ PER)</div><div class="v">${pct(sig.earnings_yield, 2)}</div>
-      <div class="k">위험 프리미엄 (이익수익률 − 금리)</div><div class="v">${sig.premium == null ? "N/A" : (sig.premium > 0 ? "+" : "") + n(sig.premium, 2) + "%p"}</div>
+      <div class="k">채권 환산 PER <span class="src nowrap">1 ÷ 금리</span></div><div class="v">${times(sig.bond_per)}</div>
+      <div class="k">주식 이익수익률 <span class="src nowrap">1 ÷ PER</span></div><div class="v">${pct(sig.earnings_yield, 2)}</div>
+      <div class="k">위험 프리미엄 <span class="src nowrap">이익수익률 − 금리</span></div><div class="v">${sig.premium == null ? "N/A" : (sig.premium > 0 ? "+" : "") + n(sig.premium, 2) + "%p"}</div>
       ${extraRate ? `<div class="k" style="font-size:12px">${esc(extraRate.label)} (참고)</div><div class="v" style="font-size:12px;font-weight:400">${pct(extraRate.latest, 2)}</div>` : ""}
-    </div>${stale}
+    </div>${stale}${key === "kr" ? kospiPbrBrief() : ""}
     <div class="chart-title">${esc(sig.rate_label)} 추이 (5년)</div>
     <div class="chart-box"><canvas id="rate-${key}"></canvas></div>
     <div class="chart-title">위험 프리미엄 추이 <span class="src">${esc(sig.premium_hist_label || "")}</span></div>
@@ -149,6 +149,7 @@ function stockCard(c) {
   if (c.div_signal) pills.push(`<span class="pill ${c.div_signal === "na" ? "" : c.div_signal}">${LIGHT[c.div_signal]?.emoji || ""} 배당 ${pct(c.div_yield, 2)}</span>`);
   if (c.short_history) pills.push(`<span class="pill">📅 ${esc((c.band_start || "").slice(0, 4))}년부터 데이터 (10년 미만)</span>`);
   if (c.rerating_warning) pills.push(`<span class="pill yellow">⚠ 리레이팅 반영 가능성</span>`);
+  if (c.new_orders) pills.push(`<span class="pill green">🆕 새 수주 공시 ${c.new_orders}건</span>`);
   if ((c.checks || []).some((x) => x.warn)) pills.push(`<span class="pill yellow">⚠ 출처 간 10%↑ 차이</span>`);
   let mine = "";
   if (c.avg_price && c.quantity) {
@@ -163,7 +164,7 @@ function stockCard(c) {
       <div class="why">${esc(c.why)}</div></div></div>
     <div class="kv">
       <div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)}</div>
-      <div class="k">괴리율 (현재가 ÷ 적정가 − 1)</div><div class="v">${gap}</div>
+      <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
     <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
@@ -173,7 +174,9 @@ function stockCard(c) {
 }
 function renderCards() {
   const list = [...DASH.stocks];
-  if (sortMode === "cheap") list.sort((a, b) => (a.gap ?? 9) - (b.gap ?? 9));
+  // 저평가 → 적정 → 고평가 → N/A 순, 같은 판정 안에서는 적정가 대비 더 싼 순
+  const rank = { green: 0, yellow: 1, red: 2, na: 3 };
+  if (sortMode === "cheap") list.sort((a, b) => (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
   else list.sort((a, b) => a.order - b.order);
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
 }
@@ -317,6 +320,58 @@ function drawDetailCharts(d) {
       { type: "bar", zero: true, fmt: (v) => n(v) + "원", yfmt: (v) => n(v), xlen: 6 });
   }
 }
+/* ---------- 수주 공시 (방산 등) ---------- */
+let ORDERS = null;
+function eok(v) { return v == null ? "N/A" : v >= 1e12 ? n(v / 1e12, 2) + "조" : n(v / 1e8, 0) + "억"; }
+async function ordersBlock(code) {
+  if (ORDERS === null) {
+    try { ORDERS = await (await fetch("data/orders.json?t=" + encodeURIComponent(DASH.updated_at))).json(); }
+    catch (e) { ORDERS = {}; }
+  }
+  const o = ORDERS[code];
+  if (!o) return "";
+  const y = String(new Date().getFullYear());
+  const live = o.contracts.filter((c) => !c.cancelled && c.amount);
+  const regions = {};
+  live.filter((c) => (c.contract_date || c.filed) >= String(Number(y) - 2)).forEach((c) => {
+    const r = (c.region || "기타").split(/[,(]/)[0].trim();
+    regions[r] = (regions[r] || 0) + c.amount;
+  });
+  const topReg = Object.entries(regions).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const row = (c) => `<tr class="${c.cancelled ? "cancel" : ""}">
+      <td>${esc((c.contract_date || c.filed).slice(2))}</td>
+      <td style="white-space:normal;min-width:9em">${c.new ? "🆕 " : ""}<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.name || c.title)}</a>
+        ${c.cancelled ? `<span class="pill red">해지 ${esc(c.cancelled)}</span>` : ""}${c.corrected ? `<span class="pill">정정 ${esc(c.last_update)}</span>` : ""}
+        <br><span class="src">${esc((c.party || "").slice(0, 40))}${c.region ? " · " + esc(c.region) : ""}${c.end ? " · ~" + esc(c.end) : ""}</span></td>
+      <td>${eok(c.amount)}<br><span class="src">${c.ratio == null ? "" : "매출의 " + n(c.ratio, 1) + "%"}</span></td></tr>`;
+  const newOnes = o.contracts.filter((c) => c.new);
+  return `<h3>수주 공시 <span class="src">${esc(o.source)}</span></h3><div class="card">
+    ${newOnes.length ? `<div class="memo" style="background:var(--good-bg);color:var(--good-ink)">🆕 최근 7일 새 수주 공시 ${newOnes.length}건: ${newOnes.map((c) => esc(c.name || "")).join(", ")}</div>` : ""}
+    <div class="tiles">
+      <div class="tile"><div class="tl">최근 12개월 수주</div><div class="tv">${eok(o.last12)}</div><div class="src">공시 기준 합계</div></div>
+      <div class="tile"><div class="tl">${y}년 수주</div><div class="tv">${eok(o.by_year[y] || 0)}</div><div class="src">계약일 기준</div></div>
+    </div>
+    <div class="chart-title">연도별 수주 공시 금액 (조원)</div>
+    <div class="chart-box"><canvas id="orders-chart"></canvas></div>
+    ${topReg.length ? `<div class="chart-title">최근 3년 지역별</div><div class="pills">${topReg.map(([r, v]) => `<span class="pill">${esc(r)} ${eok(v)}</span>`).join("")}</div>` : ""}
+    <div class="chart-title">계약 목록 (최근순)</div>
+    <div class="tbl-wrap"><table class="compact orders"><thead><tr><th>계약일</th><th>내용 · 상대 · 지역</th><th>금액</th></tr></thead>
+    <tbody>${o.contracts.slice(0, 15).map(row).join("")}</tbody></table></div>
+    ${o.contracts.length > 15 ? `<details><summary class="note">이전 계약 ${o.contracts.length - 15}건 더 보기</summary><div class="tbl-wrap"><table class="compact orders"><tbody>${o.contracts.slice(15).map(row).join("")}</tbody></table></div></details>` : ""}
+    <div class="note src">금액은 공시 당시 원화 환산액, 정정 공시가 나오면 최신 금액으로 바뀌어요. 해지된 계약은 합계에서 빠져요. 계약명을 누르면 DART 원문이 열려요. · ${esc(o.updated_at)}
+    ${(o.unreadable || []).length ? `<br>양식이 달라 자동으로 못 읽은 공시 ${o.unreadable.length}건: ${o.unreadable.map((u) => `<a href="${esc(u.url)}" target="_blank" rel="noopener">${esc(u.filed)}</a>`).join(", ")}` : ""}</div>
+  </div>`;
+}
+function drawOrders(code) {
+  const o = ORDERS && ORDERS[code];
+  const cv = document.getElementById("orders-chart");
+  if (!o || !cv) return;
+  const C = themeColors();
+  const ys = Object.keys(o.by_year).sort();
+  makeChart(cv, ys, [{ label: "수주", data: ys.map((y) => o.by_year[y] / 1e12), backgroundColor: C.s1, borderRadius: 4, borderSkipped: "start", maxBarThickness: 28 }],
+    { type: "bar", zero: true, fmt: (v) => n(v, 2) + "조원", yfmt: (v) => n(v, 0), xlen: 4 });
+}
+
 /* ---------- 4. 동종업계 비교 ---------- */
 let PEERS = null;
 const FLAG = { KR: "🇰🇷", US: "🇺🇸", EU: "🇪🇺", JP: "🇯🇵" };
@@ -386,8 +441,10 @@ async function openStock(code) {
   try {
     const d = await (await fetch(`data/stocks/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json();
     const peerHtml = await peersBlock(code, d.market === "US");
-    $("#sheetBody").innerHTML = detailHTML(d) + peerHtml;
+    const orderHtml = await ordersBlock(code);
+    $("#sheetBody").innerHTML = detailHTML(d) + orderHtml + peerHtml;
     drawDetailCharts(d);
+    drawOrders(code);
     drawPeers(code);
   } catch (e) {
     $("#sheetBody").innerHTML = `<div class="empty">상세 데이터를 불러오지 못했어요.</div>`;
@@ -447,7 +504,7 @@ function hBandHTML(id) {
   return `<div class="seg" id="${id}-seg"><button data-y="0">역사적</button><button data-y="10" class="on">10년</button><button data-y="5">5년</button></div>
     <div class="chart-box tall"><canvas id="${id}-chart"></canvas></div><div id="${id}-legend"></div><div class="note" id="${id}-stats"></div>`;
 }
-function wireHBand(id, hist, name, unit, dg, startYears) {
+function wireHBand(id, hist, name, unit, dg, startYears, marks = []) {
   const draw = (years) => {
     const C = themeColors();
     const dates = hist.map((x) => x[0]);
@@ -463,6 +520,8 @@ function wireHBand(id, hist, name, unit, dg, startYears) {
       { label: `상단 ${hi.toFixed(dg)}${unit}`, data: h.map(() => hi), borderColor: C.s4, borderDash: [6, 4] },
       { label: `평균 ${avg.toFixed(dg)}${unit}`, data: h.map(() => avg), borderColor: C.s2, borderDash: [6, 4] },
       { label: `하단 ${lo.toFixed(dg)}${unit}`, data: h.map(() => lo), borderColor: C.s3, borderDash: [6, 4] },
+      // 내 기준선 (예: 코스피 PBR 0.8·0.9배)
+      ...marks.map((m) => ({ label: `내 기준 ${m.value}${unit}`, data: h.map(() => m.value), borderColor: "#d03b3b", borderDash: [2, 3], borderWidth: 1.5 })),
     ];
     makeChart(document.getElementById(`${id}-chart`), h.map((x) => x[0]), ds, { fmt: (x) => x.toFixed(dg + 1) + unit, yfmt: (x) => x.toFixed(dg) });
     $(`#${id}-legend`).innerHTML = legend(ds.map((d) => [d.label, d.borderColor, !!d.borderDash]));
@@ -497,7 +556,7 @@ function kospiCard() {
       <div class="tile"><div class="tl">PBR (지난 실적)</div><div class="tv">${times(hasBand ? t.pbr : k.pbr_now, 2)}</div><div class="src">${hasBand ? "KRX · " + esc(t.date) : "직접 계산"}</div></div>
     </div>
     <h3>PBR 밴드 (10년)</h3>
-    ${hasBand ? hBandHTML("kp") : `<div class="warnbox">코스피 PBR 10년 이력은 한국거래소(KRX) 자료에만 있어요. KRX 계정을 연결하면 여기에 밴드 차트가 나와요.</div>`}
+    ${hasBand ? hBandHTML("kp") + kospiMarksTable() : `<div class="warnbox">코스피 PBR 10년 이력은 한국거래소(KRX) 자료에만 있어요. KRX 계정을 연결하면 여기에 밴드 차트가 나와요.</div>`}
     <h3>연도별 EPS·BPS·PER·PBR <span class="src">코스피 ${n(lvl, 2)} 기준</span></h3>
     <div class="tbl-wrap"><table><thead><tr><th></th>${ys.map((y) => `<th>${y}</th>`).join("")}</tr></thead><tbody>
       <tr><td>EPS (지수 포인트)</td>${ys.map((y) => `<td>${n(Y.eps[y], 0)}</td>`).join("")}</tr>
@@ -510,7 +569,43 @@ function kospiCard() {
     <h3>코스피 시나리오: EPS × PER</h3>${matrixTable(perRows, ys, lvl, "PER ↓ · EPS →", "지수")}
     <h3>코스피 시나리오: BPS × PBR</h3>${matrixTable(pbrRows, ys, lvl, "PBR ↓ · BPS →", "지수")}
     <div class="note">시나리오 배수는 config/settings.yaml 의 index_scenarios 에서 바꿀 수 있어요.</div>`;
-  if (hasBand) wireHBand("kp", t.pbr_hist, "코스피 PBR", "배", 2, 10);
+  if (hasBand) wireHBand("kp", t.pbr_hist, "코스피 PBR", "배", 2, 10, DASH.settings.kospi_pbr_marks || []);
+}
+
+/* 금리 신호등 한국 카드 안에 넣는 코스피 PBR 요약 */
+function kospiPbrBrief() {
+  const t = DASH.market.kospi_trailing || {};
+  const h = t.pbr_hist || [];
+  if (!t.pbr || h.length < 20) return "";
+  const dates = h.map((x) => x[0]);
+  const v = h.slice(sliceYears(dates, 10)).map((x) => x[1]);
+  const pos = (v.filter((x) => x < t.pbr).length / v.length) * 100;
+  const ms = kospiMarks();
+  return `<div class="memo" style="margin-top:12px">
+    <b>코스피 PBR ${n(t.pbr, 2)}배</b> · 10년 밴드 ${n(pos, 0)}% 위치
+    ${ms.map((m) => `<br>· PBR ${m.value}배${m.label.startsWith("PBR") ? "" : ` (${esc(m.label.split(" (")[0])})`} = 코스피 <b>${n(m.level, 0)}</b> <span class="nowrap">(지금보다 ${pct(m.chg, 0, true)})</span>`).join("")}
+    <br><a href="#kospiBand" onclick="document.getElementById('kospiBand').scrollIntoView({behavior:'smooth'});return false;">PBR 밴드 차트 보기 ↓</a></div>`;
+}
+
+/* 코스피 PBR 내 기준선: 그 PBR 이 되는 코스피 지수와 지금 대비 % */
+function kospiMarks() {
+  const t = DASH.market.kospi_trailing || {};
+  const lvl = DASH.market.kospi_forward?.level;
+  if (!t.pbr || !lvl) return [];
+  return (DASH.settings.kospi_pbr_marks || []).map((m) => {
+    const at = (lvl * m.value) / t.pbr;
+    return { ...m, level: at, chg: (at / lvl - 1) * 100 };
+  });
+}
+function kospiMarksTable() {
+  const ms = kospiMarks();
+  if (!ms.length) return "";
+  const t = DASH.market.kospi_trailing;
+  return `<h3>내 기준선: 코스피가 얼마면? <span class="src">지금 PBR ${n(t.pbr, 2)}배 · KRX ${esc(t.date)}</span></h3>
+    <div class="tbl-wrap"><table><thead><tr><th>기준</th><th>PBR</th><th>코스피</th><th>지금 대비</th></tr></thead><tbody>
+    ${ms.map((m) => `<tr><td style="white-space:normal">${esc(m.label)}</td><td>${m.value}배</td><td>${n(m.level, 0)}</td><td class="${m.chg < 0 ? "dear" : "cheap"}">${pct(m.chg, 1, true)}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="note">지난 실적 기준 PBR(KRX). 자본(BPS)이 지금과 같다고 보고 계산했어요. 기준선은 config/settings.yaml 의 kospi_pbr_marks 에서 바꿀 수 있어요.</div>`;
 }
 
 /* ---------- PBR 계산기 탭 ---------- */
@@ -564,6 +659,9 @@ function pbrCard(it, base, i) {
     </tbody></table></div>
     ${it.auto_multiples ? `<div class="note">배수는 10년 PBR 밴드의 하단·평균·상단을 자동으로 넣었어요.</div>` : ""}
     ${sum.length ? `<ul class="summary">${sum.map((s) => `<li>${s}</li>`).join("")}</ul>` : ""}
+    ${it.alert ? (it.alert.hit
+      ? `<div class="memo" style="background:var(--good-bg);color:var(--good-ink)">✅ 지금 ${esc(it.alert.year)} PBR <b>${it.alert.pbr}배</b> — ${it.alert.below}배 이하예요. <span class="src">(${esc(it.alert.text)})</span></div>`
+      : `<div class="memo">🎯 ${esc(it.alert.year)} PBR ${it.alert.below}배 = <b>${n(it.alert.target_price)}원</b> (지금보다 ${pct(it.alert.gap, 1, true)}) · 지금 ${it.alert.pbr}배 <span class="src">(${esc(it.alert.text)})</span></div>`) : ""}
     ${band}
     <div class="calc"><input id="calc-${i}" inputmode="numeric" placeholder="가격을 넣어 보세요 (예: 200000)" aria-label="${esc(it.name)} 가격 입력"></div>
     <div class="calc-out" id="calc-out-${i}"></div>

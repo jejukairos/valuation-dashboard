@@ -42,6 +42,8 @@ body {
   background: var(--page); color: var(--ink); font-family: var(--font);
   font-size: 15px; line-height: 1.5; -webkit-text-size-adjust: 100%;
   overflow-x: hidden;
+  word-break: keep-all;        /* 한글을 글자 중간이 아니라 단어(띄어쓰기) 단위로 줄바꿈 */
+  overflow-wrap: break-word;   /* 아주 긴 영문·숫자만 예외로 끊음 */
 }
 .wrap { max-width: 1280px; margin: 0 auto; padding: 0 16px 40px; }
 header.top {
@@ -59,7 +61,8 @@ header.top h1 { font-size: 17px; margin: 0; }
 h2 { font-size: 18px; margin: 28px 0 10px; }
 h3 { font-size: 16px; margin: 20px 0 8px; }
 .sub { color: var(--ink-2); font-size: 13px; }
-.src { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.src { color: var(--muted); font-size: 11px; }
+.nowrap { white-space: nowrap; }
 .kv > * { min-width: 0; }
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
@@ -81,6 +84,11 @@ header.top { flex-wrap: wrap; }
 td.base, th.base { background: var(--warn-bg); }
 tr.me td { background: var(--warn-bg); font-weight: 700; }
 table.compact { font-size: 12px; }
+table.orders td { vertical-align: top; }
+table.orders td:nth-child(2), table.orders th:nth-child(2) { text-align: left; }
+table.orders a { color: var(--ink); text-decoration: none; font-weight: 600; }
+tr.cancel td { opacity: .55; text-decoration: line-through; }
+tr.cancel .pill { text-decoration: none; }
 table.compact th, table.compact td { padding: 5px 3px; }
 table.compact td:first-child { white-space: normal; min-width: 5.5em; }
 td.hot { font-weight: 700; }

@@ -44,6 +44,12 @@ rerating:
 kospi_forward:
   top_n: 150   # 50개면 대형주 쏠림으로 PER 이 약 7% 낮게 나와서 150개로 (우산 자료와 1% 이내 일치)
 
+# 코스피 PBR 내 기준선 (밴드 차트에 선으로 표시하고, 그 PBR 이 되는 지수를 계산해 보여줌)
+kospi_pbr_marks:
+  - {value: 0.8, label: "역사적 바닥권 (공포 때마다 '무조건 사는 구간'으로 회자)"}
+  - {value: 0.9, label: "기회 구간"}
+  - {value: 1.0, label: "PBR 1배"}
+
 # 지수 적정 수준 시나리오 표에 쓸 배수 (EPS × PER, BPS × PBR)
 index_scenarios:
   kospi_per: [8, 9, 10, 11, 12]

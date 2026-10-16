@@ -56,6 +56,18 @@ def premium_hist(per_hist, rate_hist):
     return out
 
 
+def _basis_text(names, ey, mkey):
+    """화면에 짧고 자연스럽게: '27E EPS × 10년 평균 PER' 처럼."""
+    if not names:
+        return ""
+    if names == ["배당"]:
+        return "올해 배당금 ÷ 10년 평균 배당수익률"
+    span = {"avg5": "5년 평균", "avg10": "10년 평균", "low10": "10년 하단", "high10": "10년 상단"}[mkey]
+    base = {"PER": "EPS", "PBR": "BPS"}
+    parts = [f"{ey} {base[n]} × {span} {n}" for n in names if n in base]
+    return parts[0] if len(parts) == 1 else "두 값 평균: " + " / ".join(parts)
+
+
 def usdkrw():
     import yfinance as yf
     h = yf.Ticker("KRW=X").history(period="5d")["Close"].dropna()
@@ -171,9 +183,7 @@ def stock_detail(h, rates_now, fx):
         "name": name, "code": code, "market": mkt, "price": price, "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],
         "currency": currency, "verdict": verdict, "why": why, "fair": rnd(fair, 2 if currency == "USD" else 0),
         "gap": rnd(gap, 4),
-        "fair_basis": ("배당 (올해 예상 배당금 ÷ 10년 평균 배당수익률)" if [n for n, _ in fairs] == ["배당"] else
-                       " + ".join(f"{n}" for n, _ in fairs) + (f" ({ey} × {mkey})" if fairs else ""))
-                      + (" · 선행 PER 밴드" if (bands.get("PER") or {}).get("basis") == "forward" and "PER" in [n for n, _ in fairs] else ""),
+        "fair_basis": _basis_text([n for n, _ in fairs], ey, mkey),
         "band_pos": rnd(band_pos, 1), "fwd_per": rnd(fwd_per), "bond_per": rnd(bond_per),
         "bond_ratio": rnd(ratio, 3), "bond_signal": C.bond_signal(ratio), "bond_label": bond_label,
         "div_signal": det.get("div", {}).get("signal") if "DIV" in methods else None,
@@ -258,6 +268,16 @@ def main():
                 c = dict(prev_cards[code], stale=True, order=i)
                 cards.append(c)
 
+    print("■ 수주 공시")
+    import orders
+    o = orders.collect()
+    if o:
+        write_json(DATA / "orders.json", o)
+        for c in cards:  # 최근 7일 안에 새 수주 공시가 있으면 카드에 표시
+            od = o.get(c["code"])
+            if od:
+                c["new_orders"] = sum(1 for x in od["contracts"] if x.get("new"))
+
     print("■ 동종업계")
     import peers
     write_json(DATA / "peers.json", peers.collect())
@@ -274,7 +294,8 @@ def main():
                    "finished_at": now_kst().strftime("%Y-%m-%d %H:%M")},
         "settings": {"bond_signal": SETTINGS["bond_signal"], "stock_signal": SETTINGS["stock_signal"],
                      "fair_value": SETTINGS["fair_value"], "band": SETTINGS["band"],
-                     "index_scenarios": SETTINGS.get("index_scenarios", {})},
+                     "index_scenarios": SETTINGS.get("index_scenarios", {}),
+                     "kospi_pbr_marks": SETTINGS.get("kospi_pbr_marks", [])},
     }
     write_json(DATA / "dashboard.json", out)
     print(f"완료: 성공 {len(REPORT.ok)} / 실패 {len(REPORT.failures)}")

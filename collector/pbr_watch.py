@@ -13,6 +13,18 @@ def _band_multiples(code):
     return [st["low"], st["avg"], st["high"]], st
 
 
+def _alert(cfg, bps, price):
+    """예: 28E PBR 이 1배 이하인지, 아니면 1배가 되려면 몇 % 내려야 하는지."""
+    a = cfg.get("alert")
+    if not a or not bps.get(a["year"]):
+        return None
+    b = bps[a["year"]]
+    pbr = price / b
+    target = b * a["below"]
+    return {"year": a["year"], "below": a["below"], "text": a.get("text", ""), "pbr": rnd(pbr, 2),
+            "hit": pbr <= a["below"], "target_price": round(target), "gap": rnd((target / price - 1) * 100, 1)}
+
+
 def item(cfg, base):
     code = str(cfg["code"])
     now = naver_now(code)
@@ -46,7 +58,7 @@ def item(cfg, base):
         "bps": bps, "pbr": {k: rnd(price / b, 2) if b else None for k, b in bps.items()},
         "bps_last": {"year": last_y, "bps": w[last_y]["bps"] if last_y else None,
                      "pbr": rnd(price / w[last_y]["bps"], 2) if last_y else None},
-        "rows": rows, "auto_multiples": auto, "memo": cfg.get("memo") or "",
+        "rows": rows, "auto_multiples": auto, "memo": cfg.get("memo") or "", "alert": _alert(cfg, bps, price),
         "band10": {k: band.get(k) for k in ("low", "avg", "high", "pos", "from")} if band else None,
         "source": "BPS: 와이즈리포트 컨센서스(네이버 종목분석) · 가격: 네이버 증권",
     }
