@@ -1,0 +1,44 @@
+# 관심종목 탭 (내 구글 시트 '빠른 판단' 탭 종목). 숫자는 모두 자동으로 새로 받아요.
+# fair: 적정주가 하방·상방을 계산할 방식
+#   PER = 27E EPS × 10년 선행 PER 밴드의 하단(하방)·평균·상단(상방)
+#   PBR = 27E BPS × 10년 PBR 밴드의 하단·평균·상단 (이익 변동이 큰 사이클 업종·금융·유틸리티)
+# 종목을 추가하려면 한 줄 복사해서 이름·코드만 바꾸면 돼요.
+
+stocks:
+  - {name: 삼성전자, code: "005930", fair: PBR}
+  - {name: SK하이닉스, code: "000660", fair: PBR}
+  - {name: 현대차, code: "005380"}
+  - {name: 기아, code: "000270"}
+  - {name: 현대모비스, code: "012330"}
+  - {name: 한국전력, code: "015760", fair: PBR}
+  - {name: 하이브, code: "352820"}
+  - {name: 에이피알, code: "278470"}
+  - {name: 달바글로벌, code: "483650"}
+  - {name: 대한항공, code: "003490", fair: PBR}
+  - {name: 한화에어로스페이스, code: "012450"}
+  - {name: 현대로템, code: "064350"}
+  - {name: LIG디펜스앤에어로스페이스, code: "079550"}
+  - {name: 한국항공우주, code: "047810"}
+  - {name: 대한조선, code: "439260"}
+  - {name: 미래에셋증권, code: "006800", fair: PBR}
+  - {name: 키움증권, code: "039490", fair: PBR}
+  - {name: 두산에너빌리티, code: "034020"}
+  - {name: 현대건설, code: "000720", fair: PBR}
+  - {name: NAVER, code: "035420"}
+  - {name: 씨어스, code: "458870"}
+  - {name: 메디아나, code: "041920"}
+  - {name: SAMG엔터, code: "419530"}
+  - {name: 삼양식품, code: "003230"}
+  - {name: 덕산네오룩스, code: "213420"}
+  - {name: 감성코퍼레이션, code: "036620"}
+  - {name: 클래시스, code: "214150"}
+  - {name: 비나텍, code: "126340"}
+  - {name: 아이티센글로벌, code: "124500"}
+  - {name: 두산, code: "000150", fair: PBR}
+  - {name: 노머스, code: "473980"}
+  - {name: 한화오션, code: "042660"}
+  - {name: 롯데쇼핑, code: "023530", fair: PBR}
+  - {name: 신세계, code: "004170", fair: PBR}
+  - {name: 현대백화점, code: "069960", fair: PBR}
+  - {name: HD현대중공업, code: "329180"}
+  - {name: 삼성중공업, code: "010140"}

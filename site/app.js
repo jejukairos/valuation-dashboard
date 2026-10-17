@@ -788,11 +788,65 @@ function pbrCard(it, base, i) {
   </div>`;
 }
 function showView() {
-  const isPbr = location.hash === "#pbr";
-  $("#pbrView").hidden = !isPbr;
-  $("#mainView").hidden = isPbr;
-  document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", (a.dataset.view === "pbr") === isPbr));
-  if (isPbr) loadPBR();
+  const view = location.hash === "#pbr" ? "pbr" : location.hash === "#watch" ? "watch" : "main";
+  $("#pbrView").hidden = view !== "pbr";
+  $("#watchView").hidden = view !== "watch";
+  $("#mainView").hidden = view !== "main";
+  document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.view === view));
+  if (view === "pbr") loadPBR();
+  if (view === "watch") loadWatch();
+}
+
+/* ---------- 관심종목 탭 (내 시트 '빠른 판단' 자동화) ---------- */
+let WATCH = null;
+async function loadWatch() {
+  if (!WATCH) {
+    try { WATCH = await (await fetch("data/watch.json?t=" + Date.now(), { cache: "no-store" })).json(); }
+    catch (e) { $("#watchCards").innerHTML = `<div class="empty">관심종목 데이터를 불러오지 못했어요.</div>`; return; }
+  }
+  $("#watchIntro").innerHTML = `${WATCH.rows.length}개 종목 · 갱신 ${esc(WATCH.updated_at)}<br><span class="src">${esc(WATCH.note)}</span>`;
+  let s = "up";
+  try { s = localStorage.getItem("watchSort") || "up"; } catch (_) {}
+  $("#watchSort").value = s;
+  renderWatch(s);
+}
+function renderWatch(mode) {
+  const rows = WATCH.rows.map((r, i) => ({ ...r, i }));
+  const big = (k) => (a, b) => (b[k] ?? -1e9) - (a[k] ?? -1e9);
+  const small = (k) => (a, b) => (a[k] ?? 1e9) - (b[k] ?? 1e9);
+  const sorter = { up: big("up_pct"), down: big("down_pct"), peg: small("peg"), per: small("per26"), mdd: small("mdd"),
+    cap: big("market_cap"), sheet: (a, b) => a.i - b.i }[mode] || big("up_pct");
+  rows.sort(sorter);
+  $("#watchCards").innerHTML = rows.map(watchCard).join("");
+}
+function watchCard(r) {
+  const lo = r.down, hi = r.up;
+  const pos = lo && hi && hi > lo ? Math.max(0, Math.min(100, ((r.price - lo) / (hi - lo)) * 100)) : null;
+  const y = (k) => (r.op_yoy || {})[k];
+  const yk = Object.keys(r.op_yoy || {});
+  const cell = (label, v) => `<div>${label}<b>${v}</b></div>`;
+  const open = r.holding ? `onclick="location.hash='#stock/${esc(r.code)}'" style="cursor:pointer"` : "";
+  return `<div class="card" ${open}>
+    <div class="row1" style="display:flex;justify-content:space-between;gap:8px"><span class="name" style="font-weight:700;font-size:17px">${esc(r.name)}${r.holding ? '<span class="tag">보유</span>' : ""}</span>
+      <span class="price" style="font-weight:700">${won(r.price)}</span></div>
+    <div class="sub">시가총액 ${bigWon(r.market_cap)} · 적정가 기준 ${r.fair === "PBR" ? "PBR" : "선행 PER"} 밴드 ${r.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""}</div>
+    ${pos == null ? `<div class="note">적정주가 하방·상방: N/A (밴드 자료 부족)</div>` : `
+    <div class="range"><span class="dot" style="left:${pos}%"></span></div>
+    <div class="rangelbl"><span>하방 ${n(lo)}<br><b class="${r.down_pct < 0 ? "verdict red" : "verdict green"}" style="font-size:13px">${pct(r.down_pct, 0, true)}</b></span>
+      <span style="text-align:right">상방 ${n(hi)}<br><b class="verdict green" style="font-size:13px">${pct(r.up_pct, 0, true)}</b></span></div>`}
+    <div class="mini">
+      ${cell("PER 25·26E·27E", `${n(r.per25, 1)} · ${n(r.per26, 1)} · ${n(r.per27, 1)}`)}
+      ${cell("PBR 25·26E·27E", `${n(r.pbr25, 2)} · ${n(r.pbr26, 2)} · ${n(r.pbr27, 2)}`)}
+      ${cell("PEG (26E)", n(r.peg, 2))}
+      ${cell("ROE 26E", pct(r.roe26))}
+      ${cell("부채비율 26E", pct(r.debt26, 0))}
+      ${cell("고점 대비", `${pct(r.mdd, 0)}`)}
+      ${cell("EPS 성장(26~28)", pct(r.eps_g, 0, true))}
+      ${cell("매출 성장(25~27)", pct(r.sales_g, 0, true))}
+      ${cell(`영업이익 YoY ${yk.map((k) => k).join("·")}`, yk.map((k) => (y(k) == null ? "-" : n(y(k), 0) + "%")).join(" · "))}
+    </div>
+    <div class="note src">52주 최고가 ${n(r.high52)} · 밴드 ${esc(r.band_from || "")}~ (하단 ${n(r.band_low, 2)} / 평균 ${n(r.band_avg, 2)} / 상단 ${n(r.band_high, 2)}배)${r.holding ? " · 누르면 상세 화면" : ""}</div>
+  </div>`;
 }
 
 /* ---------- 전체 ---------- */
@@ -841,6 +895,10 @@ async function load() {
 $("#stockCards").addEventListener("click", (e) => {
   const b = e.target.closest(".stock"); if (!b) return;
   location.hash = `#stock/${b.dataset.code}`;
+});
+$("#watchSort").addEventListener("change", (e) => {
+  try { localStorage.setItem("watchSort", e.target.value); } catch (_) {}
+  if (WATCH) renderWatch(e.target.value);
 });
 $("#sortSeg").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;

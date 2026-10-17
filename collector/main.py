@@ -294,6 +294,10 @@ def main():
     import peers
     write_json(DATA / "peers.json", peers.collect())
 
+    print("■ 관심종목")
+    import watch
+    write_json(DATA / "watch.json", watch.collect())
+
     print("■ PBR 계산기")
     import pbr_watch
     write_json(DATA / "pbr_watch.json", pbr_watch.collect())

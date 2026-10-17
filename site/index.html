@@ -20,9 +20,25 @@
   <div class="updated"><div id="updated">불러오는 중…</div><button id="statusChip" class="status-chip ok" hidden></button></div>
   <nav class="tabbar" id="tabbar">
     <a href="#" data-view="main" class="on">📊 대시보드</a>
+    <a href="#watch" data-view="watch">⭐ 관심종목</a>
     <a href="#pbr" data-view="pbr">🧮 PBR 계산기</a>
   </nav>
 </header>
+<main class="wrap" id="watchView" hidden>
+  <h2>관심종목</h2>
+  <p class="sub" id="watchIntro"></p>
+  <div class="toolbar"><label class="sub" for="watchSort">정렬</label>
+    <select id="watchSort" class="sel">
+      <option value="up">상방 여력 큰 순</option>
+      <option value="down">하방까지 가까운 순 (하방 여력 큰 순)</option>
+      <option value="peg">PEG 낮은 순</option>
+      <option value="per">26E PER 낮은 순</option>
+      <option value="mdd">고점 대비 많이 빠진 순</option>
+      <option value="cap">시가총액 큰 순</option>
+      <option value="sheet">내 시트 순서</option>
+    </select></div>
+  <div class="grid g3" id="watchCards"></div>
+</main>
 <main class="wrap" id="pbrView" hidden>
   <h2>PBR 계산기</h2>
   <p class="sub" id="pbrIntro"></p>

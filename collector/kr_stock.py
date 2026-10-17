@@ -61,13 +61,15 @@ def naver_now(code):
         "fwd_per": num(info.get("cnsPer")), "fwd_eps": num(info.get("cnsEps")),
         "pbr": num(info.get("pbr")), "bps": num(info.get("bps")),
         "div_yield": num(info.get("dividendYieldRatio")), "dps": num(info.get("dividend")),
+        "high52": num(info.get("highPriceOf52Weeks")), "low52": num(info.get("lowPriceOf52Weeks")),
     }
 
 
 # ---------- 와이즈리포트 (네이버 종목분석) ----------
 ROWS = {
     "eps": "EPS", "bps": "BPS", "dps": "현금DPS", "roe": "ROE", "payout": "현금배당성향",
-    "ni": "당기순이익(지배)", "equity": "자본총계(지배)", "sales": "매출액", "per": "PER", "pbr": "PBR", "shares": "발행주식수(보통주)",
+    "ni": "당기순이익(지배)", "equity": "자본총계(지배)", "sales": "매출액", "op": "영업이익(발표기준)",
+    "debt": "부채비율", "per": "PER", "pbr": "PBR", "shares": "발행주식수(보통주)",
 }
 
 
@@ -95,7 +97,7 @@ def wise_annual(code):
         rec = {"estimate": "(E)" in str(c), "fy_month": int(ym.group(2))}
         for k, label in ROWS.items():
             hit = names[names.str.startswith(label.replace(" ", ""))]
-            if k in ("ni", "equity", "sales"):
+            if k in ("ni", "equity", "sales", "op"):
                 hit = names[names == label]
             if len(hit):
                 rec[k] = num(tb.iloc[hit.index[0], ci])
@@ -277,8 +279,47 @@ def merged_history(code, splits=()):
     except Exception as e:  # noqa: BLE001
         REPORT.fail(f"{code} 10년 재무(DART)", e)
     hist = {}
-    for y, rec in _sane(dart).items():
+    clean = _sane(dart)
+    # BPS = 자본 ÷ 주식수. 이익이 거의 없던 해는 '순이익÷EPS' 로 구한 주식수가 크게 틀어지므로
+    # 그 해 주식수가 여러 해 가운데값과 1.5배 넘게 다르면 가운데값을 쓴다
+    shares = sorted(r["ni"] / r["eps"] for r in clean.values() if r.get("ni") and r.get("eps") and r["ni"] * r["eps"] > 0)
+    med = shares[len(shares) // 2] if shares else None
+    for y, rec in clean.items():
+        if med and rec.get("equity"):
+            s = rec["ni"] / rec["eps"] if (rec.get("ni") and rec.get("eps") and rec["ni"] * rec["eps"] > 0) else med
+            if not (med / 1.5 < s < med * 1.5):
+                s = med
+            rec = dict(rec, bps=rec["equity"] / s)
         hist[int(y)] = {k: rec.get(k) for k in ("eps", "bps", "dps", "roe", "payout")} | {"src": "DART"}
+    # DART 값이 와이즈리포트와 겹치는 해에 단위가 다르면(예: 1/40) 보정하거나 버린다
+    if wise:
+        for key in ("eps", "bps", "dps"):
+            ratios = [wise[y][key] / dart_v for y in wise if not wise[y].get("estimate")
+                      and (dart_v := (hist.get(y) or {}).get(key)) and wise[y].get(key) and dart_v * wise[y][key] > 0]
+            if key == "bps":
+                # BPS 는 1년에 2배 넘게 바뀌기 어렵다 → 와이즈리포트 첫 해부터 한 해씩 거슬러 올라가며
+                # 바로 다음 해와 2배 넘게 차이 나는 DART 값은 버린다 (보고서마다 단위가 섞인 경우)
+                wy = min((y for y in wise if not wise[y].get("estimate") and wise[y].get("bps")), default=None)
+                if wy:
+                    nxt = wise[wy]["bps"]
+                    for y in sorted((y for y in hist if y < wy), reverse=True):
+                        v = hist[y].get("bps")
+                        if v is None:
+                            continue
+                        if v <= 0 or not 0.5 < nxt / v < 2:
+                            hist[y]["bps"] = None
+                        else:
+                            nxt = v
+                continue
+            if not ratios:
+                continue
+            r = sorted(ratios)[len(ratios) // 2]
+            if 0.8 < r < 1.25:
+                continue
+            consistent = all(0.8 < x / r < 1.25 for x in ratios)
+            for y, rec in hist.items():
+                if rec.get("src") == "DART" and rec.get(key) is not None:
+                    rec[key] = rec[key] * r if consistent else None
     for y, rec in (wise or {}).items():
         base = hist.get(y, {})
         merged = dict(base)

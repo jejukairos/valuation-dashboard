@@ -80,6 +80,18 @@ header.top { flex-wrap: wrap; }
 .tabbar a.on { background: var(--s1); color: #fff; font-weight: 700; }
 @media (min-width: 760px) { .tabbar a { flex: 0 0 auto; padding: 8px 18px; } }
 
+/* 관심종목 */
+.sel { font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--axis); background: var(--surface); color: var(--ink); }
+.mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.mini div { background: var(--surface-2); border-radius: 8px; padding: 6px 8px; font-size: 12px; color: var(--ink-2); }
+.mini b { display: block; font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.range { position: relative; height: 10px; border-radius: 5px; margin: 16px 0 4px;
+  background: linear-gradient(90deg, var(--good-bg), var(--surface-2) 50%, var(--bad-bg)); }
+.range .dot { position: absolute; top: -4px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink);
+  border: 2px solid var(--surface); transform: translateX(-50%); }
+.rangelbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tag { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--s1); color: #fff; margin-left: 6px; vertical-align: middle; }
+
 /* PBR 계산기 */
 td.base, th.base { background: var(--warn-bg); }
 tr.me td { background: var(--warn-bg); font-weight: 700; }
