@@ -14,6 +14,12 @@ groups:
       - {name: 한국항공우주, market: KR, code: "047810"}
       - {name: 록히드마틴, market: US, code: LMT}
       - {name: 제너럴다이내믹스, market: US, code: GD}
+      - {name: 노스롭그루먼, market: US, code: NOC}
+      - {name: RTX, market: US, code: RTX}
+      - {name: L3해리스, market: US, code: LHX}
+      - {name: 헌팅턴잉걸스, market: US, code: HII}
+      - {name: 텍스트론, market: US, code: TXT}
+      - {name: 보잉, market: US, code: BA}
 
   - name: 방산 (유럽)
     holdings: ["012450", "064350"]
