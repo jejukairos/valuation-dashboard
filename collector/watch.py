@@ -33,11 +33,16 @@ def row(cfg, holdings):
     # 52주 최고가는 액면분할이 반영된 '수정주가'로 (네이버 요약값은 분할 전 가격이 섞일 때가 있음)
     recent = px[px.index >= px.index[-1] - pd.Timedelta(days=365)]
     adj_high = float(recent.max()) if len(recent) else None
-    st = ((band or {}).get("periods") or {}).get("10y") or ((band or {}).get("periods") or {}).get("all") or {}
+    periods = (band or {}).get("periods") or {}
+    st = periods.get("10y") or periods.get("all") or {}
     base27 = (hist.get(y + 1) or {}).get(key)
     down = base27 * st["low"] if (base27 and st.get("low")) else None
     mid = base27 * st["avg"] if (base27 and st.get("avg")) else None
     up = base27 * st["high"] if (base27 and st.get("high")) else None
+    # 5년 밴드로 본 하방/상방 (최근 5년 눈높이)
+    s5 = periods.get("5y") or {}
+    d5 = base27 * s5["low"] if (base27 and s5.get("low")) else None
+    u5 = base27 * s5["high"] if (base27 and s5.get("high")) else None
 
     def per_at(yy):
         e = (w.get(yy) or {}).get("eps")
@@ -63,6 +68,10 @@ def row(cfg, holdings):
         "down_pct": rnd((down / price - 1) * 100, 1) if down else None,
         "up_pct": rnd((up / price - 1) * 100, 1) if up else None,
         "band_from": st.get("from"), "band_low": st.get("low"), "band_avg": st.get("avg"), "band_high": st.get("high"),
+        "down5": rnd(d5, 0), "up5": rnd(u5, 0),
+        "down5_pct": rnd((d5 / price - 1) * 100, 1) if d5 else None,
+        "up5_pct": rnd((u5 / price - 1) * 100, 1) if u5 else None,
+        "band5_from": s5.get("from"), "band5_low": s5.get("low"), "band5_avg": s5.get("avg"), "band5_high": s5.get("high"),
         "high52": high, "mdd": rnd((price / high - 1) * 100, 1) if high else None,
         "op_yoy": {str(yy)[2:]: rnd(_yoy(w, "op", yy), 1) for yy in (y - 1, y, y + 1)},
     }
@@ -83,5 +92,5 @@ def collect():
     REPORT.success("관심종목")
     return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "rows": rows,
             "note": ("현재가 기준 PER·PBR(25는 연말 실적 기준) · 성장률은 와이즈리포트 연간 값의 전년 대비 평균 · "
-                     "적정주가 하방/상방 = 27E EPS(또는 BPS) × 10년 밴드 하단/상단(하위·상위 10%) · "
+                     "적정주가 하방/상방 = 27E EPS(또는 BPS) × 10년·5년 밴드 하단/상단(하위·상위 10%) · "
                      "고점 대비 하락률 = 현재가 ÷ 52주 최고가 − 1")}

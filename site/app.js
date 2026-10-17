@@ -814,14 +814,20 @@ function renderWatch(mode) {
   const rows = WATCH.rows.map((r, i) => ({ ...r, i }));
   const big = (k) => (a, b) => (b[k] ?? -1e9) - (a[k] ?? -1e9);
   const small = (k) => (a, b) => (a[k] ?? 1e9) - (b[k] ?? 1e9);
-  const sorter = { up: big("up_pct"), down: big("down_pct"), peg: small("peg"), per: small("per26"), mdd: small("mdd"),
+  const sorter = { up: big("up_pct"), down: big("down_pct"), up5: big("up5_pct"), down5: big("down5_pct"), peg: small("peg"), per: small("per26"), mdd: small("mdd"),
     cap: big("market_cap"), sheet: (a, b) => a.i - b.i }[mode] || big("up_pct");
   rows.sort(sorter);
   $("#watchCards").innerHTML = rows.map(watchCard).join("");
 }
+function watchRange(label, price, lo, hi, loPct, hiPct) {
+  const pos = lo && hi && hi > lo ? Math.max(0, Math.min(100, ((price - lo) / (hi - lo)) * 100)) : null;
+  if (pos == null) return `<div class="note">${label} 하방·상방: N/A (밴드 자료 부족)</div>`;
+  return `<div class="sub" style="margin-top:8px;font-weight:700">${label} 밴드</div>
+    <div class="range"><span class="dot" style="left:${pos}%"></span></div>
+    <div class="rangelbl"><span>하방 ${n(lo)}<br><b class="${loPct < 0 ? "verdict red" : "verdict green"}" style="font-size:13px">${pct(loPct, 0, true)}</b></span>
+      <span style="text-align:right">상방 ${n(hi)}<br><b class="verdict green" style="font-size:13px">${pct(hiPct, 0, true)}</b></span></div>`;
+}
 function watchCard(r) {
-  const lo = r.down, hi = r.up;
-  const pos = lo && hi && hi > lo ? Math.max(0, Math.min(100, ((r.price - lo) / (hi - lo)) * 100)) : null;
   const y = (k) => (r.op_yoy || {})[k];
   const yk = Object.keys(r.op_yoy || {});
   const cell = (label, v) => `<div>${label}<b>${v}</b></div>`;
@@ -830,10 +836,8 @@ function watchCard(r) {
     <div class="row1" style="display:flex;justify-content:space-between;gap:8px"><span class="name" style="font-weight:700;font-size:17px">${esc(r.name)}${r.holding ? '<span class="tag">보유</span>' : ""}</span>
       <span class="price" style="font-weight:700">${won(r.price)}</span></div>
     <div class="sub">시가총액 ${bigWon(r.market_cap)} · 적정가 기준 ${r.fair === "PBR" ? "PBR" : "선행 PER"} 밴드 ${r.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""}</div>
-    ${pos == null ? `<div class="note">적정주가 하방·상방: N/A (밴드 자료 부족)</div>` : `
-    <div class="range"><span class="dot" style="left:${pos}%"></span></div>
-    <div class="rangelbl"><span>하방 ${n(lo)}<br><b class="${r.down_pct < 0 ? "verdict red" : "verdict green"}" style="font-size:13px">${pct(r.down_pct, 0, true)}</b></span>
-      <span style="text-align:right">상방 ${n(hi)}<br><b class="verdict green" style="font-size:13px">${pct(r.up_pct, 0, true)}</b></span></div>`}
+    ${watchRange("10년", r.price, r.down, r.up, r.down_pct, r.up_pct)}
+    ${watchRange("5년", r.price, r.down5, r.up5, r.down5_pct, r.up5_pct)}
     <div class="mini">
       ${cell("PER 25·26E·27E", `${n(r.per25, 1)} · ${n(r.per26, 1)} · ${n(r.per27, 1)}`)}
       ${cell("PBR 25·26E·27E", `${n(r.pbr25, 2)} · ${n(r.pbr26, 2)} · ${n(r.pbr27, 2)}`)}
@@ -845,7 +849,7 @@ function watchCard(r) {
       ${cell("매출 성장(25~27)", pct(r.sales_g, 0, true))}
       ${cell(`영업이익 YoY ${yk.map((k) => k).join("·")}`, yk.map((k) => (y(k) == null ? "-" : n(y(k), 0) + "%")).join(" · "))}
     </div>
-    <div class="note src">52주 최고가 ${n(r.high52)} · 밴드 ${esc(r.band_from || "")}~ (하단 ${n(r.band_low, 2)} / 평균 ${n(r.band_avg, 2)} / 상단 ${n(r.band_high, 2)}배)${r.holding ? " · 누르면 상세 화면" : ""}</div>
+    <div class="note src">52주 최고가 ${n(r.high52)} · 10년 밴드 ${esc(r.band_from || "")}~ (하단 ${n(r.band_low, 2)} / 평균 ${n(r.band_avg, 2)} / 상단 ${n(r.band_high, 2)}배) · 5년 밴드 ${esc(r.band5_from || "")}~ (하단 ${n(r.band5_low, 2)} / 평균 ${n(r.band5_avg, 2)} / 상단 ${n(r.band5_high, 2)}배)${r.holding ? " · 누르면 상세 화면" : ""}</div>
   </div>`;
 }
 
