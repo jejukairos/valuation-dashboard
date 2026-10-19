@@ -148,7 +148,7 @@ function miniBandHTML(c, pos) {
   const m = c.mini;
   if (!m || !m.lines) return "";
   return `<div class="miniband" onclick="event.stopPropagation()">
-    <div class="chart-title" style="margin-top:8px">${m.kind} 밴드 <span class="src">${esc(m.from)}~ · 점선 = 추정치 · 10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"} · 눌러서 가격 보기</span></div>
+    <div class="chart-title" style="margin-top:8px">${m.kind} 밴드 <span class="src">${esc(m.from)}~ · 배수는 10년 밴드 기준 · 점선 = 추정치 · 10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"} · 눌러서 가격 보기</span></div>
     <div class="chart-box mini"><canvas id="mini-${esc(c.code)}"></canvas></div>
     ${legend([...m.mults.map((x, i) => [`${n(x, m.kind === "PER" ? 1 : 2)}배`, css(MINI_COLORS[i]), false]), ["수정주가", css("--s1"), false]])}
   </div>`;

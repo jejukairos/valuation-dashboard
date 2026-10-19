@@ -208,7 +208,8 @@ def _mini_band(bands, hist, order, currency, step=4):
     st = b["periods"].get("10y") or b["periods"].get("all") or {}
     if not st.get("low") or not st.get("high"):
         return None
-    i0 = next((i for i, d in enumerate(b["dates"]) if d >= st["from"]), 0)
+    # 그림은 2019년부터 (배수 4개는 10년 밴드 기준 그대로, 10년치 전체는 상세 화면에서)
+    i0 = next((i for i, d in enumerate(b["dates"]) if d >= max(st["from"], "2019-01-01")), 0)
     idx = list(range(len(b["dates"]) - 1, i0 - 1, -step))[::-1]  # 마지막 주(현재)는 꼭 포함
     dates = [b["dates"][i] for i in idx]
     price = [b["price"][i] for i in idx]
