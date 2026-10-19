@@ -192,8 +192,27 @@ def stock_detail(h, rates_now, fx):
         "short_history": any(b.get("short_history") for b in bands.values()),
         "band_start": min((b["start"] for b in bands.values()), default=None),
         "rerating_warning": det.get("per", {}).get("rerating_warning"), "checks": checks,
+        "mini": _mini_band(bands, [k for k in fm if k in ("PER", "PBR")] + ["PER", "PBR"], currency),
     }
     return det
+
+
+def _mini_band(bands, order, currency, step=4):
+    """카드용 작은 밴드: 적정가에 쓴 방식(PER 우선, 없으면 PBR)의 10년 밴드를 4주 간격으로 줄인 것."""
+    kind = next((k for k in order if k in bands), None)
+    if not kind:
+        return None
+    b = bands[kind]
+    st = b["periods"].get("10y") or b["periods"].get("all") or {}
+    if not st.get("low"):
+        return None
+    i0 = next((i for i, d in enumerate(b["dates"]) if d >= st["from"]), 0)
+    idx = list(range(len(b["dates"]) - 1, i0 - 1, -step))[::-1]  # 마지막 주(현재)는 꼭 포함
+    dg = 2 if currency == "USD" else 0
+    line = lambda m: [rnd(b["base"][i] * m, dg) if b["base"][i] and b["base"][i] > 0 else None for i in idx]  # noqa: E731
+    return {"kind": kind, "from": b["dates"][idx[0]][:4], "price": [rnd(b["price"][i], dg) for i in idx],
+            "low": line(st["low"]), "avg": line(st["avg"]), "high": line(st["high"]),
+            "m": [rnd(st["low"], 2), rnd(st["avg"], 2), rnd(st["high"], 2)]}
 
 
 def main():

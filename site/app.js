@@ -140,6 +140,29 @@ function bondAlert(c) {
   const lim = DASH.settings.bond_signal.stock_alert_above ?? 1.0;
   return c.bond_ratio != null && c.bond_ratio >= lim;
 }
+// 카드용 작은 밴드 그림 (주가 실선 + 하단·평균·상단 점선)
+function miniBand(m, pos) {
+  const all = [...m.price, ...m.low, ...m.high].filter((v) => v != null && v > 0);
+  if (all.length < 4) return "";
+  const lo = Math.min(...all), hi = Math.max(...all), W = 300, H = 72, N = m.price.length;
+  const x = (i) => (i / (N - 1)) * W;
+  const y = (v) => H - 3 - ((v - lo) / (hi - lo || 1)) * (H - 6);
+  const path = (arr) => {
+    let d = "", pen = false;
+    arr.forEach((v, i) => { if (v == null || v <= 0) { pen = false; return; } d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; });
+    return d;
+  };
+  const ln = (arr, col, dash) => `<path d="${path(arr)}" fill="none" stroke="var(${col})" stroke-width="${dash ? 1.2 : 1.8}" ${dash ? 'stroke-dasharray="4 3"' : ""} vector-effect="non-scaling-stroke"/>`;
+  const last = m.price[N - 1];
+  return `<div class="miniband">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${m.kind} 10년 밴드">
+      ${ln(m.high, "--s4", 1)}${ln(m.avg, "--s2", 1)}${ln(m.low, "--s3", 1)}${ln(m.price, "--s1", 0)}
+      ${last ? `<circle cx="${W}" cy="${y(last).toFixed(1)}" r="3" fill="var(--s1)"/>` : ""}
+    </svg>
+    <div class="bandlbl"><span>${m.kind} 밴드 ${esc(m.from)}~</span><span>위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span>
+      <span><i style="color:var(--s3)">하단 ${n(m.m[0], 1)}</i> · <i style="color:var(--s2)">평균 ${n(m.m[1], 1)}</i> · <i style="color:var(--s4)">상단 ${n(m.m[2], 1)}배</i></span></div>
+  </div>`;
+}
 function stockCard(c) {
   const L = LIGHT[c.verdict] || LIGHT.na;
   const gap = c.gap == null ? "N/A" : pct(c.gap * 100, 0, true);
@@ -169,8 +192,9 @@ function stockCard(c) {
       <div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)}</div>
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>
+    ${c.mini ? miniBand(c.mini, pos) : `
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
-    <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
+    <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>`}
     ${mine}
     <div class="pills">${pills.join("")}</div>
   </button>`;
