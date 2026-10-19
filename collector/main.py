@@ -263,7 +263,7 @@ def main():
         r[k] = keep_prev(r[k], prev_rates.get(k), k)
     print("■ 시장")
     m = market.collect()
-    for k in ("sp500_trailing", "sp500_forward", "kospi_forward"):
+    for k in ("sp500_trailing", "sp500_forward", "sp500_pbr", "kospi_forward"):
         m[k] = keep_prev(m[k], prev_mkt.get(k), k)
     if m.get("kospi_trailing", {}).get("error") and prev_mkt.get("kospi_trailing", {}).get("per"):
         m["kospi_trailing"] = dict(prev_mkt["kospi_trailing"], stale=True)

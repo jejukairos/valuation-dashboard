@@ -566,9 +566,12 @@ function spBand() {
   const el = $("#spBand");
   if (!t || !t.hist) { el.innerHTML = `<div class="empty">N/A — S&P500 PER 데이터를 받지 못했어요.</div>`; return; }
   const tcur = t.hist[t.hist.length - 1];
+  const pb = DASH.market.sp500_pbr && DASH.market.sp500_pbr.hist && DASH.market.sp500_pbr.hist.length > 20 ? DASH.market.sp500_pbr : null;
+  const pcur = pb ? pb.hist[pb.hist.length - 1] : null;
   el.innerHTML = `<div class="tiles">
       <div class="tile"><div class="tl">선행 12개월 PER</div><div class="tv">${f ? times(f.value) : "N/A"}</div><div class="src">FactSet · ${esc(f?.date || "")}</div></div>
       <div class="tile"><div class="tl">후행 PER (차트 기준)</div><div class="tv">${times(tcur[1])}</div><div class="src">multpl · ${esc(tcur[0])}</div></div>
+      ${pcur ? `<div class="tile"><div class="tl">PBR (지난 실적)</div><div class="tv">${times(pcur[1], 2)}</div><div class="src">multpl · ${esc(pcur[0])}</div></div>` : ""}
     </div>
     <h3>후행 PER 밴드</h3>
     ${hBandHTML("sp")}
@@ -578,8 +581,11 @@ function spBand() {
       <div class="k">선행 12개월 PER</div><div class="v">${f ? times(f.value) : "N/A"}</div>
       <div class="k">선행 PER 5년 평균</div><div class="v">${f ? times(f.avg5) : "N/A"}</div>
       <div class="k">선행 PER 10년 평균</div><div class="v">${f ? times(f.avg10) : "N/A"}</div></div>
+    ${pb ? `<h3>PBR 밴드 <span class="src">지난 실적 장부가 기준 · ${esc(pb.source)}</span></h3>${hBandHTML("sppb")}
+      <div class="note">미국은 선행 PBR 과거 이력이 무료로 공개된 곳이 없어서, 장부가(지난 실적) 기준 PBR 로 그렸어요. 마지막 점은 최근 주가로 다시 계산한 추정값이에요.</div>` : ""}
     ${f && f.eps ? indexEPS(f, "sp") : `<div class="note">연도별 EPS: N/A (FactSet 보고서를 읽지 못했어요)</div>`}`;
   wireHBand("sp", t.hist, "S&P500 PER", "배", 1, 10);
+  if (pb) wireHBand("sppb", pb.hist, "S&P500 PBR", "배", 2, 10);
 }
 
 /* 지수 연도별 EPS 표 + 'EPS × PER = 지수' 시나리오 */

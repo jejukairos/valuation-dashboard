@@ -22,6 +22,18 @@ def sp500_trailing():
             "hist": [[d.strftime("%Y-%m-%d"), round(v, 2)] for d, v in zip(df["date"], df["v"])]}
 
 
+def sp500_pbr():
+    """S&P500 PBR (지난 실적 장부가 기준, 분기별 + 맨 위 줄은 최근 추정). 선행 PBR 이력은 무료 출처가 없음."""
+    r = HTTP.get("https://www.multpl.com/s-p-500-price-to-book/table/by-quarter")
+    df = pd.read_html(io.StringIO(r.text))[0]
+    df.columns = ["date", "v"]
+    df["v"] = df["v"].astype(str).str.extract(r"([\d.]+)")[0].astype(float)
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.dropna().sort_values("date")
+    return {"source": "multpl.com (PBR, 분기별)",
+            "hist": [[d.strftime("%Y-%m-%d"), round(v, 2)] for d, v in zip(df["date"], df["v"])]}
+
+
 FS_RE = re.compile(r"forward 12-month P/E ratio (?:for the S&P 500 )?is (\d+\.\d+).{0,200}?5-year average (?:of |\()(\d+\.\d+).{0,80}?10-year average (?:of |\()(\d+\.\d+)", re.S)
 
 
@@ -284,6 +296,7 @@ def collect():
     return {
         "sp500_trailing": attempt("S&P500 후행 PER (multpl)", sp500_trailing),
         "sp500_forward": attempt("S&P500 선행 PER (FactSet)", sp500_forward),
+        "sp500_pbr": attempt("S&P500 PBR (multpl)", sp500_pbr),
         "kospi_forward": attempt("코스피 선행 PER (직접 계산)", kospi_forward),
         "kospi_trailing": _optional(kospi_trailing),
     }
