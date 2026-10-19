@@ -126,6 +126,7 @@ td.hot { font-weight: 700; }
 .big { font-size: 28px; font-weight: 700; line-height: 1.2; }
 .kv { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 4px 12px; margin-top: 10px; font-size: 14px; }
 .kv .k { color: var(--ink-2); }
+.kv .k.kgrp { color: var(--muted); font-size: 12px; font-weight: 700; margin-top: 6px; }
 .kv .v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .kv .v .src { display: block; font-weight: 400; }
 .note { font-size: 12px; color: var(--ink-2); margin-top: 8px; }
@@ -170,10 +171,9 @@ td.hot { font-weight: 700; }
 .bandbar .dot { position: absolute; top: -4px; width: 16px; height: 16px; border-radius: 50%;
   background: var(--ink); border: 2px solid var(--surface); transform: translateX(-50%); }
 .bandlbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
-.miniband { margin: 10px 0 2px; }
-.miniband svg { display: block; width: 100%; height: 64px; background: var(--surface-2); border-radius: 6px; }
-.miniband .bandlbl { margin-top: 3px; gap: 6px; flex-wrap: wrap; }
-.miniband .bandlbl i { font-style: normal; }
+.miniband { margin: 4px 0 2px; cursor: default; text-align: left; }
+.chart-box.mini { height: 150px; margin-top: 4px; }
+.miniband .legend { font-size: 11px; gap: 8px; }
 .stale { font-size: 11px; color: var(--warn-ink); }
 
 /* 상세 시트 */

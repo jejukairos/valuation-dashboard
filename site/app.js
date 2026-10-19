@@ -96,10 +96,12 @@ function marketCard(sig, rateObj, extraRate, key) {
       <div class="sub">비율 <span class="big">${n(sig.ratio, 2)}</span></div>
     </div></div>
     <div class="kv">
+      <div class="k kgrp">배수 비교</div><div class="v"></div>
       <div class="k">${esc(sig.per_label)}</div><div class="v">${times(sig.per)}<span class="src">${esc(sig.per_source)}</span></div>
-      <div class="k">${esc(sig.rate_label)}</div><div class="v">${pct(sig.rate, 2)}<span class="src">${esc(rateObj?.source || "")} · ${esc(rateObj?.date || "")}</span></div>
       <div class="k">채권 환산 PER <span class="src nowrap">1 ÷ 금리</span></div><div class="v">${times(sig.bond_per)}</div>
+      <div class="k kgrp">수익률 비교</div><div class="v"></div>
       <div class="k">주식 이익수익률 <span class="src nowrap">1 ÷ PER</span></div><div class="v">${pct(sig.earnings_yield, 2)}</div>
+      <div class="k">${esc(sig.rate_label)}</div><div class="v">${pct(sig.rate, 2)}<span class="src">${esc(rateObj?.source || "")} · ${esc(rateObj?.date || "")}</span></div>
       <div class="k">위험 프리미엄 <span class="src nowrap">이익수익률 − 금리</span></div><div class="v">${sig.premium == null ? "N/A" : (sig.premium > 0 ? "+" : "") + n(sig.premium, 2) + "%p"}</div>
       ${extraRate ? `<div class="k" style="font-size:12px">${esc(extraRate.label)} (참고)</div><div class="v" style="font-size:12px;font-weight:400">${pct(extraRate.latest, 2)}</div>` : ""}
     </div>${stale}${key === "kr" ? kospiPbrBrief() : ""}
@@ -140,28 +142,27 @@ function bondAlert(c) {
   const lim = DASH.settings.bond_signal.stock_alert_above ?? 1.0;
   return c.bond_ratio != null && c.bond_ratio >= lim;
 }
-// 카드용 작은 밴드 그림 (주가 실선 + 하단·평균·상단 점선)
-function miniBand(m, pos) {
-  const all = [...m.price, ...m.low, ...m.high].filter((v) => v != null && v > 0);
-  if (all.length < 4) return "";
-  const lo = Math.min(...all), hi = Math.max(...all), W = 300, H = 72, N = m.price.length;
-  const x = (i) => (i / (N - 1)) * W;
-  const y = (v) => H - 3 - ((v - lo) / (hi - lo || 1)) * (H - 6);
-  const path = (arr) => {
-    let d = "", pen = false;
-    arr.forEach((v, i) => { if (v == null || v <= 0) { pen = false; return; } d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; });
-    return d;
-  };
-  const ln = (arr, col, dash) => `<path d="${path(arr)}" fill="none" stroke="var(${col})" stroke-width="${dash ? 1.2 : 1.8}" ${dash ? 'stroke-dasharray="4 3"' : ""} vector-effect="non-scaling-stroke"/>`;
-  const last = m.price[N - 1];
-  return `<div class="miniband">
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${m.kind} 10년 밴드">
-      ${ln(m.high, "--s4", 1)}${ln(m.avg, "--s2", 1)}${ln(m.low, "--s3", 1)}${ln(m.price, "--s1", 0)}
-      ${last ? `<circle cx="${W}" cy="${y(last).toFixed(1)}" r="3" fill="var(--s1)"/>` : ""}
-    </svg>
-    <div class="bandlbl"><span>${m.kind} 밴드 ${esc(m.from)}~</span><span>위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span>
-      <span><i style="color:var(--s3)">하단 ${n(m.m[0], 1)}</i> · <i style="color:var(--s2)">평균 ${n(m.m[1], 1)}</i> · <i style="color:var(--s4)">상단 ${n(m.m[2], 1)}배</i></span></div>
+// 카드용 밴드 차트 (네이버 증권 밴드차트처럼: 배수 4개 선 + 수정주가, 앞으로 2년은 추정치 점선)
+const MINI_COLORS = ["--s2", "--s3", "--s7", "--s4"];
+function miniBandHTML(c, pos) {
+  const m = c.mini;
+  if (!m || !m.lines) return "";
+  return `<div class="miniband" onclick="event.stopPropagation()">
+    <div class="chart-title" style="margin-top:8px">${m.kind} 밴드 <span class="src">${esc(m.from)}~ · 점선 = 추정치 · 10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"} · 눌러서 가격 보기</span></div>
+    <div class="chart-box mini"><canvas id="mini-${esc(c.code)}"></canvas></div>
+    ${legend([...m.mults.map((x, i) => [`${n(x, m.kind === "PER" ? 1 : 2)}배`, css(MINI_COLORS[i]), false]), ["수정주가", css("--s1"), false]])}
   </div>`;
+}
+function drawMiniBands(list) {
+  for (const c of list) {
+    const m = c.mini, cv = m && m.lines && document.getElementById(`mini-${c.code}`);
+    if (!cv) continue;
+    const dash = { borderDash: (ctx) => (ctx.p0DataIndex >= m.now ? [4, 3] : undefined) };
+    const ds = m.mults.map((x, i) => ({ label: `${n(x, m.kind === "PER" ? 1 : 2)}배`, data: m.lines[i], borderColor: css(MINI_COLORS[i]), borderWidth: 1.5, segment: dash, spanGaps: true }));
+    ds.push({ label: "수정주가", data: m.price, borderColor: css("--s1"), borderWidth: 2 });
+    const usd = c.currency === "USD";
+    makeChart(cv, m.dates, ds, { fmt: (v) => (usd ? "$" + n(v, 2) : n(v) + "원"), yfmt: (v) => (usd ? "$" + n(v) : v >= 10000 ? n(v / 10000, 0) + "만" : n(v)) });
+  }
 }
 function stockCard(c) {
   const L = LIGHT[c.verdict] || LIGHT.na;
@@ -192,7 +193,7 @@ function stockCard(c) {
       <div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)}</div>
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>
-    ${c.mini ? miniBand(c.mini, pos) : `
+    ${c.mini && c.mini.lines ? miniBandHTML(c, pos) : `
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
     <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>`}
     ${mine}
@@ -206,6 +207,7 @@ function renderCards() {
   if (sortMode === "cheap") list.sort((a, b) => (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
   else list.sort((a, b) => a.order - b.order);
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
+  drawMiniBands(list);
 }
 
 /* ---------- 3. 종목 상세 ---------- */

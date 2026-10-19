@@ -192,27 +192,56 @@ def stock_detail(h, rates_now, fx):
         "short_history": any(b.get("short_history") for b in bands.values()),
         "band_start": min((b["start"] for b in bands.values()), default=None),
         "rerating_warning": det.get("per", {}).get("rerating_warning"), "checks": checks,
-        "mini": _mini_band(bands, [k for k in fm if k in ("PER", "PBR")] + ["PER", "PBR"], currency),
+        "mini": _mini_band(bands, hist, [k for k in fm if k in ("PER", "PBR")] + ["PER", "PBR"], currency),
     }
     return det
 
 
-def _mini_band(bands, order, currency, step=4):
-    """카드용 작은 밴드: 적정가에 쓴 방식(PER 우선, 없으면 PBR)의 10년 밴드를 4주 간격으로 줄인 것."""
+def _mini_band(bands, hist, order, currency, step=4):
+    """카드용 밴드 차트 (네이버 증권 밴드차트 모양).
+    적정가에 쓴 방식(PER 우선, 없으면 PBR)의 10년 밴드 하단~상단을 4등분한 배수 4개 × 주당값 선을,
+    과거(4주 간격)부터 2년 뒤 연말까지(추정치) 월 단위로 이어 그린다."""
     kind = next((k for k in order if k in bands), None)
     if not kind:
         return None
     b = bands[kind]
     st = b["periods"].get("10y") or b["periods"].get("all") or {}
-    if not st.get("low"):
+    if not st.get("low") or not st.get("high"):
         return None
     i0 = next((i for i, d in enumerate(b["dates"]) if d >= st["from"]), 0)
     idx = list(range(len(b["dates"]) - 1, i0 - 1, -step))[::-1]  # 마지막 주(현재)는 꼭 포함
+    dates = [b["dates"][i] for i in idx]
+    price = [b["price"][i] for i in idx]
+    # 앞으로: 2년 뒤 연말까지 매달 말 (주가는 없음)
+    last = pd.Timestamp(dates[-1])
+    for d in pd.date_range(last + pd.offsets.MonthEnd(1), f"{now_kst().year + 2}-12-31", freq="ME"):
+        dates.append(d.strftime("%Y-%m-%d")); price.append(None)
+    # 주당값: 그 시점에 쓰는 연도 값(선행 PER = 1년 뒤 EPS, PBR = 직전 연도 BPS)에서
+    # 다음 연도 값으로 1년에 걸쳐 조금씩 옮겨 가게 해서 계단 대신 부드러운 선으로 (네이버 밴드차트처럼)
+    key = "eps" if kind == "PER" else "bps"
+    shift = 1 if b.get("basis") == "forward" else 0
+    avail = sorted((rec.get("avail") or f"{y + 1}-04-01", y) for y, rec in hist.items())
+
+    def base_at(ds):
+        known = [(a, y) for a, y in avail if a <= ds]
+        if not known:
+            return None
+        a, k = known[-1]
+        v0 = (hist.get(k + shift) or {}).get(key)
+        v1 = (hist.get(k + 1 + shift) or {}).get(key)
+        if v0 is None or v1 is None:
+            return v0
+        f = min(1.0, max(0.0, (pd.Timestamp(ds) - pd.Timestamp(a)).days / 365))
+        return v0 + (v1 - v0) * f
+
+    base = [base_at(d) for d in dates]
+    lo, hi = st["low"], st["high"]
+    dg_m = 1 if kind == "PER" else 2
+    mults = [round(lo + (hi - lo) * k / 3, dg_m) for k in range(4)]
     dg = 2 if currency == "USD" else 0
-    line = lambda m: [rnd(b["base"][i] * m, dg) if b["base"][i] and b["base"][i] > 0 else None for i in idx]  # noqa: E731
-    return {"kind": kind, "from": b["dates"][idx[0]][:4], "price": [rnd(b["price"][i], dg) for i in idx],
-            "low": line(st["low"]), "avg": line(st["avg"]), "high": line(st["high"]),
-            "m": [rnd(st["low"], 2), rnd(st["avg"], 2), rnd(st["high"], 2)]}
+    lines = [[rnd(x * m, dg) if x and x > 0 else None for x in base] for m in mults]
+    return {"kind": kind, "from": dates[0][:4], "now": len(idx) - 1, "dates": [d[:7] for d in dates],
+            "price": [rnd(p, dg) if p is not None else None for p in price], "mults": mults, "lines": lines}
 
 
 def main():
