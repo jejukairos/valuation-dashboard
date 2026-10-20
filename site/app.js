@@ -349,6 +349,63 @@ function drawDetailCharts(d) {
       { type: "bar", zero: true, fmt: (v) => n(v) + "원", yfmt: (v) => n(v), xlen: 6 });
   }
 }
+/* ---------- 미국 중고차 가격지수 (현대차·기아 상세 화면) ---------- */
+const AUTO_CODES = ["005380", "000270"];
+function manheimBlock() {
+  const M = DASH.market.manheim;
+  if (!M || !M.hist || M.hist.length < 24) return "";
+  const h = M.hist, last = h[h.length - 1], prev = h[h.length - 2];
+  const peak = h.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const yoys = h.filter((x) => x[2] != null);
+  const yHi = yoys.reduce((a, b) => (b[2] > a[2] ? b : a)), yLo = yoys.reduce((a, b) => (b[2] < a[2] ? b : a));
+  const gfc = h.filter((x) => x[0] >= "2008-01" && x[0] <= "2009-12").reduce((a, b) => (b[1] < a[1] ? b : a));
+  const pre = M.prelim?.includes(last[0]) ? " (그달 1~15일 잠정치)" : "";
+  const mom = (last[1] / prev[1] - 1) * 100;
+  return `<h3>🚗 미국 중고차 가격지수 (Manheim)</h3><div class="card">
+    <div class="tiles">
+      <div class="tile"><div class="tl">${esc(last[0])}${pre}</div><div class="tv">${n(last[1], 1)}</div><div class="src">1997년 1월 = 100 · 계절조정</div></div>
+      <div class="tile"><div class="tl">전월 / 전년 대비</div><div class="tv" style="font-size:20px">${pct(mom, 1, true)} / ${pct(last[2], 1, true)}</div><div class="src">Manheim · Cox Automotive</div></div>
+    </div>
+    <div class="seg" id="mh-seg"><button data-v="idx" class="on">지수</button><button data-v="yoy">전년 대비 %</button></div>
+    <div class="seg" id="mh-yseg" style="margin-left:6px"><button data-y="0">전체</button><button data-y="10" class="on">10년</button><button data-y="5">5년</button></div>
+    <div class="chart-box tall"><canvas id="mh-chart"></canvas></div>
+    <div class="memo" style="margin-top:10px">
+      <b>중고차 값이 오르면 자동차 회사에 좋은가?</b> — 보통은 도움이 되는 쪽이에요.
+      <br>· 새 차 할인(인센티브)을 덜 써도 돼서 대당 이익이 좋아져요.
+      <br>· 리스로 나간 차를 돌려받아 팔 때 손해가 줄어, 할부·리스 금융(현대캐피탈 아메리카 등) 이익에 도움이 돼요.
+      <br>· 타던 차를 비싸게 넘길 수 있어 새 차를 살 여력이 커져요.
+      <br><b>역사적으로는</b>
+      <br>· 2008년 금융위기: 지수가 ${n(gfc[1], 0)}(${esc(gfc[0])})까지 떨어짐 — 완성차 업체가 가장 어려웠던 시기.
+      <br>· 2021~2022년 반도체 부족: 새 차를 못 만들어 전년 대비 ${pct(yHi[2], 0, true)}(${esc(yHi[0])})까지 급등, 최고 ${n(peak[1], 1)}(${esc(peak[0])}). 할인이 거의 사라져 현대차·기아가 역대 최대 이익을 낸 시기(2022~2023년)와 겹쳐요.
+      <br>· 그 뒤 공급이 풀리며 ${pct(yLo[2], 0, true)}(${esc(yLo[0])})까지 내려와 정상화.
+      <br><b>볼 점</b>: 왜 오르는지가 중요해요. 수요가 좋아서 오르면 좋은 신호지만, 재고(공급)가 줄어서 오르면 판매 대수는 늘지 않을 수 있어요. 주가와 1:1로 같이 움직이지는 않아요.
+    </div>
+    <div class="note src">출처: 1997-01~2025-11 Manheim 공개 엑셀, 이후 매달 Cox Automotive 발표 기사에서 자동으로 붙임${M.prelim_url ? ` · <a href="${esc(M.prelim_url)}" target="_blank" rel="noopener">최근 발표</a>` : ""}</div>
+  </div>`;
+}
+function wireManheim() {
+  const h = DASH.market.manheim.hist;
+  let view = "idx", years = 10;
+  const draw = () => {
+    const C = themeColors();
+    const i0 = years ? Math.max(0, h.length - years * 12) : 0;
+    const s = h.slice(i0);
+    const ds = view === "idx"
+      ? [{ label: "Manheim 지수", data: s.map((x) => x[1]), borderColor: C.s1 }]
+      : [{ label: "전년 대비", data: s.map((x) => x[2]), borderColor: C.s2 }, { label: "0%", data: s.map(() => 0), borderColor: C.muted, borderDash: [4, 3], borderWidth: 1 }];
+    makeChart(document.getElementById("mh-chart"), s.map((x) => x[0]), ds,
+      view === "idx" ? { fmt: (v) => n(v, 1), yfmt: (v) => n(v, 0) } : { fmt: (v) => pct(v, 1, true), yfmt: (v) => v.toFixed(0) + "%" });
+  };
+  const seg = (id, fn) => document.getElementById(id).addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    document.getElementById(id).querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    fn(b); draw();
+  });
+  seg("mh-seg", (b) => { view = b.dataset.v; });
+  seg("mh-yseg", (b) => { years = Number(b.dataset.y); });
+  draw();
+}
+
 /* ---------- 수주 공시 (방산 등) ---------- */
 let ORDERS = null;
 function eok(v) { return v == null ? "N/A" : v >= 1e12 ? n(v / 1e12, 2) + "조" : n(v / 1e8, 0) + "억"; }
@@ -541,8 +598,10 @@ async function openStock(code) {
     const peerHtml = await peersBlock(code, d.market === "US");
     const orderHtml = await ordersBlock(code);
     const holderHtml = await holdersBlock(code);
-    $("#sheetBody").innerHTML = detailHTML(d) + orderHtml + holderHtml + peerHtml;
+    const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
+    $("#sheetBody").innerHTML = detailHTML(d) + usedCar + orderHtml + holderHtml + peerHtml;
     drawDetailCharts(d);
+    if (usedCar) wireManheim();
     drawOrders(code);
     drawHolders(code);
     drawPeers(code);

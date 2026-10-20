@@ -8,6 +8,7 @@ import pandas as pd
 
 import compute as C
 import kr_stock
+import manheim
 import market
 import rates
 import us_stock
@@ -267,6 +268,8 @@ def main():
         m[k] = keep_prev(m[k], prev_mkt.get(k), k)
     if m.get("kospi_trailing", {}).get("error") and prev_mkt.get("kospi_trailing", {}).get("per"):
         m["kospi_trailing"] = dict(prev_mkt["kospi_trailing"], stale=True)
+    m["manheim"] = keep_prev(attempt("미국 중고차 가격지수 (Manheim)", manheim.collect),
+                             prev_mkt.get("manheim"), "manheim")
     m["kospi_fwd_bands"] = keep_prev(attempt("코스피 선행 PER·PBR 밴드", market.kospi_fwd_bands,
                                              m.get("kospi_forward"), m.get("kospi_trailing")),
                                      prev_mkt.get("kospi_fwd_bands"), "kospi_fwd_bands")
