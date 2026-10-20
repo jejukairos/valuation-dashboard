@@ -276,6 +276,9 @@ def kospi_fwd_bands(kf, kt):
         out["level"].append(round(float(df.loc[d, "level"]), 2))
         out["f_eps"].append(round(float(fe), 2))
         out["f_bps"].append(round(float(fb), 2))
+    if out["dates"] and out["dates"][-1] >= kf["date"]:  # 같은 날이 두 번 찍히지 않게 (마지막 주를 지금 값으로 바꿈)
+        for k in ("dates", "level", "f_eps", "f_bps"):
+            out[k].pop()
     out["dates"].append(kf["date"])
     out["level"].append(round(level_now, 2))
     out["f_eps"].append(round(f_eps_now, 2))
