@@ -193,57 +193,50 @@ def stock_detail(h, rates_now, fx):
         "short_history": any(b.get("short_history") for b in bands.values()),
         "band_start": min((b["start"] for b in bands.values()), default=None),
         "rerating_warning": det.get("per", {}).get("rerating_warning"), "checks": checks,
-        "mini": _mini_band(bands, hist, [k for k in fm if k in ("PER", "PBR")] + ["PER", "PBR"], currency),
+        "chart": _price_chart(px, currency),
+        # 적정가에 쓰는 방식 표를 먼저, 나머지 방식도 이어서 (예: 삼성전자 = PBR 표 → PER 표)
+        "fv": _fair_table(bands, hist, price, currency,
+                          [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
     }
     return det
 
 
-def _mini_band(bands, hist, order, currency, step=4):
-    """카드용 밴드 차트 (네이버 증권 밴드차트 모양).
-    적정가에 쓴 방식(PER 우선, 없으면 PBR)의 10년 밴드 하단~상단을 4등분한 배수 4개 × 주당값 선을,
-    과거(4주 간격)부터 2년 뒤 연말까지(추정치) 월 단위로 이어 그린다."""
-    kind = next((k for k in order if k in bands), None)
-    if not kind:
-        return None
-    b = bands[kind]
-    st = b["periods"].get("10y") or b["periods"].get("all") or {}
-    if not st.get("low") or not st.get("high"):
-        return None
-    # 그림은 2019년부터 (배수 4개는 10년 밴드 기준 그대로, 10년치 전체는 상세 화면에서)
-    i0 = next((i for i, d in enumerate(b["dates"]) if d >= max(st["from"], "2019-01-01")), 0)
-    idx = list(range(len(b["dates"]) - 1, i0 - 1, -step))[::-1]  # 마지막 주(현재)는 꼭 포함
-    dates = [b["dates"][i] for i in idx]
-    price = [b["price"][i] for i in idx]
-    # 앞으로: 2년 뒤 연말까지 매달 말 (주가는 없음)
-    last = pd.Timestamp(dates[-1])
-    for d in pd.date_range(last + pd.offsets.MonthEnd(1), f"{now_kst().year + 2}-12-31", freq="ME"):
-        dates.append(d.strftime("%Y-%m-%d")); price.append(None)
-    # 주당값: 그 시점에 쓰는 연도 값(선행 PER = 1년 뒤 EPS, PBR = 직전 연도 BPS)에서
-    # 다음 연도 값으로 1년에 걸쳐 조금씩 옮겨 가게 해서 계단 대신 부드러운 선으로 (네이버 밴드차트처럼)
-    key = "eps" if kind == "PER" else "bps"
-    shift = 1 if b.get("basis") == "forward" else 0
-    avail = sorted((rec.get("avail") or f"{y + 1}-04-01", y) for y, rec in hist.items())
-
-    def base_at(ds):
-        known = [(a, y) for a, y in avail if a <= ds]
-        if not known:
-            return None
-        a, k = known[-1]
-        v0 = (hist.get(k + shift) or {}).get(key)
-        v1 = (hist.get(k + 1 + shift) or {}).get(key)
-        if v0 is None or v1 is None:
-            return v0
-        f = min(1.0, max(0.0, (pd.Timestamp(ds) - pd.Timestamp(a)).days / 365))
-        return v0 + (v1 - v0) * f
-
-    base = [base_at(d) for d in dates]
-    lo, hi = st["low"], st["high"]
-    dg_m = 1 if kind == "PER" else 2
-    mults = [round(lo + (hi - lo) * k / 3, dg_m) for k in range(4)]
+def _price_chart(px, currency, days=250):
+    """카드용 주가 차트: 최근 1년 종가 + 20·50·200일 이동평균선."""
+    s = px.dropna().astype(float)
     dg = 2 if currency == "USD" else 0
-    lines = [[rnd(x * m, dg) if x and x > 0 else None for x in base] for m in mults]
-    return {"kind": kind, "from": dates[0][:4], "now": len(idx) - 1, "dates": [d[:7] for d in dates],
-            "price": [rnd(p, dg) if p is not None else None for p in price], "mults": mults, "lines": lines}
+    ma = {n: s.rolling(n).mean() for n in (20, 50, 200)}
+    t = s.iloc[-days:]
+    f = lambda ser: [rnd(v, dg) if v == v else None for v in ser.loc[t.index]]  # noqa: E731 (NaN → None)
+    return {"dates": [d.strftime("%Y-%m-%d") for d in t.index], "close": f(s),
+            "ma20": f(ma[20]), "ma50": f(ma[50]), "ma200": f(ma[200])}
+
+
+def _fair_table(bands, hist, price, currency, kinds):
+    """적정주가 표: (27E·28E EPS) × (5년·10년 PER 저점·평균·고점), PBR 은 (26E·27E·28E BPS) × 같은 배수."""
+    y = now_kst().year
+    dg = 2 if currency == "USD" else 0
+    out = {}
+    for kind in kinds or ["PER"]:
+        b = bands.get(kind)
+        if not b:
+            continue
+        key, years = ("eps", [y + 1, y + 2]) if kind == "PER" else ("bps", [y, y + 1, y + 2])
+        base = {C.ylabel(yy): (hist.get(yy) or {}).get(key) for yy in years}
+        rows, seen = [], set()
+        for per_key, span in (("5y", "5년"), ("10y", "10년")):
+            st = b["periods"].get(per_key) or {}
+            if not st.get("avg") or st.get("from") in seen:  # 자료가 5년이 안 되면 10년 줄은 같은 값이라 뺌
+                continue
+            seen.add(st.get("from"))
+            span_txt = span if st.get("from", "") <= f"{y - (5 if per_key == '5y' else 10)}-12-31" else f"{st['from'][:4]}~"
+            for lab, mk in (("저점", "min"), ("평균", "avg"), ("고점", "max")):
+                m = st.get(mk)
+                cells = {k: (rnd(v * m, dg) if (m and v and v > 0) else None) for k, v in base.items()}
+                rows.append({"label": f"{span_txt} {lab}", "mult": rnd(m, 2),
+                             "cells": cells, "pct": {k: rnd((v / price - 1) * 100, 0) if v else None for k, v in cells.items()}})
+        out[kind] = {"cols": list(base), "base": {k: rnd(v, dg) for k, v in base.items()}, "rows": rows}
+    return out
 
 
 def main():
@@ -264,7 +257,7 @@ def main():
         r[k] = keep_prev(r[k], prev_rates.get(k), k)
     print("■ 시장")
     m = market.collect()
-    for k in ("sp500_trailing", "sp500_forward", "sp500_pbr", "kospi_forward"):
+    for k in ("sp500_trailing", "sp500_forward", "kospi_forward"):
         m[k] = keep_prev(m[k], prev_mkt.get(k), k)
     if m.get("kospi_trailing", {}).get("error") and prev_mkt.get("kospi_trailing", {}).get("per"):
         m["kospi_trailing"] = dict(prev_mkt["kospi_trailing"], stale=True)

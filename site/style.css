@@ -172,6 +172,10 @@ td.hot { font-weight: 700; }
   background: var(--ink); border: 2px solid var(--surface); transform: translateX(-50%); }
 .bandlbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
 .miniband { margin: 4px 0 2px; cursor: default; text-align: left; }
+.fvt table { width: 100%; margin-top: 4px; }
+.fvt td, .fvt th { text-align: right; }
+.fvt td:first-child, .fvt th:first-child { text-align: left; }
+.fvt tr.avg td { font-weight: 700; }
 .chart-box.mini { height: 150px; margin-top: 4px; }
 .miniband .legend { font-size: 11px; gap: 8px; }
 .stale { font-size: 11px; color: var(--warn-ink); }

@@ -22,18 +22,6 @@ def sp500_trailing():
             "hist": [[d.strftime("%Y-%m-%d"), round(v, 2)] for d, v in zip(df["date"], df["v"])]}
 
 
-def sp500_pbr():
-    """S&P500 PBR (지난 실적 장부가 기준, 분기별 + 맨 위 줄은 최근 추정). 선행 PBR 이력은 무료 출처가 없음."""
-    r = HTTP.get("https://www.multpl.com/s-p-500-price-to-book/table/by-quarter")
-    df = pd.read_html(io.StringIO(r.text))[0]
-    df.columns = ["date", "v"]
-    df["v"] = df["v"].astype(str).str.extract(r"([\d.]+)")[0].astype(float)
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.dropna().sort_values("date")
-    return {"source": "multpl.com (PBR, 분기별)",
-            "hist": [[d.strftime("%Y-%m-%d"), round(v, 2)] for d, v in zip(df["date"], df["v"])]}
-
-
 FS_RE = re.compile(r"forward 12-month P/E ratio (?:for the S&P 500 )?is (\d+\.\d+).{0,200}?5-year average (?:of |\()(\d+\.\d+).{0,80}?10-year average (?:of |\()(\d+\.\d+)", re.S)
 
 
@@ -236,6 +224,7 @@ def kospi_trailing():
         raise RuntimeError("KRX 응답 없음")
     df = df[df["PER"] > 0]
     w = df.resample("W-FRI").last().dropna()
+    w.index = list(w.index[:-1]) + [df.index[-1]]  # 이번 주는 아직 안 온 금요일 대신 실제 마지막 거래일
     last = df.iloc[-1]
     return {"per": float(last["PER"]), "pbr": float(last["PBR"]), "div": float(last.get("배당수익률", 0) or 0),
             "date": df.index[-1].strftime("%Y-%m-%d"), "source": "KRX (pykrx)",
@@ -252,6 +241,11 @@ def kospi_fwd_bands(kf, kt):
         raise RuntimeError("코스피 선행값 또는 KRX 이력이 없음")
     lv = price_history("KOSPI", start="20000101")
     lw = lv.resample("W-FRI").last().dropna()
+    lw.index = list(lw.index[:-1]) + [lv.dropna().index[-1]]
+    # KRX 마지막 날짜와 맞추기 (주가 쪽이 하루 늦게 끝나면 같은 주끼리 짝이 안 맞음)
+    kl = pd.Timestamp(kt["pbr_hist"][-1][0])
+    if lw.index[-1] != kl and lw.index[-1] - kl < pd.Timedelta(days=7):
+        lw = pd.concat([lw.iloc[:-1], pd.Series([lv[lv.index <= kl].iloc[-1]], index=[kl])])
     per = pd.Series({pd.Timestamp(d): v for d, v in kt["hist"]})
     pbr = pd.Series({pd.Timestamp(d): v for d, v in kt["pbr_hist"]})
     df = pd.DataFrame({"level": lw, "per": per, "pbr": pbr}).dropna()
@@ -296,7 +290,6 @@ def collect():
     return {
         "sp500_trailing": attempt("S&P500 후행 PER (multpl)", sp500_trailing),
         "sp500_forward": attempt("S&P500 선행 PER (FactSet)", sp500_forward),
-        "sp500_pbr": attempt("S&P500 PBR (multpl)", sp500_pbr),
         "kospi_forward": attempt("코스피 선행 PER (직접 계산)", kospi_forward),
         "kospi_trailing": _optional(kospi_trailing),
     }

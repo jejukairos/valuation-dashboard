@@ -102,13 +102,10 @@ function marketCard(sig, rateObj, extraRate, key) {
       <div class="k kgrp">수익률 비교</div><div class="v"></div>
       <div class="k">주식 이익수익률 <span class="src nowrap">1 ÷ PER</span></div><div class="v">${pct(sig.earnings_yield, 2)}</div>
       <div class="k">${esc(sig.rate_label)}</div><div class="v">${pct(sig.rate, 2)}<span class="src">${esc(rateObj?.source || "")} · ${esc(rateObj?.date || "")}</span></div>
-      <div class="k">위험 프리미엄 <span class="src nowrap">이익수익률 − 금리</span></div><div class="v">${sig.premium == null ? "N/A" : (sig.premium > 0 ? "+" : "") + n(sig.premium, 2) + "%p"}</div>
       ${extraRate ? `<div class="k" style="font-size:12px">${esc(extraRate.label)} (참고)</div><div class="v" style="font-size:12px;font-weight:400">${pct(extraRate.latest, 2)}</div>` : ""}
     </div>${stale}${key === "kr" ? kospiPbrBrief() : ""}
     <div class="chart-title">${esc(sig.rate_label)} 추이 (5년)</div>
     <div class="chart-box"><canvas id="rate-${key}"></canvas></div>
-    <div class="chart-title">위험 프리미엄 추이 <span class="src">${esc(sig.premium_hist_label || "")}</span></div>
-    <div class="chart-box" id="premwrap-${key}"><canvas id="prem-${key}"></canvas></div>
   </div>`;
 }
 function drawMarketCharts() {
@@ -121,18 +118,6 @@ function drawMarketCharts() {
       const h = r.hist.slice(i);
       makeChart(cv, h.map((x) => x[0]), [{ label: "금리", data: h.map((x) => x[1]), borderColor: C.s1 }], { yfmt: (v) => v.toFixed(1) + "%", fmt: (v) => v.toFixed(2) + "%" });
     }
-    const sig = DASH.signals[key];
-    const pw = document.getElementById(`premwrap-${key}`);
-    if (!pw) continue;
-    const ph = sig.premium_hist || [];
-    if (ph.length < 5) {
-      pw.style.height = "auto";
-      pw.innerHTML = `<div class="empty">데이터를 쌓는 중이에요 (지금 ${ph.length}개). 매일 갱신할 때마다 한 점씩 늘어나요.</div>`;
-      continue;
-    }
-    makeChart(document.getElementById(`prem-${key}`), ph.map((x) => x[0]),
-      [{ label: "위험 프리미엄", data: ph.map((x) => x[1]), borderColor: C.s3 }],
-      { yfmt: (v) => v.toFixed(0) + "%p", fmt: (v) => (v > 0 ? "+" : "") + v.toFixed(2) + "%p" });
   }
 }
 
@@ -142,27 +127,42 @@ function bondAlert(c) {
   const lim = DASH.settings.bond_signal.stock_alert_above ?? 1.0;
   return c.bond_ratio != null && c.bond_ratio >= lim;
 }
-// 카드용 밴드 차트 (네이버 증권 밴드차트처럼: 배수 4개 선 + 수정주가, 앞으로 2년은 추정치 점선)
-const MINI_COLORS = ["--s2", "--s3", "--s7", "--s4"];
-function miniBandHTML(c, pos) {
-  const m = c.mini;
-  if (!m || !m.lines) return "";
+// 카드용 주가 차트: 최근 1년 종가 + 이동평균선 (20일 빨강 · 50일 분홍 · 200일 검붉은색)
+const MA_LINES = [["ma20", "20일선", "#e53935"], ["ma50", "50일선", "#ec4899"], ["ma200", "200일선", "#7f1d1d"]];
+function priceChartHTML(c) {
+  if (!c.chart || !c.chart.close) return "";
   return `<div class="miniband" onclick="event.stopPropagation()">
-    <div class="chart-title" style="margin-top:8px">${m.kind} 밴드 <span class="src">${esc(m.from)}~ · 배수는 10년 밴드 기준 · 점선 = 추정치 · 10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"} · 눌러서 가격 보기</span></div>
-    <div class="chart-box mini"><canvas id="mini-${esc(c.code)}"></canvas></div>
-    ${legend([...m.mults.map((x, i) => [`${n(x, m.kind === "PER" ? 1 : 2)}배`, css(MINI_COLORS[i]), false]), ["수정주가", css("--s1"), false]])}
+    <div class="chart-title" style="margin-top:8px">주가 · 이동평균선 <span class="src">최근 1년 · 눌러서 가격 보기</span></div>
+    <div class="chart-box mini"><canvas id="pc-${esc(c.code)}"></canvas></div>
+    ${legend([["종가", css("--s1"), false], ...MA_LINES.map(([, l, col]) => [l, col, false])])}
   </div>`;
 }
-function drawMiniBands(list) {
+function drawPriceCharts(list) {
   for (const c of list) {
-    const m = c.mini, cv = m && m.lines && document.getElementById(`mini-${c.code}`);
+    const p = c.chart, cv = p && document.getElementById(`pc-${c.code}`);
     if (!cv) continue;
-    const dash = { borderDash: (ctx) => (ctx.p0DataIndex >= m.now ? [4, 3] : undefined) };
-    const ds = m.mults.map((x, i) => ({ label: `${n(x, m.kind === "PER" ? 1 : 2)}배`, data: m.lines[i], borderColor: css(MINI_COLORS[i]), borderWidth: 1.5, segment: dash, spanGaps: true }));
-    ds.push({ label: "수정주가", data: m.price, borderColor: css("--s1"), borderWidth: 2 });
+    const ds = [{ label: "종가", data: p.close, borderColor: css("--s1"), borderWidth: 2 },
+      ...MA_LINES.map(([k, l, col]) => ({ label: l, data: p[k], borderColor: col, borderWidth: 1.3 }))];
     const usd = c.currency === "USD";
-    makeChart(cv, m.dates, ds, { fmt: (v) => (usd ? "$" + n(v, 2) : n(v) + "원"), yfmt: (v) => (usd ? "$" + n(v) : v >= 10000 ? n(v / 10000, 0) + "만" : n(v)) });
+    makeChart(cv, p.dates, ds, { fmt: (v) => (usd ? "$" + n(v, 2) : n(v) + "원"), yfmt: (v) => (usd ? "$" + n(v) : v >= 10000 ? n(v / 10000, 0) + "만" : n(v)) });
   }
+}
+// 적정주가 표: 행 = 5년·10년 저점/평균/고점 배수, 열 = 연도별 EPS(BPS) × 배수 (지금보다 몇 %)
+function fairTableHTML(c) {
+  const fv = c.fv || {};
+  const usd = c.currency === "USD";
+  const fmtP = (v) => (v == null ? "N/A" : usd ? "$" + n(v, 0) : n(v));
+  return Object.entries(fv).map(([kind, t], i) => {
+    if (!t.rows || !t.rows.length) return "";
+    const base = kind === "PER" ? "EPS" : "BPS";
+    const head = `적정주가 · ${base} × ${kind} <span class="src">${t.cols.map((k) => `${k} ${base} ${fmtP(t.base[k])}`).join(" · ")}</span>`;
+    // 적정가 기준 방식 표는 펼쳐서, 두 번째 방식 표는 접어서 (눌러서 펼침)
+    return `<${i ? "details" : "div"} class="fvt" onclick="event.stopPropagation()">${i ? `<summary class="chart-title" style="margin-top:10px">${head}</summary>` : `<div class="chart-title" style="margin-top:10px">${head}</div>`}
+      <table class="compact"><thead><tr><th>${kind} 배수</th>${t.cols.map((k) => `<th>${k}</th>`).join("")}</tr></thead><tbody>
+      ${t.rows.map((r) => `<tr class="${r.label.includes("평균") ? "avg" : ""}"><td>${esc(r.label)} <span class="src">${n(r.mult, kind === "PER" ? 1 : 2)}배</span></td>${t.cols.map((k) => r.cells[k] == null ? "<td>N/A</td>" :
+        `<td class="${r.cells[k] >= c.price ? "cheap" : "dear"}">${fmtP(r.cells[k])}<br><span class="src">${pct(r.pct[k], 0, true)}</span></td>`).join("")}</tr>`).join("")}
+      </tbody></table></${i ? "details" : "div"}>`;
+  }).join("");
 }
 function stockCard(c) {
   const L = LIGHT[c.verdict] || LIGHT.na;
@@ -193,9 +193,10 @@ function stockCard(c) {
       <div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)}</div>
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>
-    ${c.mini && c.mini.lines ? miniBandHTML(c, pos) : `
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
-    <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>`}
+    <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
+    ${fairTableHTML(c)}
+    ${priceChartHTML(c)}
     ${mine}
     <div class="pills">${pills.join("")}</div>
   </button>`;
@@ -207,7 +208,7 @@ function renderCards() {
   if (sortMode === "cheap") list.sort((a, b) => (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
   else list.sort((a, b) => a.order - b.order);
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
-  drawMiniBands(list);
+  drawPriceCharts(list);
 }
 
 /* ---------- 3. 종목 상세 ---------- */
@@ -625,12 +626,9 @@ function spBand() {
   const el = $("#spBand");
   if (!t || !t.hist) { el.innerHTML = `<div class="empty">N/A — S&P500 PER 데이터를 받지 못했어요.</div>`; return; }
   const tcur = t.hist[t.hist.length - 1];
-  const pb = DASH.market.sp500_pbr && DASH.market.sp500_pbr.hist && DASH.market.sp500_pbr.hist.length > 20 ? DASH.market.sp500_pbr : null;
-  const pcur = pb ? pb.hist[pb.hist.length - 1] : null;
   el.innerHTML = `<div class="tiles">
       <div class="tile"><div class="tl">선행 12개월 PER</div><div class="tv">${f ? times(f.value) : "N/A"}</div><div class="src">FactSet · ${esc(f?.date || "")}</div></div>
       <div class="tile"><div class="tl">후행 PER (차트 기준)</div><div class="tv">${times(tcur[1])}</div><div class="src">multpl · ${esc(tcur[0])}</div></div>
-      ${pcur ? `<div class="tile"><div class="tl">PBR (지난 실적)</div><div class="tv">${times(pcur[1], 2)}</div><div class="src">multpl · ${esc(pcur[0])}</div></div>` : ""}
     </div>
     <h3>후행 PER 밴드</h3>
     ${hBandHTML("sp")}
@@ -640,11 +638,8 @@ function spBand() {
       <div class="k">선행 12개월 PER</div><div class="v">${f ? times(f.value) : "N/A"}</div>
       <div class="k">선행 PER 5년 평균</div><div class="v">${f ? times(f.avg5) : "N/A"}</div>
       <div class="k">선행 PER 10년 평균</div><div class="v">${f ? times(f.avg10) : "N/A"}</div></div>
-    ${pb ? `<h3>PBR 밴드 <span class="src">지난 실적 장부가 기준 · ${esc(pb.source)}</span></h3>${hBandHTML("sppb")}
-      <div class="note">미국은 선행 PBR 과거 이력이 무료로 공개된 곳이 없어서, 장부가(지난 실적) 기준 PBR 로 그렸어요. 마지막 점은 최근 주가로 다시 계산한 추정값이에요.</div>` : ""}
     ${f && f.eps ? indexEPS(f, "sp") : `<div class="note">연도별 EPS: N/A (FactSet 보고서를 읽지 못했어요)</div>`}`;
   wireHBand("sp", t.hist, "S&P500 PER", "배", 1, 10);
-  if (pb) wireHBand("sppb", pb.hist, "S&P500 PBR", "배", 2, 10);
 }
 
 /* 지수 연도별 EPS 표 + 'EPS × PER = 지수' 시나리오 */
