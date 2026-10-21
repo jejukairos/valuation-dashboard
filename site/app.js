@@ -203,11 +203,11 @@ function stockCard(c) {
 }
 function renderCards() {
   const list = [...DASH.stocks];
-  // 고평가(가장 비싼 순) → 저평가(가장 싼 순) → 적정 → N/A
-  const rank = { red: 0, green: 1, yellow: 2, na: 3 };
-  if (sortMode === "cheap") list.sort((a, b) => (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) ||
-    (a.verdict === "red" ? (b.gap ?? -9) - (a.gap ?? -9) : (a.gap ?? 9) - (b.gap ?? 9)));
-  else list.sort((a, b) => a.order - b.order);
+  // 한국 → 미국, 각각 가장 매력적인(저평가) 순: 🟢 → 🟡 → 🔴 → N/A, 같은 판정 안에서는 적정가 대비 더 싼 순
+  const rank = { green: 0, yellow: 1, red: 2, na: 3 };
+  const mk = (c) => (c.market === "US" ? 1 : 0);
+  if (sortMode === "cheap") list.sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
+  else list.sort((a, b) => mk(a) - mk(b) || a.order - b.order);
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
   drawPriceCharts(list);
 }

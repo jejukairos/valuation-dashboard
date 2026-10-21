@@ -123,6 +123,8 @@ def stock_detail(h, rates_now, fx):
     fairs = []
     fm = [x.upper() for x in (h.get("fair_methods") or methods)]  # 적정가에 쓸 방식 (사이클 업종은 PBR 만)
     ey = SETTINGS["fair_value"]["eps_year"]
+    if ey == "auto":  # 올해(밴드 배수가 쓰는 해) 실적 기준 → 지금 주가와 같은 시점끼리 비교
+        ey = f"{now_kst().year % 100}E"
     mkey = SETTINGS["fair_value"]["multiple"]
     yr = 2000 + int(ey[:2])
     pick = {"avg5": ("5y", "avg"), "avg10": ("10y", "avg"), "low10": ("10y", "low"), "high10": ("10y", "high")}[mkey]
