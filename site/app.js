@@ -203,9 +203,10 @@ function stockCard(c) {
 }
 function renderCards() {
   const list = [...DASH.stocks];
-  // 저평가 → 적정 → 고평가 → N/A 순, 같은 판정 안에서는 적정가 대비 더 싼 순
-  const rank = { green: 0, yellow: 1, red: 2, na: 3 };
-  if (sortMode === "cheap") list.sort((a, b) => (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
+  // 고평가(가장 비싼 순) → 저평가(가장 싼 순) → 적정 → N/A
+  const rank = { red: 0, green: 1, yellow: 2, na: 3 };
+  if (sortMode === "cheap") list.sort((a, b) => (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) ||
+    (a.verdict === "red" ? (b.gap ?? -9) - (a.gap ?? -9) : (a.gap ?? 9) - (b.gap ?? 9)));
   else list.sort((a, b) => a.order - b.order);
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
   drawPriceCharts(list);
@@ -407,6 +408,35 @@ function wireManheim() {
   draw();
 }
 
+/* ---------- 증권사 목표주가 트래킹 (config/broker_targets.yaml, 손으로 적음) ---------- */
+let BROKER = null;
+async function brokerBlock(code, price, cur) {
+  if (!BROKER) {
+    try { BROKER = await (await fetch("data/broker_targets.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { BROKER = {}; }
+  }
+  const snaps = [...(BROKER[code] || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (!snaps.length) return "";
+  const last = snaps[snaps.length - 1], prev = snaps.length > 1 ? snaps[snaps.length - 2] : null;
+  const names = Object.keys(last.targets || {}).sort((a, b) => last.targets[b] - last.targets[a]);
+  const vals = names.map((k) => last.targets[k]);
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const chg = (k) => {
+    const p = prev && prev.targets && prev.targets[k];
+    return p ? `<br><span class="src">${esc(String(prev.date).slice(5))} ${n(p)} → ${pct((last.targets[k] / p - 1) * 100, 0, true)}</span>` : "";
+  };
+  const row = (k, v, extra = "") => `<tr><td>${esc(k)}</td><td>${money(v, cur)}${extra}</td><td class="${v >= price ? "cheap" : "dear"}">${pct((v / price - 1) * 100, 0, true)}</td></tr>`;
+  return `<h3>🎯 증권사 목표주가 <span class="src">${esc(String(last.date))} · ${esc(last.source || "")}</span></h3><div class="card">
+    <div class="kv"><div class="k">평균 (${names.length}곳)</div><div class="v">${money(Math.round(avg), cur)} <span class="${avg >= price ? "verdict green" : "verdict red"}" style="font-size:13px">${pct((avg / price - 1) * 100, 0, true)}</span></div>
+      <div class="k">최고 / 최저</div><div class="v">${money(Math.max(...vals), cur)} / ${money(Math.min(...vals), cur)}</div>
+      <div class="k">현재가</div><div class="v">${money(price, cur)}${last.price_at ? ` <span class="src">(${esc(String(last.date).slice(5))} 당시 ${n(last.price_at)})</span>` : ""}</div></div>
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th>증권사</th><th>목표주가</th><th>현재가 대비</th></tr></thead><tbody>
+      ${names.map((k) => row(k, last.targets[k], chg(k))).join("")}
+      ${Object.entries(last.others || {}).map(([k, v]) => row(k + " (개인·방송)", v)).join("")}
+    </tbody></table></div>
+    <div class="note">${snaps.length > 1 ? `${snaps.length}번 기록 중 최근 두 번을 비교해요.` : "날짜별로 config/broker_targets.yaml 에 추가하면 이전 기록과 비교돼요."} 현재가 대비 %는 지금 주가 기준이에요.</div>
+  </div>`;
+}
+
 /* ---------- 수주 공시 (방산 등) ---------- */
 let ORDERS = null;
 function eok(v) { return v == null ? "N/A" : v >= 1e12 ? n(v / 1e12, 2) + "조" : n(v / 1e8, 0) + "억"; }
@@ -600,7 +630,8 @@ async function openStock(code) {
     const orderHtml = await ordersBlock(code);
     const holderHtml = await holdersBlock(code);
     const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
-    $("#sheetBody").innerHTML = detailHTML(d) + usedCar + orderHtml + holderHtml + peerHtml;
+    const brokerHtml = await brokerBlock(code, d.price, d.currency);
+    $("#sheetBody").innerHTML = detailHTML(d) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
     drawDetailCharts(d);
     if (usedCar) wireManheim();
     drawOrders(code);

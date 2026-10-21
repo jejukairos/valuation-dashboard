@@ -335,6 +335,8 @@ def main():
         if rc:
             c["holder_changes"] = [{"name": x["name"], "chg": x["chg_ratio"], "date": x["date"]} for x in rc]
 
+    write_json(DATA / "broker_targets.json", load_yaml("broker_targets.yaml") or {})  # 손으로 적는 증권사 목표주가
+
     print("■ 동종업계")
     import peers
     write_json(DATA / "peers.json", peers.collect())
