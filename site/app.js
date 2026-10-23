@@ -318,6 +318,101 @@ function matrixTable(rows, cols, price, rowHead, what, cur) {
     <div class="note">칸 아래 %는 ${what ? `현재 ${what} ${n(price, 2)}` : `현재가 ${money(price, cur)}`} 대비 차이 (초록 = 지금보다 높음, 빨강 = 낮음). 파란 테두리 = 지금과 5% 이내.</div>`;
 }
 
+/* ---------- 네이버 증권식 PER·PBR 밴드차트 ----------
+   선 = 그 달의 12개월 선행 EPS(BPS) × 배수 4개. Y년 실적은 (Y-1)년 12월 말에 놓고 달마다 직선으로 이어
+   네이버(와이즈리포트)와 같은 값이 나온다. 배수 = 최근 5년 선행 배수의 하위 10% ~ 상위 10% 를 4등분. */
+const NV_COLORS = ["#d4441c", "#7cc12a", "#a57fd6", "#f5a00f"];
+const NV_STYLES = [["rectRot", 0], ["rect", 0], ["triangle", 0], ["triangle", 180]];
+const ymd = (t) => new Date(t).toISOString().slice(0, 10).replace(/-/g, "/");
+function nvSeries(d, key) {
+  const band = d.bands.PER || d.bands.PBR || d.bands.DIV;
+  if (!band) return null;
+  const anchors = d.history.filter((r) => r[key] > 0).map((r) => [Date.UTC(r.year - 1, 11, 31), r[key]]).sort((a, b) => a[0] - b[0]);
+  if (anchors.length < 2) return null;
+  const fwd = (t) => {
+    for (let i = 1; i < anchors.length; i++) {
+      const [t0, v0] = anchors[i - 1], [t1, v1] = anchors[i];
+      if (t >= t0 && t <= t1) return v0 + ((v1 - v0) * (t - t0)) / (t1 - t0);
+    }
+    return null;
+  };
+  const last = new Date(band.dates[band.dates.length - 1]);
+  const start = Date.UTC(last.getUTCFullYear() - 4, last.getUTCMonth(), 1);
+  const end = anchors[anchors.length - 1][0];
+  // 월말 날짜 격자: 과거는 그달 마지막 주 종가, 이번 달은 최근 종가, 미래는 선만
+  const months = [];
+  for (let y = new Date(start).getUTCFullYear(), m = new Date(start).getUTCMonth(); ; m++) {
+    const t = Date.UTC(y, m + 1, 0);
+    if (t > end + 86400000 * 31) break;
+    months.push(Math.min(t, end));
+    if (t >= end) break;
+  }
+  const px = band.dates.map((s, i) => [Date.parse(s), band.price[i]]);
+  const price = months.map((t) => {
+    if (t > last.getTime() + 86400000 * 31) return null;
+    let v = null;
+    for (const [pt, p] of px) { if (pt <= t) v = p; else break; }
+    return t > last.getTime() ? px[px.length - 1][1] : v;
+  });
+  const base = months.map(fwd);
+  // 배수: 최근 5년 주간 선행 배수의 하위 10% ~ 상위 10%
+  const cut = Date.UTC(last.getUTCFullYear() - 5, last.getUTCMonth(), last.getUTCDate());
+  const ms = px.filter(([t]) => t >= cut).map(([t, p]) => { const b = fwd(t); return b ? p / b : null; }).filter((v) => v > 0).sort((a, b) => a - b);
+  if (ms.length < 20) return null;
+  const q = (p) => ms[Math.min(ms.length - 1, Math.floor(p * ms.length))];
+  const lo = q(DASH.settings.band.low_pct / 100), hi = q(DASH.settings.band.high_pct / 100);
+  const mults = [0, 1, 2, 3].map((i) => Number((lo + ((hi - lo) * i) / 3).toFixed(1)));
+  const curT = last.getTime(), curB = fwd(curT);
+  return { labels: months.map(ymd), price, base, mults, cur: curB ? px[px.length - 1][1] / curB : null, lo, hi, months, today: curT };
+}
+function nvBlock(id, title) {
+  return `<div class="nv"><div class="nv-t">${title}</div><div class="chart-box nvbox"><canvas id="${id}"></canvas></div><div class="note" id="${id}-note"></div></div>`;
+}
+const nvCross = { id: "nvCross", afterDatasetsDraw(ch) {
+  const a = ch.tooltip?.getActiveElements?.() || [];
+  if (!a.length) return;
+  const x = a[0].element.x, { top, bottom } = ch.chartArea, g = ch.ctx;
+  g.save(); g.strokeStyle = css("--muted"); g.lineWidth = 1; g.beginPath(); g.moveTo(x, top); g.lineTo(x, bottom); g.stroke(); g.restore();
+} };
+function drawNv(id, d, key, kind) {
+  const s = nvSeries(d, key), cv = document.getElementById(id);
+  if (!cv) return;
+  if (!s) { cv.parentElement.outerHTML = `<div class="empty">밴드를 그릴 실적 자료가 부족해요.</div>`; return; }
+  const C = themeColors(), usd = d.currency === "USD";
+  const fmt = (v) => (usd ? "$" + n(v, 2) : n(v) + " 원");
+  const ds = s.mults.map((m, i) => ({ label: `${n(m, 1)}배`, data: s.base.map((b) => (b ? Math.round(b * m * (usd ? 100 : 1)) / (usd ? 100 : 1) : null)),
+    borderColor: NV_COLORS[i], backgroundColor: NV_COLORS[i], borderWidth: 2.5, pointStyle: NV_STYLES[i][0], pointRotation: NV_STYLES[i][1], pointHoverRadius: 7 }));
+  ds.push({ label: "수정주가", data: s.price, borderColor: "#2f6fdb", backgroundColor: "#2f6fdb", borderWidth: 3, pointStyle: "circle", pointHoverRadius: 7 });
+  if (charts.has(id)) charts.get(id).destroy();
+  charts.set(id, new Chart(cv, {
+    type: "line", data: { labels: s.labels, datasets: ds }, plugins: [nvCross],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      elements: { point: { radius: 0, hitRadius: 6 }, line: { tension: 0 } },
+      plugins: {
+        legend: { position: "bottom", labels: { color: C.ink, boxWidth: 14, boxHeight: 3, padding: 8, font: { size: 12 },
+          generateLabels: (ch) => ch.data.datasets.map((x, i) => ({ text: x.label, fillStyle: ch.isDatasetVisible(i) ? x.borderColor : C.grid,
+            strokeStyle: "transparent", lineWidth: 0, hidden: false, fontColor: ch.isDatasetVisible(i) ? C.ink : C.muted, datasetIndex: i })) } },
+        tooltip: { backgroundColor: C.surface, titleColor: C.ink, bodyColor: C.ink, borderColor: C.grid, borderWidth: 1, padding: 10,
+          displayColors: false, titleFont: { size: 14, weight: "normal" }, bodyFont: { size: 14 },
+          filter: (it) => it.parsed.y != null,
+          callbacks: { label: (c) => `${c.dataset.label}: ${fmt(c.parsed.y)}`, labelTextColor: (c) => c.dataset.borderColor } },
+      },
+      scales: {
+        x: { grid: { display: false }, border: { color: C.axis || C.grid },
+          ticks: { color: C.muted, autoSkip: false, maxRotation: 0, font: { size: 11 },
+            callback(v) { const l = this.getLabelForValue(v); return l.slice(5, 7) === "01" && +l.slice(0, 4) % 2 === 0 ? l.slice(0, 7) + "/01" : ""; } } },
+        y: { beginAtZero: true, grid: { color: C.grid }, border: { display: false },
+          ticks: { color: C.muted, maxTicksLimit: 4, font: { size: 11 }, callback: (v) => (usd ? "$" + n(v) : n(v)) } },
+      },
+    },
+  }));
+  const pos = s.cur == null ? null : Math.max(0, Math.min(100, ((s.cur - s.lo) / (s.hi - s.lo)) * 100));
+  $(`#${id}-note`).innerHTML = `지금 12개월 선행 ${kind} <b>${n(s.cur, kind === "PER" ? 1 : 2)}배</b> · 최근 5년 범위 ${n(s.lo, kind === "PER" ? 1 : 2)}~${n(s.hi, kind === "PER" ? 1 : 2)}배${pos == null ? "" : ` (아래에서 ${n(pos, 0)}% 위치)`}
+    <br><span class="src">선 = 12개월 선행 ${key === "eps" ? "EPS" : "BPS"} × 배수 · 배수 = 최근 5년 선행 ${kind} 하위 ${DASH.settings.band.low_pct}% ~ 상위 ${100 - DASH.settings.band.high_pct}% 를 4등분 · 아래 이름을 누르면 선을 끄고 켤 수 있어요</span>`;
+}
+
 function detailHTML(d) {
   const c = d.card;
   const L = LIGHT[c.verdict] || LIGHT.na;
@@ -335,19 +430,20 @@ function detailHTML(d) {
   }
   h += `</div>`;
 
+  h += `<h3>밴드차트</h3><div class="card">${nvBlock("nv-per", "PER 차트")}${nvBlock("nv-pbr", "PBR 차트")}</div>`;
   if (d.per && d.bands.PER) {
     const p = d.per;
     const cols = Object.keys(p.eps);
-    h += `<h3>PER 밴드</h3><div class="card">${bandBlock("band-per", d.bands.PER, "PER")}
-      <h3>선행 PER</h3><div class="kv">${cols.map((k) => `<div class="k">${k} PER <span class="src">EPS ${k} ${money(p.eps[k], d.currency)} · ${esc(d.sources.consensus)}</span></div><div class="v">${times(p.fwd_per[k], 2)}</div>`).join("")}</div>
+    h += `<h3>PER 적정주가</h3><div class="card">
+      <h3 style="margin-top:0">선행 PER</h3><div class="kv">${cols.map((k) => `<div class="k">${k} PER <span class="src">EPS ${k} ${money(p.eps[k], d.currency)} · ${esc(d.sources.consensus)}</span></div><div class="v">${times(p.fwd_per[k], 2)}</div>`).join("")}</div>
       <h3>적정주가 시나리오 (EPS × PER)</h3>${matrixTable(p.matrix, cols, d.price, "PER ↓ · EPS →", null, d.currency)}
       ${p.rerating_warning ? `<div class="warnbox">${esc(p.rerating_warning)}</div>` : ""}</div>`;
   }
   if (d.pbr && d.bands.PBR) {
     const p = d.pbr;
     const cols = Object.keys(p.bps);
-    h += `<h3>PBR 밴드</h3><div class="card">${bandBlock("band-pbr", d.bands.PBR, "PBR")}
-      <h3>적정주가 (BPS × PBR)</h3>${matrixTable(p.matrix, cols, d.price, "PBR ↓ · BPS →")}
+    h += `<h3>PBR 적정주가</h3><div class="card">
+      <h3 style="margin-top:0">적정주가 (BPS × PBR)</h3>${matrixTable(p.matrix, cols, d.price, "PBR ↓ · BPS →")}
       <h3>ROE 와 PBR</h3><div class="kv">
         <div class="k">ROE 현재 <span class="src">${esc(p.roe_now_label)}</span></div><div class="v">${pct(p.roe_now)}</div>
         <div class="k">ROE 5년 평균</div><div class="v">${pct(p.roe5)}</div>
@@ -380,8 +476,8 @@ function detailHTML(d) {
   return h;
 }
 function drawDetailCharts(d) {
-  if (d.per && d.bands.PER) wireBand("band-per", d.bands.PER, "PER");
-  if (d.pbr && d.bands.PBR) wireBand("band-pbr", d.bands.PBR, "PBR");
+  drawNv("nv-per", d, "eps", "PER");
+  drawNv("nv-pbr", d, "bps", "PBR");
   if (d.div && d.bands.DIV) {
     if (!d.div.no_history) wireBand("band-div", d.bands.DIV, "DIV");
     const C = themeColors();

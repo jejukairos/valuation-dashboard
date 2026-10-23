@@ -193,6 +193,10 @@ td.hot { font-weight: 700; }
 .fvt td:first-child, .fvt th:first-child { text-align: left; }
 .fvt tr.avg td { font-weight: 700; }
 .chart-box.mini { height: 150px; margin-top: 4px; }
+/* 네이버식 밴드차트 */
+.nv + .nv { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--grid); }
+.nv-t { font-size: 15px; font-weight: 700; }
+.chart-box.nvbox { height: 300px; }
 .miniband .legend { font-size: 11px; gap: 8px; }
 .stale { font-size: 11px; color: var(--warn-ink); }
 
