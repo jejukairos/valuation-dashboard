@@ -127,22 +127,25 @@ function bondAlert(c) {
   const lim = DASH.settings.bond_signal.stock_alert_above ?? 1.0;
   return c.bond_ratio != null && c.bond_ratio >= lim;
 }
-// 카드용 주가 차트: 최근 1년 종가 + 이동평균선 (20일 빨강 · 50일 분홍 · 200일 검붉은색)
-const MA_LINES = [["ma20", "20일선", "#e53935"], ["ma50", "50일선", "#ec4899"], ["ma200", "200일선", "#7f1d1d"]];
+// 카드용 주가 차트: 최근 1년 종가 + 이동평균선 (20일 빨강 · 50일 분홍 · 200일 검정) + 볼린저밴드(연하늘색)
+const BB_COLOR = "#7cc7f2";
+const maLines = () => [["ma20", "20일선", "#e53935"], ["ma50", "50일선", "#ec4899"], ["ma200", "200일선", css("--ink")]];
 function priceChartHTML(c) {
   if (!c.chart || !c.chart.close) return "";
   return `<div class="miniband" onclick="event.stopPropagation()">
     <div class="chart-title" style="margin-top:8px">주가 · 이동평균선 <span class="src">최근 1년 · 눌러서 가격 보기</span></div>
     <div class="chart-box mini"><canvas id="pc-${esc(c.code)}"></canvas></div>
-    ${legend([["종가", css("--s1"), false], ...MA_LINES.map(([, l, col]) => [l, col, false])])}
+    ${legend([["종가", css("--s1"), false], ...maLines().map(([, l, col]) => [l, col, false]), ...(c.chart.bb_up ? [["볼린저밴드", BB_COLOR, false]] : [])])}
   </div>`;
 }
 function drawPriceCharts(list) {
   for (const c of list) {
     const p = c.chart, cv = p && document.getElementById(`pc-${c.code}`);
     if (!cv) continue;
-    const ds = [{ label: "종가", data: p.close, borderColor: css("--s1"), borderWidth: 2 },
-      ...MA_LINES.map(([k, l, col]) => ({ label: l, data: p[k], borderColor: col, borderWidth: 1.3 }))];
+    const bb = p.bb_up ? [{ label: "볼린저 상단", data: p.bb_up, borderColor: BB_COLOR, borderWidth: 1 },
+      { label: "볼린저 하단", data: p.bb_dn, borderColor: BB_COLOR, borderWidth: 1, fill: "-1", backgroundColor: BB_COLOR + "26" }] : [];
+    const ds = [...bb, { label: "종가", data: p.close, borderColor: css("--s1"), borderWidth: 2 },
+      ...maLines().map(([k, l, col]) => ({ label: l, data: p[k], borderColor: col, borderWidth: 1.3 }))];
     const usd = c.currency === "USD";
     makeChart(cv, p.dates, ds, { fmt: (v) => (usd ? "$" + n(v, 2) : n(v) + "원"), yfmt: (v) => (usd ? "$" + n(v) : v >= 10000 ? n(v / 10000, 0) + "만" : n(v)) });
   }
@@ -163,6 +166,42 @@ function fairTableHTML(c) {
         `<td class="${r.cells[k] >= c.price ? "cheap" : "dear"}">${fmtP(r.cells[k])}<br><span class="src">${pct(r.pct[k], 0, true)}</span></td>`).join("")}</tr>`).join("")}
       </tbody></table></${i ? "details" : "div"}>`;
   }).join("");
+}
+// ① 앞으로 실적(12MF) 기준 Bear/Base/Bull 적정주가 자 위에 지금 가격을 점으로
+function scenHTML(c) {
+  const s = c.scen;
+  if (!s || !s.base) return "";
+  const usd = c.currency === "USD";
+  const fmtP = (v) => (usd ? "$" + n(v, 0) : n(v));
+  const pts = [["bear", "Bear", "보수적"], ["base", "Base", "중간"], ["bull", "Bull", "낙관적"]];
+  const lo0 = Math.min(c.price, s.bear), hi0 = Math.max(c.price, s.bull);
+  const pad = (hi0 - lo0) * 0.08 || hi0 * 0.05;
+  const lo = Math.max(0, lo0 - pad), hi = hi0 + pad;
+  const at = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+  const where = c.price < s.bear ? "Bear 보다 낮아요" : c.price < s.base ? "Bear 와 Base 사이예요" : c.price < s.bull ? "Base 와 Bull 사이예요" : "Bull 보다 높아요";
+  const parts = s.parts || [];
+  const kinds = parts.map((p) => p.kind);
+  const multLine = kinds.map((k) => {
+    const m = (c.fwd_mult || {})[k] || {};
+    const ys = Object.keys(m).filter((y) => y !== "12MF" && m[y] != null);
+    const avg = (c.band_avg || {})[k];
+    return `<div>지금 가격 = ${ys.map((y) => `${y} ${k} <b>${n(m[y], k === "PBR" ? 2 : 1)}배</b>`).join(" · ")}${avg ? ` <span class="src">(밴드 평균 ${n(avg, k === "PBR" ? 2 : 1)}배)</span>` : ""}</div>`;
+  }).join("");
+  const how = parts.map((p) => `12MF ${p.kind === "PER" ? "EPS" : "BPS"} ${fmtP(p.base_val)} × ${p.kind} ${n(p.mult.bear, 1)} / ${n(p.mult.base, 1)} / ${n(p.mult.bull, 1)}배 (${esc(p.src)})`).join("<br>");
+  return `<div class="scen" onclick="event.stopPropagation()">
+    <div class="chart-title" style="margin-top:12px"><b>① 앞으로 실적으로 본 적정주가</b> <span class="src">12개월 선행(12MF)</span></div>
+    <div class="scenbar" style="background:linear-gradient(90deg, var(--good-bg) 0 ${at(s.base)}%, var(--warn-bg) ${at(s.base)}% ${at(s.bull)}%, var(--bad-bg) ${at(s.bull)}%)">
+      ${pts.map(([k, l]) => `<span class="tick" style="left:${at(s[k])}%"></span><span class="tl" style="left:${at(s[k])}%">${l}</span>`).join("")}
+      <span class="dot" style="left:${at(c.price)}%"></span><span class="now" style="left:${at(c.price)}%">지금</span>
+    </div>
+    <div class="scen3">${pts.map(([k, l, ko]) => {
+      const up = (s[k] / c.price - 1) * 100;
+      return `<div class="${k}${k === "base" ? " on" : ""}"><span>${l} <span class="src">${ko}</span></span><b>${fmtP(s[k])}</b><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></div>`;
+    }).join("")}</div>
+    <div class="note">지금 가격은 <b>${where}</b>${s.note ? ` · ${esc(s.note)}` : ""}</div>
+    <div class="note fm">${multLine}</div>
+    <div class="note src">${how}</div>
+  </div>`;
 }
 function stockCard(c) {
   const L = LIGHT[c.verdict] || LIGHT.na;
@@ -189,10 +228,11 @@ function stockCard(c) {
     <div class="row2">${lamp(c.verdict)}<div>
       <div class="verdict ${c.verdict}">${L.stock}</div>
       <div class="why">${esc(c.why)}</div></div></div>
-    <div class="kv">
+    ${c.scen ? scenHTML(c) : `<div class="kv">
       <div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)}</div>
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
-    </div>
+    </div>`}
+    ${c.scen ? `<div class="chart-title" style="margin-top:14px"><b>② 지난 10년 밴드에서 지금 위치</b> <span class="src">0% = 10년 중 가장 싼 쪽 · 100% = 가장 비싼 쪽</span></div>` : ""}
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
     <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
     ${fairTableHTML(c)}
@@ -286,7 +326,7 @@ function detailHTML(d) {
       <div class="big">${money(d.price, d.currency)}</div><div class="sub">${esc(d.price_date)} 종가 · 시가총액 ${bigWon(d.market_cap)} <span class="src">${esc(d.sources.price)}</span></div></div></div>
     <div class="kv"><div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)} (${c.gap == null ? "N/A" : pct(c.gap * 100, 0, true)})</div>
     <div class="k">12개월 선행 PER</div><div class="v">${times(c.fwd_per, 2)}</div>
-    </div>`;
+    </div>${scenHTML(c)}`;
   if (bondAlert(c)) h += `<div class="warnbox">⚠ 금리 대비 비쌈: 선행 PER ${times(c.fwd_per, 1)}가 ${esc(c.bond_label)} 금리로 환산한 PER ${times(c.bond_per, 1)}보다 높아요 (주식 이익수익률이 채권 금리보다 낮음).</div>`;
   if (c.short_history) h += `<div class="warnbox">📅 ${esc((c.band_start || "").slice(0, 4))}년부터의 데이터만 있어요. 10년 평균은 가능한 기간으로 계산했어요.</div>`;
   if (c.rerating_warning) h += `<div class="warnbox">${esc(c.rerating_warning)}</div>`;
@@ -905,8 +945,10 @@ function pbrCard(it, base, i) {
   </div>`;
 }
 function showView() {
-  const view = location.hash === "#pbr" ? "pbr" : location.hash === "#watch" ? "watch" : "main";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#market": "market" }[location.hash] || "main";
   $("#pbrView").hidden = view !== "pbr";
+  $("#marketView").hidden = view !== "market";
+  if (view === "market") drawMarketCharts(); // 숨겨진 상태에서 그린 차트는 크기가 0이라 보일 때 다시 그림
   $("#watchView").hidden = view !== "watch";
   $("#mainView").hidden = view !== "main";
   document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.view === view));

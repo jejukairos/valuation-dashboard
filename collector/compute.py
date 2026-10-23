@@ -116,6 +116,55 @@ def fwd12(hist, key):
     return w0 * a + (1 - w0) * b
 
 
+def scenarios(price, hist, bands, kinds, sector=None):
+    """적정주가 Bear / Base / Bull: 12개월 선행(12MF) EPS·BPS × 배수.
+    배수는 업종 배수(config/sectors.yaml)가 있으면 그것, 없으면 그 종목의 10년 밴드 하단·평균·상단.
+    PER·PBR 둘 다 쓰는 종목은 방식별 값을 평균한다."""
+    parts = []
+    for kind in kinds:
+        key = {"PER": "eps", "PBR": "bps"}.get(kind)
+        v = fwd12(hist, key) if key else None
+        if not v or v <= 0:
+            continue
+        if sector and sector.get("kind", "PER").upper() == kind:
+            m = {k: sector[k] for k in ("bear", "base", "bull")}
+            src = sector["name"]
+        else:
+            b = bands.get(kind) or {}
+            st = b.get("periods", {}).get("10y") or b.get("periods", {}).get("all") or {}
+            if not st.get("avg"):
+                continue
+            m = {"bear": st["low"], "base": st["avg"], "bull": st["high"]}
+            src = "10년 밴드" if st.get("from", "9999") <= f"{now_kst().year - 9}-12-31" else f"{st['from'][:4]}년~ 밴드"
+        parts.append({"kind": kind, "base_val": rnd(v, 2), "mult": {k: rnd(x, 2) for k, x in m.items()}, "src": src,
+                      "price": {k: v * x for k, x in m.items()}})
+    if not parts:
+        return None
+    out = {k: sum(p["price"][k] for p in parts) / len(parts) for k in ("bear", "base", "bull")}
+    for p in parts:
+        p["price"] = {k: round(x, 2) for k, x in p.pop("price").items()}
+    out["parts"] = parts
+    out["note"] = sector.get("note") if sector else None
+    return out
+
+
+def fwd_multiples(price, hist, kinds):
+    """지금 가격을 앞으로의 실적으로 나눈 배수: 26E·27E·28E·12MF PER(PBR). 예: 28E BPS 기준 PBR 1.0배."""
+    out = {}
+    for kind in kinds:
+        key = {"PER": "eps", "PBR": "bps"}.get(kind)
+        if not key:
+            continue
+        row = {}
+        for y in fwd_years(hist):
+            v = hist.get(y, {}).get(key)
+            row[ylabel(y)] = rnd(price / v) if v and v > 0 else None
+        f = fwd12(hist, key)
+        row["12MF"] = rnd(price / f) if f and f > 0 else None
+        out[kind] = row
+    return out
+
+
 def last_actual(hist):
     ys = [y for y, r in hist.items() if not r.get("estimate") and r.get("eps") is not None]
     return max(ys) if ys else None

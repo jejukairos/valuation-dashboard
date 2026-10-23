@@ -1,0 +1,19 @@
+# 업종별 적정 배수 (Bear 보수적 / Base 중간 / Bull 낙관적).
+# 보유종목 카드의 적정주가 = 12개월 선행(12MF) EPS × 이 PER (PBR 업종이면 12MF BPS × PBR).
+# stocks.yaml 에서 종목에 sector: 화장품 브랜드 처럼 적으면 그 업종 배수를 써요.
+# sector 가 없는 종목은 그 종목의 10년 밴드 하단 · 평균 · 상단 배수를 대신 써요.
+# 숫자만 바꾸면 다음 갱신부터 적용돼요.
+
+화장품 브랜드:
+  kind: PER
+  bear: 15
+  base: 22.5
+  bull: 30
+  note: "화장품 브랜드는 12MF PER 15~30배 (보수적 15배)"
+
+화장품 ODM:
+  kind: PER
+  bear: 10
+  base: 12.5
+  bull: 15
+  note: "화장품 ODM 은 12MF PER 10~15배"

@@ -6,6 +6,7 @@
 #    methods: [PER]        # PER / PBR / DIV(배당) 중 골라서
 #    per_basis: forward    # (선택) 조정 PER: 이익이 급증한 종목은 1년 뒤 실적 기준으로 밴드 계산
 #    fair_methods: [PBR]   # (선택) 적정가 계산에 쓸 방식만 따로 (비우면 methods 전부)
+#    sector: 화장품 브랜드  # (선택) sectors.yaml 의 업종 배수로 Bear/Base/Bull 적정주가 계산 (비우면 10년 밴드 배수)
 #    data_code: "005930"   # (선택) 우선주처럼 실적·배당을 다른 코드(보통주)에서 가져올 때
 #    splits: []            # (선택) 액면분할 기록 (예: [{date: "2018-05-04", ratio: 50}])
 #    avg_price:            # 평단가 (비워두면 표시 안 함)
@@ -25,6 +26,7 @@ holdings:
     market: KR
     code: "278470"
     methods: [PER]
+    sector: 화장품 브랜드
     avg_price:
     quantity:
 
@@ -32,6 +34,7 @@ holdings:
     market: KR
     code: "483650"
     methods: [PER]
+    sector: 화장품 브랜드
     note: "2025년 상장이라 가능한 기간만으로 밴드를 계산해요."
     avg_price:
     quantity:

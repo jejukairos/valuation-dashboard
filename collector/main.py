@@ -14,6 +14,8 @@ import rates
 import us_stock
 from common import DATA, REPORT, SETTINGS, attempt, load_yaml, now_kst, read_json, rnd, write_json
 
+SECTORS = load_yaml("sectors.yaml") or {}
+
 
 def keep_prev(new, prev, label):
     """새 값이 없으면 직전 값을 쓰고 '이전 데이터' 표시."""
@@ -152,7 +154,13 @@ def stock_detail(h, rates_now, fx):
             if d and y10:
                 fairs.append(("배당", d / (y10 / 100)))
     fair = sum(v for _, v in fairs) / len(fairs) if fairs else None
-    poss = [(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("pos")
+    # 적정가 = Bear/Base/Bull 의 Base (12MF 실적 × 업종 배수 또는 10년 밴드 배수). 배당만 보는 종목은 위 값 그대로
+    sec_name = h.get("sector")
+    sec = dict(SECTORS[sec_name], name=sec_name) if sec_name in SECTORS else None
+    scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec)
+    if scen:
+        fair = scen["base"]
+    poss =[(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("pos")
             for k in ("PER", "PBR") if k in bands and k in methods]
     poss = [p for p in poss if p is not None]
     if not poss and "DIV" in bands:
@@ -186,7 +194,11 @@ def stock_detail(h, rates_now, fx):
         "name": name, "code": code, "market": mkt, "price": price, "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],
         "currency": currency, "verdict": verdict, "why": why, "fair": rnd(fair, 2 if currency == "USD" else 0),
         "gap": rnd(gap, 4),
-        "fair_basis": _basis_text([n for n, _ in fairs], ey, mkey),
+        "fair_basis": _scen_text(scen) if scen else _basis_text([n for n, _ in fairs], ey, mkey),
+        "scen": _round_scen(scen, 2 if currency == "USD" else 0),
+        "fwd_mult": C.fwd_multiples(price, hist, [k for k in ("PER", "PBR") if k in methods and k in bands]),
+        "band_avg": {k: (bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("avg")
+                     for k in ("PER", "PBR") if k in bands},
         "band_pos": rnd(band_pos, 1), "fwd_per": rnd(fwd_per), "bond_per": rnd(bond_per),
         "bond_ratio": rnd(ratio, 3), "bond_signal": C.bond_signal(ratio), "bond_label": bond_label,
         "div_signal": det.get("div", {}).get("signal") if "DIV" in methods else None,
@@ -203,15 +215,31 @@ def stock_detail(h, rates_now, fx):
     return det
 
 
+def _scen_text(scen):
+    """'12MF EPS × Base PER 22.5배 (화장품 브랜드)' 처럼."""
+    base = {"PER": "EPS", "PBR": "BPS"}
+    parts = [f"12MF {base[p['kind']]} × {p['src']} 평균 {p['kind']}" if "밴드" in p["src"] else
+             f"12MF {base[p['kind']]} × {p['kind']} {p['mult']['base']:g}배 ({p['src']})" for p in scen["parts"]]
+    return parts[0] if len(parts) == 1 else "두 값 평균: " + " / ".join(parts)
+
+
+def _round_scen(scen, dg):
+    if not scen:
+        return None
+    return {**{k: rnd(scen[k], dg) for k in ("bear", "base", "bull")}, "parts": scen["parts"], "note": scen["note"]}
+
+
 def _price_chart(px, currency, days=250):
-    """카드용 주가 차트: 최근 1년 종가 + 20·50·200일 이동평균선."""
+    """카드용 주가 차트: 최근 1년 종가 + 20·50·200일 이동평균선 + 볼린저밴드(20일, ±2σ)."""
     s = px.dropna().astype(float)
     dg = 2 if currency == "USD" else 0
     ma = {n: s.rolling(n).mean() for n in (20, 50, 200)}
+    sd = s.rolling(20).std(ddof=0)
     t = s.iloc[-days:]
     f = lambda ser: [rnd(v, dg) if v == v else None for v in ser.loc[t.index]]  # noqa: E731 (NaN → None)
     return {"dates": [d.strftime("%Y-%m-%d") for d in t.index], "close": f(s),
-            "ma20": f(ma[20]), "ma50": f(ma[50]), "ma200": f(ma[200])}
+            "ma20": f(ma[20]), "ma50": f(ma[50]), "ma200": f(ma[200]),
+            "bb_up": f(ma[20] + 2 * sd), "bb_dn": f(ma[20] - 2 * sd)}
 
 
 def _fair_table(bands, hist, price, currency, kinds):
