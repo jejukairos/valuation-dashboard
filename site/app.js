@@ -259,6 +259,85 @@ function renderCards() {
   drawPriceCharts(list);
 }
 
+/* ---------- 보유종목 비교표 (구글 시트처럼: 머리글 눌러 정렬, 산업별 보기, 묶음별 칸) ---------- */
+const CMP = { group: "sum", ind: "전체", sort: "cap", dir: -1 };
+try { Object.assign(CMP, JSON.parse(localStorage.getItem("cmp") || "{}")); } catch (_) {}
+function cmpCols() {
+  const ys = (DASH.stocks.find((c) => c.tbl && c.tbl.years) || {}).tbl?.years || ["25", "26E", "27E", "28E"];
+  const t = (k, i) => (c) => (c.tbl ? (i == null ? c.tbl[k] : (c.tbl[k] || [])[i]) : null);
+  const G = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${pct(v, 0, true)}</span>`);
+  const P = (d) => (v) => (v == null ? "-" : n(v, d));
+  const R = (d) => (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, d)}%</span>`);
+  const arrow = (i) => `${ys[i]}→${ys[i + 1]}`;
+  const c = {
+    cap: { h: "시총<br>(조원)", v: (s) => (s.market_cap ? s.market_cap / 1e12 : null), f: P(1) },
+    salesC: { h: `매출<br>3년 연평균`, v: t("sales_cagr"), f: G },
+    opC: { h: `영업이익<br>3년 연평균`, v: t("op_cagr"), f: G },
+    epsC: { h: `EPS<br>3년 연평균`, v: t("eps_cagr"), f: G },
+    peg: { h: "PEG", v: t("peg"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 2)}${s.cyclical ? "*" : ""}</span>`) },
+    per12: { h: "PER<br>12MF", v: t("per12"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 1)}${s.cyclical ? "*" : ""}</span>`) },
+    dd: { h: "52주 고점<br>대비", v: t("dd52"), f: (v) => (v == null ? "-" : n(v, 0) + "%") },
+  };
+  for (let i = 0; i < 3; i++) {
+    c["sg" + i] = { h: `매출<br>${arrow(i)}`, v: t("sales_g", i), f: G };
+    c["og" + i] = { h: `영업이익<br>${arrow(i)}`, v: t("op_g", i), f: G };
+    c["per" + i] = { h: `PER<br>${ys[i]}`, v: t("per", i), f: P(1) };
+    c["pbr" + i] = { h: `PBR<br>${ys[i]}`, v: t("pbr", i), f: P(2) };
+    c["roe" + i] = { h: `ROE<br>${ys[i]}`, v: t("roe", i), f: R(0) };
+    c["pf" + i] = { h: `P/FCF<br>${ys[i + 1]}`, v: t("pfcf", i), f: P(1) };
+  }
+  for (let i = 0; i < 4; i++) {
+    c["opm" + i] = { h: `OPM<br>${ys[i]}`, v: t("opm", i), f: R(1) };
+    c["debt" + i] = { h: `부채비율<br>${ys[i]}`, v: t("debt", i), f: (v) => (v == null ? "-" : n(v) + "%") };
+  }
+  for (let i = 0; i < 2; i++) c["dy" + i] = { h: `배당<br>${ys[i + 1]}`, v: t("dy", i), f: (v) => (v == null ? "-" : n(v, 1) + "%") };
+  return c;
+}
+const CMP_GROUPS = [
+  ["sum", "요약", ["cap", "salesC", "opC", "per12", "peg", "opm1", "roe1", "debt1", "pf0", "dy0", "dd"]],
+  ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC"]],
+  ["qual", "수익성", ["opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2"]],
+  ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "pf0", "pf1", "pf2"]],
+  ["fin", "재무·배당", ["debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
+  ["all", "전체", null],
+];
+function renderCmp() {
+  const cols = cmpCols();
+  const g = CMP_GROUPS.find((x) => x[0] === CMP.group) || CMP_GROUPS[0];
+  const keys = g[2] || ["cap", "salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC", "peg", "per12", "opm0", "opm1", "opm2", "opm3",
+    "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "roe0", "roe1", "roe2", "debt0", "debt1", "debt2", "debt3", "dd", "dy0", "dy1", "pf0", "pf1", "pf2"];
+  if (!keys.includes(CMP.sort) && CMP.sort !== "name" && CMP.sort !== "ind") CMP.sort = keys[0];
+  const inds = ["전체", ...new Set(DASH.stocks.map((s) => s.industry).filter(Boolean))];
+  if (!inds.includes(CMP.ind)) CMP.ind = "전체";
+  $("#cmpGroup").innerHTML = CMP_GROUPS.map(([k, l]) => `<button data-g="${k}" class="${k === g[0] ? "on" : ""}">${l}</button>`).join("");
+  $("#cmpInd").innerHTML = inds.map((x) => `<button data-i="${esc(x)}" class="chip ${x === CMP.ind ? "on" : ""}">${esc(x)}</button>`).join("");
+  let rows = DASH.stocks.filter((s) => CMP.ind === "전체" || s.industry === CMP.ind);
+  const val = (s) => (CMP.sort === "name" ? s.name : CMP.sort === "ind" ? s.industry || "" : cols[CMP.sort].v(s));
+  rows = rows.sort((a, b) => {
+    const x = val(a), y = val(b);
+    if (x == null && y == null) return 0;
+    if (x == null) return 1; // 빈 칸은 정렬 방향과 상관없이 맨 아래
+    if (y == null) return -1;
+    return (typeof x === "string" ? x.localeCompare(y, "ko") : x - y) * CMP.dir;
+  });
+  const th = (k, h) => `<th data-k="${k}" class="${CMP.sort === k ? "on" : ""}">${h}${CMP.sort === k ? (CMP.dir > 0 ? " ▲" : " ▼") : ""}</th>`;
+  $("#cmpTable").innerHTML = `<table class="cmp"><thead><tr>${th("name", "종목")}${th("ind", "산업")}${keys.map((k) => th(k, cols[k].h)).join("")}</tr></thead>
+    <tbody>${rows.map((s) => `<tr data-code="${esc(s.code)}"><td>${esc(s.name)}${s.market === "US" ? ' <span class="src">US</span>' : ""}</td><td class="ind">${esc(s.industry || "")}</td>
+      ${keys.map((k) => `<td>${cols[k].f(cols[k].v(s), s)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  $("#cmpNote").innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · 종목을 누르면 상세 화면 · 3년 연평균 = 25년 실적 → 28년 추정 ·
+    PEG = 12MF PER ÷ EPS 3년 연평균 성장률(%) (1 아래면 성장에 비해 싼 편, 피터 린치 기준) · * = 이익이 크게 출렁이는 업종이라 PER·PEG 가 실제보다 싸 보일 수 있음 ·
+    P/FCF = 시가총액 ÷ 잉여현금흐름 · 25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준 · 미국은 야후에서 받을 수 있는 칸만 채워요 (EPS 성장은 2년 연평균)`;
+  try { localStorage.setItem("cmp", JSON.stringify(CMP)); } catch (_) {}
+}
+$("#cmpGroup").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; CMP.group = b.dataset.g; renderCmp(); });
+$("#cmpInd").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; CMP.ind = b.dataset.i; renderCmp(); });
+$("#cmpTable").addEventListener("click", (e) => {
+  const h = e.target.closest("th");
+  if (h) { const k = h.dataset.k; CMP.dir = CMP.sort === k ? -CMP.dir : (k === "name" || k === "ind" ? 1 : -1); CMP.sort = k; renderCmp(); return; }
+  const r = e.target.closest("tr[data-code]");
+  if (r) location.hash = `#stock/${r.dataset.code}`;
+});
+
 /* ---------- 3. 종목 상세 ---------- */
 const PERIODS = [["all", "역사적"], ["10y", "10년"], ["5y", "5년"]];
 
@@ -1152,6 +1231,7 @@ function renderAll() {
     marketCard(DASH.signals.us, DASH.rates.us10y, null, "us") +
     marketCard(DASH.signals.kr, DASH.rates.kr3y, DASH.rates.kr10y ? { label: "국고채 10년", latest: DASH.rates.kr10y.latest } : null, "kr");
   drawMarketCharts();
+  renderCmp();
   renderCards();
   kospiCard();
   spBand();

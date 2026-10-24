@@ -195,6 +195,28 @@ td.hot { font-weight: 700; }
 .fvt td:first-child, .fvt th:first-child { text-align: left; }
 .fvt tr.avg td { font-weight: 700; }
 .chart-box.mini { height: 150px; margin-top: 4px; }
+/* 보유종목 비교표 */
+.cmp-bar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.cmp-bar .seg { overflow-x: auto; max-width: 100%; align-self: flex-start; }
+.cmp-bar .seg button { white-space: nowrap; padding: 6px 10px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); font: inherit; font-size: 13px;
+  padding: 4px 10px; border-radius: 999px; cursor: pointer; min-height: 30px; }
+.chip.on { background: var(--s1); border-color: var(--s1); color: #fff; font-weight: 600; }
+.cmp-card { padding: 0; overflow: hidden; }
+.cmp-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.cmp { border-collapse: separate; border-spacing: 0; font-size: 12px; font-variant-numeric: tabular-nums; width: 100%; }
+table.cmp th, table.cmp td { padding: 7px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+table.cmp th { font-weight: 600; color: var(--ink-2); cursor: pointer; vertical-align: bottom; line-height: 1.25; background: var(--surface-2); user-select: none; }
+table.cmp th.on { color: var(--s1); }
+table.cmp th:first-child, table.cmp td:first-child { position: sticky; left: 0; z-index: 1; text-align: left; font-weight: 700;
+  background: var(--surface); box-shadow: 1px 0 0 var(--grid); max-width: 7.5em; overflow: hidden; text-overflow: ellipsis; }
+table.cmp th:first-child { background: var(--surface-2); z-index: 2; }
+table.cmp td.ind, table.cmp th:nth-child(2) { text-align: left; color: var(--ink-2); }
+table.cmp tbody tr { cursor: pointer; }
+table.cmp tbody tr:hover td { background: var(--surface-2); }
+table.cmp .neg { color: var(--bad-ink); }
+table.cmp .dim { color: var(--muted); }
 /* 네이버식 밴드차트 */
 .nv + .nv { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--grid); }
 .nv-t { font-size: 15px; font-weight: 700; }

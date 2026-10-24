@@ -70,6 +70,7 @@ ROWS = {
     "eps": "EPS", "bps": "BPS", "dps": "현금DPS", "roe": "ROE", "payout": "현금배당성향",
     "ni": "당기순이익(지배)", "equity": "자본총계(지배)", "sales": "매출액", "op": "영업이익(발표기준)",
     "debt": "부채비율", "per": "PER", "pbr": "PBR", "shares": "발행주식수(보통주)",
+    "fcf": "FCF", "opm": "영업이익률",
 }
 
 

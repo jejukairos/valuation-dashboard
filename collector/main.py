@@ -11,6 +11,7 @@ import kr_stock
 import manheim
 import market
 import rates
+import table
 import us_stock
 from common import DATA, REPORT, SETTINGS, attempt, load_yaml, now_kst, read_json, rnd, write_json
 
@@ -96,7 +97,7 @@ def stock_detail(h, rates_now, fx):
         now = kr_stock.naver_now(code)
         px = kr_stock.price_history(code)
         # 우선주처럼 실적은 보통주 자료를 쓰는 경우 (data_code)
-        hist, _ = kr_stock.merged_history(str(h.get("data_code") or code), h.get("splits") or [])
+        hist, wise = kr_stock.merged_history(str(h.get("data_code") or code), h.get("splits") or [])
         rate, bond_label, currency = rates_now.get("kr3y"), "국고채 3년", "KRW"
         sources = {"price": "네이버 증권", "consensus": "와이즈리포트(네이버 종목분석)",
                    "history": "OpenDART 사업보고서 + 와이즈리포트"}
@@ -190,8 +191,15 @@ def stock_detail(h, rates_now, fx):
             diff = now["fwd_eps"] / w_eps - 1
             checks.append({"item": f"{C.ylabel(now_kst().year)} EPS", "a": now["fwd_eps"], "a_src": "네이버 증권",
                            "b": w_eps, "b_src": "와이즈리포트", "warn": abs(diff) >= 0.05})
+    try:  # 보유종목 비교표 한 줄 (실패해도 카드는 그대로)
+        tbl = (table.us_row(code, hist, price, now.get("market_cap"), px) if mkt == "US" else
+               table.kr_row(wise or {}, hist, price, cap_krw, px, own_cap=not h.get("data_code")))
+    except Exception as e:  # noqa: BLE001
+        REPORT.fail(f"{name} 비교표", f"{type(e).__name__}: {e}")
+        tbl = None
     det["card"] = {
-        "name": name, "code": code, "market": mkt, "price": price, "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],
+        "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl,
+        "cyclical": fm == ["PBR"] or bool(h.get("cyclical")),  # 이익이 크게 출렁여 적정가를 PBR 로만 보는 종목 → 비교표에서 PER·PEG 주의 표시 "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],
         "currency": currency, "verdict": verdict, "why": why, "fair": rnd(fair, 2 if currency == "USD" else 0),
         "gap": rnd(gap, 4),
         "fair_basis": _scen_text(scen) if scen else _basis_text([n for n, _ in fairs], ey, mkey),
