@@ -189,7 +189,7 @@ def stock_detail(h, rates_now, fx):
         if now.get("fwd_eps") and w_eps:
             diff = now["fwd_eps"] / w_eps - 1
             checks.append({"item": f"{C.ylabel(now_kst().year)} EPS", "a": now["fwd_eps"], "a_src": "네이버 증권",
-                           "b": w_eps, "b_src": "와이즈리포트", "warn": abs(diff) >= 0.10})
+                           "b": w_eps, "b_src": "와이즈리포트", "warn": abs(diff) >= 0.05})
     det["card"] = {
         "name": name, "code": code, "market": mkt, "price": price, "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],
         "currency": currency, "verdict": verdict, "why": why, "fair": rnd(fair, 2 if currency == "USD" else 0),
@@ -197,7 +197,9 @@ def stock_detail(h, rates_now, fx):
         "fair_basis": _scen_text(scen) if scen else _basis_text([n for n, _ in fairs], ey, mkey),
         "scen": _round_scen(scen, 2 if currency == "USD" else 0),
         "fwd_mult": C.fwd_multiples(price, hist, [k for k in ("PER", "PBR") if k in methods and k in bands]),
-        "band_avg": {k: (bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("avg")
+        # 네이버 증권이 보여주는 올해 추정 PER (컨센서스 EPS 기준) — 카드의 12MF PER 과 나란히 비교용
+        "naver_per": now.get("fwd_per") if mkt == "KR" else None,
+        "band_avg": {k:(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("avg")
                      for k in ("PER", "PBR") if k in bands},
         "band_pos": rnd(band_pos, 1), "fwd_per": rnd(fwd_per), "bond_per": rnd(bond_per),
         "bond_ratio": rnd(ratio, 3), "bond_signal": C.bond_signal(ratio), "bond_label": bond_label,
