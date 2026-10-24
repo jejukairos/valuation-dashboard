@@ -222,8 +222,14 @@ function stockCard(c) {
     const r = (c.price / c.avg_price - 1) * 100;
     mine = `<div class="sub">내 평단 ${money(c.avg_price, c.currency)} · ${n(c.quantity)}주 · 수익률 ${pct(r, 1, true)}</div>`;
   }
+  // 현재가에 적용된 12개월 선행 EPS·PER (PBR 종목은 BPS·PBR 도): 주가 = EPS × PER
+  const pe = [];
+  if (c.fwd_per > 0) pe.push(`12MF EPS ${money(c.price / c.fwd_per, c.currency)} × PER <b>${n(c.fwd_per, 1)}배</b>`);
+  const pbr = (c.fwd_mult?.PBR || {})["12MF"];
+  if (pbr > 0 && (c.methods || []).includes("PBR")) pe.push(`12MF BPS ${money(c.price / pbr, c.currency)} × PBR <b>${n(pbr, 2)}배</b>`);
   return `<button class="card stock" data-code="${esc(c.code)}">
     <div class="row1"><span class="name">${esc(c.name)}</span><span class="price">${money(c.price, c.currency)}</span></div>
+    ${pe.map((x) => `<div class="pe">${x}</div>`).join("")}
     <div class="sub">시가총액 ${bigWon(c.market_cap)}${c.market_cap_usd ? ` ($${n(c.market_cap_usd / 1e9, 0)}B)` : ""} ${c.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""}</div>
     <div class="row2">${lamp(c.verdict)}<div>
       <div class="verdict ${c.verdict}">${L.stock}</div>
