@@ -214,6 +214,8 @@ table.cmp th:first-child, table.cmp td:first-child { position: sticky; left: 0; 
 table.cmp th:first-child { background: var(--surface-2); z-index: 2; }
 table.cmp td.ind, table.cmp th:nth-child(2) { text-align: left; color: var(--ink-2); }
 table.cmp tbody tr { cursor: pointer; }
+table.cmp tr.grp td { background: var(--surface-2); font-weight: 700; color: var(--ink-2); cursor: default; padding: 5px 8px; }
+table.cmp tbody tr.grp:hover td { background: var(--surface-2); }
 table.cmp tbody tr:hover td { background: var(--surface-2); }
 table.cmp .neg { color: var(--bad-ink); }
 table.cmp .dim { color: var(--muted); }

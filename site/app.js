@@ -313,7 +313,9 @@ function renderCmp() {
   $("#cmpInd").innerHTML = inds.map((x) => `<button data-i="${esc(x)}" class="chip ${x === CMP.ind ? "on" : ""}">${esc(x)}</button>`).join("");
   let rows = DASH.stocks.filter((s) => CMP.ind === "전체" || s.industry === CMP.ind);
   const val = (s) => (CMP.sort === "name" ? s.name : CMP.sort === "ind" ? s.industry || "" : cols[CMP.sort].v(s));
+  const us = (s) => (s.market === "US" ? 1 : 0);
   rows = rows.sort((a, b) => {
+    if (us(a) !== us(b)) return us(a) - us(b); // 한국 먼저, 미국은 아래에 따로
     const x = val(a), y = val(b);
     if (x == null && y == null) return 0;
     if (x == null) return 1; // 빈 칸은 정렬 방향과 상관없이 맨 아래
@@ -322,7 +324,8 @@ function renderCmp() {
   });
   const th = (k, h) => `<th data-k="${k}" class="${CMP.sort === k ? "on" : ""}">${h}${CMP.sort === k ? (CMP.dir > 0 ? " ▲" : " ▼") : ""}</th>`;
   $("#cmpTable").innerHTML = `<table class="cmp"><thead><tr>${th("name", "종목")}${th("ind", "산업")}${keys.map((k) => th(k, cols[k].h)).join("")}</tr></thead>
-    <tbody>${rows.map((s) => `<tr data-code="${esc(s.code)}"><td>${esc(s.name)}${s.market === "US" ? ' <span class="src">US</span>' : ""}</td><td class="ind">${esc(s.industry || "")}</td>
+    <tbody>${rows.map((s, i) => (i === 0 || us(s) !== us(rows[i - 1]) ? `<tr class="grp"><td>${us(s) ? "🇺🇸 미국" : "🇰🇷 한국"}</td><td colspan="${keys.length + 1}"></td></tr>` : "") +
+      `<tr data-code="${esc(s.code)}"><td>${esc(s.name)}</td><td class="ind">${esc(s.industry || "")}</td>
       ${keys.map((k) => `<td>${cols[k].f(cols[k].v(s), s)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   $("#cmpNote").innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · 종목을 누르면 상세 화면 · 3년 연평균 = 25년 실적 → 28년 추정 ·
     PEG = 12MF PER ÷ EPS 3년 연평균 성장률(%) (1 아래면 성장에 비해 싼 편, 피터 린치 기준) · * = 이익이 크게 출렁이는 업종이라 PER·PEG 가 실제보다 싸 보일 수 있음 ·

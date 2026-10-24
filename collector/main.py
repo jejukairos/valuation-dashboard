@@ -199,7 +199,9 @@ def stock_detail(h, rates_now, fx):
         tbl = None
     det["card"] = {
         "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl,
-        "cyclical": fm == ["PBR"] or bool(h.get("cyclical")),  # 이익이 크게 출렁여 적정가를 PBR 로만 보는 종목 → 비교표에서 PER·PEG 주의 표시 "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],
+        # 이익이 크게 출렁여 적정가를 PBR 로만 보는 종목 → 비교표에서 PER·PEG 주의 표시
+        "cyclical": fm == ["PBR"] or bool(h.get("cyclical")),
+        "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],
         "currency": currency, "verdict": verdict, "why": why, "fair": rnd(fair, 2 if currency == "USD" else 0),
         "gap": rnd(gap, 4),
         "fair_basis": _scen_text(scen) if scen else _basis_text([n for n, _ in fairs], ey, mkey),
