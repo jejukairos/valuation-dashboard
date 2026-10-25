@@ -263,7 +263,10 @@ table.cmp .evt { font-size: 11px; line-height: 1.3; display: inline-block; text-
 .gauge { position: relative; max-width: 260px; margin: 4px auto 0; }
 .gauge-c { position: relative; height: 120px; }
 .gauge-v { text-align: center; line-height: 1.2; margin-top: 2px; }
-.gauge-v b { font-size: 18px; display: block; } .gauge-v span { font-size: 11px; color: var(--muted); }
+.gauge-v b { font-size: 18px; display: block; }
+.moodact { text-align: center; font-size: 13px; margin: 6px 0 4px; line-height: 1.5; }
+.moodact b { font-size: 15px; }
+.tpl .rv { font-size: 14px; color: var(--ink); margin-left: 4px; } .gauge-v span { font-size: 11px; color: var(--muted); }
 .pergrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
 .pergrid div { background: var(--surface-2); border-radius: 8px; padding: 4px 6px; font-size: 11px; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
 .pergrid b { font-size: 13px; color: var(--ink); }

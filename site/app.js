@@ -233,6 +233,7 @@ function somongHTML(c) {
 }
 // 내 엑셀 '소몽의 주가 판독기' (24.8.28): 4가지를 1~5점으로 매겨 평균 → 바늘 게이지 (1 공포 … 5 광기)
 const MOOD = ["공포", "불안", "중립", "과열", "광기"];
+const MOOD_ACT = ["역발상 매수(장기)", "분할 매수", "매매 보류", "매도 준비", "분할 매도"]; // 내 엑셀 '매매 판단' 표
 const MOOD_COLORS = ["#2a78d6", "#5fb3e8", "#9aa0a6", "#f0a24a", "#d9442b"];
 function readerScores(c) {
   const up = (th, v) => (v == null ? null : th.findIndex((x) => v < x) + 1 || th.length + 1); // 구간 → 1~5
@@ -240,10 +241,10 @@ function readerScores(c) {
   const t = c.us_tpl?.tipranks;
   const upside = t && t.avg ? (t.avg / c.price - 1) * 100 : null;
   return [
-    ["시장 12MF P/E", mkt, up([15, 16, 18, 19], mkt), `S&P500 ${n(mkt, 1)}배 · ~15 공포 · 15~16 불안 · 16~18 중립 · 18~19 과열 · 19~ 광기`],
-    ["종목 12MF P/E", c.fwd_per, up([10, 20, 30, 50], c.fwd_per), `${n(c.fwd_per, 1)}배 · ~10 공포 · 10~20 불안 · 20~30 중립 · 30~50 과열 · 50~ 광기`],
-    ["목표주가 상승여력", upside, upside == null ? null : 6 - up([0, 5, 10, 20], upside), `TipRanks 평균 대비 ${pct(upside, 0, true)} · 20%~ 공포 · 10~20 불안 · 5~10 중립 · 0~5 과열 · 0% 미만 광기`],
-    ["PEG", c.tbl?.peg, up([1, 1.5, 2, 2.5], c.tbl?.peg), `${n(c.tbl?.peg, 2)} · ~1 공포 · 1~1.5 불안 · 1.5~2 중립 · 2~2.5 과열 · 2.5~ 광기`],
+    ["시장 12MF P/E", mkt, up([15, 16, 18, 19], mkt), `S&P500 · ~15 공포 · 15~16 불안 · 16~18 중립 · 18~19 과열 · 19~ 광기`, `${n(mkt, 1)}배`],
+    ["종목 12MF P/E", c.fwd_per, up([10, 20, 30, 50], c.fwd_per), `~10 공포 · 10~20 불안 · 20~30 중립 · 30~50 과열 · 50~ 광기`, `${n(c.fwd_per, 1)}배`],
+    ["목표주가 상승여력", upside, upside == null ? null : 6 - up([0, 5, 10, 20], upside), `TipRanks 평균 $${n(t?.avg, 0)} 대비 · 20%~ 공포 · 10~20 불안 · 5~10 중립 · 0~5 과열 · 0% 미만 광기`, pct(upside, 0, true)],
+    ["PEG", c.tbl?.peg, up([1, 1.5, 2, 2.5], c.tbl?.peg), `~1 공포 · 1~1.5 불안 · 1.5~2 중립 · 2~2.5 과열 · 2.5~ 광기`, n(c.tbl?.peg, 2)],
   ];
 }
 function readerHTML(c) {
@@ -253,7 +254,9 @@ function readerHTML(c) {
   const avg = got.reduce((a, x) => a + x[2], 0) / got.length;
   return `<div class="tpl" onclick="event.stopPropagation()"><div class="tpl-t">🧭 주가 판독기 <span class="src">내 엑셀 템플릿 · 4가지 점수 평균</span></div>
     <div class="gauge"><div class="gauge-c"><canvas id="gg-${esc(c.code)}" data-v="${avg}"></canvas></div><div class="gauge-v"><b style="color:${MOOD_COLORS[Math.round(avg) - 1]}">${MOOD[Math.round(avg) - 1]}</b><span>${n(avg, 1)} / 5</span></div></div>
-    <table class="compact" style="width:100%">${sc.map(([lab, , s, why]) => `<tr><td>${lab}<br><span class="src">${esc(why)}</span></td>
+    <div class="moodact">내 엑셀 '매매 판단' 표 기준: <b style="color:${MOOD_COLORS[Math.round(avg) - 1]}">${MOOD[Math.round(avg) - 1]} = ${MOOD_ACT[Math.round(avg) - 1]}</b>
+      <div class="src">공포 → 역발상 매수(장기) · 불안 → 분할 매수 · 중립 → 매매 보류 · 과열 → 매도 준비 · 광기 → 분할 매도 <br>(내가 정해 둔 원칙을 보여주는 것이고, 이 사이트의 추천은 아니에요)</div></div>
+    <table class="compact" style="width:100%">${sc.map(([lab, , s, why, val]) => `<tr><td>${lab} <b class="rv">${esc(val)}</b><br><span class="src">${esc(why)}</span></td>
       <td style="text-align:right;white-space:nowrap">${s == null ? "-" : `<b style="color:${MOOD_COLORS[s - 1]}">${s} ${MOOD[s - 1]}</b>`}</td></tr>`).join("")}</table></div>`;
 }
 const needle = { id: "needle", afterDatasetsDraw(ch) {
