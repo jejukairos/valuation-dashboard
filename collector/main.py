@@ -305,7 +305,7 @@ def stock_detail(h, rates_now, fx):
             REPORT.block("TipRanks", f"목표주가 접속 실패 ({str(e)[:50]})")
         street_info = {}
         try:
-            street_info["ratings"] = street.ratings(code)
+            street_info["ratings"] = street.ratings("GOOGL" if code == "GOOG" else code)  # 알파벳은 증권사 기록이 GOOGL 쪽에 쌓임
         except Exception as e:  # noqa: BLE001
             REPORT.block("야후 의견 변경", f"{name}: {str(e)[:50]}")
         try:  # 채널 검색어: 한글 이름 (+ 알파벳은 구글도), 티커
