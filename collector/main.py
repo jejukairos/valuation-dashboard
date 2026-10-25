@@ -356,7 +356,7 @@ def stock_detail(h, rates_now, fx):
         "chart": _price_chart(px, currency),
         # 적정가에 쓰는 방식 표를 먼저, 나머지 방식도 이어서 (예: 삼성전자 = PBR 표 → PER 표)
         # 미국: 연도별 EPS 추정치 출처 (야후·나스닥·Finviz) 와 쓴 평균값
-        "eps_srcs": {C.ylabel(yy): {**hist[yy]["srcs"], "평균": rnd(hist[yy]["eps"], 2)}
+        "eps_srcs": {C.ylabel(yy): {**hist[yy]["srcs"], "평균": rnd(hist[yy]["eps"], 2), "note": hist[yy].get("srcs_note")}
                      for yy in sorted(hist) if hist[yy].get("estimate") and hist[yy].get("srcs")} if mkt == "US" else None,
         "fv": _fair_table(bands, hist, price, currency,
                           [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
@@ -447,6 +447,8 @@ def main():
     m["kospi_fwd_bands"] = keep_prev(attempt("코스피 선행 PER·PBR 밴드", market.kospi_fwd_bands,
                                              m.get("kospi_forward"), m.get("kospi_trailing")),
                                      prev_mkt.get("kospi_fwd_bands"), "kospi_fwd_bands")
+    # 크로스체크: 우산(NNN) 텔레그램 채널의 주간 밸류에이션 숫자
+    m["woosan"] = keep_prev(attempt("우산 채널 밸류에이션 (크로스체크)", street.woosan), prev_mkt.get("woosan"), "woosan")
 
     us10 = (r.get("us10y") or {}).get("latest")
     kr3 = (r.get("kr3y") or {}).get("latest")

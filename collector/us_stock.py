@@ -152,12 +152,17 @@ def history(t):
             hist[nxt_y].setdefault("srcs", {})["Finviz"] = fv
     except Exception:  # noqa: BLE001
         pass
-    # 시킹알파(유료)를 못 쓰니, 추정치는 받을 수 있는 출처들의 평균으로 (출처가 하나면 그 값)
+    # 시킹알파(유료)를 못 쓰니, 추정치는 받을 수 있는 출처들의 평균으로 (출처가 하나면 그 값).
+    # 단 출처끼리 15% 넘게 다르면 (예: 알파벳 26E 야후 11.9 vs 나스닥 20.6 — 일회성 투자이익 포함 여부 차이) 야후 값
     for y, r in hist.items():
         s = {k: v for k, v in (r.get("srcs") or {}).items() if v is not None}
         if r.get("estimate") and s:
-            r["eps"] = sum(s.values()) / len(s)
-            r["src"] = "추정치 평균: " + " · ".join(s)
+            vals = [v for v in s.values() if v > 0]
+            if "야후" in s and len(vals) >= 2 and max(vals) / min(vals) - 1 > 0.15:
+                r["eps"], r["src"], r["srcs_note"] = s["야후"], "야후 (출처 간 차이가 커서 야후 값)", "출처 간 15% 넘게 다름"
+            else:
+                r["eps"] = sum(s.values()) / len(s)
+                r["src"] = "추정치 평균: " + " · ".join(s)
     return hist
 
 

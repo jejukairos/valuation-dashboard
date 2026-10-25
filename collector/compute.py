@@ -107,8 +107,17 @@ def ylabel(y):
 
 
 def fwd12(hist, key):
-    """12개월 선행값: 올해 추정과 내년 추정을 남은 기간 비율로 섞는다."""
+    """12개월 선행값: 올해 추정과 내년 추정을 남은 기간 비율로 섞는다.
+    미국처럼 회계연도 끝(fy_end)이 있으면 그 날짜 기준 (마이크로소프트 6월, 엔비디아 1월 결산 등)."""
     now = now_kst()
+    fys = sorted((pd.Timestamp(r["fy_end"]), y) for y, r in hist.items() if r.get("fy_end") and r.get(key) is not None)
+    if fys:
+        today = pd.Timestamp(now.date())
+        i = next((k for k, (e, _) in enumerate(fys) if e >= today), None)
+        if i is not None and i + 1 < len(fys):
+            (e0, y0), (_, y1) = fys[i], fys[i + 1]
+            w0 = min(1.0, max(0.0, (e0 - today).days / 365.25))  # 지금 회계연도에 남은 기간 비율
+            return w0 * hist[y0][key] + (1 - w0) * hist[y1][key]
     a = hist.get(now.year, {}).get(key)
     b = hist.get(now.year + 1, {}).get(key)
     if a is None or b is None:

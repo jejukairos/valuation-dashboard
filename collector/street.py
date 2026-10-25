@@ -58,6 +58,41 @@ def _same(a, b):
     return bool(x and y) and len(x & y) / len(x | y) >= 0.4
 
 
+def woosan():
+    """우산(NNN) 텔레그램 채널(@WoosanXNNN)의 주간 밸류에이션 숫자 — 사이트 숫자 크로스체크용.
+    KOSPI·코스닥·S&P500 12m fwd P/E(3·5년 평균), 12m fwd 순이익·EPS, 매그7 12m P/E."""
+    texts = []
+    for q in ("12m fwd P/E", "Magnificent 7"):
+        html = HTTP.get("https://t.me/s/WoosanXNNN", params={"q": q}).text
+        for b in html.split('data-post="')[1:]:
+            dt = re.search(r'datetime="([^"]+)"', b)
+            t = _text(b)
+            if t and dt:
+                texts.append((dt.group(1), b.split('"', 1)[0], t))
+    texts.sort(reverse=True)  # 최신 글부터
+    pats = {"kospi_pe": r"KOSPI 12m fwd P/E\s*:?\s*([\d.]+)x", "kospi_pe3": r"KOSPI 12m fwd P/E 3yr Avg\.?\s*([\d.]+)x",
+            "kospi_pe5": r"KOSPI 12m fwd P/E 5yr Avg\.?\s*([\d.]+)x", "kospi_ni": r"KOSPI 12m fwd 순이익\(지배[^)]*\)\s*:?\s*([\d,.]+)",
+            "kosdaq_pe": r"코스닥 12m fwd P/E\s*:?\s*([\d.]+)x", "sp_pe": r"S&P500 12m fwd P/E\s*:?\s*([\d.]+)x",
+            "sp_pe3": r"S&P500 12m fwd P/E 3yr Avg\.?\s*([\d.]+)x", "sp_pe5": r"S&P500 12m fwd P/E 5yr Avg\.?\s*([\d.]+)x",
+            "sp_eps": r"S&P500 12m fwd EPS\s*:?\s*([\d,.]+)"}
+    out, mag7 = {}, {}
+    for dt, pid, t in texts:
+        for k, p in pats.items():
+            m = re.search(p, t)
+            if m and k not in out:
+                out[k] = float(m.group(1).replace(",", ""))
+                out.setdefault("date", pd.Timestamp(dt).tz_convert("Asia/Seoul").strftime("%Y-%m-%d"))
+                out.setdefault("url", f"https://t.me/{pid}")
+        if not mag7 and "Magnificent 7" in t:
+            mag7 = {s: float(v) for s, v in re.findall(r"^(GOOGL|NVDA|AAPL|MSFT|AMZN|META|TSLA)\s+([\d.]+)x", t, re.M)}
+            if mag7:
+                out["mag7_date"] = pd.Timestamp(dt).tz_convert("Asia/Seoul").strftime("%Y-%m-%d")
+    if not out:
+        raise RuntimeError("우산 채널에서 숫자를 못 찾음")
+    out["mag7"] = mag7
+    return out
+
+
 def channel_posts(terms, limit=12, channel=None, per_channel=5):
     """채널 공개 미리보기(t.me/s/…)에서 검색어마다 글을 찾아 최신순으로. 본문은 앞부분만 (전체는 원문 링크).
     channel 을 안 주면 CHANNELS 전부를 합치고, 같은 내용(제목·앞부분이 40% 넘게 겹침)은 하나만 남긴다.
