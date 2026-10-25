@@ -294,6 +294,21 @@ def _dart_fin_q(cc, year, rc):
     return []
 
 
+def dart_dilution(stock_code, days=365):
+    """최근 1년 주식 수가 늘 수 있는 공시 (유상증자·전환사채(CB)·신주인수권부사채(BW)·교환사채) — 주요사항보고서."""
+    cc = corp_code(stock_code)
+    end = now_kst()
+    j = HTTP.get("https://opendart.fss.or.kr/api/list.json",
+                 params={"crtfc_key": dart_key(), "corp_code": cc, "bgn_de": (end - pd.Timedelta(days=days)).strftime("%Y%m%d"),
+                         "end_de": end.strftime("%Y%m%d"), "pblntf_ty": "B", "page_count": 100}).json()
+    if j.get("status") not in ("000", "013"):  # 013 = 자료 없음
+        raise RuntimeError(f"DART 공시목록 {j.get('status')}")
+    keys = ("유상증자결정", "전환사채권발행결정", "신주인수권부사채권발행결정", "교환사채권발행결정")
+    return [{"date": f"{r['rcept_dt'][:4]}-{r['rcept_dt'][4:6]}-{r['rcept_dt'][6:]}", "name": r["report_nm"].strip(),
+             "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={r['rcept_no']}"}
+            for r in j.get("list", []) if any(k in r.get("report_nm", "") for k in keys)]
+
+
 def wise_quarters(code):
     """와이즈리포트 분기 실적 {(연, 월): {sales, op, ni}} (억원) — DART 누적값과 맞춰 보기용."""
     page = f"{WISE}/c1010001.aspx?cmp_cd={code}"

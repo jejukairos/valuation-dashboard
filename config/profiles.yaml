@@ -421,3 +421,210 @@ TSLA:
   notes: '매출총이익률 18.0%는 FY2025(이익 170.9억/매출 948.3억 달러); 최근 4개 분기(25년 4Q~26년 3Q)로 계산하면 약 19.3%(1,035.7억 매출). 2026년 3분기 단독은 19.6%. FSD 구독 174만 건은 일시불 구매도 포함한 숫자입니다(Electrek). 전기차 침투율 25%는 IEA 원문 사이트가 막혀(403)
     IEA를 인용한 기사(all-about-industries.com)로 확인했고, 하이브리드(PHEV) 포함입니다. 지역별 매출을 ''어디에 인도했는지'' 기준으로 나눴는지는 원문에서 확인하지 못했습니다. ir.tesla.com은 자동 접속이 막혀(403) 내용 확인은 못 했지만 공식 IR 주소입니다. 가격 인하 사례 출처: investinglive.com(2025-10-07),
     FSD 구독 전환 출처: driveteslacanada.ca.'
+'003230':
+  code: '003230'
+  name_ko: 삼양식품
+  ir:
+  - label: IR 메인
+    url: https://www.samyangfoods.com/kor/content/ir/index.do
+  - label: 2026 반기보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003053
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260318001082
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250318001186
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240320001358
+  - label: 재무정보 (회사)
+    url: https://www.samyangfoods.com/kor/ir/finance.do
+  ir_notes: 회사 홈페이지에 실적발표 PDF 자료실이 없음 (IR 메뉴는 주주·배당·재무정보·공시만). 기업설명회는 KRX/DART 안내공시로만 확인됨. 3분기 분기보고서는 11월 중순 예정.
+'278470':
+  code: '278470'
+  name_ko: 에이피알
+  ir:
+  - label: IR 메인 (실적자료)
+    url: https://apr-in.com/ir.php
+  - label: 2026 2분기 실적발표 (PDF)
+    url: https://apr-in.aprd.io/ir/APR_%EA%B2%BD%EC%98%81%EC%8B%A4%EC%A0%81_2Q26_KOR_vF.pdf
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://apr-in.aprd.io/ir/APR_%E1%84%80%E1%85%A7%E1%86%BC%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%B5%E1%86%AF%E1%84%8C%E1%85%A5%E1%86%A8_4Q25_KOR_vF.pdf
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260323001257
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250321001576
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240321000964
+  ir_notes: 'IR BOOK(최근 실적·사업계획) PDF도 있음: https://apr-in.aprd.io/ir_book/095de73b-ecbe-487e-ac66-5b5da94dcd4a.pdf'
+'483650':
+  code: '483650'
+  name_ko: 달바글로벌
+  ir:
+  - label: IR 메인 (IR자료실)
+    url: http://www.dalbaglobal.com/main/ir_material.php
+  - label: 2026 2분기 실적발표 (PDF)
+    url: http://www.dalbaglobal.com/_upload_files/20260813102754_Mq.pdf
+  - label: 2026 2분기 IR Book (PDF)
+    url: http://www.dalbaglobal.com/_upload_files/20260818150934_sp.pdf
+  - label: 2025 4분기 실적발표 (PDF)
+    url: http://www.dalbaglobal.com/_upload_files/20260220122012_Ap.pdf
+  - label: 2025 사업보고서 [기재정정] (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260407001978
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250318000466
+  ir_notes: 2025년 5월 상장이라 사업보고서는 2024·2025 두 개뿐. 회사 사이트 https 인증서가 만료(ERR_CERT_DATE_INVALID)라 http 주소로 연결.
+'012450':
+  code: '012450'
+  name_ko: 한화에어로스페이스
+  ir:
+  - label: IR 메인 (실적발표)
+    url: https://www.hanwhaaerospace.com/kor/ir/earning-release.do
+  - label: 2026 2분기 실적발표 (PDF)
+    url: https://www.hanwhaaerospace.com/files/down.do?id=c54680e1-e72c-481a-b075-6eb702153637
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://www.hanwhaaerospace.com/files/down.do?id=12b9b3d0-2aa4-4e1b-bbaa-530093f96281
+  - label: 2025 사업보고서 [첨부정정] (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260319000633
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250317000990
+  - label: 2023 사업보고서 [기재정정] (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240329000902
+  ir_notes: 3분기 실적발표 웹캐스트 페이지는 열려 있으나 자료는 아직 미게시 (2026-10-25 기준).
+'064350':
+  code: '064350'
+  name_ko: 현대로템
+  ir:
+  - label: IR 메인 (IR자료실)
+    url: https://www.hyundai-rotem.co.kr/ko/invest/ir/list.do
+  - label: 2026 3분기 실적발표 (PDF)
+    url: https://www.hyundai-rotem.co.kr/upload/2026/10/20261019115550017326.pdf
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://www.hyundai-rotem.co.kr/upload/2026/1/20260130075659009231.pdf
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260319001275
+  - label: 2024 사업보고서 [기재정정] (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250321001612
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240320000873
+  ir_notes: '2026 2분기 실적발표 PDF: https://www.hyundai-rotem.co.kr/upload/2026/7/20260724015202026163.pdf'
+'023530':
+  code: '023530'
+  name_ko: 롯데쇼핑
+  ir:
+  - label: IR 메인
+    url: https://www.lotteshoppingir.com/index.jsp
+  - label: 2026 2분기 실적발표 (PDF)
+    url: https://www.lotteshoppingir.com/download/2026lotte_q2_kor.pdf
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://www.lotteshoppingir.com/download/2025lotte_q4_kor.pdf
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260312001405
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250314001659
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240315000948
+  ir_notes: '실적발표 목록: https://www.lotteshoppingir.com/data/data_01.jsp . 3분기 컨퍼런스콜 공지는 있으나 자료 미게시.'
+005380:
+  code: 005380
+  name_ko: 현대차
+  ir:
+  - label: IR 메인
+    url: https://www.hyundai.com/worldwide/ko/company/ir
+  - label: 2026 2분기 실적발표 (PDF)
+    url: https://www.hyundai.com/content/dam/hyundai/ww/en/images/company/investor-relations/ir-events/pdf/ko/2026/q2-2026-earnings-call-pt-final-ko.pdf
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://www.hyundai.com/content/dam/hyundai/ww/en/images/company/investor-relations/ir-events/pdf/ko/2026/q4-2025-earnings-call-pt-ko.pdf
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260318001394
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250312001148
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240313001451
+  ir_notes: '분기 실적·보고서 목록: https://www.hyundai.com/worldwide/ko/company/ir/financial-information/quarterly-earnings . 2026 3분기 실적발표 2026-10-29 예정.'
+'000270':
+  code: '000270'
+  name_ko: 기아
+  ir:
+  - label: IR 메인
+    url: https://worldwide.kia.com/ko/company/investor-relations/
+  - label: 2026 2분기 경영실적 (PDF)
+    url: https://worldwide.kia.com/files/investors/business-sales-result/ag/207049708/ouqv/207049661itpu.pdf
+  - label: 2025 4분기 경영실적 (PDF)
+    url: https://worldwide.kia.com/files/investors/business-sales-result/qd/196784905/agym/196784931wfhx.pdf
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260312001224
+  - label: 2024 사업보고서 [기재정정] (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250313001390
+  - label: 2023 사업보고서 [기재정정] (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240312000909
+  ir_notes: '분기 경영실적 목록: https://worldwide.kia.com/ko/company/investor-relations/library/performance-and-plans/ . 3분기 자료 아직 미게시 (2026-10-25 기준).'
+005930:
+  code: 005930
+  name_ko: 삼성전자
+  ir: &id001
+  - label: IR 메인
+    url: https://www.samsung.com/sec/ir/main/
+  - label: 2026 2분기 실적발표 (PDF)
+    url: https://images.samsung.com/kdp/ir/events/2026/2026_2Q_conference_kor.pdf
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://images.samsung.com/kdp/ir/events/2025/2025_4Q_conference_kor.pdf
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260310002820
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250311001085
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240312000736
+  ir_notes: '삼성전자우(005935)도 같은 자료. 실적발표 목록: https://www.samsung.com/sec/ir/financial-information/earnings-release/ . 3분기 확정실적 미게시 (2026-10-25 기준).'
+'000660':
+  code: '000660'
+  name_ko: SK하이닉스
+  ir:
+  - label: IR 메인
+    url: https://www.skhynix.com/ir/UI-FR-IR01/
+  - label: 2026 2분기 실적발표 (PDF)
+    url: https://mis-prod-koce-homepage-cdn-01-blob-ep.azureedge.net/web/attach/13571120735730603.pdf
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://mis-prod-koce-homepage-cdn-01-blob-ep.azureedge.net/web/attach/116964002700447819.pdf
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260317000635
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250319000665
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240319000684
+  ir_notes: 2026 3분기 실적발표 2026-10-28 오전 9시 예정 (자료 미게시).
+'035420':
+  code: '035420'
+  name_ko: NAVER
+  ir:
+  - label: IR 메인 (실적발표)
+    url: https://www.navercorp.com/investment/earnings
+  - label: 2026 2분기 실적발표 (PDF)
+    url: https://www.navercorp.com/api/article/download/a769655e-43a9-4be8-8e78-d091981b1803
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://www.navercorp.com/api/article/download/acd6abea-d548-441d-b69c-92ca3dee97b3
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260313001021
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250318000645
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240318000844
+'036620':
+  code: '036620'
+  name_ko: 감성코퍼레이션
+  ir:
+  - label: IR 메인 (투자정보)
+    url: https://www.gamsungcorp.co.kr/sub03/sub01.php
+  - label: IR 공지 (사업보고서·공고)
+    url: https://www.gamsungcorp.co.kr/bbs/board.php?tbl=bbs34
+  - label: 2026 반기보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001414
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260318001572
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250318001099
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240320000614
+  ir_notes: '회사 홈페이지에 실적발표 PDF 자료실 없음 (투자정보: 주가·공시·재무·공지·뉴스만).'
+005935:
+  code: 005935
+  name_ko: 삼성전자우
+  ir: *id001

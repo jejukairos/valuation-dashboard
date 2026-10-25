@@ -168,6 +168,50 @@ def checklist(code, c, tbl, f, per5_avg, pbr10_avg, psr):
             "manual": bool(m), "memo": m.get("memo")}
 
 
+def us_dps(code):
+    """미국: 야후 배당 지급 내역 → {연도: 연간 주당배당금} (올해는 아직 다 안 줬으니 뺌)."""
+    d = yf.Ticker(code).dividends
+    if d is None or d.empty:
+        return {}
+    s = d.groupby(d.index.year).sum()
+    return {int(y): float(v) for y, v in s.items() if int(y) < now_kst().year}
+
+
+def dividend_check(dps):
+    """배당주 점검 (강의 '배당주점검'): ① 위기에도 안 줄였나 ② 꾸준히 늘렸나(연속 인상 횟수) ③ 5년 이상 지급했나.
+    dps = {연도: 주당배당금} 실제 지급분만."""
+    ys = sorted(y for y, v in dps.items() if v is not None)
+    if not ys:
+        return None
+    paid = [y for y in ys if dps[y] > 0]
+    if not paid:
+        return {"verdict": "배당 없음", "rows": [], "years": []}
+    # 연속 지급 연수 (최근 해부터 거꾸로)
+    streak = 0
+    for y in reversed(ys):
+        if dps[y] > 0:
+            streak += 1
+        else:
+            break
+    # 삭감: 전년보다 5% 넘게 줄인 해 (특별배당 들쭉날쭉은 5% 이내로 봐줌)
+    cuts = [y for y in ys[1:] if dps.get(y - 1) and dps[y - 1] > 0 and dps[y] < dps[y - 1] * 0.95]
+    crisis = [y for y in cuts if y in (2009, 2020, 2022)]
+    inc = 0
+    for y in reversed(ys[1:]):
+        if dps.get(y - 1) is not None and dps[y] > dps[y - 1] * 1.001:
+            inc += 1
+        else:
+            break
+    rows = [
+        {"item": "배당을 위기에도 줄이지 않았는가", "ok": "X" if crisis else ("△" if cuts else "O"),
+         "why": (f"위기 때 삭감: {', '.join(map(str, crisis))}년" if crisis else f"삭감한 해: {', '.join(map(str, cuts))}년" if cuts else "확인한 기간에 삭감 없음")
+         + f" (자료 {ys[0]}~{ys[-1]}년)"},
+        {"item": "배당을 꾸준히 늘렸는가", "ok": "O" if inc >= 5 else ("△" if inc >= 1 else "X"), "why": f"최근 연속 인상 {inc}년"},
+        {"item": "배당을 최소 5년 이상 지급했는가", "ok": "O" if streak >= 5 else "X", "why": f"연속 지급 {streak}년"},
+    ]
+    return {"rows": rows, "years": [[y, rnd(dps[y], 4)] for y in ys[-10:]]}
+
+
 def somong(hist, price, lt_growth, finviz_5y=None):
     """내 엑셀 '소몽의 적정주가 템플릿': 성장률 × 100~200(보통) / 150~250(강세장) = 적정 PER, × 올해 EPS."""
     y = now_kst().year

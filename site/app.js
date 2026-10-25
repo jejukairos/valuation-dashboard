@@ -325,6 +325,7 @@ function stockCard(c) {
     ${c.scen ? `<div class="chart-title" style="margin-top:14px"><b>② 지난 10년 밴드에서 지금 위치</b> <span class="src">0% = 10년 중 가장 싼 쪽 · 100% = 가장 비싼 쪽</span></div>` : ""}
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
     <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
+    ${somongHTMLcard(c)}
     ${tipranksHTML(c)}
     ${readerHTML(c)}
     ${fairTableHTML(c)}
@@ -387,6 +388,14 @@ function cmpCols() {
     c["gpm" + i] = { h: `GPM<br>${ago[i]}`, v: t("gpm", i), f: R(1) };
     c["fcf" + i] = { h: `FCF<br>${ago[i]}`, v: t("fcf3", i), f: money3 };
   }
+  // 소몽 체크리스트 (O=2, △=1, X=0 으로 정렬)
+  const vnum = { O: 2, "△": 1, X: 0 };
+  const smv = (k) => (s) => vnum[smVerdict(smData(s), k)] ?? null;
+  const smf = (k) => (v, s) => (v == null ? "-" : badge(smVerdict(smData(s), k)));
+  c.smS = { h: "소몽<br>점수", v: (s) => smScore(smData(s)), f: (v) => (v == null ? "-" : `<b class="${v >= 90 ? "ok" : ""}">${v}</b>`) };
+  for (const [k, l] of [...SM_KEYS, ["good_boss", "굿보스"], ["giant", "거인의<br>어깨"]]) c["sm_" + k] = { h: l.replace("이겨라", "<br>이겨라"), v: smv(k), f: smf(k) };
+  c.ath = { h: "최고가<br>대비", v: (s) => s.mdd?.dd ?? null, f: (v) => (v == null ? "-" : n(v, 0) + "%") };
+  c.nev = { h: "다음<br>이벤트", v: (s) => nextEvent(smData(s))?.date ?? null, f: (v, s) => { const e = nextEvent(smData(s)); return e ? `<span class="evt">${esc(e.date)}<br><span class="src">${esc(String(e.what).slice(0, 14))}</span></span>` : "-"; } };
   c.roic = { h: "ROIC<br>최근 연간", v: t("roic"), f: R(0) };
   c.psr = { h: `PSR<br>${ys[1]}`, v: t("psr"), f: P(1) };
   return c;
@@ -397,6 +406,7 @@ const CMP_GROUPS = [
   ["qual", "수익성", ["gpm0", "opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2", "roic"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "psr", "pf0", "pf1", "pf2"]],
   ["fin", "재무·배당", ["nc", "ncp", "fcf0", "fcf1", "fcf2", "debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
+  ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
   ["all", "전체", null],
 ];
 // 미국은 무료로 받을 수 있는 숫자가 달라서 (추정은 EPS·매출 위주, 나머지는 최근 실적) 칸 구성을 따로
@@ -406,6 +416,7 @@ const CMP_GROUPS_US = [
   ["qual", "수익성", ["gpm0", "gpm1", "gpm2", "opm0", "roe0", "roic"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "psr"]],
   ["fin", "재무·배당", ["nc", "ncp", "fcf0", "fcf1", "fcf2", "debt0", "dy0", "dd"]],
+  ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
   ["all", "전체", null],
 ];
 function renderCmp() {
@@ -457,6 +468,8 @@ function badge(v) { const x = VERD[v] || ["na", "-"]; return `<span class="vb ${
 function profileHTML(code) {
   const p = PROFILES[code];
   if (!p) return "";
+  const irList = (p.ir || []).length ? `<ul class="irl">${p.ir.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></li>`).join("")}</ul>` : "";
+  if (!p.one_liner) return irList ? `<h3>📂 IR 자료</h3><div class="card">${irList}${p.ir_notes ? `<div class="note src">${esc(p.ir_notes)}</div>` : ""}</div>` : "";
   const q = (title, o) => (o ? `<div class="pq"><div class="pq-h">${badge(o.verdict)} <b>${title}</b></div><div class="pq-b">${esc(o.why || "")}</div></div>` : "");
   const ol = p.oligopoly || {};
   const donut = (id, title, d, extra = "") => (d && (d.items || []).length ? `<div class="pd"><div class="pd-t">${title}</div>
@@ -493,6 +506,125 @@ function drawProfile(code) {
       options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: "62%",
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${c.label}: ${n(c.parsed, 1)}%` } } } } }));
   }
+}
+
+/* ---------- 소몽 체크리스트 (강의: 지갑털이·올리고폴리·아무나이겨라·굿보스/거인의 어깨 → 점수, MDD 반반전략, 여름에 패딩사기, 배당주 점검, 내가 이걸 왜 샀지) ---------- */
+let SOMONG = {};
+const SM_KEYS = [["wallet", "지갑털이"], ["oligopoly", "올리고폴리"], ["anyone_wins", "아무나이겨라"]];
+function smData(c) { return SOMONG[c.code] || (c.code === "005935" ? SOMONG["005930"] : null); }
+function smVerdict(s, k) { return s?.my?.override?.[k] || s?.[k]?.v; } // 내가 고친 값이 있으면 그걸
+function smScore(s) {
+  if (!s) return null;
+  const vs = SM_KEYS.map(([k]) => smVerdict(s, k));
+  if (vs.some((v) => !v)) return null;
+  let sc = 100 - 10 * vs.filter((v) => v === "X").length - 5 * vs.filter((v) => v === "△").length;
+  if (smVerdict(s, "good_boss") === "O" || smVerdict(s, "giant") === "O") sc += 5;
+  return Math.min(100, sc);
+}
+function nextEvent(s) {
+  const today = new Date().toISOString().slice(0, 7);
+  return (s?.events || []).filter((e) => String(e.date).slice(0, 7) >= today).sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
+}
+function somongHTMLcard(c) {
+  const s = smData(c);
+  const sc = smScore(s);
+  const m = c.mdd, d = c.div_check;
+  if (!s && !m && !d) return "";
+  const chips = s ? SM_KEYS.map(([k, l]) => `${l} ${badge(smVerdict(s, k))}`).join(" ") +
+    ` 굿보스 ${badge(smVerdict(s, "good_boss"))} 거인 ${badge(smVerdict(s, "giant"))}` : "";
+  const past = s?.past;
+  const reason = (k, l) => (s?.[k] ? `<div class="pq"><div class="pq-h">${badge(smVerdict(s, k))} <b>${l}</b>${s[k].who ? ` <span class="src">${esc(s[k].who)}</span>` : ""}</div>
+    <div class="pq-b">${esc(s[k].why || "")}${s[k].source ? ` <a href="${esc(s[k].source)}" target="_blank" rel="noopener">출처</a>` : ""}</div></div>` : "");
+  // 반반전략: 고점 대비 -10~-50% 구간 가격, 지금 어디까지 내려왔는지
+  const ladder = m ? `<div class="chart-title" style="margin-top:12px"><b>📉 현재 MDD · 반반전략 분할매수 구간</b> <span class="src">사상 최고가 ${money(m.peak, c.currency)} (${esc(m.peak_date)}) 대비</span></div>
+    <div class="note">지금 고점 대비 <b>${pct(m.dd, 1)}</b></div>
+    <div class="ladder">${m.levels.map(([lv, p]) => `<div class="${m.dd <= lv ? "hit" : ""}"><span>${lv}%</span><b>${money(p, c.currency)}</b></div>`).join("")}</div>
+    <div class="note src">색칠된 칸 = 이미 그 구간까지 내려옴 · 강의: 월 투자금 절반은 자동 적립, 절반은 비상금으로 모아 고점 대비 하락 구간에서 3번 나눠 사고 마지막 1번은 남겨 두기</div>` : "";
+  const ev = (s?.events || []).length ? `<div class="chart-title" style="margin-top:12px"><b>🧥 여름에 패딩사기</b> <span class="src">이벤트(D-DAY) 3~6개월 전에 미리 · 이벤트 날 즈음엔 나눠서 정리</span></div>
+    <ul class="irl">${s.events.map((e) => `<li><b>${esc(e.date)}</b> ${esc(e.what)}${e.src ? ` <a href="${esc(e.src)}" target="_blank" rel="noopener">출처</a>` : ""}</li>`).join("")}</ul>
+    ${s.season ? `<div class="note">🔁 반복 패턴: ${esc(s.season)}</div>` : ""}` : "";
+  const dv = d && d.rows?.length ? `<div class="chart-title" style="margin-top:12px"><b>💰 배당주 점검</b> <span class="src">${d.years.map(([y, v]) => `${String(y).slice(2)}년 ${c.currency === "USD" ? "$" + n(v, 2) : n(v)}`).join(" · ")}</span></div>
+    ${d.rows.map((r) => `<div class="note">${badge(r.ok)} ${esc(r.item)} <span class="src">${esc(r.why)}</span></div>`).join("")}` : (d?.verdict ? `<div class="note">💰 ${esc(d.verdict)}</div>` : "");
+  const my = s?.my || {};
+  const mine = `<div class="chart-title" style="margin-top:12px"><b>📝 내가 이걸 왜 샀지</b></div>
+    <div class="note">${my.why_bought ? esc(my.why_bought) : '<span class="src">아직 안 적었어요 (config/somong.yaml 의 my.why_bought)</span>'}
+    ${my.review ? ` · 검토: <b>${esc(my.review)}</b>` : ""}${my.rank ? ` · 순위 ${esc(my.rank)}` : ""}${my.greed_price ? ` · 욕망시 ${esc(my.greed_price)}` : ""}</div>
+    <div class="note src">강의: 산 이유가 사라지면 매도를 고려 · 수익률이 아니라 '지금 다시 산다면?'으로 순위를 매겨 낮은 순위부터 정리(현금 확보·갈아타기)</div>`;
+  return `<details class="fvt sm" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:10px">📋 소몽 체크리스트 ${sc == null ? "" : `<b class="smsc ${sc >= 90 ? "ok" : ""}">${sc}점</b>`}
+      ${past?.score != null ? `<span class="src">(25.4.7 당시 ${past.score}점)</span>` : ""}<div class="smchips">${chips}</div></summary>
+    ${s ? `<div class="note src">점수 = 100 − X 1개당 10 − △ 1개당 5 (지갑털이·올리고폴리·아무나이겨라) + 굿보스·거인의 어깨 5 · 강의 기준: 90점 넘으면 투자 고려 · 조사일 ${esc(s.checked_at || "")}</div>
+      ${reason("wallet", "지갑털이 (내 돈·시간을 점점 더 가져가나)")}${reason("oligopoly", "올리고폴리 (1~3위 합 50% 이상)")}${reason("anyone_wins", "아무나이겨라 (누가 이기든 돈 버나)")}
+      ${reason("good_boss", "굿보스 (믿을 만한 경영자)")}${reason("giant", "거인의 어깨 (큰 기관·거물 보유)")}
+      ${past ? `<div class="note">🕰 25.4.7 당시 내 판단: 지갑 ${esc(past.wallet || "-")} · 올리고 ${esc(past.oligopoly || "-")} · 아무나 ${esc(past.anyone_wins || "-")} · 굿보스/거인 ${esc(past.boss || "-")} · ${esc(past.score ?? "-")}점${past.season ? " · " + esc(past.season) : ""}${past.range ? " · 하방~상방 " + esc(past.range) : ""}${past.greed ? " · 욕망시 " + esc(past.greed) : ""}</div>` : ""}` : ""}
+    ${ladder}${ev}${dv}${mine}
+  </details>`;
+}
+
+/* ---------- 매수 전 최종 점검 (내 엑셀 '기업분석 3단계 Q&A' + 재파 체크리스트에서 다른 체크리스트와 겹치는 것 뺀 16개) ----------
+   답은 이 기기 브라우저에 저장 (localStorage). 숫자로 볼 수 있는 항목은 자동. */
+const PRE_Q = [
+  ["이해", [["why", "왜 투자하는가? 초등학생에게 2분 안에 설명하면", "text"], ["circle", "내가 잘 아는 분야인가? (능력범위)", "ox"],
+    ["bm", "뭐로 돈 벌고 고객은 누구? (B2B·B2C, 경기 사이클 타는지)", "text"]]],
+  ["리스크", [["worst", "최악의 상황은? 일어날 확률은? 내가 견딜 수 있나?", "text"],
+    ["drop", "주가가 빠졌다면 원인은?", "sel:시장 전체|섹터|종목 본질|오해·일시적|안 빠짐"],
+    ["uncertain", "불확실성이 리스크로 확정됐나? 악재에도 더 안 빠지나?", "text"], ["china", "중국·미중 관계 영향은?", "text"]]],
+  ["시장·심리", [["leader", "주도주인가 소외주인가? 사람들이 이미 몰렸나, 더 몰릴까?", "text"], ["earn", "실적 발표일과 대응 전략은?", "text"]]],
+  ["매매 계획", [["style", "트레이딩인가 인베스팅인가? 언제까지 들고 갈까?", "text"], ["target", "목표 주가·시총, 비중, 기간 대비 수익률은?", "text"],
+    ["sell", "매도 기준은? (매수 이유 소멸 · 적정가 도달 · 급등 고평가 · 손절선)", "text"],
+    ["future", "1~2년 뒤에도 좋아질 주식인가? 회사의 미래를 상상해 보면?", "text"],
+    ["done3", "정량(숫자)·정성(스토리)·기술적(차트) 분석을 다 했나?", "chk:정량|정성|기술적"]]],
+];
+function preLoad(code) { try { return JSON.parse(localStorage.getItem("pre:" + code) || "{}"); } catch (_) { return {}; } }
+function preSave(code, v) { try { localStorage.setItem("pre:" + code, JSON.stringify(v)); } catch (_) {} }
+function precheckHTML(d) {
+  const c = d.card, a = preLoad(c.code), p = c.pre || {}, s = smData(c), prof = PROFILES[c.code];
+  const field = ([k, q, t]) => {
+    const v = a[k] ?? "";
+    let input;
+    if (t === "text") input = `<textarea data-k="${k}" rows="2" placeholder="메모">${esc(v)}</textarea>`;
+    else if (t === "ox") input = `<div class="oxs" data-k="${k}">${["O", "△", "X"].map((x) => `<button data-v="${x}" class="${v === x ? "on" : ""}">${x}</button>`).join("")}</div>`;
+    else if (t.startsWith("sel:")) input = `<select data-k="${k}" class="sel"><option value="">선택</option>${t.slice(4).split("|").map((x) => `<option ${v === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
+    else input = `<div class="chks" data-k="${k}">${t.slice(4).split("|").map((x) => `<label><input type="checkbox" value="${esc(x)}" ${(v || []).includes(x) ? "checked" : ""}> ${esc(x)}</label>`).join("")}</div>`;
+    // 자동 힌트
+    let hint = "";
+    if (k === "china" && prof?.revenue_geo) { const cn = prof.revenue_geo.items.find((x) => /중국|China|홍콩|대만/.test(x.name)); if (cn) hint = `매출 중 ${esc(cn.name)} ${n(cn.pct, 0)}%`; }
+    if (k === "leader" && c.mdd) hint = `사상 최고가 대비 ${pct(c.mdd.dd, 0)} · 10년 밴드 ${c.band_pos == null ? "-" : n(c.band_pos, 0) + "%"} 위치`;
+    if (k === "earn") { const e = nextEvent(s); if (e) hint = `다음 이벤트: ${esc(e.date)} ${esc(e.what)}`; }
+    if (k === "target" && c.scen) hint = `Base ${money(c.scen.base, c.currency)} · Bull ${money(c.scen.bull, c.currency)}${c.us_tpl?.tipranks ? ` · TipRanks 평균 $${n(c.us_tpl.tipranks.avg, 0)}` : ""}`;
+    if (k === "why" && prof?.one_liner) hint = `참고(조사): ${esc(prof.one_liner)}`;
+    return `<div class="preq"><div class="preq-q">${esc(q)}</div>${hint ? `<div class="note src">💡 ${hint}</div>` : ""}${input}</div>`;
+  };
+  const auto = [];
+  if (p.equity) auto.push(`${badge(p.equity.down_years.length ? "△" : "O")} 자본총계(BPS) ${p.equity.from}~${p.equity.to}년 연평균 ${pct(p.equity.cagr, 1, true)}${p.equity.down_years.length ? ` · 줄어든 해 ${p.equity.down_years.join(", ")}` : " · 매년 늘었음"}`);
+  if (p.peak) auto.push(`${badge(p.peak.flag ? "△" : "O")} 이익 피크아웃 신호: EPS 성장 ${p.peak.y[0]}→${p.peak.y[1]} ${pct(p.peak.g1, 0, true)}, ${p.peak.y[1]}→${p.peak.y[2]} ${pct(p.peak.g2, 0, true)}${p.peak.flag ? " (성장이 크게 꺾임)" : ""}`);
+  if (p.dilution) auto.push(`${badge(p.dilution.length ? "X" : "O")} 최근 1년 주식 수 늘리는 공시(유상증자·CB·BW): ${p.dilution.length ? p.dilution.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.date)} ${esc(x.name)}</a>`).join(", ") : "없음"}`);
+  if (c.mdd) auto.push(`${badge(c.mdd.dd > -5 ? "△" : "O")} 전고점: ${c.mdd.dd > -5 ? "사상 최고가 근처 (돌파 시도 구간)" : `사상 최고가보다 ${pct(c.mdd.dd, 0)} 아래`}`);
+  const filled = PRE_Q.flatMap((g) => g[1]).filter(([k]) => a[k] && (a[k].length ?? 1)).length;
+  const total = PRE_Q.flatMap((g) => g[1]).length;
+  return `<h3>✅ 매수 전 최종 점검 <span class="src">${filled} / ${total} 작성</span></h3><div class="card" id="precheck" data-code="${esc(c.code)}">
+    <div class="note src">내 엑셀 '기업분석 3단계 Q&A'·재파 체크리스트에서 다른 체크리스트(점수·프로필·소몽)와 겹치는 건 빼고 남긴 질문이에요. 적은 답은 <b>이 휴대폰(브라우저)에만</b> 저장돼요.</div>
+    ${auto.length ? `<div class="chart-title" style="margin-top:10px"><b>자동 확인</b></div>${auto.map((x) => `<div class="note">${x}</div>`).join("")}` : ""}
+    ${PRE_Q.map(([g, qs]) => `<div class="chart-title" style="margin-top:12px"><b>${g}</b></div>${qs.map(field).join("")}`).join("")}
+  </div>`;
+}
+function wirePrecheck() {
+  const box = $("#precheck");
+  if (!box) return;
+  const code = box.dataset.code;
+  const save = () => {
+    const v = {};
+    box.querySelectorAll("textarea, select").forEach((x) => { if (x.value) v[x.dataset.k] = x.value; });
+    box.querySelectorAll(".oxs").forEach((x) => { const on = x.querySelector("button.on"); if (on) v[x.dataset.k] = on.dataset.v; });
+    box.querySelectorAll(".chks").forEach((x) => { const c = [...x.querySelectorAll("input:checked")].map((i) => i.value); if (c.length) v[x.dataset.k] = c; });
+    preSave(code, v);
+  };
+  box.addEventListener("input", save);
+  box.addEventListener("change", save);
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest(".oxs button"); if (!b) return;
+    b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b && !x.classList.contains("on")));
+    save();
+  });
 }
 
 /* ---------- 점수 체크리스트 탭 ---------- */
@@ -1127,9 +1259,10 @@ async function openStock(code) {
     const holderHtml = await holdersBlock(code);
     const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", profileHTML(code)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
     drawDetailCharts(d);
     drawProfile(code);
+    wirePrecheck();
     if (usedCar) wireManheim();
     drawOrders(code);
     drawHolders(code);
@@ -1513,6 +1646,7 @@ async function load() {
     const r = await fetch("data/dashboard.json?t=" + Date.now(), { cache: "no-store" });
     DASH = await r.json();
     try { PROFILES = await (await fetch("data/profiles.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { PROFILES = {}; }
+    try { SOMONG = await (await fetch("data/somong.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { SOMONG = {}; }
   } catch (e) {
     $("#updated").textContent = "데이터를 불러오지 못했어요";
     return;

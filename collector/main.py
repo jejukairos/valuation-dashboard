@@ -254,6 +254,38 @@ def stock_detail(h, rates_now, fx):
     except Exception as e:  # noqa: BLE001
         REPORT.fail(f"{name} 점수 체크리스트", f"{type(e).__name__}: {e}")
         checks_score = None
+    # 현재 MDD (강의 'MDD' 시트): 사상 최고가(수정주가) 대비 지금 몇 % 아래 + 고점 대비 -10~-50% 가격
+    try:
+        s = px.dropna()
+        peak, peak_d = float(s.max()), s.idxmax().strftime("%Y-%m-%d")
+        mdd = {"peak": rnd(peak, 2), "peak_date": peak_d, "dd": rnd((price / peak - 1) * 100, 1),
+               "levels": [[lv, rnd(peak * (1 + lv / 100), 2)] for lv in (-10, -15, -20, -30, -35, -40, -45, -50)]}
+    except Exception:  # noqa: BLE001
+        mdd = None
+    # 매수 전 최종 점검 중 숫자로 볼 수 있는 것 (자본총계 추이, 이익 피크아웃, 주식 수 희석 공시)
+    pre = {}
+    act = sorted(y for y, r in hist.items() if not r.get("estimate") and (r.get("bps") or 0) > 0)[-10:]
+    if len(act) >= 3:
+        b = [hist[y]["bps"] for y in act]
+        pre["equity"] = {"from": act[0], "to": act[-1], "down_years": [y for y, p, q in zip(act[1:], b, b[1:]) if q < p * 0.98],
+                         "cagr": rnd(((b[-1] / b[0]) ** (1 / (len(b) - 1)) - 1) * 100, 1)}
+    y0 = now_kst().year
+    e = [(hist.get(y) or {}).get("eps") for y in (y0, y0 + 1, y0 + 2)]
+    if all(v and v > 0 for v in e):
+        g1, g2 = (e[1] / e[0] - 1) * 100, (e[2] / e[1] - 1) * 100
+        pre["peak"] = {"g1": rnd(g1, 0), "g2": rnd(g2, 0), "y": [C.ylabel(y) for y in (y0, y0 + 1, y0 + 2)],
+                       "flag": g2 < 0 or (g1 > 0 and g2 < g1 / 3)}
+    if mkt == "KR" and not h.get("data_code"):
+        try:
+            pre["dilution"] = kr_stock.dart_dilution(code)
+        except Exception as ex:  # noqa: BLE001
+            REPORT.block("DART 공시목록", f"{name}: {str(ex)[:50]}")
+    try:  # 배당주 점검 (강의): 한국은 DART·와이즈리포트 실적의 DPS, 미국은 야후 배당 지급 내역
+        dps = score.us_dps(code) if mkt == "US" else {y: r.get("dps") for y, r in hist.items() if not r.get("estimate")}
+        div_check = score.dividend_check(dps)
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("배당 이력", f"{name}: {str(e)[:60]}")
+        div_check = None
     us_tpl = None
     if mkt == "US":
         ests = sorted(yy for yy, r in hist.items() if r.get("estimate") and r.get("eps"))
@@ -282,7 +314,7 @@ def stock_detail(h, rates_now, fx):
             REPORT.fail(f"{name} 적정주가 템플릿", f"{type(e).__name__}: {e}")
     det["card"] = {
         "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl, "dart_check": dart_check,
-        "score": checks_score, "us_tpl": us_tpl,
+        "score": checks_score, "us_tpl": us_tpl, "div_check": div_check, "mdd": mdd, "pre": pre,
         # 이익이 크게 출렁여 적정가를 PBR 로만 보는 종목 → 비교표에서 PER·PEG 주의 표시
         "cyclical": fm == ["PBR"] or bool(h.get("cyclical")),
         "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],
@@ -462,7 +494,8 @@ def main():
             c["holder_changes"] = [{"name": x["name"], "chg": x["chg_ratio"], "date": x["date"]} for x in rc]
 
     write_json(DATA / "broker_targets.json", load_yaml("broker_targets.yaml") or {})  # 손으로 적는 증권사 목표주가
-    write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)
+    write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})
+    write_json(DATA / "somong.json", load_yaml("somong.yaml") or {})  # 강의 체크리스트 (지갑털이·올리고폴리·아무나이겨라·굿보스 등)  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)
 
     print("■ 동종업계")
     import peers
