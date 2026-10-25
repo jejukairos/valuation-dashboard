@@ -11,6 +11,7 @@ import kr_stock
 import manheim
 import market
 import rates
+import score
 import table
 import us_stock
 from common import DATA, REPORT, SETTINGS, attempt, load_yaml, now_kst, read_json, rnd, write_json
@@ -209,19 +210,64 @@ def stock_detail(h, rates_now, fx):
             dart_check = kr_stock.cross_check(code, wise or {})
         except Exception as e:  # noqa: BLE001
             REPORT.block("DART 보고서 대조", f"{name}: {str(e)[:60]}")
-    if tbl is not None and not h.get("data_code"):  # 순현금 (우선주는 회사 전체 값이라 뺌)
-        for tkr in ([code] if mkt == "US" else [f"{code}.KS", f"{code}.KQ"]):
-            try:
-                nc = table.net_cash(tkr, now.get("market_cap"))
-            except Exception:  # noqa: BLE001
-                nc = None
-            if nc:
-                if mkt == "US" and fx:
-                    nc["net_cash"] *= fx  # 화면은 원화(조원)로
-                tbl.update(nc)
-                break
+    # 야후 재무제표 (순현금·점수 체크리스트·미국 템플릿). 우선주는 보통주 회사 값을 쓴다
+    fcode = str(h.get("data_code") or code)
+    tkr = score.yf_ticker(fcode, mkt)
+    fins = None
+    if tkr:
+        try:
+            fins = score.fin(tkr)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("야후 재무제표", f"{name}: {str(e)[:60]}")
+    if tbl is not None and tkr and not h.get("data_code"):  # 순현금 (우선주는 회사 전체 값이라 뺌)
+        try:
+            nc = table.net_cash(tkr, now.get("market_cap"))
+        except Exception:  # noqa: BLE001
+            nc = None
+        if nc:
+            if mkt == "US" and fx:
+                nc["net_cash"] *= fx  # 화면은 원화(조원)로
+            tbl.update(nc)
+    # PSR = 시가총액 ÷ 올해 예상 매출
+    psr = None
+    if mkt == "KR" and wise and not h.get("data_code"):
+        s26 = (wise.get(now_kst().year) or {}).get("sales")
+        psr = now.get("market_cap") / (s26 * 1e8) if (s26 and now.get("market_cap")) else None
+    elif mkt == "US":
+        try:
+            import yfinance as yf
+            re_ = yf.Ticker(code).revenue_estimate
+            psr = now.get("market_cap") / float(re_.loc["0y", "avg"]) if (now.get("market_cap") and re_ is not None and "0y" in re_.index) else None
+        except Exception:  # noqa: BLE001
+            psr = None
+    if tbl is not None:  # 엑셀 '간단 벨류'의 GPM·ROIC·FCF, PSR (한국·미국 공통)
+        tbl.update(score.us_extra(fins, now.get("market_cap")))
+        tbl["psr"] = rnd(psr, 2)
+    st5 = (bands.get("PER") or {}).get("periods", {})
+    per5 = (st5.get("5y") or st5.get("all") or {}).get("avg")
+    stp = (bands.get("PBR") or {}).get("periods", {})
+    pbr10 = (stp.get("10y") or stp.get("all") or {}).get("avg")
+    try:
+        checks_score = score.checklist(code, {"cyclical": fm == ["PBR"] or bool(h.get("cyclical")), "currency": currency},
+                                       tbl, fins, per5, pbr10, psr)
+        checks_score["psr"] = rnd(psr, 2)
+    except Exception as e:  # noqa: BLE001
+        REPORT.fail(f"{name} 점수 체크리스트", f"{type(e).__name__}: {e}")
+        checks_score = None
+    us_tpl = None
+    if mkt == "US":
+        ests = sorted(yy for yy, r in hist.items() if r.get("estimate") and r.get("eps"))
+        y0 = now_kst().year
+        e0, el = (hist.get(y0) or {}).get("eps"), (hist.get(ests[-1]) or {}).get("eps") if ests else None
+        ltg = ((el / e0) ** (1 / (ests[-1] - y0)) - 1) * 100 if (ests and ests[-1] > y0 and e0 and el and e0 > 0 and el > 0) else None
+        try:
+            us_tpl = {"somong": score.somong(hist, price, ltg),
+                      "ltg_src":f"{C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균 (나스닥 컨센서스)" if ltg else None}
+        except Exception as e:  # noqa: BLE001
+            REPORT.fail(f"{name} 적정주가 템플릿", f"{type(e).__name__}: {e}")
     det["card"] = {
         "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl, "dart_check": dart_check,
+        "score": checks_score, "us_tpl": us_tpl,
         # 이익이 크게 출렁여 적정가를 PBR 로만 보는 종목 → 비교표에서 PER·PEG 주의 표시
         "cyclical": fm == ["PBR"] or bool(h.get("cyclical")),
         "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],

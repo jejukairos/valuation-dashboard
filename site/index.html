@@ -19,7 +19,9 @@
   <h1>🚦 밸류 신호등</h1>
   <div class="updated"><div id="updated">불러오는 중…</div><button id="statusChip" class="status-chip ok" hidden></button></div>
   <nav class="tabbar" id="tabbar">
-    <a href="#" data-view="main" class="on">💼 보유종목</a>
+    <a href="#" data-view="main" class="on">🇰🇷 보유</a>
+    <a href="#us" data-view="us">🇺🇸 보유</a>
+    <a href="#score" data-view="score">✅ 점수</a>
     <a href="#market" data-view="market">🚦 시장</a>
     <a href="#watch" data-view="watch">⭐ 관심</a>
     <a href="#pbr" data-view="pbr">🧮 PBR</a>
@@ -58,10 +60,16 @@
     <div><h3>🇺🇸 S&amp;P500</h3><div class="card" id="spBand"></div></div>
   </div>
 </main>
+<main class="wrap" id="scoreView" hidden>
+  <h2>점수 체크리스트</h2>
+  <p class="sub">내 엑셀 '점수 체크리스트'를 종목마다 자동으로 계산했어요. 숫자로 매길 수 있는 항목은 자동, 비즈니스 모델처럼 판단이 필요한 항목은 <b>config/checklist.yaml</b> 에 적은 점수를 써요 (비어 있으면 빼고 100점 환산).</p>
+  <div class="chips" id="scoreMkt" style="margin-bottom:10px"></div>
+  <div class="grid g2" id="scoreCards"></div>
+</main>
 <main class="wrap" id="mainView">
   <div id="failBox"></div>
 
-  <h2>보유종목 비교표</h2>
+  <h2 id="cmpTitle">보유종목 비교표</h2>
   <div class="cmp-bar">
     <div class="seg" id="cmpGroup"></div>
     <div class="chips" id="cmpInd"></div>
@@ -69,11 +77,11 @@
   <div class="card cmp-card"><div class="cmp-wrap" id="cmpTable"></div></div>
   <p class="note" id="cmpNote"></p>
 
-  <h2>보유종목 신호등</h2>
+  <h2 id="cardTitle">보유종목 신호등</h2>
   <p class="sub">① 앞으로 실적(12MF)으로 본 적정주가 Bear · Base · Bull 과 지금 가격 ② 지난 10년 밴드에서 지금 위치, 두 가지로 봐요.</p>
   <div class="toolbar">
     <div class="seg" id="sortSeg">
-      <button data-sort="cheap" class="on">매력적인 순 (한국 → 미국)</button>
+      <button data-sort="cheap" class="on">매력적인 순</button>
       <button data-sort="mine">내 목록 순</button>
     </div>
   </div>
