@@ -21,7 +21,13 @@ function n(v, d = 0) {
   return Number(v).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 function won(v) { return v == null ? "N/A" : n(v) + "원"; }
-function money(v, cur) { return v == null ? "N/A" : cur === "USD" ? "$" + n(v, 2) : n(v) + "원"; }
+// 달러 옆 괄호 원화 (최근 환율): 30.2만원 · 1.3억원 · 135조원 처럼 짧게
+function krwShort(w) {
+  const a = Math.abs(w);
+  return a >= 1e12 ? n(w / 1e12, 1) + "조원" : a >= 1e8 ? n(w / 1e8, 1) + "억원" : a >= 1e4 ? n(w / 1e4, a >= 1e6 ? 0 : 1) + "만원" : n(w) + "원";
+}
+function krw(usd) { const fx = DASH?.fx; return usd == null || !fx ? "" : ` <span class="krw">(약 ${krwShort(usd * fx)})</span>`; }
+function money(v, cur) { return v == null ? "N/A" : cur === "USD" ? "$" + n(v, 2) + krw(v) : n(v) + "원"; }
 function bigWon(v) {
   if (v == null) return "N/A";
   if (v >= 1e12) return n(v / 1e12, 1) + "조원";
@@ -155,7 +161,7 @@ function drawPriceCharts(list) {
 function fairTableHTML(c) {
   const fv = c.fv || {};
   const usd = c.currency === "USD";
-  const fmtP = (v) => (v == null ? "N/A" : usd ? "$" + n(v, 0) : n(v));
+  const fmtP = (v) => (v == null ? "N/A" : usd ? "$" + n(v, 0) + krw(v) : n(v));
   return Object.entries(fv).map(([kind, t], i) => {
     if (!t.rows || !t.rows.length) return "";
     const base = kind === "PER" ? "EPS" : "BPS";
@@ -173,7 +179,7 @@ function scenHTML(c) {
   const s = c.scen;
   if (!s || !s.base) return "";
   const usd = c.currency === "USD";
-  const fmtP = (v) => (usd ? "$" + n(v, 0) : n(v));
+  const fmtP = (v) => (usd ? "$" + n(v, 0) + krw(v) : n(v));
   const pts = [["bear", "Bear", "보수적"], ["base", "Base", "중간"], ["bull", "Bull", "낙관적"]];
   const lo0 = Math.min(c.price, s.bear), hi0 = Math.max(c.price, s.bull);
   const pad = (hi0 - lo0) * 0.08 || hi0 * 0.05;
@@ -211,7 +217,7 @@ function growthHTML(c) {
   if (!g) return "";
   const usd = c.currency === "USD";
   const fmtE = (v) => (v == null ? "-" : usd ? n(v, 2) : n(v));
-  const fmtP = (v) => (v == null ? "-" : usd ? "$" + n(v, 0) : n(v));
+  const fmtP = (v) => (v == null ? "-" : usd ? "$" + n(v, 0) + krw(v) : n(v));
   const e27 = c.scen.e27, alt = c.scen.alt;
   const warn = alt ? `<div class="warnbox" style="margin-top:6px">⚠ 과거 성장률과 앞으로 예상 성장률이 2배 넘게 달라요. 다른 쪽(${n(alt.g, 1)}%)으로 계산하면
     Bear ${fmtP(alt.bear)} · <b>Base ${fmtP(alt.base)}</b> (${pct((alt.base / c.price - 1) * 100, 0, true)}) · Bull ${fmtP(alt.bull)}</div>` : "";
@@ -234,7 +240,7 @@ function growthHTML(c) {
 function somongHTML(c) {
   const s = c.us_tpl?.somong;
   if (!s) return "";
-  const $f = (v) => (v == null ? "-" : "$" + n(v, 0));
+  const $f = (v) => (v == null ? "-" : "$" + n(v, 0) + krw(v));
   const up = (v) => (v == null ? "-" : `<b class="${v >= 0 ? "up" : "dn"}">${pct(v, 0, true)}</b>`);
   const box = (title, k, note) => {
     const x = s[k];
@@ -326,7 +332,7 @@ function streetHTML(c) {
 function tipranksHTML(c) {
   const t = c.us_tpl?.tipranks;
   if (!t || !t.avg) return "";
-  const cell = (lab, v) => `<div><span>${lab}</span><b>$${n(v, 0)}</b><em class="${v >= c.price ? "up" : "dn"}">${pct((v / c.price - 1) * 100, 0, true)}</em></div>`;
+  const cell = (lab, v) => `<div><span>${lab}</span><b>$${n(v, 0)}${krw(v)}</b><em class="${v >= c.price ? "up" : "dn"}">${pct((v / c.price - 1) * 100, 0, true)}</em></div>`;
   return `<div class="tpl" onclick="event.stopPropagation()"><div class="tpl-t">🎯 애널리스트 목표주가 <span class="src">TipRanks · 최근 3개월 · ${t.n ?? "-"}명</span></div>
     <div class="scen3" style="margin-top:6px">${cell("최저", t.low)}${cell("평균", t.avg)}${cell("최고", t.high)}</div>
     <div class="note">의견 수: 매수 ${t.buy ?? "-"} · 보유 ${t.hold ?? "-"} · 매도 ${t.sell ?? "-"} <span class="src">(애널리스트 의견을 옮긴 것, 이 사이트의 추천 아님)</span></div></div>`;
@@ -432,7 +438,7 @@ function cmpCols() {
   for (let i = 0; i < 2; i++) c["dy" + i] = { h: `배당<br>${ys[i + 1]}`, v: t("dy", i), f: (v) => (v == null ? "-" : n(v, 1) + "%") };
   // 엑셀 '간단 벨류' 지표 (야후 연간 실적: 최근 / 1년 전 / 2년 전)
   const ago = ["최근 연간", "1년 전", "2년 전"];
-  const money3 = (v, s) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${s.currency === "USD" ? "$" + n(v / 1e9, 1) + "B" : Math.abs(v) >= 1e12 ? n(v / 1e12, 1) + "조" : n(v / 1e8, 0) + "억"}</span>`);
+  const money3 = (v, s) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${s.currency === "USD" ? "$" + n(v / 1e9, 1) + "B" + krw(v) : Math.abs(v) >= 1e12 ? n(v / 1e12, 1) + "조" : n(v / 1e8, 0) + "억"}</span>`);
   for (let i = 0; i < 3; i++) {
     c["gpm" + i] = { h: `GPM<br>${ago[i]}`, v: t("gpm", i), f: R(1) };
     c["fcf" + i] = { h: `FCF<br>${ago[i]}`, v: t("fcf3", i), f: money3 };
@@ -1248,10 +1254,15 @@ async function peersBlock(code, noPbr) {
   return gs.map((g, gi) => {
     const warns = g.rows.filter((r) => r.warn && !noPbr).map((r) => `${esc(r.name)}: ${esc(r.warn)}`);
     return `<h3>동종업계 비교 · ${esc(g.name)}</h3><div class="card">
-      <div class="tbl-wrap"><table class="compact"><thead><tr><th>회사</th><th>시총<br>(조원)</th><th>선행<br>PER</th>${noPbr ? "" : "<th>PBR</th>"}<th>ROE</th><th>배당</th></tr></thead><tbody>
-      ${g.rows.map((r) => `<tr${r.code === code ? ' class="me"' : ""}><td>${FLAG[r.market] || ""} ${esc(r.name)}${r.stale ? " ⚠" : ""}</td>
-        <td>${r.cap_krw == null ? "N/A" : n(r.cap_krw / 1e12, 1)}</td><td>${times(r.fwd_per)}</td>${noPbr ? "" : `<td>${times(r.pbr, 2)}</td>`}
-        <td>${pct(r.roe)}</td><td>${pct(r.div, 2)}</td></tr>`).join("")}
+      <div class="tbl-wrap"><table class="compact"><thead><tr><th>회사</th><th>시총<br>(조원)</th><th>EPS<br>TTM</th><th>EPS<br>12MF</th><th>PER<br>TTM</th><th>PER<br>12MF</th><th>OPM</th>${noPbr ? "" : "<th>PBR</th>"}<th>ROE</th><th>배당</th></tr></thead><tbody>
+      ${g.rows.map((r) => {
+        const eps = (v) => (v == null ? "-" : `<span class="${v < 0 ? "dear" : ""}">${n(v, Math.abs(v) >= 100 ? 0 : 2)}</span>`);
+        const per = (v, e) => (e != null && e <= 0 ? '<span class="dear">적자</span>' : v == null ? "-" : n(v, 1) + "x");
+        return `<tr${r.code === code ? ' class="me"' : ""}><td>${FLAG[r.market] || ""} ${esc(r.name)}${r.stale ? " ⚠" : ""}<br><span class="src">${esc(r.code)}</span></td>
+        <td>${r.cap_krw == null ? "N/A" : n(r.cap_krw / 1e12, 1)}</td><td>${eps(r.eps_ttm)}</td><td>${eps(r.eps_12mf)}</td>
+        <td>${per(r.per_ttm, r.eps_ttm)}</td><td><b>${per(r.fwd_per, r.eps_12mf)}</b></td><td>${r.opm == null ? "-" : `<span class="${r.opm < 0 ? "dear" : ""}">${n(r.opm, 1)}%</span>`}</td>
+        ${noPbr ? "" : `<td>${times(r.pbr, 2)}</td>`}<td>${pct(r.roe)}</td><td>${pct(r.div, 2)}</td></tr>`;
+      }).join("")}
       </tbody></table></div>
       ${noPbr ? `<div class="note">미국 빅테크는 PBR 이 의미가 적어서 PBR 비교는 뺐어요.</div>` : `<div class="chart-title">ROE(가로) vs PBR(세로) <span class="src">오른쪽 아래일수록 'ROE 에 비해 PBR 이 낮음'</span></div>
       <div class="chart-box tall"><canvas id="peer-scatter-${gi}"></canvas></div>

@@ -1,4 +1,4 @@
-"""동종업계 비교: 시가총액(원화), 선행 PER, PBR, ROE, 배당수익률."""
+"""동종업계 비교: 시가총액(원화), EPS TTM·12MF, PER TTM·12MF, 영업이익률, PBR, ROE, 배당수익률."""
 from common import DATA, REPORT, load_yaml, now_kst, read_json, rnd
 from kr_stock import naver_now, wise_annual
 
@@ -30,8 +30,12 @@ def kr_row(p):
     w0 = max(0.0, (12 - (t.month - 1) - t.day / 31) / 12)
     f12 = (w0 * a + (1 - w0) * b) if (a is not None and b is not None) else None
     fwd_per = now["price"] / f12 if (f12 and f12 > 0 and now.get("price")) else now.get("fwd_per")
+    opm_y = max((y for y, r in w.items() if not r.get("estimate") and r.get("opm") is not None), default=None)
     return {"cap_krw": now.get("market_cap"), "fwd_per": fwd_per, "pbr": now.get("pbr"),
             "roe": roe, "div": now.get("div_yield"), "currency": "KRW",
+            # 사진의 글로벌 피어 표처럼: EPS TTM·12MF, PER TTM·12MF, 영업이익률
+            "eps_ttm": now.get("eps"), "eps_12mf": f12, "per_ttm": now.get("per"),
+            "opm": w[opm_y]["opm"] if opm_y else None,
             "src": f"네이버 증권 · ROE {max(actual)}년 와이즈리포트" if actual else "네이버 증권"}
 
 
@@ -49,9 +53,16 @@ def yf_row(p, fx):
         warn = f"PBR N/A: 재무제표 통화({i['financialCurrency']})와 주가 통화({cap_cur})가 달라 계산 불가"
         pbr = None
     roe = i.get("returnOnEquity")
-    return {"cap_krw": cap * rate if (cap and rate) else None, "fwd_per": i.get("forwardPE"),
+    opm = i.get("operatingMargins")
+    price = i.get("currentPrice") or i.get("regularMarketPrice")
+    eps_f = i.get("forwardEps")
+    # 선행 PER 은 지금 가격 ÷ 야후 선행 EPS 로 다시 계산 (야후 forwardPE 는 갱신이 늦을 때가 있음), 적자면 비움
+    fwd = price / eps_f if (price and eps_f and eps_f > 0) else (None if (eps_f is not None and eps_f <= 0) else i.get("forwardPE"))
+    return {"cap_krw": cap * rate if (cap and rate) else None, "fwd_per": fwd,
             "pbr": pbr, "roe": roe * 100 if roe is not None else None,
-            "div": i.get("dividendYield"), "currency": cap_cur, "src": "야후 파이낸스", "warn": warn}
+            "div": i.get("dividendYield"), "currency": cap_cur, "src": "야후 파이낸스", "warn": warn,
+            "eps_ttm": i.get("trailingEps"), "eps_12mf": eps_f, "per_ttm": i.get("trailingPE") if (i.get("trailingEps") or 0) > 0 else None,
+            "opm": opm * 100 if opm is not None else None}
 
 
 def collect():
