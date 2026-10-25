@@ -264,7 +264,11 @@ table.cmp .evt { font-size: 11px; line-height: 1.3; display: inline-block; text-
 .gauge-c { position: relative; height: 120px; }
 .gauge-v { text-align: center; line-height: 1.2; margin-top: 2px; }
 .gauge-v b { font-size: 18px; display: block; }
-.moodact { text-align: center; font-size: 13px; margin: 6px 0 4px; line-height: 1.5; }
+.fvt .up, .fvt b.up { color: var(--good-ink); } .fvt .dn, .fvt b.dn { color: var(--bad-ink); }
+details.post { margin-top: 6px; background: var(--surface-2); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+details.post summary { cursor: pointer; line-height: 1.45; }
+details.post a { color: var(--s1); font-size: 12px; }
+.moodact {text-align: center; font-size: 13px; margin: 6px 0 4px; line-height: 1.5; }
 .moodact b { font-size: 15px; }
 .tpl .rv { font-size: 14px; color: var(--ink); margin-left: 4px; } .gauge-v span { font-size: 11px; color: var(--muted); }
 .pergrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }

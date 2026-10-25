@@ -279,6 +279,28 @@ function drawGauges(list) {
   }
 }
 
+// 🏦 월가 의견: 증권사 의견·목표주가 변경 (야후) + 에테르 텔레그램 리서치 채널 글
+function streetHTML(c) {
+  const st = c.us_tpl?.street;
+  if (!st || (!st.ratings && !(st.posts || []).length)) return "";
+  const r = st.ratings, s = r?.summary;
+  const actCls = { 상향: "up", 하향: "dn", 신규: "", 유지: "", 재확인: "" };
+  const tbl = r && r.rows.length ? `<table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">날짜 · 증권사</th><th>의견</th><th>목표가</th></tr></thead><tbody>
+    ${r.rows.slice(0, 12).map((x) => `<tr><td>${esc(x.date.slice(5))} <b>${esc(x.firm)}</b></td>
+      <td style="text-align:right"><span class="${actCls[x.action] || ""}">${esc(x.action)}</span> ${x.from && x.from !== x.to ? `${esc(x.from)}→` : ""}${esc(x.to)}</td>
+      <td style="text-align:right;white-space:nowrap">${x.pt == null ? "-" : `${x.prior && x.prior !== x.pt ? `$${n(x.prior)}→` : ""}<b class="${x.pt_action === "올림" ? "up" : x.pt_action === "내림" ? "dn" : ""}">$${n(x.pt)}</b>`}</td></tr>`).join("")}</tbody></table>` : "";
+  const posts = (st.posts || []).map((p) => `<details class="post"><summary><span class="src">${esc(p.date)}</span> ${esc(p.title)}</summary>
+    <div class="pq-b" style="white-space:pre-line">${esc(p.excerpt)}${p.excerpt.length >= 600 ? "…" : ""}</div><a href="${esc(p.url)}" target="_blank" rel="noopener">원문 보기 →</a></details>`).join("");
+  const latest = (st.posts || [])[0];
+  return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:10px">🏦 월가 의견
+      ${s ? `<span class="src">최근 ${r.days}일: 의견 상향 <b class="up">${s.up}</b> · 하향 <b class="dn">${s.down}</b> · 목표가 올림 <b class="up">${s.raise}</b> · 내림 <b class="dn">${s.lower}</b></span>` : ""}
+      ${latest ? `<div class="src">📰 채널 최신 ${esc(latest.date.slice(5, 10))}: ${esc(latest.title.slice(0, 50))}</div>` : ""}</summary>
+    ${tbl}
+    ${posts ? `<div class="chart-title" style="margin-top:10px"><b>📰 에테르의 일본&미국 리서치</b> <span class="src">텔레그램 채널에서 이 종목이 나온 글 · 눌러서 요약 보기</span></div>${posts}` : ""}
+    <div class="note src">의견 변경: 야후 파이낸스(증권사 발표 기록) · 채널 글은 앞부분만, 전체는 원문 링크에서 · 증권사 의견을 옮긴 것이고 이 사이트의 추천은 아니에요</div>
+  </details>`;
+}
+
 // TipRanks 애널리스트 목표주가 (최근 3개월)
 function tipranksHTML(c) {
   const t = c.us_tpl?.tipranks;
@@ -330,6 +352,7 @@ function stockCard(c) {
     <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
     ${somongHTMLcard(c)}
     ${tipranksHTML(c)}
+    ${streetHTML(c)}
     ${readerHTML(c)}
     ${fairTableHTML(c)}
     ${somongHTML(c)}

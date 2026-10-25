@@ -12,6 +12,7 @@ import manheim
 import market
 import rates
 import score
+import street
 import table
 import us_stock
 from common import DATA, REPORT, SETTINGS, attempt, load_yaml, now_kst, read_json, rnd, write_json
@@ -302,10 +303,20 @@ def stock_detail(h, rates_now, fx):
         except Exception as e:  # noqa: BLE001
             tr = None
             REPORT.block("TipRanks", f"목표주가 접속 실패 ({str(e)[:50]})")
+        street_info = {}
+        try:
+            street_info["ratings"] = street.ratings(code)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("야후 의견 변경", f"{name}: {str(e)[:50]}")
+        try:  # 채널 검색어: 한글 이름 (+ 알파벳은 구글도), 티커
+            terms = [name] + (["구글"] if code == "GOOG" else []) + [code]
+            street_info["posts"] = street.channel_posts(terms)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("텔레그램 채널", f"{name}: {str(e)[:50]}")
         e28 = (hist.get(y0 + 2) or {}).get("eps")
         try:
             us_tpl = {"somong": score.somong(hist, price, ltg, fv5),
-                      "finviz_5y": fv5, "tipranks": tr,
+                      "finviz_5y": fv5, "tipranks": tr, "street": street_info,
                       # 내 엑셀: '28년(3년 뒤) 주가 가정' = 28E EPS × PER 20~110
                       "per_grid": {"year": C.ylabel(y0 + 2), "eps": e28,
                                    "rows": [[m, rnd(m * e28, 2)] for m in range(20, 120, 10)] if e28 and e28 > 0 else []},
