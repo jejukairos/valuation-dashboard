@@ -11,6 +11,9 @@ on:
         description: "실패 알림 시험 (금리 수집을 일부러 실패시킴)"
         type: boolean
         default: false
+  push:                       # 계산 코드·설정이 바뀌면 바로 다시 갱신 (봇의 데이터 저장은 이 경로가 아니라 다시 돌지 않음)
+    branches: [main]
+    paths: ["collector/**", "config/**", ".github/workflows/update.yml"]
 
 permissions:
   contents: write
@@ -22,7 +25,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
