@@ -202,7 +202,30 @@ function scenHTML(c) {
     <div class="note">지금 가격은 <b>${where}</b>${s.note ? ` · ${esc(s.note)}` : ""}</div>
     <div class="note fm">${multLine}</div>
     <div class="note src">${how}</div>
+    ${growthHTML(c)}
   </div>`;
+}
+// 성장률 방식 (내 엑셀 '소몽의 적정주가 템플릿'): 성장률 = EPS 전년 대비 성장률 중앙값, PER = 성장률 × 1 / 1.5 / 2
+function growthHTML(c) {
+  const g = c.scen?.growth;
+  if (!g) return "";
+  const usd = c.currency === "USD";
+  const fmtE = (v) => (v == null ? "-" : usd ? n(v, 2) : n(v));
+  const fmtP = (v) => (v == null ? "-" : usd ? "$" + n(v, 0) : n(v));
+  const e27 = c.scen.e27, alt = c.scen.alt;
+  const warn = alt ? `<div class="warnbox" style="margin-top:6px">⚠ 과거 성장률과 앞으로 예상 성장률이 2배 넘게 달라요. 다른 쪽(${n(alt.g, 1)}%)으로 계산하면
+    Bear ${fmtP(alt.bear)} · <b>Base ${fmtP(alt.base)}</b> (${pct((alt.base / c.price - 1) * 100, 0, true)}) · Bull ${fmtP(alt.bull)}</div>` : "";
+  return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:8px">📐 성장률로 정한 PER <b>${n(g.g, 1)}%</b> → Bear ${n(g.mult.bear, 1)} · Base ${n(g.mult.base, 1)} · Bull ${n(g.mult.bull, 1)}배${alt ? ' <span class="pill yellow">⚠ 성장률 차이 큼</span>' : ""}</summary>${warn}
+    <div class="note">쓴 성장률: <b>${esc(g.src)}</b></div>
+    <div class="note">기본값(${esc(g.window)} EPS 성장률 중앙값) <b>${g.median == null ? "-" : n(g.median, 1) + "%"}</b> · 보정값 ${g.adj == null ? "-" : `<b>${n(g.adj, 1)}%</b> <span class="src">${esc(g.adj_src || "")}</span>`}</div>
+    <div class="tbl-wrap"><table class="compact" style="margin-top:6px"><thead><tr><th style="text-align:left">EPS</th>${g.years.map((y) => `<th>${esc(y)}</th>`).join("")}</tr></thead><tbody>
+      <tr><td>EPS</td>${g.eps.map((v) => `<td>${fmtE(v)}</td>`).join("")}</tr>
+      <tr><td>성장률</td>${g.yoy.map((v) => `<td class="${v != null && v < 0 ? "dear" : ""}">${v == null ? "-" : n(v, 0) + "%"}</td>`).join("")}</tr></tbody></table></div>
+    <table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">적정 PER</th><th>배수</th><th>× 12MF EPS</th>${e27 ? "<th>× 27E EPS</th>" : ""}</tr></thead><tbody>
+      ${[["Bear (성장률 × 1)", "bear"], ["Base (× 1.5)", "base"], ["Bull (× 2, 강세장·금리 낮을 때)", "bull"]].map(([l, k]) => `<tr><td>${l}</td><td style="text-align:right">${n(g.mult[k], 1)}배</td>
+        <td style="text-align:right"><b>${fmtP(c.scen[k])}</b></td>${e27 ? `<td style="text-align:right">${fmtP(e27[k])}</td>` : ""}</tr>`).join("")}</tbody></table>
+    <div class="note src">내 엑셀 방식: 성장률(기대수익률)과 PER 이 비슷하면 보통, 호황·강세장에선 더 받음 · 최근 3년 중 역성장이 있거나 성장률이 50% 를 넘으면 보정값(앞으로 3~5년 EPS 연평균 성장률 추정) 사용 · PER+PBR 을 같이 보는 종목은 PBR 밴드 값과 평균</div>
+  </details>`;
 }
 // 미국: 내 엑셀 '소몽의 적정주가 템플릿' (성장률 × 100~200 = 적정 PER, × 올해 EPS)
 function somongHTML(c) {
@@ -219,16 +242,11 @@ function somongHTML(c) {
       <tr><td>강세장 (× 150~250)</td><td>${n(x.mult.bull_lo, 0)}~${n(x.mult.bull_hi, 0)}배</td><td>${$f(x.price.bull_lo)}~${$f(x.price.bull_hi)}</td></tr></tbody></table>
       <div class="note">목표주가 보수 ${$f(x.price.base_hi)} (${up(x.up_cons)}) · 강세 ${$f(x.price.bull_hi)} (${up(x.up_bull)})</div></div>`;
   };
-  return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:10px">📐 성장률로 본 적정주가 <span class="src">내 엑셀 템플릿 · 지금 PER ${n(s.cur_mult, 1)}배</span></summary>
-    <table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">EPS</th>${s.years.map((y) => `<th>${y}</th>`).join("")}</tr></thead><tbody>
-    <tr><td>희석 EPS</td>${s.eps.map((v) => `<td>${v == null ? "-" : n(v, 2)}</td>`).join("")}</tr>
-    <tr><td>성장률</td>${s.growth.map((v) => `<td class="${v != null && v < 0 ? "dear" : ""}">${v == null ? "-" : n(v, 0) + "%"}</td>`).join("")}</tr></tbody></table>
-    ${box("① 기본값", "default", "= 최근 5년 EPS 성장률의 가운데값")}
-    ${box("② 보정값", "adjusted", `= ${esc(c.us_tpl.ltg_src || "장기 성장률")}`)}
-    ${s.finviz ? box("③ Finviz 보정값", "finviz", "= Finviz 'EPS next 5Y' (5년 연평균 성장 추정)") : ""}
+  return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:10px">🔭 3년 뒤 주가 가정 <span class="src">${esc(c.us_tpl.per_grid?.year || "28E")} EPS × PER 20~110배 · 지금 PER ${n(s.cur_mult, 1)}배</span></summary>
+    ${c.us_tpl.finviz_5y != null ? `<div class="note">Finviz EPS next 5Y <b>${n(c.us_tpl.finviz_5y, 1)}%</b> <span class="src">(적정 PER 계산의 보정값 후보)</span></div>` : ""}
     ${(c.us_tpl.per_grid?.rows || []).length ? `<div class="tpl"><div class="tpl-t">${esc(c.us_tpl.per_grid.year)}(3년 뒤) 주가 가정 <span class="src">${esc(c.us_tpl.per_grid.year)} EPS $${n(c.us_tpl.per_grid.eps, 2)} × PER</span></div>
       <div class="pergrid">${c.us_tpl.per_grid.rows.map(([m, p]) => `<div><span>${m}배</span><b>${$f(p)}</b><em class="${p >= c.price ? "up" : "dn"}">${pct((p / c.price - 1) * 100, 0, true)}</em></div>`).join("")}</div></div>` : ""}
-    <div class="note src">적정주가 = 올해(${esc(s.years[5])}) EPS $${n(s.eps_now, 2)} × 적정 PER · 성장률이 너무 높거나 들쭉날쭉하면(50% 이상) ② 보정값을 보세요 · 상승여력이 마이너스면 미래 성장을 이미 주가에 먼저 반영했거나 월가 예상이 보수적인 경우</div>
+    <div class="note src">내 엑셀 '28년(3년 뒤) 주가 가정, PER 밴드 활용' 표 · 상승여력이 마이너스면 미래 성장을 이미 주가에 먼저 반영했거나 월가 예상이 보수적인 경우</div>
   </details>`;
 }
 // 내 엑셀 '소몽의 주가 판독기' (24.8.28): 4가지를 1~5점으로 매겨 평균 → 바늘 게이지 (1 공포 … 5 광기)

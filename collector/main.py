@@ -159,9 +159,34 @@ def stock_detail(h, rates_now, fx):
                 fairs.append(("배당", d / (y10 / 100)))
     fair = sum(v for _, v in fairs) / len(fairs) if fairs else None
     # 적정가 = Bear/Base/Bull 의 Base (12MF 실적 × 업종 배수 또는 10년 밴드 배수). 배당만 보는 종목은 위 값 그대로
-    sec_name = h.get("sector")
+    # 성장률 방식 적정 PER (내 엑셀 템플릿). 보정값 후보: 미국 = Finviz EPS next 5Y·나스닥 컨센서스 CAGR, 한국 = 컨센서스 올해→28E EPS CAGR
+    y0 = now_kst().year
+    fv5 = ltg = None
+    ests = sorted(yy for yy, r in hist.items() if r.get("estimate") and r.get("eps"))
+    e_now = (hist.get(y0) or {}).get("eps")
+    if ests and ests[-1] > y0 and e_now and e_now > 0 and (hist[ests[-1]].get("eps") or 0) > 0:
+        ltg = ((hist[ests[-1]]["eps"] / e_now) ** (1 / (ests[-1] - y0)) - 1) * 100
+    if mkt == "US":
+        try:
+            fv5 = us_stock.finviz_eps_5y(code)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("Finviz", f"EPS next 5Y 접속 실패 ({str(e)[:50]})")
+        adj = [(fv5, "Finviz EPS next 5Y"), (ltg, f"나스닥 컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균" if ests else "")]
+    else:
+        adj = [(ltg, f"컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균" if ests else "")]
+    pg = C.growth_fair(hist, adj) if ("PER" in fm and "PER" in bands) else None
+    sec_name = h.get("sector") if h.get("fair_mode") == "sector" else None  # 업종 배수는 fair_mode: sector 로 고른 종목만
     sec = dict(SECTORS[sec_name], name=sec_name) if sec_name in SECTORS else None
-    scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec)
+    scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg)
+    if scen and pg:
+        scen["growth"] = pg
+        e27 = (hist.get(y0 + 1) or {}).get("eps")
+        scen["e27"] = {"eps": e27, **{k: rnd(e27 * v, 2) for k, v in pg["mult"].items()}} if e27 and e27 > 0 else None
+        # 쓴 성장률과 다른 쪽(기본값↔보정값)이 2배 넘게 차이 나면, 다른 쪽으로 계산한 12MF 적정주가도 같이 (PER 만 보는 종목)
+        other = pg["adj"] if pg["g"] == pg["median"] else pg["median"]
+        e12 = C.fwd12(hist, "eps")
+        if other and other > 0 and e12 and e12 > 0 and fm == ["PER"] and max(other, pg["g"]) / min(other, pg["g"]) >= 2:
+            scen["alt"] = {"g": rnd(other, 1), **{k: rnd(e12 * other * f, 2) for k, f in (("bear", 1), ("base", 1.5), ("bull", 2))}}
     if scen:
         fair = scen["base"]
     poss =[(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("pos")
@@ -288,16 +313,7 @@ def stock_detail(h, rates_now, fx):
         REPORT.block("배당 이력", f"{name}: {str(e)[:60]}")
         div_check = None
     us_tpl = None
-    if mkt == "US":
-        ests = sorted(yy for yy, r in hist.items() if r.get("estimate") and r.get("eps"))
-        y0 = now_kst().year
-        e0, el = (hist.get(y0) or {}).get("eps"), (hist.get(ests[-1]) or {}).get("eps") if ests else None
-        ltg = ((el / e0) ** (1 / (ests[-1] - y0)) - 1) * 100 if (ests and ests[-1] > y0 and e0 and el and e0 > 0 and el > 0) else None
-        try:
-            fv5 = us_stock.finviz_eps_5y(code)
-        except Exception as e:  # noqa: BLE001
-            fv5 = None
-            REPORT.block("Finviz", f"EPS next 5Y 접속 실패 ({str(e)[:50]})")
+    if mkt == "US":  # ltg·fv5 는 위 적정가 계산에서 받아 둔 값
         try:
             tr = us_stock.tipranks(code)
         except Exception as e:  # noqa: BLE001
@@ -358,6 +374,7 @@ def _scen_text(scen):
     """'12MF EPS × Base PER 22.5배 (화장품 브랜드)' 처럼."""
     base = {"PER": "EPS", "PBR": "BPS"}
     parts = [f"12MF {base[p['kind']]} × {p['src']} 평균 {p['kind']}" if "밴드" in p["src"] else
+             f"12MF EPS × PER {p['mult']['base']:g}배 ({p['src']} × 1.5)" if p["src"].startswith("성장률") else
              f"12MF {base[p['kind']]} × {p['kind']} {p['mult']['base']:g}배 ({p['src']})" for p in scen["parts"]]
     return parts[0] if len(parts) == 1 else "두 값 평균: " + " / ".join(parts)
 
@@ -365,7 +382,8 @@ def _scen_text(scen):
 def _round_scen(scen, dg):
     if not scen:
         return None
-    return {**{k: rnd(scen[k], dg) for k in ("bear", "base", "bull")}, "parts": scen["parts"], "note": scen["note"]}
+    return {**{k: rnd(scen[k], dg) for k in ("bear", "base", "bull")}, "parts": scen["parts"], "note": scen["note"],
+            "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt")}
 
 
 def _price_chart(px, currency, days=250):

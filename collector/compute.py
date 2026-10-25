@@ -1,5 +1,6 @@
 """밴드·적정가·신호 계산. 모든 숫자에 출처를 붙여 화면으로 넘긴다."""
 import math
+import statistics
 
 import pandas as pd
 
@@ -116,17 +117,55 @@ def fwd12(hist, key):
     return w0 * a + (1 - w0) * b
 
 
-def scenarios(price, hist, bands, kinds, sector=None):
+def growth_fair(hist, adj_candidates=()):
+    """내 엑셀 '소몽의 적정주가 템플릿' 방식의 적정 PER.
+    평균성장률 = 21년~올해(E) EPS 전년 대비 성장률의 중앙값 (코로나·기저효과·금리 급등기 튀는 해의 영향을 줄임).
+    역성장한 해가 있거나 성장률이 50% 를 넘으면(이익 변동이 너무 큼) 보정값(앞으로 3~5년 EPS 연평균 성장률 추정) 사용.
+    적정 PER: Bear = 성장률 × 1, Base = × 1.5, Bull = × 2 (강세장·금리 낮을 때)."""
+    y = now_kst().year
+    years = list(range(y - 6, y + 3))
+    eps = {yy: (hist.get(yy) or {}).get("eps") for yy in years}
+    yoy = {}
+    for yy in range(y - 5, y + 3):
+        a, b = eps.get(yy), eps.get(yy - 1)
+        yoy[yy] = (a / b - 1) * 100 if (a is not None and b and b > 0) else None
+    window = [yoy[yy] for yy in range(y - 5, y + 1) if yoy.get(yy) is not None]
+    med = statistics.median(window) if len(window) >= 3 else None
+    # 역성장 확인은 최근 3년(작년 전·작년·올해E)만: 오래된 해의 튀는 값은 중앙값이 이미 걸러 준다
+    recent = [yoy[yy] for yy in range(y - 2, y + 1) if yoy.get(yy) is not None]
+    neg = any(v < 0 for v in recent) or any(eps.get(yy) is not None and eps[yy] <= 0 for yy in range(y - 3, y + 1))
+    adj = [(v, src) for v, src in adj_candidates if v is not None and v > 0]
+    adj_v, adj_src = min(adj) if adj else (None, None)  # 여러 추정이 있으면 보수적으로 낮은 쪽
+    if med is not None and med > 0 and not neg and med <= 50:
+        g, src = med, "기본값: 21년~올해 EPS 성장률 중앙값"
+    elif adj_v:
+        why = "최근 3년 중 역성장한 해가 있어" if neg else ("성장률이 50% 를 넘어" if med and med > 50 else "성장률을 구할 수 없어")
+        g, src = adj_v, f"보정값({adj_src}) — {why}"
+    elif med is not None and med > 0:
+        g, src = med, "기본값 (보정값 없음, 변동 큼 주의)"
+    else:
+        return None
+    return {"g": rnd(g, 1), "src": src, "median": rnd(med, 1), "adj": rnd(adj_v, 1), "adj_src": adj_src,
+            "mult": {"bear": rnd(g, 1), "base": rnd(g * 1.5, 1), "bull": rnd(g * 2, 1)},
+            "years": [ylabel(yy) if (hist.get(yy) or {}).get("estimate") else str(yy)[2:] for yy in years],
+            "eps": [eps[yy] for yy in years], "yoy": [None] + [rnd(yoy.get(yy), 1) for yy in years[1:]],
+            "window": f"{str(y - 5)[2:]}~{str(y)[2:]}E"}
+
+
+def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
     """적정주가 Bear / Base / Bull: 12개월 선행(12MF) EPS·BPS × 배수.
-    배수는 업종 배수(config/sectors.yaml)가 있으면 그것, 없으면 그 종목의 10년 밴드 하단·평균·상단.
-    PER·PBR 둘 다 쓰는 종목은 방식별 값을 평균한다."""
+    PER 배수는 성장률 방식(growth_fair: 성장률 × 1 / 1.5 / 2)이 있으면 그것, 업종 배수(sectors.yaml)를 고른 종목은 그것,
+    둘 다 없으면 그 종목의 10년 밴드 하단·평균·상단. PBR 은 10년 밴드. PER·PBR 둘 다 쓰는 종목은 평균."""
     parts = []
     for kind in kinds:
         key = {"PER": "eps", "PBR": "bps"}.get(kind)
         v = fwd12(hist, key) if key else None
         if not v or v <= 0:
             continue
-        if sector and sector.get("kind", "PER").upper() == kind:
+        if kind == "PER" and per_growth:
+            m = dict(per_growth["mult"])
+            src = f"성장률 {per_growth['g']:g}%"
+        elif sector and sector.get("kind", "PER").upper() == kind:
             m = {k: sector[k] for k in ("bear", "base", "bull")}
             src = sector["name"]
         else:
