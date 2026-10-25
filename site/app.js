@@ -225,8 +225,65 @@ function somongHTML(c) {
     <tr><td>성장률</td>${s.growth.map((v) => `<td class="${v != null && v < 0 ? "dear" : ""}">${v == null ? "-" : n(v, 0) + "%"}</td>`).join("")}</tr></tbody></table>
     ${box("① 기본값", "default", "= 최근 5년 EPS 성장률의 가운데값")}
     ${box("② 보정값", "adjusted", `= ${esc(c.us_tpl.ltg_src || "장기 성장률")}`)}
+    ${s.finviz ? box("③ Finviz 보정값", "finviz", "= Finviz 'EPS next 5Y' (5년 연평균 성장 추정)") : ""}
+    ${(c.us_tpl.per_grid?.rows || []).length ? `<div class="tpl"><div class="tpl-t">${esc(c.us_tpl.per_grid.year)}(3년 뒤) 주가 가정 <span class="src">${esc(c.us_tpl.per_grid.year)} EPS $${n(c.us_tpl.per_grid.eps, 2)} × PER</span></div>
+      <div class="pergrid">${c.us_tpl.per_grid.rows.map(([m, p]) => `<div><span>${m}배</span><b>${$f(p)}</b><em class="${p >= c.price ? "up" : "dn"}">${pct((p / c.price - 1) * 100, 0, true)}</em></div>`).join("")}</div></div>` : ""}
     <div class="note src">적정주가 = 올해(${esc(s.years[5])}) EPS $${n(s.eps_now, 2)} × 적정 PER · 성장률이 너무 높거나 들쭉날쭉하면(50% 이상) ② 보정값을 보세요 · 상승여력이 마이너스면 미래 성장을 이미 주가에 먼저 반영했거나 월가 예상이 보수적인 경우</div>
   </details>`;
+}
+// 내 엑셀 '소몽의 주가 판독기' (24.8.28): 4가지를 1~5점으로 매겨 평균 → 바늘 게이지 (1 공포 … 5 광기)
+const MOOD = ["공포", "불안", "중립", "과열", "광기"];
+const MOOD_COLORS = ["#2a78d6", "#5fb3e8", "#9aa0a6", "#f0a24a", "#d9442b"];
+function readerScores(c) {
+  const up = (th, v) => (v == null ? null : th.findIndex((x) => v < x) + 1 || th.length + 1); // 구간 → 1~5
+  const mkt = DASH.signals?.us?.per;
+  const t = c.us_tpl?.tipranks;
+  const upside = t && t.avg ? (t.avg / c.price - 1) * 100 : null;
+  return [
+    ["시장 12MF P/E", mkt, up([15, 16, 18, 19], mkt), `S&P500 ${n(mkt, 1)}배 · ~15 공포 · 15~16 불안 · 16~18 중립 · 18~19 과열 · 19~ 광기`],
+    ["종목 12MF P/E", c.fwd_per, up([10, 20, 30, 50], c.fwd_per), `${n(c.fwd_per, 1)}배 · ~10 공포 · 10~20 불안 · 20~30 중립 · 30~50 과열 · 50~ 광기`],
+    ["목표주가 상승여력", upside, upside == null ? null : 6 - up([0, 5, 10, 20], upside), `TipRanks 평균 대비 ${pct(upside, 0, true)} · 20%~ 공포 · 10~20 불안 · 5~10 중립 · 0~5 과열 · 0% 미만 광기`],
+    ["PEG", c.tbl?.peg, up([1, 1.5, 2, 2.5], c.tbl?.peg), `${n(c.tbl?.peg, 2)} · ~1 공포 · 1~1.5 불안 · 1.5~2 중립 · 2~2.5 과열 · 2.5~ 광기`],
+  ];
+}
+function readerHTML(c) {
+  if (c.market !== "US") return "";
+  const sc = readerScores(c), got = sc.filter((x) => x[2] != null);
+  if (got.length < 2) return "";
+  const avg = got.reduce((a, x) => a + x[2], 0) / got.length;
+  return `<div class="tpl" onclick="event.stopPropagation()"><div class="tpl-t">🧭 주가 판독기 <span class="src">내 엑셀 템플릿 · 4가지 점수 평균</span></div>
+    <div class="gauge"><div class="gauge-c"><canvas id="gg-${esc(c.code)}" data-v="${avg}"></canvas></div><div class="gauge-v"><b style="color:${MOOD_COLORS[Math.round(avg) - 1]}">${MOOD[Math.round(avg) - 1]}</b><span>${n(avg, 1)} / 5</span></div></div>
+    <table class="compact" style="width:100%">${sc.map(([lab, , s, why]) => `<tr><td>${lab}<br><span class="src">${esc(why)}</span></td>
+      <td style="text-align:right;white-space:nowrap">${s == null ? "-" : `<b style="color:${MOOD_COLORS[s - 1]}">${s} ${MOOD[s - 1]}</b>`}</td></tr>`).join("")}</table></div>`;
+}
+const needle = { id: "needle", afterDatasetsDraw(ch) {
+  const v = +ch.canvas.dataset.v, m = ch.getDatasetMeta(0).data[0];
+  if (!m || !v) return;
+  const a = Math.PI + ((v - 0.5) / 5) * Math.PI, r = m.outerRadius * 0.95, g = ch.ctx;
+  g.save(); g.translate(m.x, m.y); g.rotate(a); g.fillStyle = css("--ink");
+  g.beginPath(); g.moveTo(0, -4); g.lineTo(r, 0); g.lineTo(0, 4); g.fill();
+  g.beginPath(); g.arc(0, 0, 6, 0, Math.PI * 2); g.fill(); g.restore();
+} };
+function drawGauges(list) {
+  for (const c of list) {
+    const cv = document.getElementById(`gg-${c.code}`);
+    if (!cv) continue;
+    if (charts.has(cv.id)) charts.get(cv.id).destroy();
+    charts.set(cv.id, new Chart(cv, { type: "doughnut", plugins: [needle],
+      data: { labels: MOOD, datasets: [{ data: [1, 1, 1, 1, 1], backgroundColor: MOOD_COLORS, borderWidth: 2, borderColor: css("--surface") }] },
+      options: { responsive: true, maintainAspectRatio: false, animation: false, rotation: -90, circumference: 180, cutout: "62%",
+        plugins: { legend: { display: false }, tooltip: { enabled: false } } } }));
+  }
+}
+
+// TipRanks 애널리스트 목표주가 (최근 3개월)
+function tipranksHTML(c) {
+  const t = c.us_tpl?.tipranks;
+  if (!t || !t.avg) return "";
+  const cell = (lab, v) => `<div><span>${lab}</span><b>$${n(v, 0)}</b><em class="${v >= c.price ? "up" : "dn"}">${pct((v / c.price - 1) * 100, 0, true)}</em></div>`;
+  return `<div class="tpl" onclick="event.stopPropagation()"><div class="tpl-t">🎯 애널리스트 목표주가 <span class="src">TipRanks · 최근 3개월 · ${t.n ?? "-"}명</span></div>
+    <div class="scen3" style="margin-top:6px">${cell("최저", t.low)}${cell("평균", t.avg)}${cell("최고", t.high)}</div>
+    <div class="note">의견 수: 매수 ${t.buy ?? "-"} · 보유 ${t.hold ?? "-"} · 매도 ${t.sell ?? "-"} <span class="src">(애널리스트 의견을 옮긴 것, 이 사이트의 추천 아님)</span></div></div>`;
 }
 function stockCard(c) {
   const L = LIGHT[c.verdict] || LIGHT.na;
@@ -268,6 +325,8 @@ function stockCard(c) {
     ${c.scen ? `<div class="chart-title" style="margin-top:14px"><b>② 지난 10년 밴드에서 지금 위치</b> <span class="src">0% = 10년 중 가장 싼 쪽 · 100% = 가장 비싼 쪽</span></div>` : ""}
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
     <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
+    ${tipranksHTML(c)}
+    ${readerHTML(c)}
     ${fairTableHTML(c)}
     ${somongHTML(c)}
     ${priceChartHTML(c)}
@@ -284,6 +343,7 @@ function renderCards() {
   else list.sort((a, b) => mk(a) - mk(b) || a.order - b.order);
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
   drawPriceCharts(list);
+  drawGauges(list);
 }
 
 /* ---------- 보유종목 비교표 (구글 시트처럼: 머리글 눌러 정렬, 산업별 보기, 묶음별 칸) ---------- */
@@ -380,14 +440,60 @@ function renderCmp() {
     ${MKT === "US" ? "미국: 추정치는 야후·나스닥 컨센서스(EPS·매출), 나머지는 최근 실적 · 25 PER 은 지금 주가 ÷ 작년 EPS" : "25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준"}`;
   try { localStorage.setItem("cmp", JSON.stringify(CMP)); } catch (_) {}
 }
-$("#cmpGroup").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; CMP.group = b.dataset.g; renderCmp(); });
-$("#cmpInd").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; CMP.ind = b.dataset.i; renderCmp(); });
-$("#cmpTable").addEventListener("click", (e) => {
+$("#cmpGroup")?.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; CMP.group = b.dataset.g; renderCmp(); });
+$("#cmpInd")?.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; CMP.ind = b.dataset.i; renderCmp(); });
+$("#cmpTable")?.addEventListener("click", (e) => {
   const h = e.target.closest("th");
   if (h) { const k = h.dataset.k; CMP.dir = CMP.sort === k ? -CMP.dir : (k === "name" || k === "ind" ? 1 : -1); CMP.sort = k; renderCmp(); return; }
   const r = e.target.closest("tr[data-code]");
   if (r) location.hash = `#stock/${r.dataset.code}`;
 });
+
+/* ---------- 기업 프로필 (config/profiles.yaml: 한 줄 설명·정성 평가·매출 비중·점유율·IR 자료) ---------- */
+let PROFILES = {};
+const DONUT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#7c3aed", "#e05297", "#5b8def", "#8a8a85"];
+const VERD = { O: ["good", "O"], "△": ["warn", "△"], X: ["bad", "X"] };
+function badge(v) { const x = VERD[v] || ["na", "-"]; return `<span class="vb ${x[0]}">${x[1]}</span>`; }
+function profileHTML(code) {
+  const p = PROFILES[code];
+  if (!p) return "";
+  const q = (title, o) => (o ? `<div class="pq"><div class="pq-h">${badge(o.verdict)} <b>${title}</b></div><div class="pq-b">${esc(o.why || "")}</div></div>` : "");
+  const ol = p.oligopoly || {};
+  const donut = (id, title, d, extra = "") => (d && (d.items || []).length ? `<div class="pd"><div class="pd-t">${title}</div>
+    <div class="pd-c"><canvas id="${id}"></canvas></div>
+    <div class="pd-l">${d.items.map((x, i) => `<span><i style="background:${DONUT[i % DONUT.length]}"></i>${esc(x.name)} <b>${n(x.pct, 0)}%</b></span>`).join("")}</div>
+    <div class="note src">${esc(d.market ? d.market + " · " : "")}${esc(d.period || "")}${d.source ? ` · <a href="${esc(d.source)}" target="_blank" rel="noopener">출처</a>` : ""}${d.note ? " · " + esc(d.note) : ""}</div>${extra}</div>` : "");
+  const ms = p.market_share;
+  const top3 = ms && ms.top3_pct != null ? `<div class="note">${badge(ms.top3_over50 ? "O" : "X")} 상위 3개 회사 합계 <b>${n(ms.top3_pct, 0)}%</b> ${ms.top3_over50 ? "(50% 넘음 → 과점)" : "(50% 안 됨)"}</div>` : "";
+  const g = p.gpm;
+  return `<h3>🏢 기업 프로필 <span class="src">조사일 ${esc(p.checked_at || "")}</span></h3><div class="card">
+    <div class="oneliner">${esc(p.one_liner || "")}</div>
+    ${g && g.value != null ? `<div class="note">${badge(g.over30 ? "O" : "X")} 매출총이익률(GPM) <b>${n(g.value, 1)}%</b> ${g.over30 ? "— 30% 이상" : "— 30% 미만"} <span class="src">${esc(g.period || "")}${g.source ? ` · <a href="${esc(g.source)}" target="_blank" rel="noopener">출처</a>` : ""}</span></div>` : ""}
+    <div class="chart-title" style="margin-top:12px"><b>올리고폴리오 (성장·독점·진입장벽)</b> ${badge(ol.verdict)}</div>
+    <div class="pq-b">📈 ${esc(ol.growth || "-")}<br>👑 ${esc(ol.share || "-")}<br>🏰 ${esc(ol.barriers || "-")}</div>
+    ${q("아무나 이겨라 (누가 이기든 돈 버는 구조)", p.pick_and_shovel)}
+    ${q("요금 인상 가능? (가격 전가력)", p.pricing_power)}
+    ${q("데이터를 모으는 기업?", p.data_company)}
+    ${q("내 지갑에서 돈을 빼가나? (구독)", p.wallet)}
+    ${p.human_indicator ? `<div class="pq"><div class="pq-h">🧑‍🤝‍🧑 <b>인간지표</b></div><div class="pq-b">${esc(p.human_indicator)}</div></div>` : ""}
+    <div class="pdg">${donut("pd-geo-" + code, "🌍 지역별 매출", p.revenue_geo)}${donut("pd-seg-" + code, "🧩 사업별 매출", p.revenue_segment)}${donut("pd-ms-" + code, "🥧 시장 점유율", ms, top3)}</div>
+    ${(p.ir || []).length ? `<div class="chart-title" style="margin-top:12px"><b>📂 IR 자료</b></div><ul class="irl">${p.ir.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></li>`).join("")}</ul>` : ""}
+    ${p.notes ? `<div class="note src">메모: ${esc(p.notes)}</div>` : ""}
+  </div>`;
+}
+function drawProfile(code) {
+  const p = PROFILES[code];
+  if (!p) return;
+  for (const [k, d] of [["geo", p.revenue_geo], ["seg", p.revenue_segment], ["ms", p.market_share]]) {
+    const cv = document.getElementById(`pd-${k}-${code}`);
+    if (!cv || !d) continue;
+    if (charts.has(cv.id)) charts.get(cv.id).destroy();
+    charts.set(cv.id, new Chart(cv, { type: "doughnut",
+      data: { labels: d.items.map((x) => x.name), datasets: [{ data: d.items.map((x) => x.pct), backgroundColor: d.items.map((_, i) => DONUT[i % DONUT.length]), borderWidth: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: "62%",
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${c.label}: ${n(c.parsed, 1)}%` } } } } }));
+  }
+}
 
 /* ---------- 점수 체크리스트 탭 ---------- */
 let SCORE_MKT = "전체";
@@ -418,7 +524,7 @@ function renderScore() {
     </div>`;
   }).join("") || `<div class="empty">점수 데이터가 아직 없어요 (다음 갱신 후 나와요).</div>`;
 }
-$("#scoreMkt").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; SCORE_MKT = b.dataset.m; renderScore(); });
+$("#scoreMkt")?.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; SCORE_MKT = b.dataset.m; renderScore(); });
 
 /* ---------- 3. 종목 상세 ---------- */
 const PERIODS = [["all", "역사적"], ["10y", "10년"], ["5y", "5년"]];
@@ -682,6 +788,7 @@ function detailHTML(d) {
   }
   h += `</div>`;
 
+  h += `<!--profile-->`;
   h += `<h3>밴드차트</h3><div class="card">${nvSeg()}${nvBlock("nv-per", "PER 차트")}${nvBlock("nv-pbr", "PBR 차트")}</div>`;
   h += kfBlock();
   if (d.per && d.bands.PER) {
@@ -1020,8 +1127,9 @@ async function openStock(code) {
     const holderHtml = await holdersBlock(code);
     const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
-    $("#sheetBody").innerHTML = detailHTML(d) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", profileHTML(code)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
     drawDetailCharts(d);
+    drawProfile(code);
     if (usedCar) wireManheim();
     drawOrders(code);
     drawHolders(code);
@@ -1404,6 +1512,7 @@ async function load() {
   try {
     const r = await fetch("data/dashboard.json?t=" + Date.now(), { cache: "no-store" });
     DASH = await r.json();
+    try { PROFILES = await (await fetch("data/profiles.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { PROFILES = {}; }
   } catch (e) {
     $("#updated").textContent = "데이터를 불러오지 못했어요";
     return;

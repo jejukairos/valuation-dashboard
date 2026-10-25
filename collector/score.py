@@ -168,7 +168,7 @@ def checklist(code, c, tbl, f, per5_avg, pbr10_avg, psr):
             "manual": bool(m), "memo": m.get("memo")}
 
 
-def somong(hist, price, lt_growth):
+def somong(hist, price, lt_growth, finviz_5y=None):
     """내 엑셀 '소몽의 적정주가 템플릿': 성장률 × 100~200(보통) / 150~250(강세장) = 적정 PER, × 올해 EPS."""
     y = now_kst().year
     years = list(range(y - 5, y + 3))
@@ -188,7 +188,8 @@ def somong(hist, price, lt_growth):
     return {"years": [f"{str(v)[2:]}{'E' if (hist.get(v) or {}).get('estimate') else ''}" for v in years],
             "eps": [eps[v] for v in years], "growth": [None] + [rnd(gr[v] * 100, 1) if gr.get(v) is not None else None for v in years[1:]],
             "cur_mult": rnd(price / e0, 1) if e0 and e0 > 0 else None, "eps_now": e0,
-            "default": case(g), "adjusted": case(lt_growth / 100 if lt_growth else None), "lt_growth": lt_growth}
+            "default": case(g), "adjusted": case(lt_growth / 100 if lt_growth else None), "lt_growth": lt_growth,
+            "finviz": case(finviz_5y / 100 if finviz_5y else None)}
 
 
 def us_extra(f, cap):

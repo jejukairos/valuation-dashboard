@@ -261,7 +261,22 @@ def stock_detail(h, rates_now, fx):
         e0, el = (hist.get(y0) or {}).get("eps"), (hist.get(ests[-1]) or {}).get("eps") if ests else None
         ltg = ((el / e0) ** (1 / (ests[-1] - y0)) - 1) * 100 if (ests and ests[-1] > y0 and e0 and el and e0 > 0 and el > 0) else None
         try:
-            us_tpl = {"somong": score.somong(hist, price, ltg),
+            fv5 = us_stock.finviz_eps_5y(code)
+        except Exception as e:  # noqa: BLE001
+            fv5 = None
+            REPORT.block("Finviz", f"EPS next 5Y 접속 실패 ({str(e)[:50]})")
+        try:
+            tr = us_stock.tipranks(code)
+        except Exception as e:  # noqa: BLE001
+            tr = None
+            REPORT.block("TipRanks", f"목표주가 접속 실패 ({str(e)[:50]})")
+        e28 = (hist.get(y0 + 2) or {}).get("eps")
+        try:
+            us_tpl = {"somong": score.somong(hist, price, ltg, fv5),
+                      "finviz_5y": fv5, "tipranks": tr,
+                      # 내 엑셀: '28년(3년 뒤) 주가 가정' = 28E EPS × PER 20~110
+                      "per_grid": {"year": C.ylabel(y0 + 2), "eps": e28,
+                                   "rows": [[m, rnd(m * e28, 2)] for m in range(20, 120, 10)] if e28 and e28 > 0 else []},
                       "ltg_src":f"{C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균 (나스닥 컨센서스)" if ltg else None}
         except Exception as e:  # noqa: BLE001
             REPORT.fail(f"{name} 적정주가 템플릿", f"{type(e).__name__}: {e}")
@@ -447,6 +462,7 @@ def main():
             c["holder_changes"] = [{"name": x["name"], "chg": x["chg_ratio"], "date": x["date"]} for x in rc]
 
     write_json(DATA / "broker_targets.json", load_yaml("broker_targets.yaml") or {})  # 손으로 적는 증권사 목표주가
+    write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)
 
     print("■ 동종업계")
     import peers

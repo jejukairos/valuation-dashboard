@@ -161,6 +161,29 @@ def nasdaq_eps(t):
     return out
 
 
+def finviz_eps_5y(t):
+    """Finviz 'EPS next 5Y' (향후 5년 연평균 EPS 성장률 %, 애널리스트 추정)."""
+    txt = HTTP.get(f"https://finviz.com/quote.ashx?t={t}").text
+    m = re.search(r"EPS next 5Y.{0,300}?>(-?[\d.]+)%<", txt, re.S)
+    return num(m.group(1)) if m else None
+
+
+def tipranks(t):
+    """TipRanks 애널리스트 목표주가 (최근 3개월): 최저·평균·최고 + 매수·보유·매도 의견 수."""
+    import requests
+    j = requests.get(f"https://www.tipranks.com/api/stocks/getData/?name={t}", timeout=40,
+                     headers={"User-Agent": HTTP.s.headers["User-Agent"], "Accept": "application/json"}).json()
+    pts = j.get("ptConsensus") or []
+    pt = next((p for p in pts if p.get("period") == 3 and p.get("bench") == 0), pts[0] if pts else None)
+    cs = j.get("consensuses") or []
+    c = next((x for x in cs if x.get("isLatest") and x.get("period") == 3 and x.get("bench") == 0), cs[0] if cs else {})
+    if not pt or not pt.get("priceTarget"):
+        raise RuntimeError("TipRanks 목표주가 없음")
+    return {"low": pt.get("low"), "avg": pt.get("priceTarget"), "high": pt.get("high"),
+            "buy": c.get("nB"), "hold": c.get("nH"), "sell": c.get("nS"),
+            "n": sum(c.get(k) or 0 for k in ("nB", "nH", "nS")) or None}  # numOfAnalysts 는 사이트 전체 수라 쓰지 않음
+
+
 def finviz_next_eps(t):
     """Finviz 의 'EPS next Y'(내년 EPS 추정, 달러)."""
     txt = HTTP.get(f"https://finviz.com/quote.ashx?t={t}").text

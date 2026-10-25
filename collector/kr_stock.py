@@ -263,13 +263,18 @@ def dart_latest(stock_code):
         if not rows:
             continue
         out = {"report": f"{year}년 {nm}", "year": year, "month": month}
+        # 손익계산서(IS)를 먼저, 없으면 포괄손익계산서(CIS)
+        pl = sorted((r for r in rows if r.get("sj_div") in ("IS", "CIS")), key=lambda r: r.get("sj_div") != "IS")
         for k, (ids, names) in ACCTS.items():
-            for r in rows:
-                if r.get("sj_div") not in ("IS", "CIS"):
-                    continue
+            def hit(r):
                 aid = r.get("account_id", "").split("_", 1)[-1]
                 nmr = r.get("account_nm", "").replace(" ", "")
                 if aid in ids or nmr in names:
+                    return True
+                # 지배주주 순이익은 회사마다 이름이 달라서 한 번 더: '지배' + '순이익', 포괄·비지배 제외
+                return k == "ni" and "지배" in nmr and "순이익" in nmr and "비지배" not in nmr and "포괄" not in nmr
+            for r in pl:
+                if hit(r):
                     v = _amt(r.get("thstrm_add_amount")) if rc != "11011" else None
                     v = v if v is not None else _amt(r.get("thstrm_amount"))
                     if v is not None:

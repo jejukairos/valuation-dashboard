@@ -220,12 +220,36 @@ table.cmp tbody tr.grp:hover td { background: var(--surface-2); }
 table.cmp tbody tr:hover td { background: var(--surface-2); }
 table.cmp .neg { color: var(--bad-ink); }
 table.cmp .dim { color: var(--muted); }
+/* 기업 프로필 */
+.oneliner { font-size: 15px; font-weight: 600; line-height: 1.5; }
+.vb { display: inline-block; min-width: 22px; text-align: center; border-radius: 6px; font-weight: 800; font-size: 12px; padding: 1px 5px; }
+.vb.good { background: var(--good-bg); color: var(--good-ink); } .vb.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.vb.bad { background: var(--bad-bg); color: var(--bad-ink); } .vb.na { background: var(--na-bg); color: var(--muted); }
+.pq { margin-top: 10px; } .pq-h { font-size: 13px; } .pq-b { font-size: 13px; color: var(--ink-2); line-height: 1.55; margin-top: 3px; }
+.pdg { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
+@media (min-width: 760px) { .pdg { grid-template-columns: repeat(3, 1fr); } }
+.pd-t { font-size: 13px; font-weight: 700; }
+.pd-c { position: relative; height: 170px; margin-top: 4px; }
+.pd-l { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+.pd-l i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: 0; }
+.pd-l b { color: var(--ink); }
+.irl { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }
+.irl a, .pd a, .note a { color: var(--s1); }
 /* 점수 체크리스트 */
 .sbar { display: grid; grid-template-columns: 6.5em 1fr 4.5em; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
 .sbar i { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: block; }
 .sbar i b { display: block; height: 100%; background: var(--s1); border-radius: 4px; }
 .sbar em { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
-.tpl { margin-top: 8px; }
+.tpl { margin-top: 8px; cursor: default; }
+.gauge { position: relative; max-width: 260px; margin: 4px auto 0; }
+.gauge-c { position: relative; height: 120px; }
+.gauge-v { text-align: center; line-height: 1.2; margin-top: 2px; }
+.gauge-v b { font-size: 18px; display: block; } .gauge-v span { font-size: 11px; color: var(--muted); }
+.pergrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+.pergrid div { background: var(--surface-2); border-radius: 8px; padding: 4px 6px; font-size: 11px; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+.pergrid b { font-size: 13px; color: var(--ink); }
+.pergrid em, .tpl .scen3 em { font-style: normal; font-weight: 700; }
+.pergrid .up, .tpl .up { color: var(--good-ink); } .pergrid .dn, .tpl .dn { color: var(--bad-ink); }
 .tpl-t { font-size: 13px; font-weight: 700; }
 .fvt .up { color: var(--good-ink); } .fvt .dn { color: var(--bad-ink); }
 /* 네이버식 밴드차트 */
