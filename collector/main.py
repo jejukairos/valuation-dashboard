@@ -475,6 +475,17 @@ def main():
         try:
             det = stock_detail(h, {"us10y": us10, "kr3y": kr3}, fx)
             det["card"]["order"] = i
+            # 텔레그램 채널 글 중 지난 갱신 때 없던 글에 🆕 표시 (처음 모으는 날은 표시 안 함)
+            posts = ((det["card"].get("us_tpl") or {}).get("street") or {}).get("posts") or []
+            old_st = ((prev_cards.get(code) or {}).get("us_tpl") or {}).get("street") or {}
+            if old_st.get("posts") is not None:
+                old_ids = {p["id"] for p in old_st["posts"]} | set(old_st.get("seen") or [])
+                old_ids |= {f"aetherjapanresearch/{x}" for x in old_ids if str(x).isdigit()}  # 예전 저장 형식(번호만)
+                for p in posts:
+                    p["new"] = p["id"] not in old_ids
+                det["card"]["us_tpl"]["street"]["seen"] = sorted(old_ids | {p["id"] for p in posts})[-200:]
+            elif posts:
+                det["card"]["us_tpl"]["street"]["seen"] = [p["id"] for p in posts]
             write_json(DATA / "stocks" / f"{code}.json", det)
             cards.append(det["card"])
             REPORT.success(f"{h['name']} 종목 계산")

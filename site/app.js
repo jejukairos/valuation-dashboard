@@ -289,14 +289,14 @@ function streetHTML(c) {
     ${r.rows.slice(0, 12).map((x) => `<tr><td>${esc(x.date.slice(5))} <b>${esc(x.firm)}</b></td>
       <td style="text-align:right"><span class="${actCls[x.action] || ""}">${esc(x.action)}</span> ${x.from && x.from !== x.to ? `${esc(x.from)}→` : ""}${esc(x.to)}</td>
       <td style="text-align:right;white-space:nowrap">${x.pt == null ? "-" : `${x.prior && x.prior !== x.pt ? `$${n(x.prior)}→` : ""}<b class="${x.pt_action === "올림" ? "up" : x.pt_action === "내림" ? "dn" : ""}">$${n(x.pt)}</b>`}</td></tr>`).join("")}</tbody></table>` : "";
-  const posts = (st.posts || []).map((p) => `<details class="post"><summary><span class="src">${esc(p.date)}</span> ${esc(p.title)}</summary>
+  const posts = (st.posts || []).map((p) => `<details class="post"><summary>${p.new ? '<span class="pill green">🆕</span> ' : ""}<span class="src">${esc(p.date)} · ${esc(p.ch || "에테르")}${(p.also || []).length ? ` (${esc(p.also.join("·"))}에도 같은 내용)` : ""}</span> ${esc(p.title)}</summary>
     <div class="pq-b" style="white-space:pre-line">${esc(p.excerpt)}${p.excerpt.length >= 600 ? "…" : ""}</div><a href="${esc(p.url)}" target="_blank" rel="noopener">원문 보기 →</a></details>`).join("");
   const latest = (st.posts || [])[0];
   return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:10px">🏦 월가 의견
       ${s ? `<span class="src">최근 ${r.days}일: 의견 상향 <b class="up">${s.up}</b> · 하향 <b class="dn">${s.down}</b> · 목표가 올림 <b class="up">${s.raise}</b> · 내림 <b class="dn">${s.lower}</b></span>` : ""}
-      ${latest ? `<div class="src">📰 채널 최신 ${esc(latest.date.slice(5, 10))}: ${esc(latest.title.slice(0, 50))}</div>` : ""}</summary>
+      ${latest ? `<div class="src">📰 채널 최신 ${esc(latest.date.slice(5, 10))} (${esc(latest.ch || "에테르")}): ${esc(latest.title.slice(0, 50))}</div>` : ""}</summary>
     ${tbl}
-    ${posts ? `<div class="chart-title" style="margin-top:10px"><b>📰 에테르의 일본&미국 리서치</b> <span class="src">텔레그램 채널에서 이 종목이 나온 글 · 눌러서 요약 보기</span></div>${posts}` : ""}
+    ${posts ? `<div class="chart-title" style="margin-top:10px"><b>📰 텔레그램 리서치 채널</b> <span class="src">에테르의 일본&미국 리서치 · 본루팡 · 이 종목이 나온 글, 두 채널에 같은 내용은 하나만 · 🆕 = 지난 갱신 이후 새 글</span></div>${posts}` : ""}
     <div class="note src">의견 변경: 야후 파이낸스(증권사 발표 기록) · 채널 글은 앞부분만, 전체는 원문 링크에서 · 증권사 의견을 옮긴 것이고 이 사이트의 추천은 아니에요</div>
   </details>`;
 }
@@ -324,6 +324,8 @@ function stockCard(c) {
     pills.push(`<span class="pill ${x.chg < 0 ? "red" : "green"}">👥 ${esc(x.name.replace("공단", ""))} 지분 ${x.chg < 0 ? "▼" : "▲"}${n(Math.abs(x.chg), 2)}%p (${esc(x.date.slice(5))})</span>`);
   }
   if ((c.checks || []).some((x) => x.warn)) pills.push(`<span class="pill yellow">⚠ 출처 간 EPS 차이 큼</span>`);
+  const newPosts = (c.us_tpl?.street?.posts || []).filter((p) => p.new).length;
+  if (newPosts) pills.push(`<span class="pill green">🆕 채널 새 글 ${newPosts}개</span>`);
   if (c.dart_check?.warn) pills.push(`<span class="pill yellow">⚠ DART 공시와 숫자 차이</span>`);
   let mine = "";
   if (c.avg_price && c.quantity) {
