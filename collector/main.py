@@ -203,21 +203,12 @@ def stock_detail(h, rates_now, fx):
     # 출처 교차확인 (10% 이상 차이면 ⚠)
     checks = []
     if mkt == "US":
-        ests = sorted(y for y, r in hist.items() if r.get("estimate"))
-        nxt = hist.get(ests[-1], {}).get("eps") if ests else None
-        fv = None
-        try:
-            fv = us_stock.finviz_next_eps(code)
-        except Exception as e:  # noqa: BLE001
-            REPORT.block("Finviz", f"접속 실패 ({str(e)[:60]})")
-        if fv and nxt:
-            checks.append({"item": f"{C.ylabel(ests[-1])} EPS", "a": fv, "a_src": "Finviz",
-                           "b": nxt, "b_src": "야후", "warn": abs(fv / nxt - 1) >= 0.10, "dg": 2})
-        for yy in sorted(hist):  # 나스닥 vs 야후 컨센서스 (겹치는 해)
-            r = hist[yy]
-            if r.get("nasdaq") and r.get("eps"):
-                checks.append({"item": f"{C.ylabel(yy)} EPS", "a": r["nasdaq"], "a_src": "나스닥",
-                               "b": r["eps"], "b_src": "야후", "warn": abs(r["nasdaq"] / r["eps"] - 1) >= 0.05, "dg": 2})
+        for yy in sorted(hist):  # 같은 해 추정치를 출처끼리 비교 (가장 높은 값 vs 가장 낮은 값, 10% 넘게 다르면 ⚠)
+            s = {k: v for k, v in (hist[yy].get("srcs") or {}).items() if v}
+            if hist[yy].get("estimate") and len(s) >= 2:
+                hi_k, lo_k = max(s, key=s.get), min(s, key=s.get)
+                checks.append({"item": f"{C.ylabel(yy)} EPS", "a": s[hi_k], "a_src": hi_k, "b": s[lo_k], "b_src": lo_k,
+                               "warn": s[lo_k] > 0 and s[hi_k] / s[lo_k] - 1 >= 0.10, "dg": 2})
     else:
         w_eps = hist.get(now_kst().year, {}).get("eps")
         if now.get("fwd_eps") and w_eps:
@@ -364,6 +355,9 @@ def stock_detail(h, rates_now, fx):
         "rerating_warning": det.get("per", {}).get("rerating_warning"), "checks": checks,
         "chart": _price_chart(px, currency),
         # 적정가에 쓰는 방식 표를 먼저, 나머지 방식도 이어서 (예: 삼성전자 = PBR 표 → PER 표)
+        # 미국: 연도별 EPS 추정치 출처 (야후·나스닥·Finviz) 와 쓴 평균값
+        "eps_srcs": {C.ylabel(yy): {**hist[yy]["srcs"], "평균": rnd(hist[yy]["eps"], 2)}
+                     for yy in sorted(hist) if hist[yy].get("estimate") and hist[yy].get("srcs")} if mkt == "US" else None,
         "fv": _fair_table(bands, hist, price, currency,
                           [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
     }

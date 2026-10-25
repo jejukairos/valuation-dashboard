@@ -1,4 +1,4 @@
-"""미국 보유종목 '월가 의견': 증권사 의견·목표주가 변경(야후) + 텔레그램 리서치 채널(에테르·본루팡) 글 (공개 미리보기 검색)."""
+"""미국 보유종목 '월가 의견': 증권사 의견·목표주가 변경(야후) + 텔레그램 리서치 채널(에테르·본루팡·펀디지) 글 (공개 미리보기 검색)."""
 import html as H
 import re
 
@@ -44,7 +44,7 @@ def _text(block):
     return H.unescape(t).strip()
 
 
-CHANNELS = [("aetherjapanresearch", "에테르"), ("bornlupin", "본루팡")]  # 앞 채널이 우선 (겹치면 앞 채널 글만 남김)
+CHANNELS = [("aetherjapanresearch", "에테르"), ("bornlupin", "본루팡"), ("fundeasy_choi", "펀디지")]  # 앞 채널이 우선 (겹치면 앞 채널 글만 남김)
 
 
 def _sig(p):
@@ -58,7 +58,7 @@ def _same(a, b):
     return bool(x and y) and len(x & y) / len(x | y) >= 0.4
 
 
-def channel_posts(terms, limit=10, channel=None, per_channel=5):
+def channel_posts(terms, limit=12, channel=None, per_channel=5):
     """채널 공개 미리보기(t.me/s/…)에서 검색어마다 글을 찾아 최신순으로. 본문은 앞부분만 (전체는 원문 링크).
     channel 을 안 주면 CHANNELS 전부를 합치고, 같은 내용(제목·앞부분이 40% 넘게 겹침)은 하나만 남긴다.
     채널마다 최대 per_channel 개, 제목에 종목 이름이 들어간 글을 먼저 고른다 (스쳐 지나가는 언급은 뒤로)."""

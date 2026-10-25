@@ -130,17 +130,34 @@ def history(t):
                     continue
                 hist[y] = {"eps": float(est.loc[k, "avg"]), "estimate": True, "fy_end": e.strftime("%Y-%m-%d"),
                            "src": f"야후 컨센서스 ({int(est.loc[k, 'numberOfAnalysts'])}명)",
-                           "low": float(est.loc[k, "low"]), "high": float(est.loc[k, "high"])}
-    # 3) 야후에 없는 먼 해(보통 28E~)는 나스닥 컨센서스로 채운다 (나스닥은 4개 회계연도까지 제공)
+                           "low": float(est.loc[k, "low"]), "high": float(est.loc[k, "high"]),
+                           "srcs": {"야후": float(est.loc[k, "avg"])}}
+                if k == "+1y":
+                    nxt_y = y
+    # 3) 나스닥 컨센서스 (4개 회계연도): 야후에 없는 먼 해(28E~)를 채우고, 겹치는 해는 출처 목록에 더함
     try:
         for e, v, cnt in nasdaq_eps(t):
             y = _label(e)
             if y not in hist:
-                hist[y] = {"eps": v, "estimate": True, "fy_end": e.strftime("%Y-%m-%d"), "src": f"나스닥 컨센서스 ({cnt}명)"}
-            elif hist[y].get("estimate"):
-                hist[y]["nasdaq"] = v  # 야후와 겹치는 해 → 교차확인용
+                hist[y] = {"eps": v, "estimate": True, "fy_end": e.strftime("%Y-%m-%d"), "src": f"나스닥 컨센서스 ({cnt}명)", "srcs": {}}
+            if hist[y].get("estimate"):
+                hist[y].setdefault("srcs", {})["나스닥"] = v
+                hist[y]["nasdaq"] = v  # 교차확인용
     except Exception as e:  # noqa: BLE001
         REPORT.block("나스닥 컨센서스", str(e)[:80])
+    # 4) Finviz 'EPS next Y' (내년 추정) 도 출처 목록에
+    try:
+        fv = finviz_next_eps(t)
+        if fv and "nxt_y" in locals() and hist.get(nxt_y, {}).get("estimate"):
+            hist[nxt_y].setdefault("srcs", {})["Finviz"] = fv
+    except Exception:  # noqa: BLE001
+        pass
+    # 시킹알파(유료)를 못 쓰니, 추정치는 받을 수 있는 출처들의 평균으로 (출처가 하나면 그 값)
+    for y, r in hist.items():
+        s = {k: v for k, v in (r.get("srcs") or {}).items() if v is not None}
+        if r.get("estimate") and s:
+            r["eps"] = sum(s.values()) / len(s)
+            r["src"] = "추정치 평균: " + " · ".join(s)
     return hist
 
 

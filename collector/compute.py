@@ -136,10 +136,13 @@ def growth_fair(hist, adj_candidates=()):
     neg = any(v < 0 for v in recent) or any(eps.get(yy) is not None and eps[yy] <= 0 for yy in range(y - 3, y + 1))
     adj = [(v, src) for v, src in adj_candidates if v is not None and v > 0]
     adj_v, adj_src = min(adj) if adj else (None, None)  # 여러 추정이 있으면 보수적으로 낮은 쪽
-    if med is not None and med > 0 and not neg and med <= 50:
+    # 과거(중앙값)와 앞으로 예상(보정값)이 2배 넘게 다르면 과거 성장이 계속된다고 보기 어려워 보정값 (PER 상한은 두지 않음)
+    gap2 = bool(med and med > 0 and adj_v and max(med, adj_v) / min(med, adj_v) >= 2)
+    if med is not None and med > 0 and not neg and med <= 50 and not gap2:
         g, src = med, "기본값: 21년~올해 EPS 성장률 중앙값"
     elif adj_v:
-        why = "최근 3년 중 역성장한 해가 있어" if neg else ("성장률이 50% 를 넘어" if med and med > 50 else "성장률을 구할 수 없어")
+        why = ("최근 3년 중 역성장한 해가 있어" if neg else "성장률이 50% 를 넘어" if med and med > 50
+               else "과거와 앞으로 예상 성장률이 2배 넘게 달라" if gap2 else "성장률을 구할 수 없어")
         g, src = adj_v, f"보정값({adj_src}) — {why}"
     elif med is not None and med > 0:
         g, src = med, "기본값 (보정값 없음, 변동 큼 주의)"
