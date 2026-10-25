@@ -131,7 +131,34 @@ def history(t):
                 hist[y] = {"eps": float(est.loc[k, "avg"]), "estimate": True, "fy_end": e.strftime("%Y-%m-%d"),
                            "src": f"야후 컨센서스 ({int(est.loc[k, 'numberOfAnalysts'])}명)",
                            "low": float(est.loc[k, "low"]), "high": float(est.loc[k, "high"])}
+    # 3) 야후에 없는 먼 해(보통 28E~)는 나스닥 컨센서스로 채운다 (나스닥은 4개 회계연도까지 제공)
+    try:
+        for e, v, cnt in nasdaq_eps(t):
+            y = _label(e)
+            if y not in hist:
+                hist[y] = {"eps": v, "estimate": True, "fy_end": e.strftime("%Y-%m-%d"), "src": f"나스닥 컨센서스 ({cnt}명)"}
+            elif hist[y].get("estimate"):
+                hist[y]["nasdaq"] = v  # 야후와 겹치는 해 → 교차확인용
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("나스닥 컨센서스", str(e)[:80])
     return hist
+
+
+def nasdaq_eps(t):
+    """나스닥 '연간 EPS 컨센서스' [(회계연도 끝, EPS, 애널리스트 수)] — 무료, 보통 4개 연도."""
+    import requests
+    r = requests.get(f"https://api.nasdaq.com/api/analyst/{t}/earnings-forecast", timeout=30,
+                     headers={"User-Agent": HTTP.s.headers["User-Agent"], "Accept": "application/json",
+                              "Origin": "https://www.nasdaq.com", "Referer": "https://www.nasdaq.com/"})
+    rows = ((r.json().get("data") or {}).get("yearlyForecast") or {}).get("rows") or []
+    out = []
+    for x in rows:
+        v = num(x.get("consensusEPSForecast"))
+        if v is None:
+            continue
+        end = pd.Timestamp(x["fiscalEnd"]) + pd.offsets.MonthEnd(0)  # 'Jan 2027' → 2027-01-31
+        out.append((end, v, x.get("noOfEstimates")))
+    return out
 
 
 def finviz_next_eps(t):

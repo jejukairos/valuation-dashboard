@@ -247,6 +247,89 @@ def dart_history(stock_code, splits=()):
     return data
 
 
+# ---------- 최신 정기보고서 대조 (분기·반기·사업보고서) ----------
+REPORTS = [("11014", "3분기보고서", 9), ("11012", "반기보고서", 6), ("11013", "1분기보고서", 3), ("11011", "사업보고서", 12)]
+ACCTS = {"sales": (["Revenue"], ["매출액", "수익(매출액)", "영업수익"]),
+         "op": (["OperatingIncomeLoss"], ["영업이익", "영업이익(손실)"]),
+         "ni": (["ProfitLossAttributableToOwnersOfParent"], ["지배기업의소유주에게귀속되는당기순이익", "지배기업소유주지분"])}
+
+
+def dart_latest(stock_code):
+    """DART 에 올라온 가장 최근 정기보고서의 누적 매출·영업이익·지배주주 순이익(원)."""
+    cc = corp_code(stock_code)
+    y = now_kst().year
+    for year, (rc, nm, month) in [(y, r) for r in REPORTS[:3]] + [(y - 1, REPORTS[3])] + [(y - 1, r) for r in REPORTS[:3]]:
+        rows = _dart_fin(cc, year) if rc == "11011" else _dart_fin_q(cc, year, rc)
+        if not rows:
+            continue
+        out = {"report": f"{year}년 {nm}", "year": year, "month": month}
+        for k, (ids, names) in ACCTS.items():
+            for r in rows:
+                if r.get("sj_div") not in ("IS", "CIS"):
+                    continue
+                aid = r.get("account_id", "").split("_", 1)[-1]
+                nmr = r.get("account_nm", "").replace(" ", "")
+                if aid in ids or nmr in names:
+                    v = _amt(r.get("thstrm_add_amount")) if rc != "11011" else None
+                    v = v if v is not None else _amt(r.get("thstrm_amount"))
+                    if v is not None:
+                        out[k] = v
+                        break
+        return out
+    raise RuntimeError("DART 정기보고서 없음")
+
+
+def _dart_fin_q(cc, year, rc):
+    for fs in ("CFS", "OFS"):
+        j = HTTP.get("https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json",
+                     params={"crtfc_key": dart_key(), "corp_code": cc, "bsns_year": year,
+                             "reprt_code": rc, "fs_div": fs}).json()
+        if j.get("status") == "000":
+            return j["list"]
+    return []
+
+
+def wise_quarters(code):
+    """와이즈리포트 분기 실적 {(연, 월): {sales, op, ni}} (억원) — DART 누적값과 맞춰 보기용."""
+    page = f"{WISE}/c1010001.aspx?cmp_cd={code}"
+    r = HTTP.get(page)
+    m = re.search(r"encparam\s*:\s*'([^']+)'", r.text)
+    rr = HTTP.get(f"{WISE}/ajax/cF1001.aspx", headers={"Referer": page},
+                  params={"cmp_cd": code, "fin_typ": "0", "freq_typ": "Q", "extY": "0", "extQ": "0", "encparam": m.group(1)})
+    rr.encoding = "utf-8"
+    tb = pd.read_html(io.StringIO(rr.text))[-1]
+    cols = [c[1] if isinstance(c, tuple) else c for c in tb.columns]
+    names = tb.iloc[:, 0].astype(str).str.replace(r"\s+", "", regex=True)
+    rowi = {k: names[names == lab].index for k, lab in (("sales", "매출액"), ("op", "영업이익"), ("ni", "당기순이익(지배)"))}
+    out = {}
+    for ci, c in enumerate(cols[1:], start=1):
+        ym = re.match(r"(\d{4})/(\d{2})", str(c))
+        if not ym or "(E)" in str(c):
+            continue
+        out[(int(ym.group(1)), int(ym.group(2)))] = {k: num(tb.iloc[ix[0], ci]) if len(ix) else None for k, ix in rowi.items()}
+    return out
+
+
+def cross_check(stock_code, wise_annual_data):
+    """DART 최신 보고서(누적) vs 네이버·와이즈리포트 값. 차이(%)를 돌려준다."""
+    d = dart_latest(stock_code)
+    if d["month"] == 12:
+        w = {k: (wise_annual_data.get(d["year"]) or {}).get(k if k != "ni" else "ni") for k in ACCTS}
+        w["op"] = (wise_annual_data.get(d["year"]) or {}).get("op")
+    else:
+        q = wise_quarters(stock_code)
+        parts = [v for (yy, mm), v in q.items() if yy == d["year"] and mm <= d["month"]]
+        w = {k: (sum(p[k] for p in parts) if parts and all(p.get(k) is not None for p in parts) and len(parts) == d["month"] // 3 else None)
+             for k in ACCTS}
+    rows = []
+    for k, lab in (("sales", "매출액"), ("op", "영업이익"), ("ni", "순이익(지배)")):
+        a = d.get(k) / 1e8 if d.get(k) is not None else None
+        b = w.get(k)
+        diff = abs(a / b - 1) * 100 if (a is not None and b) else None
+        rows.append({"item": lab, "dart": round(a) if a is not None else None, "wise": b, "diff": round(diff, 2) if diff is not None else None})
+    return {"report": d["report"], "rows": rows, "warn": any((r["diff"] or 0) > 1 for r in rows)}
+
+
 def _sane(dart):
     """단위가 섞인 옛 보고서 값 걸러내기: 순이익÷EPS(=주식수)가 다른 해와 2배 넘게 다르면 버린다."""
     shares = {y: r["ni"] / r["eps"] for y, r in dart.items()

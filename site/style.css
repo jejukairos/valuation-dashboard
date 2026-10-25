@@ -223,6 +223,8 @@ table.cmp .dim { color: var(--muted); }
 .nv + .nv { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--grid); }
 .nv-t { font-size: 15px; font-weight: 700; }
 #nv-seg + .nv { margin-top: 12px; }
+#kf-seg { max-width: 100%; overflow-x: auto; }
+#kf-seg button { padding: 6px 9px; }
 .chart-box.nvbox { height: 300px; }
 .miniband .legend { font-size: 11px; gap: 8px; }
 .stale { font-size: 11px; color: var(--warn-ink); }

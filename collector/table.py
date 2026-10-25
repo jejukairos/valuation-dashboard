@@ -22,6 +22,20 @@ def _drawdown(px):
     return rnd((float(s.iloc[-1]) / float(recent.max()) - 1) * 100, 1) if len(recent) else None
 
 
+def net_cash(ticker, cap):
+    """순현금 = (현금 + 단기투자자산) − 총차입금(리스 포함), 최근 분기 재무상태표 (야후, 한국은 'XXXXXX.KS')."""
+    import yfinance as yf
+    bs = yf.Ticker(ticker).quarterly_balance_sheet
+    c = bs.columns[0]
+    get = lambda k: float(bs.loc[k, c]) if k in bs.index and bs.loc[k, c] == bs.loc[k, c] else None  # noqa: E731
+    cash = get("Cash Cash Equivalents And Short Term Investments") or get("Cash And Cash Equivalents")
+    debt = get("Total Debt") or 0.0
+    if cash is None:
+        return None
+    nc = cash - debt
+    return {"net_cash": nc, "net_cash_pct": rnd(nc / cap * 100, 1) if cap else None, "net_cash_asof": c.strftime("%Y-%m")}
+
+
 def _peg(per12, eps_cagr):
     return rnd(per12 / eps_cagr, 2) if (per12 and per12 > 0 and eps_cagr and eps_cagr > 0) else None
 
@@ -96,8 +110,8 @@ def us_row(code, hist, price, cap, px):
     out["per"] = [rnd(price / eps(v)) if (eps(v) or 0) > 0 else None for v in (y - 1, y, y + 1)]
     f_eps = C.fwd12(hist, "eps")
     per12 = price / f_eps if f_eps and f_eps > 0 else None
-    # 미국은 추정이 2년치뿐 → EPS 성장률은 작년 실적 → 내년 추정 2년 연평균
-    eps_cagr = _cagr(eps(y + 1), eps(y - 1), 2)
+    # EPS 성장률: 작년 실적 → 28E 3년 연평균 (나스닥 추정이 없으면 내년까지 2년 연평균)
+    eps_cagr = _cagr(eps(y + 2), eps(y - 1), 3) if eps(y + 2) else _cagr(eps(y + 1), eps(y - 1), 2)
     out.update({"per12": rnd(per12), "eps_cagr": eps_cagr, "peg": _peg(per12, eps_cagr), "dd52": _drawdown(px),
                 "sales_cagr": None, "op_cagr": None, "us": True})
     return out

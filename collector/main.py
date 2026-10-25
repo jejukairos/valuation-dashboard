@@ -90,6 +90,7 @@ def stock_detail(h, rates_now, fx):
         now = us_stock.now_info(code)
         px = us_stock.price_history(code)
         hist = us_stock.history(code)
+        wise = None
         rate, bond_label, currency = rates_now.get("us10y"), "미국채 10년", "USD"
         sources = {"price": "야후 파이낸스", "consensus": "야후 파이낸스 컨센서스",
                    "history": next((r["src"] for r in hist.values() if not r.get("estimate")), "")}
@@ -185,6 +186,11 @@ def stock_detail(h, rates_now, fx):
         if fv and nxt:
             checks.append({"item": f"{C.ylabel(ests[-1])} EPS", "a": fv, "a_src": "Finviz",
                            "b": nxt, "b_src": "야후", "warn": abs(fv / nxt - 1) >= 0.10, "dg": 2})
+        for yy in sorted(hist):  # 나스닥 vs 야후 컨센서스 (겹치는 해)
+            r = hist[yy]
+            if r.get("nasdaq") and r.get("eps"):
+                checks.append({"item": f"{C.ylabel(yy)} EPS", "a": r["nasdaq"], "a_src": "나스닥",
+                               "b": r["eps"], "b_src": "야후", "warn": abs(r["nasdaq"] / r["eps"] - 1) >= 0.05, "dg": 2})
     else:
         w_eps = hist.get(now_kst().year, {}).get("eps")
         if now.get("fwd_eps") and w_eps:
@@ -197,8 +203,25 @@ def stock_detail(h, rates_now, fx):
     except Exception as e:  # noqa: BLE001
         REPORT.fail(f"{name} 비교표", f"{type(e).__name__}: {e}")
         tbl = None
+    dart_check = None
+    if mkt == "KR" and not h.get("data_code"):  # DART 최신 정기보고서 vs 네이버(와이즈리포트) 숫자 대조
+        try:
+            dart_check = kr_stock.cross_check(code, wise or {})
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("DART 보고서 대조", f"{name}: {str(e)[:60]}")
+    if tbl is not None and not h.get("data_code"):  # 순현금 (우선주는 회사 전체 값이라 뺌)
+        for tkr in ([code] if mkt == "US" else [f"{code}.KS", f"{code}.KQ"]):
+            try:
+                nc = table.net_cash(tkr, now.get("market_cap"))
+            except Exception:  # noqa: BLE001
+                nc = None
+            if nc:
+                if mkt == "US" and fx:
+                    nc["net_cash"] *= fx  # 화면은 원화(조원)로
+                tbl.update(nc)
+                break
     det["card"] = {
-        "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl,
+        "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl, "dart_check": dart_check,
         # 이익이 크게 출렁여 적정가를 PBR 로만 보는 종목 → 비교표에서 PER·PEG 주의 표시
         "cyclical": fm == ["PBR"] or bool(h.get("cyclical")),
         "market_cap": cap_krw, "market_cap_usd": det["market_cap_usd"],

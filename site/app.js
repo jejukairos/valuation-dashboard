@@ -217,6 +217,7 @@ function stockCard(c) {
     pills.push(`<span class="pill ${x.chg < 0 ? "red" : "green"}">👥 ${esc(x.name.replace("공단", ""))} 지분 ${x.chg < 0 ? "▼" : "▲"}${n(Math.abs(x.chg), 2)}%p (${esc(x.date.slice(5))})</span>`);
   }
   if ((c.checks || []).some((x) => x.warn)) pills.push(`<span class="pill yellow">⚠ 출처 간 EPS 차이 큼</span>`);
+  if (c.dart_check?.warn) pills.push(`<span class="pill yellow">⚠ DART 공시와 숫자 차이</span>`);
   let mine = "";
   if (c.avg_price && c.quantity) {
     const r = (c.price / c.avg_price - 1) * 100;
@@ -277,6 +278,8 @@ function cmpCols() {
     peg: { h: "PEG", v: t("peg"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 2)}${s.cyclical ? "*" : ""}</span>`) },
     per12: { h: "PER<br>12MF", v: t("per12"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 1)}${s.cyclical ? "*" : ""}</span>`) },
     dd: { h: "52주 고점<br>대비", v: t("dd52"), f: (v) => (v == null ? "-" : n(v, 0) + "%") },
+    nc: { h: "순현금<br>(조원)", v: (s) => (s.tbl?.net_cash != null ? s.tbl.net_cash / 1e12 : null), f: (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, 1)}</span>`) },
+    ncp: { h: "순현금<br>÷ 시총", v: t("net_cash_pct"), f: R(0) },
   };
   for (let i = 0; i < 3; i++) {
     c["sg" + i] = { h: `매출<br>${arrow(i)}`, v: t("sales_g", i), f: G };
@@ -298,14 +301,14 @@ const CMP_GROUPS = [
   ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC"]],
   ["qual", "수익성", ["opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "pf0", "pf1", "pf2"]],
-  ["fin", "재무·배당", ["debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
+  ["fin", "재무·배당", ["nc", "ncp", "debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
   ["all", "전체", null],
 ];
 function renderCmp() {
   const cols = cmpCols();
   const g = CMP_GROUPS.find((x) => x[0] === CMP.group) || CMP_GROUPS[0];
   const keys = g[2] || ["cap", "salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC", "peg", "per12", "opm0", "opm1", "opm2", "opm3",
-    "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "roe0", "roe1", "roe2", "debt0", "debt1", "debt2", "debt3", "dd", "dy0", "dy1", "pf0", "pf1", "pf2"];
+    "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "roe0", "roe1", "roe2", "nc", "ncp", "debt0", "debt1", "debt2", "debt3", "dd", "dy0", "dy1", "pf0", "pf1", "pf2"];
   if (!keys.includes(CMP.sort) && CMP.sort !== "name" && CMP.sort !== "ind") CMP.sort = keys[0];
   const inds = ["전체", ...new Set(DASH.stocks.map((s) => s.industry).filter(Boolean))];
   if (!inds.includes(CMP.ind)) CMP.ind = "전체";
@@ -329,7 +332,7 @@ function renderCmp() {
       ${keys.map((k) => `<td>${cols[k].f(cols[k].v(s), s)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   $("#cmpNote").innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · 종목을 누르면 상세 화면 · 3년 연평균 = 25년 실적 → 28년 추정 ·
     PEG = 12MF PER ÷ EPS 3년 연평균 성장률(%) (1 아래면 성장에 비해 싼 편, 피터 린치 기준) · * = 이익이 크게 출렁이는 업종이라 PER·PEG 가 실제보다 싸 보일 수 있음 ·
-    P/FCF = 시가총액 ÷ 잉여현금흐름 · 25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준 · 미국은 야후에서 받을 수 있는 칸만 채워요 (EPS 성장은 2년 연평균)`;
+    P/FCF = 시가총액 ÷ 잉여현금흐름 · 순현금 = 현금·단기투자 − 총차입금(최근 분기, 야후) ·25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준 · 미국은 야후에서 받을 수 있는 칸만 채워요 (EPS 성장은 2년 연평균)`;
   try { localStorage.setItem("cmp", JSON.stringify(CMP)); } catch (_) {}
 }
 $("#cmpGroup").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; CMP.group = b.dataset.g; renderCmp(); });
@@ -521,6 +524,64 @@ function drawNv(id, d, key, kind, period) {
     <br><span class="src">${s.from}~ · 선 = ${key === "eps" ? "EPS" : "BPS"} × 배수 (연간 실적·추정치를 각 해 12월 말에 두고 달마다 이음, 네이버 방식) · 배수 = ${nm} ${kind} 하위 ${DASH.settings.band.low_pct}% ~ 상위 ${100 - DASH.settings.band.high_pct}% 를 4등분 · 아래 이름을 누르면 선을 끄고 켤 수 있어요</span>`;
 }
 
+/* ---------- Koyfin 식 선행 PER(NTM) 추이 ----------
+   NTM EPS = 앞으로 12개월 EPS (Y년 실적을 (Y-1)년 12월 말에 두고 직선 보간 = 올해·내년 추정을 남은 기간 비율로 섞음).
+   1년 이하 기간은 일별 종가, 그보다 길면 주간 종가. High / Median / Low = 그 기간 최고·가운데·최저. */
+const KF_PERIODS = [["all", "ALL"], ["10y", "10Y"], ["5y", "5Y"], ["1y", "1Y"], ["ytd", "YTD"], ["6m", "6M"], ["3m", "3M"]];
+function kfSeries(d, period) {
+  const anchors = d.history.filter((r) => r.eps > 0).map((r) => [Date.UTC(r.year - 1, 11, 31), r.eps]).sort((a, b) => a[0] - b[0]);
+  const ntm = (t) => {
+    for (let i = 1; i < anchors.length; i++) {
+      const [t0, v0] = anchors[i - 1], [t1, v1] = anchors[i];
+      if (t >= t0 && t <= t1) return v0 + ((v1 - v0) * (t - t0)) / (t1 - t0);
+    }
+    return null;
+  };
+  const band = d.bands.PER || d.bands.PBR || d.bands.DIV;
+  const ch = d.card.chart;
+  const short = ["1y", "ytd", "6m", "3m"].includes(period);
+  let pts = short && ch ? ch.dates.map((s, i) => [Date.parse(s), ch.close[i]]) : band ? band.dates.map((s, i) => [Date.parse(s), band.price[i]]) : [];
+  if (!pts.length) return null;
+  const L = new Date(pts[pts.length - 1][0]);
+  const back = { "10y": [10, 0], "5y": [5, 0], "1y": [1, 0], "6m": [0, 6], "3m": [0, 3] }[period];
+  const from = period === "all" ? 0 : period === "ytd" ? Date.UTC(L.getUTCFullYear(), 0, 1)
+    : Date.UTC(L.getUTCFullYear() - back[0], L.getUTCMonth() - back[1], L.getUTCDate());
+  pts = pts.filter(([t]) => t >= from).map(([t, p]) => { const e = ntm(t); return [t, e ? p / e : null]; })
+    .filter(([, v]) => v != null && v > 0 && v <= (DASH.settings.band.per_cap || 1e9));
+  if (pts.length < 5) return null;
+  const vs = pts.map((x) => x[1]).sort((a, b) => a - b);
+  return { labels: pts.map(([t]) => ymd(t)), pe: pts.map((x) => Math.round(x[1] * 100) / 100),
+    hi: vs[vs.length - 1], med: vs[Math.floor(vs.length / 2)], lo: vs[0], cur: pts[pts.length - 1][1] };
+}
+function kfBlock() {
+  return `<h3>선행 PER 추이 <span class="src">Koyfin 방식 · P/E (NTM)</span></h3><div class="card">
+    <div class="seg" id="kf-seg">${KF_PERIODS.map(([k, l]) => `<button data-p="${k}" class="${k === "10y" ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="chart-box nvbox"><canvas id="kf-chart"></canvas></div><div class="note" id="kf-note"></div></div>`;
+}
+function drawKf(d, period) {
+  const s = kfSeries(d, period), cv = document.getElementById("kf-chart");
+  if (!cv) return;
+  if (!s) { if (charts.has("kf-chart")) charts.get("kf-chart").destroy(); $("#kf-note").textContent = "이 기간은 자료가 부족해요."; return; }
+  const C = themeColors(), flat = (v) => s.pe.map(() => v);
+  const ds = [{ label: "P/E (NTM)", data: s.pe, borderColor: "#7c3aed", borderWidth: 2 },
+    { label: `High ${n(s.hi, 1)}배`, data: flat(s.hi), borderColor: C.muted, borderDash: [5, 4], borderWidth: 1 },
+    { label: `Median ${n(s.med, 1)}배`, data: flat(s.med), borderColor: C.ink2, borderDash: [5, 4], borderWidth: 1.3 },
+    { label: `Low ${n(s.lo, 1)}배`, data: flat(s.lo), borderColor: C.muted, borderDash: [5, 4], borderWidth: 1 }];
+  makeChart(cv, s.labels, ds, { fmt: (v) => n(v, 1) + "배", yfmt: (v) => n(v, 0) + "x", xlen: 7 });
+  const pos = s.hi > s.lo ? ((s.cur - s.lo) / (s.hi - s.lo)) * 100 : null;
+  $("#kf-note").innerHTML = `${legend(ds.map((x) => [x.label, x.borderColor, !!x.borderDash]))}
+    지금 P/E (NTM) <b>${n(s.cur, 1)}배</b> · 이 기간 가운데값 ${n(s.med, 1)}배 대비 ${pct((s.cur / s.med - 1) * 100, 0, true)}${pos == null ? "" : ` · 최저~최고 사이 ${n(pos, 0)}% 위치`}
+    <br><span class="src">NTM EPS = 앞으로 12개월 EPS (올해·내년 추정을 남은 기간 비율로 섞음, 지난 시점은 실제 실적으로 계산) · Koyfin 은 그 당시 컨센서스를 써서 과거 구간 숫자가 조금 다를 수 있어요</span>`;
+}
+function wireKf(d) {
+  drawKf(d, "10y");
+  $("#kf-seg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    $("#kf-seg").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    drawKf(d, b.dataset.p);
+  });
+}
+
 function detailHTML(d) {
   const c = d.card;
   const L = LIGHT[c.verdict] || LIGHT.na;
@@ -536,9 +597,17 @@ function detailHTML(d) {
   for (const x of c.checks || []) {
     h += `<div class="note">${x.warn ? "⚠ " : "✓ "}${esc(x.item)}: ${n(x.a, x.dg || 0)} <span class="src">${esc(x.a_src)}</span> / ${n(x.b, x.dg || 0)} <span class="src">${esc(x.b_src)}</span>${x.warn ? ` — ${n(Math.abs(x.a / x.b - 1) * 100, 1)}% 차이` : " — 거의 일치"}</div>`;
   }
+  const dc = c.dart_check;
+  if (dc) {
+    h += `<div class="chart-title" style="margin-top:12px"><b>📑 DART 공시 대조</b> <span class="src">${esc(dc.report)} (누적) vs 네이버·와이즈리포트</span></div>
+      <table class="compact" style="width:100%"><thead><tr><th style="text-align:left">항목 (억원)</th><th>DART</th><th>네이버</th><th>차이</th></tr></thead><tbody>
+      ${dc.rows.map((r) => `<tr><td>${esc(r.item)}</td><td style="text-align:right">${n(r.dart)}</td><td style="text-align:right">${n(r.wise)}</td>
+        <td style="text-align:right">${r.diff == null ? "-" : (r.diff > 1 ? "⚠ " : "✓ ") + n(r.diff, 1) + "%"}</td></tr>`).join("")}</tbody></table>`;
+  }
   h += `</div>`;
 
   h += `<h3>밴드차트</h3><div class="card">${nvSeg()}${nvBlock("nv-per", "PER 차트")}${nvBlock("nv-pbr", "PBR 차트")}</div>`;
+  h += kfBlock();
   if (d.per && d.bands.PER) {
     const p = d.per;
     const cols = Object.keys(p.eps);
@@ -585,6 +654,7 @@ function detailHTML(d) {
 }
 function drawDetailCharts(d) {
   wireNv(d);
+  wireKf(d);
   if (d.div && d.bands.DIV) {
     if (!d.div.no_history) wireBand("band-div", d.bands.DIV, "DIV");
     const C = themeColors();
