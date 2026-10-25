@@ -167,6 +167,175 @@
     rank: null
     greed_price: ''
     override: {}
+'064350':
+  name: 현대로템
+  wallet:
+    v: X
+    why: 전차·철도는 개인이 아니라 각국 정부가 사는 물건이라 내 지갑과는 거리가 멉니다. 다만 유럽 등 각국 국방비는 해마다 늘고 있습니다.
+  oligopoly:
+    v: O
+    why: 신형 전차 수출은 독일 KNDS(레오파르트2)·미국 GDLS(에이브럼스)·현대로템(K2) 등 소수 회사가 나눠 갖고, 국내 철도차량도 사실상 독점입니다. 다만 페루·이라크·루마니아 추가 수주가 내년 이후로 밀리며 올해 1~3분기 신규 수주가 74% 줄었습니다.
+    top3_pct: null
+    source: https://www.mordorintelligence.kr/industry-reports/main-battle-tank-market/companies
+  anyone_wins:
+    v: △
+    why: 어느 나라가 군비를 늘리든 전차·장갑차 수요가 커지는 건 유리합니다. 하지만 계약은 KNDS 등과 경쟁해서 직접 따내야 하므로 누가 이기든 버는 구조는 아닙니다.
+  good_boss:
+    v: X
+    who: 이용배 대표이사 사장 (전문경영인, 2019년~), 최대주주 현대차 33.77%
+    why: 창업자나 오너가 직접 이끄는 회사가 아니라 현대차그룹 계열사입니다. 이 대표 취임 뒤 실적은 크게 좋아졌지만 강의의 굿보스(창업자 경영) 기준과는 다릅니다.
+  giant:
+    v: O
+    who: 국민연금 7.07% (2026-08-03 보고), 블랙록 5.00% (2026-04-21 보고)
+    source: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260803000433
+  events:
+  - date: 2026-4Q
+    what: 폴란드 K2(1차 K2GF) 인도 확대로 4분기 매출 증가 기대 (3분기 실적은 10-19 발표, 영업이익 2,471억원으로 예상치 하회)
+    src: https://newsway.co.kr/news/view?ud=2026102010164231170
+  - date: 2026-12
+    what: 페루 대통령 방한 조율 중. K2 54대·K808 141대 본계약 논의 진전 여부
+    src: https://www.kukinews.com/article/view/kuk202610070221
+  - date: 2027-1Q
+    what: 페루 K2·K808 이행계약(약 3조원) 체결 예상 시점 (증권사 추정, 회사는 시점 미확정이라고 밝힘)
+    src: https://www.hankyung.com/article/2026100642926
+  - date: 2027-03 말
+    what: 현대위아 특수사업부(전차 주포 등) 인수 완료 예정 (3,584억원)
+    src: https://newsway.co.kr/news/view?ud=2026102010164231170
+  season: 방산은 정부 납품이 연말에 몰려 4분기 매출이 가장 큰 편이고, 주가는 대형 수출 계약 소식에 크게 움직입니다.
+  checked_at: '2026-10-25'
+  my:
+    why_bought: ''
+    review: ''
+    rank: null
+    greed_price: ''
+    override: {}
+'023530':
+  name: 롯데쇼핑
+  wallet:
+    v: △
+    why: 백화점은 명품·외국인 관광객 덕에 쓰는 돈이 조금씩 늘고 있습니다. 하지만 장보기·생활용품 지출은 쿠팡 등 온라인으로 옮겨 가는 흐름입니다.
+  oligopoly:
+    v: △
+    why: 백화점만 보면 롯데(35.2%)·신세계(33.0%)·현대(22.5%) 3사가 90.7%로 독과점이고 롯데 점유율도 유지(+0.4%p)됐습니다. 다만 백화점 시장 성장률이 연 3%대로 낮고, 쇼핑 전체로 보면 온라인 강자들에게 밀리는 중입니다.
+    top3_pct: 90.7
+    source: https://m.apparelnews.co.kr/news/news_view/?idx=222509
+  anyone_wins:
+    v: △
+    why: 백화점은 어떤 브랜드가 잘 팔리든 입점 수수료를 받는 구조라 '하우스'에 가깝습니다. 하지만 유통 채널끼리는 쿠팡·신세계 등과 직접 경쟁하는 선수입니다.
+  good_boss:
+    v: X
+    who: 신동빈 회장 (창업주 신격호 2세 오너), 김원재 대표이사
+    why: 창업자가 아닌 2세 오너이고, 지난 10년 가까이 롯데쇼핑 실적이 줄어 왔습니다. 2024년엔 그룹 유동성 우려도 있어 '믿고 맡길 경영자'로 보기엔 근거가 약합니다.
+  giant:
+    v: O
+    who: 국민연금 11.09% (2026-10-02 보고, 직전 12.37%에서 일부 매도)
+    source: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261002000514
+  events:
+  - date: '2026-11-06'
+    what: 3분기 실적 발표·컨퍼런스콜. 롯데마트 기존점 매출이 홈플러스 폐점 반사이익으로 크게 늘었을 것이라는 전망
+    src: https://www.chickstockfi.com/en/events/ir/46565
+  - date: 2026-11 말
+    what: 롯데그룹 정기 임원인사 (백화점·마트 대표 등 교체 여부)
+    src: https://dealsite.co.kr/articles/168471
+  - date: 2026-11~12
+    what: 연말 쇼핑 성수기(블랙프라이데이·크리스마스)와 홈플러스 점포 폐점 반사 수혜 지속 여부
+    src: https://www.etoday.co.kr/news/view/2626599
+  - date: 2027-02 초
+    what: 4분기·연간 실적 발표와 결산배당 기준일 공고 (올해는 2026-02-05 공고)
+    src: https://www.lotteshoppingir.com/news/news_list.jsp
+  season: 백화점은 겨울 의류·연말 선물이 몰리는 4분기가 최대 성수기이고, 추석이 9월인지 10월인지에 따라 3·4분기 실적이 흔들립니다.
+  checked_at: '2026-10-25'
+  my:
+    why_bought: ''
+    review: ''
+    rank: null
+    greed_price: ''
+    override: {}
+005380:
+  name: 현대차
+  wallet:
+    v: △
+    why: 차 값이 오르고 하이브리드·SUV처럼 비싼 차를 사는 사람이 늘어 차 한 대에 쓰는 돈은 커졌습니다. 하지만 차를 사는 횟수 자체가 늘지는 않습니다.
+  oligopoly:
+    v: △
+    why: 국내에선 현대·기아가 93%(국산 5사 기준)로 독점에 가깝지만, 세계 시장은 상위 3개 그룹(도요타·폭스바겐·현대차그룹) 합이 약 30%로 경쟁이 치열합니다. BYD 등 중국 업체가 빠르게 따라오고, 올 3분기엔 파업 여파로 판매가 11.5% 줄었습니다.
+    top3_pct: 30
+    source: https://carnewschina.com/2026/02/26/three-chinese-automakers-enter-global-top-10-as-2025-sales-rankings-finalized/
+  anyone_wins:
+    v: X
+    why: 완성차 회사는 직접 경쟁하는 선수라 자기 차가 이겨야 돈을 법니다. 다만 전기차·하이브리드·내연기관을 모두 팔아 어떤 동력 방식이 이기든 대응은 가능합니다.
+  good_boss:
+    v: O
+    who: 정의선 회장 (창업주 정주영 손자, 3세 오너 경영자)
+    why: 창업자는 아니지만 오너가 직접 이끌며 전기차·로봇(보스턴다이내믹스)·미국 현지 생산 전환을 주도해 왔습니다. 다만 올해는 파업·관세로 실적이 주춤해 지켜볼 필요가 있습니다.
+  giant:
+    v: O
+    who: 국민연금 7.75% (2025년 말 기준, 2대 주주)
+    source: https://www.koreajoongangdaily.com/korea/nps-shareholder-voting-hits-fiveyear-high/12902912
+  events:
+  - date: '2026-10-29'
+    what: 3분기 실적 발표와 분기배당 결정. 컨센서스 영업이익 약 2.4조원(전년 대비 감소, 기아에 역전 가능성)
+    src: https://www.vegannews.co.kr/news/article.html?no=396668
+  - date: 2026-11
+    what: 신형 투싼(5세대) 국내 출고 본격화 (10-21 가격 공개·계약 시작, 북미는 2027년형으로 출시)
+    src: https://fnnews.com/news/202610210858057079
+  - date: 2027-01 말
+    what: 2026년 연간 실적과 2027년 가이던스 발표 (매년 1월 말)
+    src: https://www.hyundaimotorgroup.com/ko/news/hyundai-motor-company-2025-earnings-announcement
+  season: 매달 1일 전월 판매 실적이 나오고, 여름(7~9월)에는 임금협상 파업·휴가로 3분기 생산이 줄기 쉬운 편입니다.
+  checked_at: '2026-10-25'
+  past:
+    wallet: O
+    oligopoly: O(국내)
+    anyone_wins: X
+    boss: 굿보스(정의선)
+    score: 95
+    season: 현재가 여름
+  my:
+    why_bought: ''
+    review: ''
+    rank: null
+    greed_price: ''
+    override: {}
+'000270':
+  name: 기아
+  wallet:
+    v: △
+    why: 하이브리드·SUV·전기차처럼 비싼 차 비중이 늘며 차 한 대에 쓰는 돈은 커졌습니다. 하지만 차를 사는 횟수 자체가 늘지는 않습니다.
+  oligopoly:
+    v: △
+    why: 국내에선 현대·기아가 93%(국산 5사 기준)로 독점에 가깝지만, 세계 시장은 상위 3개 그룹(도요타·폭스바겐·현대차그룹) 합이 약 30%로 경쟁이 치열합니다. 그래도 기아는 올 3분기 판매가 7.8% 늘어 점유율을 키우는 중이고, 2030년 세계 점유율 4.5%를 목표로 합니다.
+    top3_pct: 30
+    source: https://carnewschina.com/2026/02/26/three-chinese-automakers-enter-global-top-10-as-2025-sales-rankings-finalized/
+  anyone_wins:
+    v: X
+    why: 완성차 회사는 직접 경쟁하는 선수라 자기 차가 이겨야 돈을 법니다. 다만 전기차·하이브리드·내연기관을 모두 팔아 어떤 동력 방식이 이기든 대응은 가능합니다.
+  good_boss:
+    v: O
+    who: 정의선 회장 (현대차그룹 3세 오너), 송호성 사장 (CEO)
+    why: 그룹 오너가 직접 이끌며 기아 디자인·전기차 전환을 성공시켰다는 평가를 받습니다. 다만 창업자 경영은 아니고 일상 경영은 전문경영인 송호성 사장이 맡습니다.
+  giant:
+    v: O
+    who: 국민연금 7.25% (2025년 말 기준, 2대 주주)
+    source: https://worldwide.kia.com/kr/company/ir/info/shareholders
+  events:
+  - date: '2026-10-30'
+    what: 3분기 실적 발표·컨퍼런스콜(14:10). 3분기 판매는 역대 최대(+7.8%), 영업이익 컨센서스 약 2.4조원
+    src: https://www.vegannews.co.kr/news/article.html?no=392688
+  - date: 2027-01 말
+    what: 2026년 연간 실적·결산배당·2027년 가이던스 발표 (매년 1월 말)
+    src: https://ceoscoredaily.com/page/view/2026012915293213606
+  - date: 2027-04 (예상)
+    what: 'CEO 인베스터 데이: 중장기 목표·주주환원 정책 발표 (올해는 2026-04-09)'
+    src: https://www.hankyung.com/article/2026040905431
+  season: 매달 1일 전월 판매 실적이 나오고, 연간 실적과 결산배당·주주환원 계획이 1월 말에 함께 발표되는 편입니다.
+  checked_at: '2026-10-25'
+  my:
+    why_bought: ''
+    review: ''
+    rank: null
+    greed_price: ''
+    override: {}
 005930:
   name: 삼성전자
   wallet:
@@ -582,20 +751,6 @@ TSLA:
     anyone_wins: O
     boss: O(일론 머스크)
     score: 100
-    season: 현재가 여름
-  my:
-    why_bought: ''
-    review: ''
-    rank: null
-    greed_price: ''
-    override: {}
-005380:
-  past:
-    wallet: O
-    oligopoly: O(국내)
-    anyone_wins: X
-    boss: 굿보스(정의선)
-    score: 95
     season: 현재가 여름
   my:
     why_bought: ''
