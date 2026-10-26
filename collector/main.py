@@ -15,10 +15,11 @@ import score
 import street
 import table
 import us_stock
-from common import DATA, REPORT, SETTINGS, attempt, load_yaml, now_kst, read_json, rnd, write_json
+from common import CACHE, DATA, REPORT, SETTINGS, attempt, load_yaml, now_kst, read_json, rnd, write_json
 
 SECTORS = load_yaml("sectors.yaml") or {}
 SOMONG = load_yaml("somong.yaml") or {}
+LTG_GAP = read_json(CACHE / "ltg_gap.json") or {}  # 종목 → 시킹알파 확인일 → Zacks·나스닥과의 차이(%p)
 
 
 def keep_prev(new, prev, label):
@@ -182,9 +183,24 @@ def stock_detail(h, rates_now, fx):
             REPORT.block("Zacks", f"Next 5 Years 접속 실패 ({str(e)[:50]})")
         # 3~5년 성장률 출처 비교 (시킹알파 기준으로 얼마나 다른지 화면에 표시)
         ltg_cmp = [["시킹알파", my.get("sa_ltg")], ["Zacks", zk], ["Finviz", fv5], ["나스닥(내 계산)", rnd(ltg, 1) if ltg else None]]
-        if my.get("sa_ltg"):
-            ltg = float(my["sa_ltg"])
-            adj = [(ltg, f"시킹알파 EPS FWD Long Term Growth (3-5Y CAGR), {my.get('sa_ltg_date') or '날짜 미기록'} 입력")]
+        sa, sa_d = my.get("sa_ltg"), str(my.get("sa_ltg_date") or "")
+        sa_age = (now_kst().date() - pd.Timestamp(sa_d).date()).days if sa_d else 999
+        # 시킹알파 값을 넣을 때마다 그날의 Zacks·나스닥과의 차이를 기록 → 값이 오래되면 평소 더 가까웠던 쪽으로 대체
+        subs = {"Zacks": zk, "나스닥": ltg}
+        hist_gap = LTG_GAP.setdefault(code, {})
+        if sa and sa_age <= 90:
+            hist_gap[sa_d] = {k: rnd(v - float(sa), 2) for k, v in subs.items() if v is not None}
+        avg_gap = {k: sum(abs(g[k]) for g in hist_gap.values() if k in g) / n
+                   for k in subs if (n := sum(1 for g in hist_gap.values() if k in g))}
+        best = min((k for k in avg_gap if subs[k] is not None), key=avg_gap.get, default=None)
+        ltg_note = (f"시킹알파와 평소 차이 (확인 {len(hist_gap)}번 평균): " + " · ".join(f"{k} ±{v:.1f}%p" for k, v in avg_gap.items())
+                    + (f" → 시킹알파가 오래되면 {best} 로 대체" if best and avg_gap[best] <= 5 else " → 둘 다 5%p 넘게 달라 대체하지 않음")) if avg_gap else None
+        if sa and sa_age > 90 and best and avg_gap[best] <= 5:
+            ltg = subs[best]
+            adj = [(ltg, f"{best} {ltg:.1f}% — 시킹알파 값이 {sa_age}일 지나 대체 (평소 차이 ±{avg_gap[best]:.1f}%p)")]
+        elif sa:
+            ltg = float(sa)
+            adj = [(ltg, f"시킹알파 EPS FWD Long Term Growth (3-5Y CAGR), {sa_d or '날짜 미기록'} 입력" + (" — 오래된 값" if sa_age > 90 else ""))]
         else:
             adj = [(ltg, f"시킹알파 값 미입력 → 임시로 나스닥 컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균")] if ltg and ltg > 0 else [(fv5, "Finviz EPS next 5Y")]
     else:
@@ -215,7 +231,8 @@ def stock_detail(h, rates_now, fx):
         scen["e12"] = rnd(e12, 2) if e12 else None
         if mkt == "US":
             scen["ltg_cmp"] = ltg_cmp
-            scen["sa_date"] = str(my.get("sa_ltg_date") or "") or None
+            scen["sa_date"] = sa_d or None
+            scen["ltg_note"] = ltg_note
     if scen:
         fair = scen["base"]
     poss =[(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("pos")
@@ -407,7 +424,7 @@ def _round_scen(scen, dg):
         return None
     return {**{k: rnd(scen[k], dg) for k in ("bear", "base", "bull")}, "parts": scen["parts"], "note": scen["note"],
             "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12"),
-            "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date")}
+            "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date"), "ltg_note": scen.get("ltg_note")}
 
 
 def _price_chart(px, currency, days=250):
@@ -561,6 +578,7 @@ def main():
 
     write_json(DATA / "broker_targets.json", load_yaml("broker_targets.yaml") or {})  # 손으로 적는 증권사 목표주가
     write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})
+    write_json(CACHE / "ltg_gap.json", LTG_GAP)
     write_json(DATA / "somong.json", load_yaml("somong.yaml") or {})  # 강의 체크리스트 (지갑털이·올리고폴리·아무나이겨라·굿보스 등)  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)
 
     print("■ 동종업계")
