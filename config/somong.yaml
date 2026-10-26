@@ -2,6 +2,7 @@
 # 조사한 판단(O/△/X)과 근거·출처, 25.4.7 당시 내 판단(past)이 들어 있어요.
 # 'my' 아래는 직접 적는 칸: why_bought(내가 이걸 왜 샀지), review(유지/축소/종료), rank(순위), greed_price(욕망시),
 #   override 에 wallet: X 처럼 적으면 조사 결과 대신 내 판단으로 점수를 계산해요.
+#   my_per(내가 정한 PER, 엑셀 '③ 직접 계산') · my_per_note(이유) 를 적으면 적정주가 4가지 비교표 ④ 에 나와요.
 '003230':
   name: 삼양식품
   wallet:
@@ -571,6 +572,8 @@ NVDA:
     rank: null
     greed_price: ''
     override: {}
+    my_per: 30
+    my_per_note: 하방잡기
 MSFT:
   name: 마이크로소프트
   wallet:
@@ -619,6 +622,8 @@ MSFT:
     rank: null
     greed_price: ''
     override: {}
+    my_per: 20
+    my_per_note: 하방잡기, 오픈 AI, 에져, MS
 GOOG:
   name: 알파벳
   wallet:
@@ -665,6 +670,8 @@ GOOG:
     rank: null
     greed_price: ''
     override: {}
+    my_per: 20
+    my_per_note: 하방잡기, 스페이스x 지분, 제미나이, 유튜브, 자율주행, 로봇
 META:
   name: 메타
   wallet:
@@ -711,6 +718,8 @@ META:
     rank: null
     greed_price: ''
     override: {}
+    my_per: 15
+    my_per_note: 하방잡기, 스마트글래스(애플), SNS독점
 TSLA:
   name: 테슬라
   wallet:
@@ -758,3 +767,5 @@ TSLA:
     rank: null
     greed_price: ''
     override: {}
+    my_per: 50
+    my_per_note: 밸류를 얼마나 더 줘야, 옵티머스로봇, 자율주행(FSD), 스페이스X지분, Xai(그록)

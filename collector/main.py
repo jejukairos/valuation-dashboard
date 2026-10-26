@@ -171,7 +171,8 @@ def stock_detail(h, rates_now, fx):
             fv5 = us_stock.finviz_eps_5y(code)
         except Exception as e:  # noqa: BLE001
             REPORT.block("Finviz", f"EPS next 5Y 접속 실패 ({str(e)[:50]})")
-        adj = [(fv5, "Finviz EPS next 5Y"), (ltg, f"나스닥 컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균" if ests else "")]
+        # 엑셀 ② 보정값 = 시킹알파 EPS 3~5년 성장률 → 유료라 같은 성격의 나스닥 컨센서스 연평균으로 대신, 없으면 ③ Finviz
+        adj = [(ltg, f"나스닥 컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균, 시킹알파 대신")] if ltg and ltg > 0 else [(fv5, "Finviz EPS next 5Y")]
     else:
         adj = [(ltg, f"컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균" if ests else "")]
     pg = C.growth_fair(hist, adj) if ("PER" in fm and "PER" in bands) else None
@@ -187,6 +188,14 @@ def stock_detail(h, rates_now, fx):
         e12 = C.fwd12(hist, "eps")
         if other and other > 0 and e12 and e12 > 0 and fm == ["PER"] and max(other, pg["g"]) / min(other, pg["g"]) >= 2:
             scen["alt"] = {"g": rnd(other, 1), **{k: rnd(e12 * other * f, 2) for k, f in (("bear", 1), ("base", 1.5), ("bull", 2))}}
+        # 내 엑셀의 성장률 방법들을 나란히: ① 기본값 ② 보정값 ③ Finviz (④ 내가 정한 PER 은 화면에서 somong.yaml 값으로)
+        ways = [("기본값", pg["median"], f"{pg['window']} EPS 성장률 중앙값"), ("보정값", ltg, adj[0][1] if ltg else "컨센서스 없음")]
+        if mkt == "US":
+            ways.append(("Finviz", fv5, "Finviz EPS next 5Y"))
+        scen["ways"] = [{"name": nm, "g": rnd(g, 1), "src": s, "used": bool(g) and rnd(g, 1) == pg["g"],
+                         **({k: rnd(e12 * g * f, 2) for k, f in (("bear", 1), ("base", 1.5), ("bull", 2))} if g and g > 0 and e12 and e12 > 0 else {})}
+                        for nm, g, s in ways]  # 성장률 15% → PER 15배 (숫자 그대로)
+        scen["e12"] = rnd(e12, 2) if e12 else None
     if scen:
         fair = scen["base"]
     poss =[(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("pos")
@@ -377,7 +386,7 @@ def _round_scen(scen, dg):
     if not scen:
         return None
     return {**{k: rnd(scen[k], dg) for k in ("bear", "base", "bull")}, "parts": scen["parts"], "note": scen["note"],
-            "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt")}
+            "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12")}
 
 
 def _price_chart(px, currency, days=250):

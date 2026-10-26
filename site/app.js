@@ -222,6 +222,7 @@ function growthHTML(c) {
   const warn = alt ? `<div class="warnbox" style="margin-top:6px">⚠ 과거 성장률과 앞으로 예상 성장률이 2배 넘게 달라요. 다른 쪽(${n(alt.g, 1)}%)으로 계산하면
     Bear ${fmtP(alt.bear)} · <b>Base ${fmtP(alt.base)}</b> (${pct((alt.base / c.price - 1) * 100, 0, true)}) · Bull ${fmtP(alt.bull)}</div>` : "";
   return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:8px">📐 성장률로 정한 PER <b>${n(g.g, 1)}%</b> → Bear ${n(g.mult.bear, 1)} · Base ${n(g.mult.base, 1)} · Bull ${n(g.mult.bull, 1)}배${alt ? ' <span class="pill yellow">⚠ 성장률 차이 큼</span>' : ""}</summary>${warn}
+    ${waysHTML(c, fmtP)}
     <div class="note">쓴 성장률: <b>${esc(g.src)}</b></div>
     <div class="note">기본값(${esc(g.window)} EPS 성장률 중앙값) <b>${g.median == null ? "-" : n(g.median, 1) + "%"}</b> · 보정값 ${g.adj == null ? "-" : `<b>${n(g.adj, 1)}%</b> <span class="src">${esc(g.adj_src || "")}</span>`}</div>
     <div class="tbl-wrap"><table class="compact" style="margin-top:6px"><thead><tr><th style="text-align:left">EPS</th>${g.years.map((y) => `<th>${esc(y)}</th>`).join("")}</tr></thead><tbody>
@@ -236,6 +237,20 @@ function growthHTML(c) {
       ${Object.values(c.eps_srcs).some((s) => s.note) ? `<div class="note src">⚠ = 출처끼리 15% 넘게 달라서 평균 대신 야후 값을 썼어요 (일회성 이익 포함 여부 등 기준 차이)</div>` : ""}` : ""}
     <div class="note src">내 엑셀 방식: 성장률(기대수익률)과 PER 이 비슷하면 보통, 호황·강세장에선 더 받음 · 최근 3년 중 역성장이 있거나, 성장률이 50% 를 넘거나, 과거와 앞으로 예상 성장률이 2배 넘게 다르면 보정값(앞으로 3~5년 EPS 연평균 성장률 추정) 사용 · PER 상한 없음 · PER+PBR 을 같이 보는 종목은 PBR 밴드 값과 평균</div>
   </details>`;
+}
+// 내 엑셀의 적정주가 방법 4가지를 나란히: ① 기본값 ② 보정값 ③ Finviz (성장률 × 1 / 1.5 / 2) ④ 내가 정한 PER (somong.yaml my.my_per)
+function waysHTML(c, fmtP) {
+  const w = c.scen?.ways, e12 = c.scen?.e12;
+  if (!w || !e12) return "";
+  const my = smData(c)?.my || {};
+  const up = (v) => (v == null ? "" : ` <em class="${v >= c.price ? "up" : "dn"}">${pct((v / c.price - 1) * 100, 0, true)}</em>`);
+  const rows = w.map((x, i) => `<tr${x.used ? ' style="font-weight:700"' : ""}><td style="text-align:left">${"①②③"[i]} ${esc(x.name)}${x.used ? " ✔" : ""}<div class="src">${esc(x.src)}</div></td>
+    <td>${x.g == null ? "-" : n(x.g, 1) + "%"}</td>${["bear", "base", "bull"].map((k) => `<td>${x[k] == null ? "-" : fmtP(x[k]) + up(x[k])}</td>`).join("")}</tr>`).join("");
+  const mp = my.my_per ? e12 * my.my_per : null;
+  const mine = `<tr><td style="text-align:left">④ 내가 정한 PER<div class="src">${my.my_per ? esc(my.my_per_note || "") : "config/somong.yaml 의 my.my_per 에 적으면 나와요"}</div></td>
+    <td>${my.my_per ? n(my.my_per, 0) + "배" : "-"}</td><td colspan="3">${mp ? `<b>${fmtP(mp)}</b>${up(mp)}` : "-"}</td></tr>`;
+  return `<div class="chart-title" style="margin-top:8px"><b>적정주가 4가지 비교</b> <span class="src">12MF EPS ${fmtP(e12)} 기준 · ✔ = 위 Bear/Base/Bull 에 쓴 방법${(c.scen.parts || []).length > 1 ? " (위 값은 PBR 밴드와 평균이라 다를 수 있어요)" : ""}</span></div>
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">방법</th><th>성장률</th><th>Bear ×1</th><th>Base ×1.5</th><th>Bull ×2</th></tr></thead><tbody>${rows}${mine}</tbody></table></div>`;
 }
 // 미국: 내 엑셀 '소몽의 적정주가 템플릿' (성장률 × 100~200 = 적정 PER, × 올해 EPS)
 function somongHTML(c) {
