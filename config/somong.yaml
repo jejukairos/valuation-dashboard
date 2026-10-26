@@ -576,7 +576,7 @@ NVDA:
     my_per: 30
     my_per_note: 하방잡기
     sa_ltg: 49.99
-    sa_ltg_date: '2026-10-23'
+    sa_ltg_date: '2026-10-26'
 MSFT:
   name: 마이크로소프트
   wallet:
@@ -628,7 +628,7 @@ MSFT:
     my_per: 20
     my_per_note: 하방잡기, 오픈 AI, 에져, MS
     sa_ltg: 15.95
-    sa_ltg_date: '2026-10-23'
+    sa_ltg_date: '2026-10-26'
 GOOG:
   name: 알파벳
   wallet:
@@ -678,7 +678,7 @@ GOOG:
     my_per: 20
     my_per_note: 하방잡기, 스페이스x 지분, 제미나이, 유튜브, 자율주행, 로봇
     sa_ltg: 13.27
-    sa_ltg_date: '2026-10-23'
+    sa_ltg_date: '2026-10-26'
 META:
   name: 메타
   wallet:
@@ -728,7 +728,7 @@ META:
     my_per: 15
     my_per_note: 하방잡기, 스마트글래스(애플), SNS독점
     sa_ltg: 19.30
-    sa_ltg_date: '2026-10-23'
+    sa_ltg_date: '2026-10-26'
 TSLA:
   name: 테슬라
   wallet:
@@ -779,4 +779,4 @@ TSLA:
     my_per: 50
     my_per_note: 밸류를 얼마나 더 줘야, 옵티머스로봇, 자율주행(FSD), 스페이스X지분, Xai(그록)
     sa_ltg: 32.73
-    sa_ltg_date: '2026-10-23'
+    sa_ltg_date: '2026-10-26'
