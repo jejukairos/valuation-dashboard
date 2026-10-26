@@ -7,7 +7,8 @@
 #    methods: [PER]        # PER / PBR / DIV(배당) 중 골라서
 #    per_basis: forward    # (선택) 조정 PER: 이익이 급증한 종목은 1년 뒤 실적 기준으로 밴드 계산
 #    fair_methods: [PBR]   # (선택) 적정가 계산에 쓸 방식만 따로 (비우면 methods 전부)
-#    sector: 화장품 브랜드  # (선택) sectors.yaml 의 업종 배수로 Bear/Base/Bull 적정주가 계산 (비우면 10년 밴드 배수)
+#    sector: 화장품 브랜드  # (선택) sectors.yaml 의 업종: Bear = 바닥 PER, Base·Bull 은 업종이 받아 본 PER 까지 + 리레이팅 메모
+#    rerating: ""          # (선택) 이 종목만의 리레이팅 메모 (비우면 업종 메모)
 #    data_code: "005930"   # (선택) 우선주처럼 실적·배당을 다른 코드(보통주)에서 가져올 때
 #    splits: []            # (선택) 액면분할 기록 (예: [{date: "2018-05-04", ratio: 50}])
 #    avg_price:            # 평단가 (비워두면 표시 안 함)
@@ -19,6 +20,7 @@ holdings:
   - name: 삼양식품
     market: KR
     code: "003230"
+    sector: 음식료
     industry: 음식료
     methods: [PER]
     avg_price:
@@ -46,6 +48,7 @@ holdings:
   - name: 한화에어로스페이스
     market: KR
     code: "012450"
+    sector: 방산
     industry: 방산
     methods: [PER]
     avg_price:
@@ -54,6 +57,7 @@ holdings:
   - name: 현대로템
     market: KR
     code: "064350"
+    sector: 방산
     industry: 방산·철도
     methods: [PER]
     per_basis: forward
@@ -63,6 +67,7 @@ holdings:
   - name: 롯데쇼핑
     market: KR
     code: "023530"
+    sector: 백화점
     industry: 유통
     methods: [PBR, PER]
     fair_methods: [PBR]   # 이익이 들쭉날쭉해 적정가는 PBR 로만 (PER 논리가 다시 붙으면 바꾸기)
@@ -72,6 +77,7 @@ holdings:
   - name: 현대차
     market: KR
     code: "005380"
+    sector: 자동차
     industry: 자동차
     methods: [PBR, PER, DIV]
     avg_price:
@@ -80,6 +86,7 @@ holdings:
   - name: 기아
     market: KR
     code: "000270"
+    sector: 자동차
     industry: 자동차
     methods: [PBR, PER, DIV]
     avg_price:
@@ -119,6 +126,7 @@ holdings:
   - name: NAVER
     market: KR
     code: "035420"
+    sector: 인터넷
     industry: 인터넷
     methods: [PER]
     splits: [{date: "2018-10-12", ratio: 5}]
@@ -128,6 +136,8 @@ holdings:
   - name: 감성코퍼레이션
     market: KR
     code: "036620"
+    sector: 의류
+    rerating: "아직 리레이팅된 적 없음 (23년 피어 PER 12배 적용, 26.4월 SK증권 적정 15배). 의류 업종 전체가 바닥권(4~6배). 다음 리레이팅 조건: 스노우피크 중국·해외 사업이 숫자로 확인될 때"
     industry: 의류
     methods: [PER, DIV]
     note: "의류 브랜드(스노우피크 어패럴) 회사 — PER + 배당 기준 적정가."

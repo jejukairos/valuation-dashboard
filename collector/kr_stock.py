@@ -3,6 +3,7 @@ import ast
 import io
 import os
 import re
+import statistics
 import zipfile
 from xml.etree import ElementTree
 
@@ -63,6 +64,24 @@ def naver_now(code):
         "div_yield": num(info.get("dividendYieldRatio")), "dps": num(info.get("dividend")),
         "high52": num(info.get("highPriceOf52Weeks")), "low52": num(info.get("lowPriceOf52Weeks")),
     }
+
+
+def sector_per(code):
+    """네이버 업종 PER: WICS 업종 PER(최근 4분기) + 네이버가 고른 같은 업종 회사들의 추정 PER(없으면 현재 PER)."""
+    t = HTTP.get(f"{WISE}/c1010001.aspx?cmp_cd={code}").text
+    m = re.search(r"업종PER\s*<b[^>]*>\s*([-\d.,]+)", t)
+    w = re.search(r"WICS\s*:\s*([^<]+)", t)
+    peers = []
+    for p in (HTTP.get(f"https://m.stock.naver.com/api/stock/{code}/integration").json().get("industryCompareInfo") or [])[:6]:
+        try:
+            info = {x["code"]: x["value"] for x in HTTP.get(f"https://m.stock.naver.com/api/stock/{p['itemCode']}/integration").json().get("totalInfos", [])}
+        except Exception:  # noqa: BLE001
+            continue
+        f, c = num(info.get("cnsPer")), num(info.get("per"))
+        peers.append({"name": p.get("stockName"), "per": f or c, "fwd": bool(f)})
+    vals = [p["per"] for p in peers if p["per"] and p["per"] > 0]
+    med = round(statistics.median(vals), 2) if vals else None
+    return {"wics": w.group(1).strip() if w else None, "per": num(m.group(1)) if m else None, "peers": peers, "peer_med": med}
 
 
 # ---------- 와이즈리포트 (네이버 종목분석) ----------

@@ -208,8 +208,20 @@ function scenHTML(c) {
     <div class="note">지금 가격은 <b>${where}</b>${s.note ? ` · ${esc(s.note)}` : ""}</div>
     <div class="note fm">${multLine}</div>
     <div class="note src">${how}</div>
+    ${floorHTML(c)}
     ${growthHTML(c)}
   </div>`;
+}
+// Bear = 바닥(지하실) PER, Base·Bull = 업종이 받아 본 PER 상한 · 네이버 업종 PER · 리레이팅 상태
+function floorHTML(c) {
+  const s = c.scen, g = s.growth, ind = s.ind, sec = s.sector;
+  const out = [];
+  if (s.bear > c.price * 1.5) out.push(`<div class="warnbox" style="margin-top:6px">⚠ Bear(바닥)가 지금 가격보다 ${pct((s.bear / c.price - 1) * 100, 0)} 높아요. 바닥은 지금 가격 근처나 아래여야 정상이라, 추정 EPS 가 너무 높거나 이익이 한 해 튄 건 아닌지 확인하세요.</div>`);
+  (g?.limit || []).forEach((x) => out.push(`<div class="note src">📏 ${esc(x)}</div>`));
+  if (sec) out.push(`<div class="note src">🏷 ${esc(sec.name)} PER 역사: 바닥 ${n(sec.bear, 1)} · 보통 ${n(sec.base, 1)} · 최고 ${n(sec.bull, 1)}배${sec.history ? ` — ${esc(sec.history)}` : ""}</div>`);
+  if (ind && (ind.per || ind.peer_med)) out.push(`<div class="note src">🏭 네이버 업종 PER${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 최근 4분기 ${ind.per == null ? "-" : n(ind.per, 1) + "배"}${ind.peer_med ? ` · 같은 업종 ${ind.peers.length}곳 중앙값 <b>${n(ind.peer_med, 1)}배</b> (${ind.peers.filter((p) => p.per).map((p) => `${esc(p.name)} ${n(p.per, 1)}${p.fwd ? "" : "*"}`).join(" · ")})` : ""}${ind.peers.some((p) => p.per && !p.fwd) ? " <span>* 추정치 없어 현재 PER</span>" : ""}</div>`);
+  if (s.rerating) out.push(`<div class="note src">🔁 리레이팅: ${esc(s.rerating)}</div>`);
+  return out.join("");
 }
 // 성장률 방식 (내 엑셀 '소몽의 적정주가 템플릿'): 성장률 = EPS 전년 대비 성장률 중앙값, PER = 성장률 × 1 / 1.5 / 2
 function growthHTML(c) {
@@ -229,13 +241,13 @@ function growthHTML(c) {
       <tr><td>EPS</td>${g.eps.map((v) => `<td>${fmtE(v)}</td>`).join("")}</tr>
       <tr><td>성장률</td>${g.yoy.map((v) => `<td class="${v != null && v < 0 ? "dear" : ""}">${v == null ? "-" : n(v, 0) + "%"}</td>`).join("")}</tr></tbody></table></div>
     <table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">적정 PER</th><th>배수</th><th>× 12MF EPS</th>${e27 ? "<th>× 27E EPS</th>" : ""}</tr></thead><tbody>
-      ${[["Bear (성장률 × 1)", "bear"], ["Base (× 1.5)", "base"], ["Bull (× 2, 강세장·금리 낮을 때)", "bull"]].map(([l, k]) => `<tr><td>${l}</td><td style="text-align:right">${n(g.mult[k], 1)}배</td>
+      ${[["Bear (바닥 PER)", "bear"], ["Base (× 1.5, 업종 보통까지)", "base"], ["Bull (× 2, 업종 최고까지)", "bull"]].map(([l, k]) => `<tr><td>${l}</td><td style="text-align:right">${n(g.mult[k], 1)}배${g.raw && g.raw[k] !== g.mult[k] ? `<br><span class="src">성장률만 ${n(g.raw[k], 1)}</span>` : ""}</td>
         <td style="text-align:right"><b>${fmtP(c.scen[k])}</b></td>${e27 ? `<td style="text-align:right">${fmtP(e27[k])}</td>` : ""}</tr>`).join("")}</tbody></table>
     ${c.eps_srcs && Object.keys(c.eps_srcs).length ? `<div class="chart-title" style="margin-top:8px"><b>EPS 추정치 출처</b> <span class="src">시킹알파(유료) 대신 받을 수 있는 출처들의 평균을 써요</span></div>
       <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">연도</th>${["야후", "나스닥", "Finviz", "평균"].map((k) => `<th>${k}</th>`).join("")}</tr></thead><tbody>
       ${Object.entries(c.eps_srcs).map(([y, s]) => `<tr><td>${esc(y)}${s.note ? " ⚠" : ""}</td>${["야후", "나스닥", "Finviz", "평균"].map((k) => `<td${k === "평균" ? ' style="font-weight:700"' : ""}>${s[k] == null ? "-" : n(s[k], 2)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
       ${Object.values(c.eps_srcs).some((s) => s.note) ? `<div class="note src">⚠ = 출처끼리 15% 넘게 달라서 평균 대신 야후 값을 썼어요 (일회성 이익 포함 여부 등 기준 차이)</div>` : ""}` : ""}
-    <div class="note src">내 엑셀 방식: 성장률(기대수익률)과 PER 이 비슷하면 보통, 호황·강세장에선 더 받음 · 최근 3년 중 역성장이 있거나, 성장률이 50% 를 넘거나, 과거와 앞으로 예상 성장률이 2배 넘게 다르면 보정값(앞으로 3~5년 EPS 연평균 성장률 추정) 사용 · PER 상한 없음 · PER+PBR 을 같이 보는 종목은 PBR 밴드 값과 평균</div>
+    <div class="note src">내 엑셀 방식: 성장률(기대수익률)과 PER 이 비슷하면 보통, 호황·강세장에선 더 받음 · 최근 3년 중 역성장이 있거나, 성장률이 50% 를 넘거나, 과거와 앞으로 예상 성장률이 2배 넘게 다르면 보정값(앞으로 3~5년 EPS 연평균 성장률 추정) 사용 · Bear 는 바닥(지하실)이라 성장률 PER·이 종목 10년 최저·업종 바닥 중 가장 낮은 값, Base·Bull 은 업종이 받아 본 보통·최고 PER 까지만 (config/sectors.yaml) · PER+PBR 을 같이 보는 종목은 PBR 밴드 값과 평균</div>
   </details>`;
 }
 // 내 엑셀의 적정주가 방법 4가지를 나란히: ① 기본값 ② 보정값 ③ Finviz (성장률 × 1 / 1.5 / 2) ④ 내가 정한 PER (somong.yaml my.my_per)
@@ -255,7 +267,7 @@ function waysHTML(c, fmtP) {
   const stale = c.scen.ltg_cmp ? (sa == null ? `<div class="warnbox" style="margin-top:6px">⚠ <b>시킹알파 값이 비어 있어요.</b> 시킹알파 → ${esc(c.code)} → Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)' 숫자를 config/somong.yaml 의 sa_ltg 에 적어 주세요.</div>`
     : age > 90 ? `<div class="warnbox" style="margin-top:6px;border-color:var(--bad);background:var(--bad-bg)">🔴 <b>시킹알파 값 갱신 필요!</b> 마지막 확인 ${esc(c.scen.sa_date)} (${age}일 전) — 한 분기가 지났어요. 실적 발표 뒤 바뀌었을 수 있으니 Growth 탭에서 다시 확인해 주세요.${(c.scen.ways || []).some((w) => w.name === "보정값" && /대체/.test(w.src)) ? " 그동안은 평소 시킹알파와 가장 가까웠던 출처로 대신 계산하고 있어요." : ""}</div>`
     : `<div class="note src">시킹알파 값 확인일 ${esc(c.scen.sa_date || "-")} (${age ?? "-"}일 전) · 90일이 지나면 빨간 표시로 갱신하라고 알려줘요</div>`) : "";
-  return `${stale}<div class="chart-title" style="margin-top:8px"><b>적정주가 4가지 비교</b> <span class="src">12MF EPS ${fmtP(e12)} 기준 · ✔ = 위 Bear/Base/Bull 에 쓴 방법${(c.scen.parts || []).length > 1 ? " (위 값은 PBR 밴드와 평균이라 다를 수 있어요)" : ""}</span></div>
+  return `${stale}<div class="chart-title" style="margin-top:8px"><b>적정주가 4가지 비교</b> <span class="src">12MF EPS ${fmtP(e12)} 기준 · ✔ = 위 Bear/Base/Bull 에 쓴 방법 · 바닥·업종 상한 보정 전 값${(c.scen.parts || []).length > 1 ? " (위 값은 PBR 밴드와 평균이라 다를 수 있어요)" : ""}</span></div>
     <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">방법</th><th>성장률</th><th>Bear ×1</th><th>Base ×1.5</th><th>Bull ×2</th></tr></thead><tbody>${rows}${mine}</tbody></table></div>${cmp}${c.scen.ltg_note ? `<div class="note src">${esc(c.scen.ltg_note)}</div>` : ""}`;
 }
 // 시킹알파 3-5Y 성장률을 마지막으로 확인한 뒤 지난 날 수 (직접 입력값이라 분기마다 갱신 필요)

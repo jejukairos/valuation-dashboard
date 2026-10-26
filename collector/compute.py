@@ -185,6 +185,30 @@ def growth_fair(hist, adj_candidates=()):
             "window": f"{str(y - 5)[2:]}~{str(y)[2:]}E"}
 
 
+def floor_cap(m, band, sector=None, sec_name=None):
+    """성장률 PER(× 1 / 1.5 / 2)에 바닥·천장 보정.
+    Bear = 바닥(지하실): 성장률 PER · 이 종목 10년 최저 PER · 업종 바닥 PER 중 가장 낮은 값.
+    Base·Bull 은 업종이 받아 본 보통·최고 PER 을 넘지 않게 (수출주처럼 이익이 한 해 튀어 성장률이 부풀 때 보정)."""
+    st = (band or {}).get("periods", {})
+    st = st.get("10y") or st.get("all") or {}
+    sec = sector if sector and str(sector.get("kind", "PER")).upper() == "PER" else None
+    floors = [("성장률", m["bear"])]
+    if st.get("low") and st["low"] > 0:
+        floors.append(("이 종목 10년 최저", st["low"]))
+    if sec:
+        floors.append((f"{sec_name} 바닥", sec["bear"]))
+    lab, bear = min(floors, key=lambda x: x[1])
+    notes = [f"Bear = 바닥 PER {bear:.1f}배 ({lab}) — " + " · ".join(f"{k} {v:.1f}배" for k, v in floors) + " 중 가장 낮은 값"]
+    out = {"bear": bear}
+    for k, word in (("base", "보통"), ("bull", "최고")):
+        v = m[k]
+        if sec and v > sec[k]:
+            notes.append(f"{k.capitalize()} {v:.1f}배 → {sec[k]:g}배 ({sec_name} 업종이 받아 본 {word} PER 로 상한)")
+            v = sec[k]
+        out[k] = max(v, out["bear"] if k == "base" else out["base"])
+    return {k: rnd(v, 1) for k, v in out.items()}, notes
+
+
 def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
     """적정주가 Bear / Base / Bull: 12개월 선행(12MF) EPS·BPS × 배수.
     PER 배수는 성장률 방식(growth_fair: 성장률 × 1 / 1.5 / 2)이 있으면 그것, 업종 배수(sectors.yaml)를 고른 종목은 그것,

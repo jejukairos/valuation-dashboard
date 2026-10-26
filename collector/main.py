@@ -211,6 +211,9 @@ def stock_detail(h, rates_now, fx):
     pg = C.growth_fair(hist, adj) if ("PER" in fm and "PER" in bands) else None
     sec_name = h.get("sector") if h.get("fair_mode") == "sector" else None  # 업종 배수는 fair_mode: sector 로 고른 종목만
     sec = dict(SECTORS[sec_name], name=sec_name) if sec_name in SECTORS else None
+    if pg:  # Bear 는 바닥 PER, Base·Bull 은 업종이 받아 본 PER 까지만 (sectors.yaml)
+        pg["raw"] = dict(pg["mult"])
+        pg["mult"], pg["limit"] = C.floor_cap(pg["mult"], bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"))
     scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg)
     if scen and pg:
         scen["growth"] = pg
@@ -235,6 +238,14 @@ def stock_detail(h, rates_now, fx):
             scen["ltg_note"] = ltg_note
     if scen:
         fair = scen["base"]
+        s_ = SECTORS.get(h.get("sector")) or {}
+        scen["rerating"] = h.get("rerating") or s_.get("rerating")
+        scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "history")}} if s_ else None
+        if mkt == "KR":
+            try:
+                scen["ind"] = kr_stock.sector_per(str(h.get("data_code") or code))
+            except Exception as e:  # noqa: BLE001
+                REPORT.block("네이버 업종 PER", f"{name}: {str(e)[:60]}")
     poss =[(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("pos")
             for k in ("PER", "PBR") if k in bands and k in methods]
     poss = [p for p in poss if p is not None]
@@ -424,7 +435,8 @@ def _round_scen(scen, dg):
         return None
     return {**{k: rnd(scen[k], dg) for k in ("bear", "base", "bull")}, "parts": scen["parts"], "note": scen["note"],
             "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12"),
-            "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date"), "ltg_note": scen.get("ltg_note")}
+            "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date"), "ltg_note": scen.get("ltg_note"),
+            "rerating": scen.get("rerating"), "sector": scen.get("sector"), "ind": scen.get("ind")}
 
 
 def _price_chart(px, currency, days=250):
