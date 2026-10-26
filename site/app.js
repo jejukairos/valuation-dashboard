@@ -181,6 +181,8 @@ function scenHTML(c) {
   const usd = c.currency === "USD";
   const fmtP = (v) => (usd ? "$" + n(v, 0) + krw(v) : n(v));
   const pts = [["bear", "Bear", "보수적"], ["base", "Base", "중간"], ["bull", "Bull", "낙관적"]];
+  // 시장 국면: 긴축·약세장이면 적정가 = Bear(× 1)·상방 Base(× 1.5), 완화·강세장이면 적정가 = Base·상방 Bull(× 2)
+  const reg = s.regime, fk = s.fair_key || "base", tight = fk === "bear", up1 = tight ? "base" : "bull";
   const lo0 = Math.min(c.price, s.bear), hi0 = Math.max(c.price, s.bull);
   const pad = (hi0 - lo0) * 0.08 || hi0 * 0.05;
   const lo = Math.max(0, lo0 - pad), hi = hi0 + pad;
@@ -203,8 +205,10 @@ function scenHTML(c) {
     </div>
     <div class="scen3">${pts.map(([k, l, ko]) => {
       const up = (s[k] / c.price - 1) * 100;
-      return `<div class="${k}${k === "base" ? " on" : ""}"><span>${l} <span class="src">${ko}</span></span><b>${fmtP(s[k])}</b><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></div>`;
+      const tag = k === fk ? "적정가" : k === up1 ? "상방" : tight && k === "bull" ? "완화장에서만" : "";
+      return `<div class="${k}${k === fk ? " on" : ""}"${tight && k === "bull" ? ' style="opacity:.55"' : ""}><span>${l} <span class="src">${tag ? `<b>${tag}</b>` : ko}</span></span><b>${fmtP(s[k])}</b><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></div>`;
     }).join("")}</div>
+    ${reg ? `<div class="note">🌡 시장 국면 <b>${esc(reg.label)}</b>${reg.manual ? " (직접 고정)" : ""} → 적정가 = 성장률 PER × ${tight ? "1" : "1.5"}, 상방 × ${tight ? "1.5" : "2"}까지 <span class="src">${reg.why.map(esc).join(" · ")}</span></div>` : ""}
     <div class="note">지금 가격은 <b>${where}</b>${s.note ? ` · ${esc(s.note)}` : ""}</div>
     <div class="note fm">${multLine}</div>
     <div class="note src">${how}</div>

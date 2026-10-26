@@ -237,7 +237,12 @@ def stock_detail(h, rates_now, fx):
             scen["sa_date"] = sa_d or None
             scen["ltg_note"] = ltg_note
     if scen:
-        fair = scen["base"]
+        # 시장 국면: 긴축·약세장이면 성장률 PER 은 × 1(Bear 칸)이 적정가, 완화·강세장이면 × 1.5(Base 칸). 밴드·업종 배수 부분은 늘 Base
+        reg = (rates_now.get("regime") or {}).get(mkt)
+        grow = any(p["src"].startswith("성장률") for p in scen["parts"])
+        fk = "bear" if grow and reg and reg["mode"] == "tight" else "base"
+        fair = sum(p["price"][fk if p["src"].startswith("성장률") else "base"] for p in scen["parts"]) / len(scen["parts"])
+        scen["regime"], scen["fair_key"] = (reg if grow else None), fk
         s_ = SECTORS.get(h.get("sector")) or {}
         scen["rerating"] = h.get("rerating") or s_.get("rerating")
         scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "history")}} if s_ else None
@@ -424,8 +429,10 @@ def stock_detail(h, rates_now, fx):
 def _scen_text(scen):
     """'12MF EPS × Base PER 22.5배 (화장품 브랜드)' 처럼."""
     base = {"PER": "EPS", "PBR": "BPS"}
+    fk = scen.get("fair_key", "base")
+    reg = f", {scen['regime']['label']}" if scen.get("regime") else ""
     parts = [f"12MF {base[p['kind']]} × {p['src']} 평균 {p['kind']}" if "밴드" in p["src"] else
-             f"12MF EPS × PER {p['mult']['base']:g}배 ({p['src']} × 1.5)" if p["src"].startswith("성장률") else
+             f"12MF EPS × PER {p['mult'][fk]:g}배 ({'Bear' if fk == 'bear' else 'Base'} 칸 · {p['src']}{reg})" if p["src"].startswith("성장률") else
              f"12MF {base[p['kind']]} × {p['kind']} {p['mult']['base']:g}배 ({p['src']})" for p in scen["parts"]]
     return parts[0] if len(parts) == 1 else "두 값 평균: " + " / ".join(parts)
 
@@ -436,7 +443,8 @@ def _round_scen(scen, dg):
     return {**{k: rnd(scen[k], dg) for k in ("bear", "base", "bull")}, "parts": scen["parts"], "note": scen["note"],
             "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12"),
             "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date"), "ltg_note": scen.get("ltg_note"),
-            "rerating": scen.get("rerating"), "sector": scen.get("sector"), "ind": scen.get("ind")}
+            "rerating": scen.get("rerating"), "sector": scen.get("sector"), "ind": scen.get("ind"),
+            "regime": scen.get("regime"), "fair_key": scen.get("fair_key")}
 
 
 def _price_chart(px, currency, days=250):
@@ -539,6 +547,9 @@ def main():
         kr_sig["premium_hist_label"] = "코스피 선행 PER 기준 (갱신할 때마다 쌓임)"
 
     fx = attempt("원/달러 환율", usdkrw) or prev.get("fx")
+    # 시장 국면 (긴축·약세 / 완화·강세): 종목 적정가를 성장률 × 1 로 볼지 × 1.5 로 볼지
+    regime = {mk: attempt(f"시장 국면 ({nm})", lambda t=t, nm=nm: C.market_regime(us_stock.price_history(t), nm, us10))
+              for mk, t, nm in (("KR", "^KS11", "코스피"), ("US", "^GSPC", "S&P500"))}
 
     print("■ 보유종목")
     cards = []
@@ -546,7 +557,7 @@ def main():
     for i, h in enumerate(load_yaml("stocks.yaml")["holdings"]):
         code = str(h["code"])
         try:
-            det = stock_detail(h, {"us10y": us10, "kr3y": kr3}, fx)
+            det = stock_detail(h, {"us10y": us10, "kr3y": kr3, "regime": regime}, fx)
             det["card"]["order"] = i
             # 텔레그램 채널 글 중 지난 갱신 때 없던 글에 🆕 표시 (처음 모으는 날은 표시 안 함)
             posts = ((det["card"].get("us_tpl") or {}).get("street") or {}).get("posts") or []

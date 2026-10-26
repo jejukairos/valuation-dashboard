@@ -185,6 +185,29 @@ def growth_fair(hist, adj_candidates=()):
             "window": f"{str(y - 5)[2:]}~{str(y)[2:]}E"}
 
 
+def market_regime(idx, idx_name, us10y):
+    """시장 국면: 미국채 10년이 기준 이상(긴축)이거나 지수가 200일 평균 아래·평균선이 한 달 전보다 낮으면(약세·횡보) tight.
+    셋 다 아니면(금리 낮고 지수가 오르는 평균선 위) easy."""
+    cfg = SETTINGS.get("market_regime") or {}
+    why = []
+    if us10y is not None and us10y >= cfg.get("us10y_tight", 5.0):
+        why.append(f"미국채 10년 {us10y:.2f}% (≥ {cfg.get('us10y_tight', 5.0):g}%, 긴축)")
+    days = cfg.get("ma_days", 200)
+    s = idx.dropna() if idx is not None else None
+    if s is not None and len(s) > days + 21:
+        ma = s.rolling(days).mean()
+        if s.iloc[-1] < ma.iloc[-1]:
+            why.append(f"{idx_name} {days}일 평균 아래 ({(s.iloc[-1] / ma.iloc[-1] - 1) * 100:+.1f}%)")
+        if ma.iloc[-1] < ma.iloc[-22]:
+            why.append(f"{idx_name} {days}일 평균선이 한 달 전보다 낮음 (내려가는 중)")
+    fixed = cfg.get("mode", "auto")
+    mode = fixed if fixed in ("tight", "easy") else ("tight" if why else "easy")
+    if not why:
+        why.append(f"미국채 10년 {us10y:.2f}% · {idx_name} 오르는 {days}일 평균선 위" if us10y is not None else f"{idx_name} 오르는 {days}일 평균선 위")
+    return {"mode": mode, "why": why, "manual": fixed in ("tight", "easy"),
+            "label": "긴축·약세장" if mode == "tight" else "완화·강세장"}
+
+
 def floor_cap(m, band, sector=None, sec_name=None):
     """성장률 PER(× 1 / 1.5 / 2)에 바닥·천장 보정.
     Bear = 바닥(지하실): 성장률 PER · 이 종목 10년 최저 PER · 업종 바닥 PER 중 가장 낮은 값.
