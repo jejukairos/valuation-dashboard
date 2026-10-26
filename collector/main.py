@@ -18,6 +18,7 @@ import us_stock
 from common import DATA, REPORT, SETTINGS, attempt, load_yaml, now_kst, read_json, rnd, write_json
 
 SECTORS = load_yaml("sectors.yaml") or {}
+SOMONG = load_yaml("somong.yaml") or {}
 
 
 def keep_prev(new, prev, label):
@@ -159,7 +160,7 @@ def stock_detail(h, rates_now, fx):
                 fairs.append(("배당", d / (y10 / 100)))
     fair = sum(v for _, v in fairs) / len(fairs) if fairs else None
     # 적정가 = Bear/Base/Bull 의 Base (12MF 실적 × 업종 배수 또는 10년 밴드 배수). 배당만 보는 종목은 위 값 그대로
-    # 성장률 방식 적정 PER (내 엑셀 템플릿). 보정값 후보: 미국 = Finviz EPS next 5Y·나스닥 컨센서스 CAGR, 한국 = 컨센서스 올해→28E EPS CAGR
+    # 성장률 방식 적정 PER (내 엑셀 템플릿). 보정값: 미국 = 시킹알파 3~5Y CAGR(직접 입력), 한국 = 컨센서스 앞으로 3년 EPS 성장률
     y0 = now_kst().year
     fv5 = ltg = None
     ests = sorted(yy for yy, r in hist.items() if r.get("estimate") and r.get("eps"))
@@ -171,10 +172,19 @@ def stock_detail(h, rates_now, fx):
             fv5 = us_stock.finviz_eps_5y(code)
         except Exception as e:  # noqa: BLE001
             REPORT.block("Finviz", f"EPS next 5Y 접속 실패 ({str(e)[:50]})")
-        # 엑셀 ② 보정값 = 시킹알파 EPS 3~5년 성장률 → 유료라 같은 성격의 나스닥 컨센서스 연평균으로 대신, 없으면 ③ Finviz
-        adj = [(ltg, f"나스닥 컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균, 시킹알파 대신")] if ltg and ltg > 0 else [(fv5, "Finviz EPS next 5Y")]
+        # 엑셀 ② 보정값 = 시킹알파 Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)': somong.yaml my.sa_ltg 에 적은 값.
+        # shortcut: 자동 수집은 시킹알파가 막아서 직접 입력, 비어 있으면 나스닥 컨센서스 연평균으로 임시 대신
+        my = ((SOMONG.get(code) or {}).get("my") or {})
+        if my.get("sa_ltg"):
+            ltg = float(my["sa_ltg"])
+            adj = [(ltg, f"시킹알파 EPS FWD Long Term Growth (3-5Y CAGR), {my.get('sa_ltg_date') or '날짜 미기록'} 입력")]
+        else:
+            adj = [(ltg, f"시킹알파 값 미입력 → 임시로 나스닥 컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균")] if ltg and ltg > 0 else [(fv5, "Finviz EPS next 5Y")]
     else:
-        adj = [(ltg, f"컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균" if ests else "")]
+        # 한국은 시킹알파 같은 3~5년 성장률이 없어 네이버·에프앤가이드 컨센서스(증권사 추정 합산) 앞으로 3년 EPS 성장률
+        cg = C.cons_growth(hist, y0)
+        ltg = cg[0] if cg else None
+        adj = [cg or (None, "")]
     pg = C.growth_fair(hist, adj) if ("PER" in fm and "PER" in bands) else None
     sec_name = h.get("sector") if h.get("fair_mode") == "sector" else None  # 업종 배수는 fair_mode: sector 로 고른 종목만
     sec = dict(SECTORS[sec_name], name=sec_name) if sec_name in SECTORS else None
@@ -189,7 +199,7 @@ def stock_detail(h, rates_now, fx):
         if other and other > 0 and e12 and e12 > 0 and fm == ["PER"] and max(other, pg["g"]) / min(other, pg["g"]) >= 2:
             scen["alt"] = {"g": rnd(other, 1), **{k: rnd(e12 * other * f, 2) for k, f in (("bear", 1), ("base", 1.5), ("bull", 2))}}
         # 내 엑셀의 성장률 방법들을 나란히: ① 기본값 ② 보정값 ③ Finviz (④ 내가 정한 PER 은 화면에서 somong.yaml 값으로)
-        ways = [("기본값", pg["median"], f"{pg['window']} EPS 성장률 중앙값"), ("보정값", ltg, adj[0][1] if ltg else "컨센서스 없음")]
+        ways = [("기본값", pg["median"], f"{pg['window']} EPS 성장률 중앙값"), ("보정값", adj[0][0], adj[0][1] or "컨센서스 없음")]
         if mkt == "US":
             ways.append(("Finviz", fv5, "Finviz EPS next 5Y"))
         scen["ways"] = [{"name": nm, "g": rnd(g, 1), "src": s, "used": bool(g) and rnd(g, 1) == pg["g"],

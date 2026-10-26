@@ -126,6 +126,27 @@ def fwd12(hist, key):
     return w0 * a + (1 - w0) * b
 
 
+def cons_growth(hist, y0):
+    """컨센서스(증권사 추정 합산) 앞으로 3년 EPS 성장률: 작년 실적→올해E→… 중 마지막 3구간 (29E 까지 있으면 26→27→28→29).
+    연평균(CAGR)을 쓰되, 한 해가 튀면(역성장, 또는 가장 큰 해가 가장 작은 해의 3배 이상) 해마다 성장률의 중앙값."""
+    e = {y: (hist.get(y) or {}).get("eps") for y in range(y0 - 1, y0 + 5)}
+    ys = [y0 - 1]
+    while e.get(ys[-1] + 1) and hist[ys[-1] + 1].get("estimate"):
+        ys.append(ys[-1] + 1)
+    ys = ys[-4:]
+    if len(ys) < 3 or any(not e[y] or e[y] <= 0 for y in ys[:-1]):
+        return None
+    lab = lambda y: ylabel(y) if hist[y].get("estimate") else str(y)[2:]  # noqa: E731
+    steps = [(f"{lab(a)}→{lab(b)}", (e[b] / e[a] - 1) * 100) for a, b in zip(ys, ys[1:])]
+    vals = [v for _, v in steps]
+    cagr = ((e[ys[-1]] / e[ys[0]]) ** (1 / (len(ys) - 1)) - 1) * 100 if e[ys[-1]] > 0 else None
+    odd = cagr is None or min(vals) <= 0 or max(vals) / min(vals) >= 3
+    g = statistics.median(vals) if odd else cagr
+    txt = " · ".join(f"{k} {v:+.0f}%" for k, v in steps)
+    how = f"해마다 성장률이 들쭉날쭉해 중앙값 {g:.1f}%" if odd else f"연평균 {g:.1f}%"
+    return g, f"컨센서스 {txt} → {how}"
+
+
 def growth_fair(hist, adj_candidates=()):
     """내 엑셀 '소몽의 적정주가 템플릿' 방식의 적정 PER.
     평균성장률 = 21년~올해(E) EPS 전년 대비 성장률의 중앙값 (코로나·기저효과·금리 급등기 튀는 해의 영향을 줄임).

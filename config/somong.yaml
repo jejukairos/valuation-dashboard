@@ -3,6 +3,7 @@
 # 'my' 아래는 직접 적는 칸: why_bought(내가 이걸 왜 샀지), review(유지/축소/종료), rank(순위), greed_price(욕망시),
 #   override 에 wallet: X 처럼 적으면 조사 결과 대신 내 판단으로 점수를 계산해요.
 #   my_per(내가 정한 PER, 엑셀 '③ 직접 계산') · my_per_note(이유) 를 적으면 적정주가 4가지 비교표 ④ 에 나와요.
+#   sa_ltg(미국): 시킹알파 → 종목 → Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)' 의 % 숫자, sa_ltg_date 는 확인한 날. ② 보정값으로 써요.
 '003230':
   name: 삼양식품
   wallet:
@@ -574,6 +575,8 @@ NVDA:
     override: {}
     my_per: 30
     my_per_note: 하방잡기
+    sa_ltg: 49.99
+    sa_ltg_date: '2026-10-23'
 MSFT:
   name: 마이크로소프트
   wallet:
@@ -624,6 +627,8 @@ MSFT:
     override: {}
     my_per: 20
     my_per_note: 하방잡기, 오픈 AI, 에져, MS
+    sa_ltg: null
+    sa_ltg_date: null
 GOOG:
   name: 알파벳
   wallet:
@@ -672,6 +677,8 @@ GOOG:
     override: {}
     my_per: 20
     my_per_note: 하방잡기, 스페이스x 지분, 제미나이, 유튜브, 자율주행, 로봇
+    sa_ltg: null
+    sa_ltg_date: null
 META:
   name: 메타
   wallet:
@@ -720,6 +727,8 @@ META:
     override: {}
     my_per: 15
     my_per_note: 하방잡기, 스마트글래스(애플), SNS독점
+    sa_ltg: null
+    sa_ltg_date: null
 TSLA:
   name: 테슬라
   wallet:
@@ -769,3 +778,5 @@ TSLA:
     override: {}
     my_per: 50
     my_per_note: 밸류를 얼마나 더 줘야, 옵티머스로봇, 자율주행(FSD), 스페이스X지분, Xai(그록)
+    sa_ltg: null
+    sa_ltg_date: null
