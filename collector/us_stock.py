@@ -190,6 +190,13 @@ def finviz_eps_5y(t):
     return num(m.group(1)) if m else None
 
 
+def zacks_ltg(t):
+    """Zacks 'Growth Estimates' 표의 Next 5 Years (향후 5년 연평균 EPS 성장률 %, 첫 칸 = 종목)."""
+    txt = HTTP.get(f"https://www.zacks.com/stock/quote/{t}/detailed-earning-estimates").text
+    m = re.search(r">\s*Next 5 Years\s*</td>\s*<td[^>]*>\s*(-?[\d.]+)\s*<", txt)
+    return num(m.group(1)) if m else None
+
+
 def tipranks(t):
     """TipRanks 애널리스트 목표주가 (최근 3개월): 최저·평균·최고 + 매수·보유·매도 의견 수."""
     import requests

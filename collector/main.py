@@ -175,6 +175,13 @@ def stock_detail(h, rates_now, fx):
         # 엑셀 ② 보정값 = 시킹알파 Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)': somong.yaml my.sa_ltg 에 적은 값.
         # shortcut: 자동 수집은 시킹알파가 막아서 직접 입력, 비어 있으면 나스닥 컨센서스 연평균으로 임시 대신
         my = ((SOMONG.get(code) or {}).get("my") or {})
+        try:
+            zk = us_stock.zacks_ltg(code)
+        except Exception as e:  # noqa: BLE001
+            zk = None
+            REPORT.block("Zacks", f"Next 5 Years 접속 실패 ({str(e)[:50]})")
+        # 3~5년 성장률 출처 비교 (시킹알파 기준으로 얼마나 다른지 화면에 표시)
+        ltg_cmp = [["시킹알파", my.get("sa_ltg")], ["Zacks", zk], ["Finviz", fv5], ["나스닥(내 계산)", rnd(ltg, 1) if ltg else None]]
         if my.get("sa_ltg"):
             ltg = float(my["sa_ltg"])
             adj = [(ltg, f"시킹알파 EPS FWD Long Term Growth (3-5Y CAGR), {my.get('sa_ltg_date') or '날짜 미기록'} 입력")]
@@ -206,6 +213,9 @@ def stock_detail(h, rates_now, fx):
                          **({k: rnd(e12 * g * f, 2) for k, f in (("bear", 1), ("base", 1.5), ("bull", 2))} if g and g > 0 and e12 and e12 > 0 else {})}
                         for nm, g, s in ways]  # 성장률 15% → PER 15배 (숫자 그대로)
         scen["e12"] = rnd(e12, 2) if e12 else None
+        if mkt == "US":
+            scen["ltg_cmp"] = ltg_cmp
+            scen["sa_date"] = str(my.get("sa_ltg_date") or "") or None
     if scen:
         fair = scen["base"]
     poss =[(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("pos")
@@ -396,7 +406,8 @@ def _round_scen(scen, dg):
     if not scen:
         return None
     return {**{k: rnd(scen[k], dg) for k in ("bear", "base", "bull")}, "parts": scen["parts"], "note": scen["note"],
-            "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12")}
+            "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12"),
+            "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date")}
 
 
 def _price_chart(px, currency, days=250):
