@@ -70,7 +70,11 @@ def insider(code, days=90, max_docs=25):
     return {"days": days, "buy": sumamt("매수"), "sell": sumamt("매도"), "buyers": who("매수"), "sellers": who("매도"),
             "major_sell": sumamt("매도", lambda x: x["role"] == "대주주"), "major_buy": sumamt("매수", lambda x: x["role"] == "대주주"),
             "exec_buyers": who("매수", lambda x: x["role"] != "대주주"), "ceo_buy": who("매수", lambda x: x["role"] == "대표이사"),
-            "rows": rows[:40], "reports": len(reps)}
+            "rows": rows[:40], "reports": len(reps),
+            # shortcut: 원인 확인용 (DART 키가 GitHub 에만 있어 내 컴퓨터에서 못 돌려 봄) — 장내 거래가 잘 잡히면 지우기
+            "debug": {"status": j.get("status"), "n": len(j.get("list", [])), "last": max((r.get("rcept_dt", "") for r in j.get("list", [])), default=None),
+                      "keys": sorted((j.get("list") or [{}])[0].keys()), "sample": {k: (j.get("list") or [{}])[-1].get(k) for k in
+                      ("rcept_dt", "repror", "isu_exctv_ofcps", "isu_main_shrholdr", "sp_stock_lmp_irds_cnt")}}}
 
 
 def company(code):
