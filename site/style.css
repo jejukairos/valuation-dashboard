@@ -235,6 +235,16 @@ table.cmp .dim { color: var(--muted); }
 .pd-l b { color: var(--ink); }
 .irl { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }
 .irl a, .pd a, .note a { color: var(--s1); }
+/* 분기 실적 한눈에 */
+.qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 640px) { .qgrid { grid-template-columns: 1fr; } }
+.qp { border: 1px solid var(--border); border-radius: 10px; padding: 8px 8px 2px; background: var(--surface); }
+.qt { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 13px; }
+.qtag { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--good-bg); color: var(--good-ink); white-space: nowrap; }
+.qtag.bad { background: var(--bad-bg); color: var(--bad-ink); } .qtag.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.qp svg, svg.sankey { width: 100%; height: auto; display: block; }
+.qx { font-size: 10px; fill: var(--muted); } .qv { font-size: 10px; fill: var(--ink-2); } .qv.b { font-weight: 700; fill: var(--ink); }
+.sk { font-size: 12px; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; } .sk2 { font-size: 11px; fill: var(--muted); font-weight: 400; }
 /* 소몽 체크리스트 */
 .smsc { margin-left: 4px; color: var(--ink); } .smsc.ok, table.cmp b.ok { color: var(--good-ink); }
 .smchips { font-size: 12px; color: var(--ink-2); margin-top: 4px; line-height: 1.9; }

@@ -41,6 +41,27 @@ def fin(tkr):
     return out
 
 
+def quarters(tkr, saved=None):
+    """분기 실적 {분기 끝 날짜: {rev, cogs, gp, rnd, sm, ga, opex, op, ni, fcf, capex}} (원 또는 달러).
+    야후는 최근 5~6분기만 주므로 예전에 받아 둔 분기(saved)와 합쳐 1년 전 같은 분기 대비 성장률을 계산할 수 있게 쌓는다."""
+    tk = yf.Ticker(tkr)
+    inc, cf = tk.quarterly_income_stmt, tk.quarterly_cashflow
+    rows = {"rev": (inc, "Total Revenue"), "cogs": (inc, "Cost Of Revenue"), "gp": (inc, "Gross Profit"),
+            "rnd": (inc, "Research And Development"), "sm": (inc, "Selling And Marketing Expense"),
+            "ga": (inc, "General And Administrative Expense"), "sga": (inc, "Selling General And Administration"),
+            "opex": (inc, "Operating Expense"), "op": (inc, "Operating Income"), "ni": (inc, "Net Income"),
+            "fcf": (cf, "Free Cash Flow"), "capex": (cf, "Capital Expenditure")}
+    out = dict(saved or {})
+    for col in inc.columns:
+        d = {}
+        for k, (df, row) in rows.items():
+            v = df.loc[row].get(col) if row in df.index and col in df.columns else None
+            d[k] = float(v) if v is not None and v == v else None
+        if d["rev"] is not None and d["op"] is not None:
+            out[str(col.date())] = {**(out.get(str(col.date())) or {}), **{k: v for k, v in d.items() if v is not None}}
+    return dict(sorted(out.items())[-12:])
+
+
 def _at(f, k, i=0):
     s = f.get(k) or []
     return s[i] if len(s) > i else None

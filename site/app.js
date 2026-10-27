@@ -673,6 +673,108 @@ const PRE_Q = [
     ["future", "1~2년 뒤에도 좋아질 주식인가? 회사의 미래를 상상해 보면?", "text"],
     ["done3", "정량(숫자)·정성(스토리)·기술적(차트) 분석을 다 했나?", "chk:정량|정성|기술적"]]],
 ];
+/* ---------- 분기 실적 한눈에: 4칸 핵심지표 + 돈의 흐름 (야후 분기 재무제표, cache 에 쌓음) ---------- */
+function qLabel(end) { const [y, m] = end.split("-").map(Number); return m % 3 ? `${String(y).slice(2)}.${m}월` : `${String(y).slice(2)}.${m / 3}Q`; }
+function qMoney(v, usd) {
+  if (v == null) return "-";
+  const a = Math.abs(v), s = v < 0 ? "-" : "";
+  if (usd) return a >= 1e9 ? `${s}$${n(a / 1e9, 1)}B` : `${s}$${n(a / 1e6, 0)}M`;
+  return a >= 1e12 ? `${s}${n(a / 1e12, 1)}조` : `${s}${n(a / 1e8, 0)}억`;
+}
+// 막대(값) + 선(%) 미니 차트. 음수 막대는 빨강, 마지막 분기는 진하게
+function qPanel(title, tag, labels, bars, line, usd, color) {
+  const W = 300, x0 = 14, bw = (W - 2 * x0) / labels.length;
+  const vals = bars.filter((v) => v != null), hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
+  const top = line ? 78 : 40, bot = lo < 0 ? 138 : 150, sc = (bot - top) / ((hi - lo) || 1), zero = top + hi * sc;  // 음수 막대 글자 자리
+  let g = `<line x1="${x0}" x2="${W - x0}" y1="${zero}" y2="${zero}" stroke="var(--axis)"/>`;
+  bars.forEach((v, i) => {
+    const cx = x0 + bw * i + bw / 2, last = i === bars.length - 1;
+    g += `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(labels[i])}</text>`;
+    if (v == null) return;
+    const y = v >= 0 ? zero - v * sc : zero, h = Math.max(1, Math.abs(v) * sc);
+    g += `<rect x="${cx - bw * 0.32}" y="${y}" width="${bw * 0.64}" height="${h}" rx="2" fill="${v < 0 ? "var(--bad)" : color}" opacity="${last ? 1 : 0.55}"/>`;
+    g += `<text x="${cx}" y="${v >= 0 ? y - 4 : y + h + 11}" text-anchor="middle" class="qv${last ? " b" : ""}">${qMoney(v, usd)}</text>`;
+  });
+  if (line) {
+    const lv = line.filter((v) => v != null), lh = Math.max(...lv), ll = Math.min(...lv), ls = 34 / ((lh - ll) || 1);
+    const pts = line.map((v, i) => (v == null ? null : [x0 + bw * i + bw / 2, 56 - (v - ll) * ls]));
+    const seg = pts.filter(Boolean);
+    if (seg.length > 1) g += `<polyline points="${seg.map((p) => p.join(",")).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
+    pts.forEach((p, i) => { if (p) g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${p[0]}" y="${p[1] - 8}" text-anchor="middle" class="qv${i === line.length - 1 ? " b" : ""}"${line[i] < 0 ? ' fill="var(--bad-ink)"' : ""}>${n(line[i], 0)}%</text>`; });
+  }
+  return `<div class="qp"><div class="qt"><b>${title}</b>${tag ? `<span class="qtag${/-|적자|둔화/.test(tag) ? " bad" : /늘어|줄어/.test(tag) ? " warn" : ""}">${esc(tag)}</span>` : ""}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg></div>`;
+}
+// 매출 → 매출원가 / 매출총이익 → 영업비용(연구개발·판매·관리·기타) / 영업이익
+function qSankey(q, usd) {
+  const rev = q.rev, cogs = q.cogs ?? (q.gp != null ? rev - q.gp : null), gp = q.gp ?? (cogs != null ? rev - cogs : rev);
+  const opex = q.opex ?? gp - q.op;
+  const pos = (v) => (v != null && v > 0 ? v : 0);
+  let items = [["연구개발", pos(q.rnd)], ["판매·마케팅", pos(q.sm)], ["관리", pos(q.ga)]];
+  if (!items.some(([, v]) => v) && q.sga) items = [["판매·관리", pos(q.sga)]];
+  const known = items.reduce((a, [, v]) => a + v, 0);
+  if (opex - known > opex * 0.02) items.push(["기타 영업비용", opex - known]);
+  items = items.filter(([, v]) => v > 0);
+  const W = 480, H = 240, T = 20, k = H / rev, x = [58, 178, 308], nw = 12;  // 휴대폰에서 글자가 작아지지 않게 좁게
+  const pct = (v) => `${n((v / rev) * 100, 0)}%`;
+  let flows = "", nodes = "", labels = "";
+  const band = (x1, a1, b1, x2, a2, b2, col) => { const m = (x1 + x2) / 2; flows += `<path d="M${x1},${a1} C${m},${a1} ${m},${a2} ${x2},${a2} L${x2},${b2} C${m},${b2} ${m},${b1} ${x1},${b1} Z" fill="${col}" opacity=".28"/>`; };
+  const node = (xx, y, h, col) => { nodes += `<rect x="${xx}" y="${y}" width="${nw}" height="${Math.max(h, 1.5)}" fill="${col}" rx="2"/>`; };
+  const lab = (xx, y, t1, t2, anchor = "start", col = "var(--ink)") => { labels += `<text x="${xx}" y="${y}" text-anchor="${anchor}" class="sk"><tspan font-weight="700" fill="${col}">${esc(t1)}</tspan><tspan x="${xx}" dy="14" class="sk2">${esc(t2)}</tspan></text>`; };
+  node(x[0], T, rev * k, "var(--ink-2)");
+  lab(x[0] - 6, T + rev * k / 2 - 4, "매출", qMoney(rev, usd), "end");
+  const gH = pos(gp) * k, cH = pos(cogs) * k, gY = T, cY = T + gH + 14;
+  node(x[1], gY, gH, "var(--good)"); node(x[1], cY, cH, "var(--bad)");
+  band(x[0] + nw, T, T + gH, x[1], gY, gY + gH, "var(--good)");
+  band(x[0] + nw, T + gH, T + gH + cH, x[1], cY, cY + cH, "var(--bad)");
+  lab(x[1] + nw + 6, gY + 12, "매출총이익", `${qMoney(gp, usd)} · ${pct(gp)}`, "start", "var(--good-ink)");
+  lab(x[1] + nw + 6, cY + Math.min(cH, 40) / 2 + 2, "매출원가", `${qMoney(cogs, usd)} · ${pct(cogs)}`, "start", "var(--bad-ink)");
+  // 매출총이익 → 영업이익(위) + 비용들(아래)
+  const outs = (q.op > 0 ? [["영업이익", q.op, "var(--good)", "var(--good-ink)"]] : []).concat(items.map(([l, v]) => [l, v, "var(--bad)", "var(--bad-ink)"]));
+  let sy = gY, ty = T;
+  const tot = outs.reduce((a, [, v]) => a + v, 0), f = tot > gp ? gp / tot : 1;  // 영업손실이면 비용을 매출총이익 폭에 맞춰 줄여 그림
+  outs.forEach(([l, v, col, ink]) => {
+    const h = v * k * f;
+    band(x[1] + nw, sy, sy + h, x[2], ty, ty + h, col); node(x[2], ty, h, col);
+    lab(x[2] + nw + 6, ty + Math.max(h, 14) / 2 + 1, l, `${qMoney(v, usd)} · ${pct(v)}`, "start", ink);
+    sy += h; ty += Math.max(h, 26) + 6;
+  });
+  const vh = Math.max(ty, cY + cH) + 10;
+  const loss = q.op <= 0 ? `<div class="note" style="color:var(--bad-ink)">영업손실 ${qMoney(q.op, usd)} — 영업비용이 매출총이익보다 많아요</div>` : "";
+  return `<svg viewBox="0 0 ${W} ${vh}" class="sankey" role="img" aria-label="매출에서 영업이익까지 돈의 흐름">${flows}${nodes}${labels}</svg>${loss}`;
+}
+function qtrHTML(d) {
+  const all = Object.entries(d.qtrs || {}).filter(([, q]) => q.rev);
+  if (all.length < 2) return "";
+  const usd = (d.card || d).currency === "USD";
+  const get = (end, k) => { // 1년 전 같은 분기 (끝 날짜 ±40일)
+    const t = new Date(end) - 365 * 864e5;
+    const hit = all.find(([e]) => Math.abs(new Date(e) - t) < 40 * 864e5);
+    return hit ? hit[1][k] : null;
+  };
+  const qs = all.slice(-5), labels = qs.map(([e]) => qLabel(e)), L = qs.length - 1;
+  const rev = qs.map(([, q]) => q.rev), op = qs.map(([, q]) => q.op ?? null);
+  const yoy = qs.map(([e, q]) => { const p = get(e, "rev"); return p && p > 0 ? (q.rev / p - 1) * 100 : null; });
+  const opm = qs.map(([, q]) => (q.op != null ? (q.op / q.rev) * 100 : null));
+  const fcf = qs.map(([, q]) => q.fcf ?? null), capex = qs.map(([, q]) => (q.capex != null ? Math.abs(q.capex) : null));
+  // 한 줄 꼬리표: 최근 분기 변화
+  const tRev = yoy[L] != null && yoy[L - 1] != null ? (yoy[L] > yoy[L - 1] ? "성장 가속" : "성장 둔화") : "";
+  const tOp = op[L] != null && op[L - 1] != null ? (op[L - 1] <= 0 && op[L] > 0 ? "흑자 전환" : op[L - 1] > 0 && op[L] <= 0 ? "적자 전환" : opm[L] > opm[L - 1] ? `이익률 +${n(opm[L] - opm[L - 1], 1)}%p` : `이익률 ${n(opm[L] - opm[L - 1], 1)}%p`) : "";
+  const tF = fcf[L] != null && fcf[L - 1] != null ? (fcf[L - 1] > 0 && fcf[L] < 0 ? "현금흐름 적자 전환" : fcf[L - 1] < 0 && fcf[L] > 0 ? "현금흐름 흑자 전환" : "") : "";
+  const prevC = capex.slice(0, L).filter((v) => v != null), avgC = prevC.length ? prevC.reduce((a, b) => a + b, 0) / prevC.length : null;
+  const tC = capex[L] != null && avgC ? (capex[L] > avgC * 1.5 ? "CapEx 크게 늘어남" : capex[L] < avgC * 0.67 ? "CapEx 줄어듦" : "") : "";
+  const last = qs[L];
+  return `<h3>📊 분기 실적 한눈에 <span class="src">${esc(labels[L])} (${esc(last[0])} 끝난 분기) · 야후 파이낸스 · ${usd ? "달러" : "원"}</span></h3><div class="card">
+    <div class="qgrid">
+      ${qPanel("매출 · 1년 전 대비 성장률", tRev, labels, rev, yoy.some((v) => v != null) ? yoy : null, usd, "var(--ink-2)")}
+      ${qPanel("영업이익 · 영업이익률", tOp, labels, op, opm, usd, "var(--good)")}
+      ${qPanel("잉여현금흐름 (FCF)", tF, labels, fcf, null, usd, "var(--good)")}
+      ${qPanel("설비투자 (CapEx)", tC, labels, capex, null, usd, "var(--warn)")}
+    </div>
+    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(labels[L])} 돈의 흐름</b> <span class="src">매출 → 원가·비용 → 영업이익 (매출 대비 %)</span></div>
+    ${qSankey(last[1], usd)}
+    <div class="note src">성장률은 1년 전 같은 분기 대비 (분기 자료가 쌓이면 빈 칸이 채워져요) · 한국 종목은 야후 반영이 실적 발표보다 늦을 수 있어요</div>
+  </div>`;
+}
 function preLoad(code) { try { return JSON.parse(localStorage.getItem("pre:" + code) || "{}"); } catch (_) { return {}; } }
 function preSave(code, v) { try { localStorage.setItem("pre:" + code, JSON.stringify(v)); } catch (_) {} }
 function precheckHTML(d) {
@@ -1364,7 +1466,7 @@ async function openStock(code) {
     const holderHtml = await holdersBlock(code);
     const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", qtrHTML(d) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
     drawDetailCharts(d);
     drawProfile(code);
     wirePrecheck();

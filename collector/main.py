@@ -19,7 +19,8 @@ from common import CACHE, DATA, REPORT, SETTINGS, attempt, load_yaml, now_kst, r
 
 SECTORS = load_yaml("sectors.yaml") or {}
 SOMONG = load_yaml("somong.yaml") or {}
-LTG_GAP = read_json(CACHE / "ltg_gap.json") or {}  # 종목 → 시킹알파 확인일 → Zacks·나스닥과의 차이(%p)
+LTG_GAP = read_json(CACHE / "ltg_gap.json") or {}
+QTRS = read_json(CACHE / "quarters.json") or {}  # 분기 실적 (야후는 최근 5~6분기만 줘서 쌓아 둠)  # 종목 → 시킹알파 확인일 → Zacks·나스닥과의 차이(%p)
 
 
 def keep_prev(new, prev, label):
@@ -298,6 +299,10 @@ def stock_detail(h, rates_now, fx):
             fins = score.fin(tkr)
         except Exception as e:  # noqa: BLE001
             REPORT.block("야후 재무제표", f"{name}: {str(e)[:60]}")
+        try:  # 분기 실적 한눈에 (매출·이익률·FCF·CapEx·돈의 흐름)
+            QTRS[tkr] = score.quarters(tkr, QTRS.get(tkr))
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("야후 분기 실적", f"{name}: {str(e)[:60]}")
     if tbl is not None and tkr and not h.get("data_code"):  # 순현금 (우선주는 회사 전체 값이라 뺌)
         try:
             nc = table.net_cash(tkr, now.get("market_cap"))
@@ -392,6 +397,7 @@ def stock_detail(h, rates_now, fx):
                       "ltg_src":f"{C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균 (나스닥 컨센서스)" if ltg else None}
         except Exception as e:  # noqa: BLE001
             REPORT.fail(f"{name} 적정주가 템플릿", f"{type(e).__name__}: {e}")
+    det["qtrs"] = QTRS.get(tkr) if tkr else None  # 분기 실적 한눈에 (상세 화면 전용)
     det["card"] = {
         "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl, "dart_check": dart_check,
         "score": checks_score, "us_tpl": us_tpl, "div_check": div_check, "mdd": mdd, "pre": pre,
@@ -602,6 +608,7 @@ def main():
     write_json(DATA / "broker_targets.json", load_yaml("broker_targets.yaml") or {})  # 손으로 적는 증권사 목표주가
     write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})
     write_json(CACHE / "ltg_gap.json", LTG_GAP)
+    write_json(CACHE / "quarters.json", QTRS)
     write_json(DATA / "somong.json", load_yaml("somong.yaml") or {})  # 강의 체크리스트 (지갑털이·올리고폴리·아무나이겨라·굿보스 등)  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)
 
     print("■ 동종업계")
