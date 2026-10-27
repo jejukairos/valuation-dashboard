@@ -24,6 +24,7 @@
     <a href="#score" data-view="score">✅ 점수</a>
     <a href="#market" data-view="market">🚦 시장</a>
     <a href="#watch" data-view="watch">⭐ 관심</a>
+    <a href="#joint" data-view="joint">🤝 공동자산</a>
     <a href="#pbr" data-view="pbr">🧮 PBR</a>
   </nav>
 </header>
@@ -32,6 +33,9 @@
   <details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>🔭 AI 가 전망하는 2027년 주도섹터</b> <span class="src">클로드·챗GPT·제미나이 취합 (@going_tothe_moon) · 참고용</span></summary>
     <img src="img/sectors-2027.jpg" alt="2027년 주도섹터 전망: 1 반도체 소부장(차별화), 2 원자력(수주가 매출로 인식되는 원년), 3 ESS(북미·유럽 대용량 수요), 4 AI 전력(변압기·전선 공급자 우위), 5 로봇(액추에이터·감속기·센서·전고체배터리), 6 바이오(금리 하락 기대), 7 조선(실적 방어주), 8 AI 소프트웨어(추론 단가 하락 수혜)" loading="lazy" style="width:100%;max-width:520px;display:block;margin:8px auto 0;border-radius:10px">
   </details>
+  <h3>🔎 보유종목처럼 추적하는 관심종목 <span class="src">적정주가·분기 실적·실적발표 요약까지 · 매력적인 순 · 누르면 상세 화면</span></h3>
+  <div class="grid g3" id="watchFull"></div>
+  <h3 style="margin-top:18px">⚡ 빠른 판단 표</h3>
   <p class="sub" id="watchIntro"></p>
   <div class="toolbar"><label class="sub" for="watchSort">정렬</label>
     <select id="watchSort" class="sel">
@@ -46,6 +50,11 @@
       <option value="sheet">내 시트 순서</option>
     </select></div>
   <div class="grid g3" id="watchCards"></div>
+</main>
+<main class="wrap" id="jointView" hidden>
+  <h2>공동자산</h2>
+  <p class="sub">함께 투자하는 종목이에요. 보유종목과 똑같이 적정주가·분기 실적·실적발표 요약까지 봐요. 종목은 config/stocks.yaml 의 joint 에 넣어요.</p>
+  <div class="grid g3" id="jointCards"></div>
 </main>
 <main class="wrap" id="pbrView" hidden>
   <h2>PBR 계산기</h2>

@@ -560,11 +560,15 @@ def main():
     print("■ 보유종목")
     cards = []
     prev_cards = {c["code"]: c for c in prev.get("stocks", [])}
-    for i, h in enumerate(load_yaml("stocks.yaml")["holdings"]):
+    sy = load_yaml("stocks.yaml")
+    # 보유 + 관심(watchlist) + 공동자산(joint) 모두 같은 계산. 화면은 group 으로 탭을 나눠 보여줌
+    todo = [(h, g) for key, g in (("holdings", "보유"), ("watchlist", "관심"), ("joint", "공동")) for h in (sy.get(key) or [])]
+    for i, (h, g) in enumerate(todo):
         code = str(h["code"])
         try:
             det = stock_detail(h, {"us10y": us10, "kr3y": kr3, "regime": regime}, fx)
             det["card"]["order"] = i
+            det["card"]["group"] = g
             # 텔레그램 채널 글 중 지난 갱신 때 없던 글에 🆕 표시 (처음 모으는 날은 표시 안 함)
             posts = ((det["card"].get("us_tpl") or {}).get("street") or {}).get("posts") or []
             old_st = ((prev_cards.get(code) or {}).get("us_tpl") or {}).get("street") or {}
@@ -583,7 +587,7 @@ def main():
             traceback.print_exc()
             REPORT.fail(f"{h['name']} 종목", f"{type(e).__name__}: {e}")
             if code in prev_cards:
-                c = dict(prev_cards[code], stale=True, order=i)
+                c = dict(prev_cards[code], stale=True, order=i, group=g)
                 cards.append(c)
 
     print("■ 수주 공시")

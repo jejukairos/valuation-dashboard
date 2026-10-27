@@ -79,14 +79,16 @@ def row(cfg, holdings):
 
 def collect():
     cfg = load_yaml("watch.yaml") or {}
-    holdings = {str(h["code"]) for h in load_yaml("stocks.yaml")["holdings"]}
+    sy = load_yaml("stocks.yaml")
+    holdings = {str(h["code"]) for h in sy["holdings"]}
+    tracked = holdings | {str(h["code"]) for k in ("watchlist", "joint") for h in (sy.get(k) or [])}  # 상세 화면이 있는 종목
     prev = {r["code"]: r for r in (read_json(DATA / "watch.json", {}) or {}).get("rows", [])}
     rows = []
     for s in cfg.get("stocks", []):
         if str(s["code"]) in holdings:  # 보유종목은 보유 탭에서 보므로 관심종목에서 뺌 (팔면 다시 나타남)
             continue
         try:
-            rows.append(row(s, holdings))
+            rows.append(row(s, tracked))
         except Exception as e:  # noqa: BLE001
             REPORT.fail(f"관심종목 {s['name']}", f"{type(e).__name__}: {e}")
             if str(s["code"]) in prev:

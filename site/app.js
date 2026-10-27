@@ -434,8 +434,9 @@ function stockCard(c) {
     <div class="pills">${pills.join("")}</div>
   </button>`;
 }
+const grp = (c) => c.group || "보유";
 function renderCards() {
-  const list = DASH.stocks.filter((c) => (c.market === "US" ? "US" : "KR") === MKT);
+  const list = DASH.stocks.filter((c) => grp(c) === "보유" && (c.market === "US" ? "US" : "KR") === MKT);
   // 한국 → 미국, 각각 가장 매력적인(저평가) 순: 🟢 → 🟡 → 🔴 → N/A, 같은 판정 안에서는 적정가 대비 더 싼 순
   const rank = { green: 0, yellow: 1, red: 2, na: 3 };
   const mk = (c) => (c.market === "US" ? 1 : 0);
@@ -524,7 +525,7 @@ function renderCmp() {
   const g = GROUPS.find((x) => x[0] === CMP.group) || GROUPS[0];
   const keys = g[2] || [...new Set(GROUPS.slice(0, -1).flatMap((x) => x[2]))];
   if (!keys.includes(CMP.sort) && CMP.sort !== "name" && CMP.sort !== "ind") CMP.sort = keys[0];
-  const mine = DASH.stocks.filter((s) => (s.market === "US" ? "US" : "KR") === MKT);
+  const mine = DASH.stocks.filter((s) => grp(s) === "보유" && (s.market === "US" ? "US" : "KR") === MKT);
   const inds = ["전체", ...new Set(mine.map((s) => s.industry).filter(Boolean))];
   if (!inds.includes(CMP.ind)) CMP.ind = "전체";
   $("#cmpGroup").innerHTML = GROUPS.map(([k, l]) => `<button data-g="${k}" class="${k === g[0] ? "on" : ""}">${l}</button>`).join("");
@@ -1778,7 +1779,7 @@ function pbrCard(it, base, i) {
   </div>`;
 }
 function showView() {
-  const view = { "#pbr": "pbr", "#watch": "watch", "#market": "market", "#us": "us", "#score": "score" }[location.hash] || "main";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score" }[location.hash] || "main";
   $("#pbrView").hidden = view !== "pbr";
   $("#marketView").hidden = view !== "market";
   $("#scoreView").hidden = view !== "score";
@@ -1791,9 +1792,19 @@ function showView() {
   $("#mainView").hidden = !(view === "main" || view === "us");
   document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.view === view));
   $("#watchView").hidden = view !== "watch";
+  $("#jointView").hidden = view !== "joint";
   if (view === "market") drawMarketCharts(); // 숨겨진 상태에서 그린 차트는 크기가 0이라 보일 때 다시 그림
   if (view === "pbr") loadPBR();
-  if (view === "watch") loadWatch();
+  if (view === "watch") { renderGroup("관심", "#watchFull"); loadWatch(); }
+  if (view === "joint") renderGroup("공동", "#jointCards");
+}
+// 보유 말고도 보유종목처럼 다 추적하는 묶음 (stocks.yaml 의 watchlist = 관심, joint = 공동자산) — 매력적인 순
+function renderGroup(g, el) {
+  const rank = { green: 0, yellow: 1, red: 2, na: 3 }, mk = (c) => (c.market === "US" ? 1 : 0);
+  const list = DASH.stocks.filter((c) => grp(c) === g).sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
+  $(el).innerHTML = list.map(stockCard).join("") || `<div class="empty">config/stocks.yaml 의 ${g === "공동" ? "joint" : "watchlist"} 에 종목을 넣으면 여기에 보여요.</div>`;
+  drawPriceCharts(list);
+  drawGauges(list);
 }
 
 /* ---------- 관심종목 탭 (내 시트 '빠른 판단' 자동화) ---------- */
@@ -1900,7 +1911,7 @@ async function load() {
   route();
 }
 
-$("#stockCards").addEventListener("click", (e) => {
+for (const id of ["#stockCards", "#watchFull", "#jointCards"]) $(id).addEventListener("click", (e) => {
   const b = e.target.closest(".stock"); if (!b) return;
   location.hash = `#stock/${b.dataset.code}`;
 });
