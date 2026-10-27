@@ -775,6 +775,18 @@ function qtrHTML(d) {
     <div class="note src">성장률은 1년 전 같은 분기 대비 (분기 자료가 쌓이면 빈 칸이 채워져요) · 한국 종목은 야후 반영이 실적 발표보다 늦을 수 있어요</div>
   </div>`;
 }
+/* ---------- 실적발표(컨퍼런스콜) 요약: 분기 목록 → 누르면 자세한 요약, 맨 아래 '핵심만' (config/earnings.yaml) ---------- */
+let EARNINGS = {};
+function earningsHTML(code) {
+  const list = EARNINGS[code] || [];
+  if (!list.length) return "";
+  return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">
+    ${list.map((e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
+      ${(e.short || []).length ? `<div class="warnbox" style="margin-top:6px"><b>⚡ 핵심만</b><ul class="irl">${e.short.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
+    </details>`).join("")}
+  </div>`;
+}
 function preLoad(code) { try { return JSON.parse(localStorage.getItem("pre:" + code) || "{}"); } catch (_) { return {}; } }
 function preSave(code, v) { try { localStorage.setItem("pre:" + code, JSON.stringify(v)); } catch (_) {} }
 function precheckHTML(d) {
@@ -1466,7 +1478,7 @@ async function openStock(code) {
     const holderHtml = await holdersBlock(code);
     const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", qtrHTML(d) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
     drawDetailCharts(d);
     drawProfile(code);
     wirePrecheck();
@@ -1878,6 +1890,7 @@ async function load() {
     const r = await fetch("data/dashboard.json?t=" + Date.now(), { cache: "no-store" });
     DASH = await r.json();
     try { PROFILES = await (await fetch("data/profiles.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { PROFILES = {}; }
+    try { EARNINGS = await (await fetch("data/earnings.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { EARNINGS = {}; }
     try { SOMONG = await (await fetch("data/somong.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { SOMONG = {}; }
   } catch (e) {
     $("#updated").textContent = "데이터를 불러오지 못했어요";

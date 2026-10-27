@@ -607,6 +607,7 @@ def main():
 
     write_json(DATA / "broker_targets.json", load_yaml("broker_targets.yaml") or {})  # 손으로 적는 증권사 목표주가
     write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})
+    write_json(DATA / "earnings.json", load_yaml("earnings.yaml") or {})  # 실적발표(컨퍼런스콜) 요약
     write_json(CACHE / "ltg_gap.json", LTG_GAP)
     write_json(CACHE / "quarters.json", QTRS)
     write_json(DATA / "somong.json", load_yaml("somong.yaml") or {})  # 강의 체크리스트 (지갑털이·올리고폴리·아무나이겨라·굿보스 등)  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)
