@@ -590,6 +590,29 @@ def main():
                 c = dict(prev_cards[code], stale=True, order=i, group=g)
                 cards.append(c)
 
+    print("■ 실적발표·컨퍼런스콜 일정")
+    cal = []
+    for h, g in todo:
+        try:
+            if h.get("market", "KR").upper() == "US":
+                import yfinance as yf
+                d = (yf.Ticker(h["code"]).calendar or {}).get("Earnings Date") or []
+                ev = {"when": str(d[0]), "time_unknown": True, "title": "실적발표",
+                      "url": f"https://finance.yahoo.com/quote/{h['code']}/"} if d else None
+            elif not h.get("data_code"):
+                ev = kr_stock.ir_schedule(str(h["code"]))
+            else:
+                ev = None
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("실적발표 일정", f"{h['name']}: {str(e)[:50]}")
+            ev = None
+        if ev:
+            days = (pd.Timestamp(ev["when"][:10]).date() - now_kst().date()).days
+            if -7 <= days <= 90:  # 지난 1주 ~ 앞으로 3개월
+                cal.append({**ev, "name": h["name"], "code": str(h["code"]), "group": g, "market": h.get("market", "KR").upper(), "dday": days})
+    cal.sort(key=lambda x: x["when"])
+    write_json(DATA / "ir_calendar.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "items": cal})
+
     print("■ 수주 공시")
     import orders
     o = orders.collect()

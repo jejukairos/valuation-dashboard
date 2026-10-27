@@ -66,6 +66,21 @@ def naver_now(code):
     }
 
 
+def ir_schedule(code):
+    """네이버 증권의 실적발표·컨퍼런스콜 일정 (종목 IR 탭에 보이는 정보): 날짜·시간, 분기, 라이브 여부."""
+    out = {"code": code, "url": f"https://stock.naver.com/domestic/stock/{code}/ir"}
+    ec = (HTTP.get(f"https://stock.naver.com/api/stockSecurity/earning-calls/v1/{code}").json() or {}).get("earningCall") or {}
+    if ec.get("eventDatetime"):
+        out.update(when=ec["eventDatetime"], time_unknown=bool(ec.get("isEventTimeUnknown")), live=ec.get("contentType") == "LIVE",
+                   title=f"{ec.get('fiscalYear')}년 {ec.get('fiscalQuarter')}분기 어닝콜", replay=bool(ec.get("isReplayProvided")))
+    ir = (HTTP.get(f"https://m.stock.naver.com/api/stock/{code}/integration").json() or {}).get("irScheduleInfo") or {}
+    if ir.get("irScheduleDate") and not out.get("when"):
+        out.update(when=ir["irScheduleDate"], time_unknown=True, title=ir.get("title"))
+    elif ir.get("title"):
+        out["ir_title"] = ir["title"]
+    return out if out.get("when") else None
+
+
 def sector_per(code):
     """네이버 업종 PER: WICS 업종 PER(최근 4분기) + 네이버가 고른 같은 업종 회사들의 추정 PER(없으면 현재 PER)."""
     t = HTTP.get(f"{WISE}/c1010001.aspx?cmp_cd={code}").text

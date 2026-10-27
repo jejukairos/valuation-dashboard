@@ -777,11 +777,26 @@ function qtrHTML(d) {
   </div>`;
 }
 /* ---------- 실적발표(컨퍼런스콜) 요약: 분기 목록 → 누르면 자세한 요약, 맨 아래 '핵심만' (config/earnings.yaml) ---------- */
-let EARNINGS = {};
+let EARNINGS = {}, IRCAL = { items: [] };
+// 실적발표·컨퍼런스콜 일정 한 줄 (네이버 증권 IR 탭 / 미국은 야후)
+function irWhen(e) {
+  const d = new Date(e.when), dd = e.dday === 0 ? "오늘" : e.dday > 0 ? `D-${e.dday}` : `${-e.dday}일 전`;
+  const t = e.time_unknown ? "" : ` ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return `<b>${esc(e.when.slice(5, 10).replace("-", "/"))}${t}</b> <span class="pill ${e.dday === 0 ? "red" : e.dday > 0 && e.dday <= 7 ? "yellow" : ""}">${dd}</span>`;
+}
+function irCalHTML() {
+  const items = (IRCAL.items || []).filter((e) => e.dday >= -2 && e.dday <= 30);
+  if (!items.length) return "";
+  const gl = { 보유: "", 관심: " ⭐", 공동: " 🤝" };
+  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">보유·관심·공동 · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
+    <ul class="irl">${items.map((e) => `<li>${irWhen(e)} <a href="#stock/${esc(e.code)}">${esc(e.name)}</a>${gl[e.group] || ""} · ${esc(e.title || "")}${e.live ? " · 🔴 라이브" : ""}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}</li>`).join("")}</ul></details>`;
+}
 function earningsHTML(code) {
   const list = EARNINGS[code] || [];
-  if (!list.length) return "";
-  return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">
+  const ev = (IRCAL.items || []).find((e) => e.code === code && e.dday >= -7);
+  const next = ev ? `<div class="note">📅 ${irWhen(ev)} ${esc(ev.title || "")}${ev.live ? " · 🔴 라이브 컨퍼런스콜" : ""}${ev.url ? ` · <a href="${esc(ev.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}</div>` : "";
+  if (!list.length) return next ? `<h3>📞 실적발표</h3><div class="card">${next}<div class="note src">발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 여기에 넣어요.</div></div>` : "";
+  return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">${next}
     ${list.map((e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
       ${(e.short || []).length ? `<div class="warnbox" style="margin-top:6px"><b>⚡ 핵심만</b><ul class="irl">${e.short.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
@@ -1882,6 +1897,7 @@ function renderAll() {
     marketCard(DASH.signals.us, DASH.rates.us10y, null, "us") +
     marketCard(DASH.signals.kr, DASH.rates.kr3y, DASH.rates.kr10y ? { label: "국고채 10년", latest: DASH.rates.kr10y.latest } : null, "kr");
   drawMarketCharts();
+  $("#irCal").innerHTML = irCalHTML();
   renderCmp();
   renderCards();
   kospiCard();
@@ -1902,6 +1918,7 @@ async function load() {
     DASH = await r.json();
     try { PROFILES = await (await fetch("data/profiles.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { PROFILES = {}; }
     try { EARNINGS = await (await fetch("data/earnings.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { EARNINGS = {}; }
+    try { IRCAL = await (await fetch("data/ir_calendar.json?t=" + Date.now(), { cache: "no-store" })).json() || { items: [] }; } catch (_) { IRCAL = { items: [] }; }
     try { SOMONG = await (await fetch("data/somong.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { SOMONG = {}; }
   } catch (e) {
     $("#updated").textContent = "데이터를 불러오지 못했어요";
