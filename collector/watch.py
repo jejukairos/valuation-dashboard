@@ -83,6 +83,8 @@ def collect():
     prev = {r["code"]: r for r in (read_json(DATA / "watch.json", {}) or {}).get("rows", [])}
     rows = []
     for s in cfg.get("stocks", []):
+        if str(s["code"]) in holdings:  # 보유종목은 보유 탭에서 보므로 관심종목에서 뺌 (팔면 다시 나타남)
+            continue
         try:
             rows.append(row(s, holdings))
         except Exception as e:  # noqa: BLE001
