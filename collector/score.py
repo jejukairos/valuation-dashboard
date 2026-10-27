@@ -38,6 +38,16 @@ def fin(tkr):
     out = {"years": [c.year for c in inc.columns], "fy_month": inc.columns[0].month if len(inc.columns) else 12}
     for k, (df, row) in pick.items():
         out[k] = [float(v) if v == v else None for v in df.loc[row].values] if row in df.index else []
+    # 최근 연간 손익 (돈의 흐름 연간판): 분기 실적(quarters)과 같은 키
+    pl = {}
+    for k, row in (("rev", "Total Revenue"), ("cogs", "Cost Of Revenue"), ("gp", "Gross Profit"), ("rnd", "Research And Development"),
+                   ("sm", "Selling And Marketing Expense"), ("ga", "General And Administrative Expense"),
+                   ("sga", "Selling General And Administration"), ("opex", "Operating Expense"), ("op", "Operating Income")):
+        v = inc.loc[row].iloc[0] if row in inc.index and len(inc.columns) else None
+        if v is not None and v == v:
+            pl[k] = float(v)
+    if pl.get("rev") and pl.get("op") is not None:
+        out["pl"] = {**pl, "end": str(inc.columns[0].date())}
     return out
 
 

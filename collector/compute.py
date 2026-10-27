@@ -208,18 +208,23 @@ def market_regime(idx, idx_name, us10y):
             "label": "긴축·약세장" if mode == "tight" else "완화·강세장"}
 
 
-def floor_cap(m, band, sector=None, sec_name=None):
+def floor_cap(m, band, sector=None, sec_name=None, cur=None):
     """성장률 PER(× 1 / 1.5 / 2)에 바닥·천장 보정.
-    Bear = 바닥(지하실): 성장률 PER · 이 종목 10년 최저 PER · 업종 바닥 PER 중 가장 낮은 값.
+    Bear = 바닥(지하실): 성장률 PER · 이 종목 10년 밴드 하단(하위 10%) PER · 업종 바닥 PER 중 가장 낮은 값.
+    밴드 PER 은 '주가 ÷ 1년 뒤 실제 EPS'(증권사 12MF PER 밴드와 같은 시점, 과거 컨센서스는 무료로 없어 실제 실적).
+    지금 12MF PER(cur)이 이미 그 바닥들보다 낮으면 지금 PER 이 바닥 — 시장이 추정치를 못 믿는 구간이라
+    과거 바닥 배수를 곱하면 Bear 가 지금 가격보다 크게 높아져서 (예: 엔비디아).
     Base·Bull 은 업종이 받아 본 보통·최고 PER 을 넘지 않게 (수출주처럼 이익이 한 해 튀어 성장률이 부풀 때 보정)."""
     st = (band or {}).get("periods", {})
     st = st.get("10y") or st.get("all") or {}
     sec = sector if sector and str(sector.get("kind", "PER")).upper() == "PER" else None
     floors = [("성장률", m["bear"])]
     if st.get("low") and st["low"] > 0:
-        floors.append(("이 종목 10년 최저", st["low"]))
+        floors.append(("이 종목 10년 밴드 하단(하위 10%)", st["low"]))
     if sec:
         floors.append((f"{sec_name} 바닥", sec["bear"]))
+    if cur and cur > 0 and cur < min(v for _, v in floors):
+        floors.append(("지금 12MF PER — 이미 과거 바닥보다 낮음", cur))
     lab, bear = min(floors, key=lambda x: x[1])
     notes = [f"Bear = 바닥 PER {bear:.1f}배 ({lab}) — " + " · ".join(f"{k} {v:.1f}배" for k, v in floors) + " 중 가장 낮은 값"]
     out = {"bear": bear}
@@ -264,6 +269,13 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
         p["price"] = {k: round(x, 2) for k, x in p.pop("price").items()}
     out["parts"] = parts
     out["note"] = sector.get("note") if sector else None
+    # 같은 배수를 28E(2년 뒤) EPS·BPS 에 곱한 적정주가 (화면에서 접어 두고 눌러서 봄)
+    y2 = now_kst().year + 2
+    p2 = [{"kind": p["kind"], "base_val": rnd(hist[y2][k], 2), "mult": p["mult"]} for p in parts
+          if (k := {"PER": "eps", "PBR": "bps"}[p["kind"]]) and (hist.get(y2) or {}).get(k) and hist[y2][k] > 0]
+    if p2 and len(p2) == len(parts):
+        out["y2"] = {"label": ylabel(y2), "parts": p2,
+                     **{s: rnd(sum(p["base_val"] * p["mult"][s] for p in p2) / len(p2), 2) for s in ("bear", "base", "bull")}}
     return out
 
 

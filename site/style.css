@@ -187,6 +187,8 @@ td.hot { font-weight: 700; }
 .scen3 div { background: var(--surface-2); border-radius: 10px; padding: 6px 8px; font-size: 12px; color: var(--ink-2);
   display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
 .scen3 div.on { box-shadow: inset 0 0 0 2px var(--s1); }
+table.cmp th.sep, table.cmp td.sep { border-left: 2px solid var(--axis); }
+.scen3 .basis { font-size: 10.5px; line-height: 1.35; margin: 2px 0; word-break: keep-all; }
 .scen3 b { font-size: 15px; color: var(--ink); }
 .scen3 em { font-style: normal; font-weight: 700; font-size: 13px; }
 .scen3 em.up { color: var(--good-ink); } .scen3 em.dn { color: var(--bad-ink); }

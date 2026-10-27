@@ -215,7 +215,9 @@ def stock_detail(h, rates_now, fx):
     sec = dict(SECTORS[sec_name], name=sec_name) if sec_name in SECTORS else None
     if pg:  # Bear 는 바닥 PER, Base·Bull 은 업종이 받아 본 PER 까지만 (sectors.yaml)
         pg["raw"] = dict(pg["mult"])
-        pg["mult"], pg["limit"] = C.floor_cap(pg["mult"], bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"))
+        e12_ = C.fwd12(hist, "eps")
+        pg["mult"], pg["limit"] = C.floor_cap(pg["mult"], bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"),
+                                              cur=price / e12_ if e12_ and e12_ > 0 else None)
     scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg)
     if scen and pg:
         scen["growth"] = pg
@@ -412,6 +414,7 @@ def stock_detail(h, rates_now, fx):
         except Exception as e:  # noqa: BLE001
             REPORT.fail(f"{name} 적정주가 템플릿", f"{type(e).__name__}: {e}")
     det["qtrs"] = QTRS.get(tkr) if tkr else None  # 분기 실적 한눈에 (상세 화면 전용)
+    det["pl_year"] = (fins or {}).get("pl")  # 최근 연간 손익 (돈의 흐름 연간판)
     det["kq"] = None
     if mkt == "KR" and not h.get("data_code"):  # 최신 분기 실적(잠정) vs 컨센서스
         try:
@@ -475,7 +478,7 @@ def _round_scen(scen, dg):
             "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12"),
             "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date"), "ltg_note": scen.get("ltg_note"),
             "rerating": scen.get("rerating"), "sector": scen.get("sector"), "ind": scen.get("ind"),
-            "regime": scen.get("regime"), "fair_key": scen.get("fair_key")}
+            "regime": scen.get("regime"), "fair_key": scen.get("fair_key"), "y2": scen.get("y2")}
 
 
 def _price_chart(px, currency, days=250):
@@ -656,6 +659,9 @@ def main():
         rc = (hd["companies"].get(c["code"]) or {}).get("recent") or []
         if rc:
             c["holder_changes"] = [{"name": x["name"], "chg": x["chg_ratio"], "date": x["date"]} for x in rc]
+        ins = (hd["companies"].get(c["code"]) or {}).get("insider") or {}
+        if ins.get("major_sell") or ins.get("exec_buyers"):  # 최근 3개월 대주주 장내매도 / 임원 장내매수 (깡토 백테스트에서 의미 있던 두 신호)
+            c["insider"] = {k: ins.get(k) for k in ("major_sell", "exec_buyers", "buy", "sell")}
 
     write_json(DATA / "broker_targets.json", load_yaml("broker_targets.yaml") or {})  # 손으로 적는 증권사 목표주가
     write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})
