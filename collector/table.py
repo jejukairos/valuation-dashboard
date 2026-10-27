@@ -33,7 +33,9 @@ def net_cash(ticker, cap):
     if cash is None:
         return None
     nc = cash - debt
-    return {"net_cash": nc, "net_cash_pct": rnd(nc / cap * 100, 1) if cap else None, "net_cash_asof": c.strftime("%Y-%m")}
+    xl = nc + (get("Capital Lease Obligations") or 0.0)  # 리스 부채는 빼고 (회사가 어닝콜에서 말하는 '부채' 기준)
+    return {"net_cash": nc, "net_cash_pct": rnd(nc / cap * 100, 1) if cap else None, "net_cash_asof": c.strftime("%Y-%m"),
+            "net_cash_xl": xl, "net_cash_xl_pct": rnd(xl / cap * 100, 1) if cap else None}
 
 
 def _peg(per12, eps_cagr):

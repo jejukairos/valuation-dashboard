@@ -312,7 +312,13 @@ def stock_detail(h, rates_now, fx):
         if nc:
             if mkt == "US" and fx:
                 nc["net_cash"] *= fx  # 화면은 원화(조원)로
+                nc["net_cash_xl"] *= fx
             tbl.update(nc)
+        # 최근 4분기 FCF 합계와 시총 대비 (연간 FCF 는 투자가 급증하는 구간을 늦게 보여줘서)
+        q4 = [q.get("fcf") for _, q in sorted((QTRS.get(tkr) or {}).items())[-4:]]
+        if len(q4) == 4 and all(v is not None for v in q4):
+            tbl["fcf_ttm"] = sum(q4)
+            tbl["fcf_ttm_yield"] = rnd(sum(q4) / now["market_cap"] * 100, 1) if now.get("market_cap") else None
     # PSR = 시가총액 ÷ 올해 예상 매출
     psr = None
     if mkt == "KR" and wise and not h.get("data_code"):

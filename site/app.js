@@ -467,8 +467,11 @@ function cmpCols() {
     peg: { h: "PEG", v: t("peg"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 2)}${s.cyclical ? "*" : ""}</span>`) },
     per12: { h: "PER<br>12MF", v: t("per12"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 1)}${s.cyclical ? "*" : ""}</span>`) },
     dd: { h: "52주 고점<br>대비", v: t("dd52"), f: (v) => (v == null ? "-" : n(v, 0) + "%") },
-    nc: { h: "순현금<br>(조원)", v: (s) => (s.tbl?.net_cash != null ? s.tbl.net_cash / 1e12 : null), f: (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, 1)}</span>`) },
+    nc: { h: "순현금 (조원)<br>리스 포함", v: (s) => (s.tbl?.net_cash != null ? s.tbl.net_cash / 1e12 : null), f: (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, 1)}</span>`) },
     ncp: { h: "순현금<br>÷ 시총", v: t("net_cash_pct"), f: R(0) },
+    ncx: { h: "순현금 (조원)<br>리스 제외", v: (s) => (s.tbl?.net_cash_xl != null ? s.tbl.net_cash_xl / 1e12 : null), f: (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, 1)}</span>`) },
+    ncxp: { h: "순현금 리스 제외<br>÷ 시총", v: t("net_cash_xl_pct"), f: R(0) },
+    fcfY: { h: "FCF ÷ 시총<br>최근 4분기", v: t("fcf_ttm_yield"), f: R(1) },
   };
   for (let i = 0; i < 3; i++) {
     c["sg" + i] = { h: `매출<br>${arrow(i)}`, v: t("sales_g", i), f: G };
@@ -490,6 +493,7 @@ function cmpCols() {
     c["gpm" + i] = { h: `GPM<br>${ago[i]}`, v: t("gpm", i), f: R(1) };
     c["fcf" + i] = { h: `FCF<br>${ago[i]}`, v: t("fcf3", i), f: money3 };
   }
+  c.fcfT = { h: "FCF<br>최근 4분기", v: t("fcf_ttm"), f: money3 };
   // 소몽 체크리스트 (O=2, △=1, X=0 으로 정렬)
   const vnum = { O: 2, "△": 1, X: 0 };
   const smv = (k) => (s) => vnum[smVerdict(smData(s), k)] ?? null;
@@ -507,17 +511,17 @@ const CMP_GROUPS = [
   ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC"]],
   ["qual", "수익성", ["gpm0", "opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2", "roic"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "psr", "pf0", "pf1", "pf2"]],
-  ["fin", "재무·배당", ["nc", "ncp", "fcf0", "fcf1", "fcf2", "debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
+  ["fin", "재무·배당", ["nc", "ncp", "ncx", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
   ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
   ["all", "전체", null],
 ];
 // 미국은 무료로 받을 수 있는 숫자가 달라서 (추정은 EPS·매출 위주, 나머지는 최근 실적) 칸 구성을 따로
 const CMP_GROUPS_US = [
-  ["sum", "요약", ["cap", "sg0", "sg1", "epsC", "per12", "peg", "gpm0", "opm0", "roic", "debt0", "fcf0", "dy0", "dd"]],
+  ["sum", "요약", ["cap", "sg0", "sg1", "epsC", "per12", "peg", "gpm0", "opm0", "roic", "ncx", "fcfT", "fcfY", "dy0", "dd"]],
   ["grow", "성장", ["sg0", "sg1", "epsC"]],
   ["qual", "수익성", ["gpm0", "gpm1", "gpm2", "opm0", "roe0", "roic"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "psr"]],
-  ["fin", "재무·배당", ["nc", "ncp", "fcf0", "fcf1", "fcf2", "debt0", "dy0", "dd"]],
+  ["fin", "재무·배당", ["nc", "ncp", "ncx", "ncxp", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "dy0", "dd"]],
   ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
   ["all", "전체", null],
 ];
