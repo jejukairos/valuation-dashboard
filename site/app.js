@@ -223,6 +223,7 @@ function floorHTML(c) {
   if (s.bear > c.price * 1.5) out.push(`<div class="warnbox" style="margin-top:6px">⚠ Bear(바닥)가 지금 가격보다 ${pct((s.bear / c.price - 1) * 100, 0)} 높아요. 바닥은 지금 가격 근처나 아래여야 정상이라, 추정 EPS 가 너무 높거나 이익이 한 해 튄 건 아닌지 확인하세요.</div>`);
   (g?.limit || []).forEach((x) => out.push(`<div class="note src">📏 ${esc(x)}</div>`));
   if (sec) out.push(`<div class="note src">🏷 ${esc(sec.name)} PER 역사: 바닥 ${n(sec.bear, 1)} · 보통 ${n(sec.base, 1)} · 최고 ${n(sec.bull, 1)}배${sec.history ? ` — ${esc(sec.history)}` : ""}</div>`);
+  (sec?.notes || []).forEach((x) => out.push(`<div class="note src">📝 ${esc(x.date)} ${esc(x.source)}: ${esc(x.text)}</div>`));
   if (ind && (ind.per || ind.peer_med)) out.push(`<div class="note src">🏭 네이버 업종 PER${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 최근 4분기 ${ind.per == null ? "-" : n(ind.per, 1) + "배"}${ind.peer_med ? ` · 같은 업종 ${ind.peers.length}곳 중앙값 <b>${n(ind.peer_med, 1)}배</b> (${ind.peers.filter((p) => p.per).map((p) => `${esc(p.name)} ${n(p.per, 1)}${p.fwd ? "" : "*"}`).join(" · ")})` : ""}${ind.peers.some((p) => p.per && !p.fwd) ? " <span>* 추정치 없어 현재 PER</span>" : ""}</div>`);
   if (s.rerating) out.push(`<div class="note src">🔁 리레이팅: ${esc(s.rerating)}</div>`);
   return out.join("");

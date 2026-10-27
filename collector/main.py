@@ -245,7 +245,7 @@ def stock_detail(h, rates_now, fx):
         scen["regime"], scen["fair_key"] = (reg if grow else None), fk
         s_ = SECTORS.get(h.get("sector")) or {}
         scen["rerating"] = h.get("rerating") or s_.get("rerating")
-        scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "history")}} if s_ else None
+        scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "history", "notes")}} if s_ else None
         if mkt == "KR":
             try:
                 scen["ind"] = kr_stock.sector_per(str(h.get("data_code") or code))
