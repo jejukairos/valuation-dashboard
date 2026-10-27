@@ -7,6 +7,7 @@ import traceback
 import pandas as pd
 
 import compute as C
+import kq
 import kr_stock
 import manheim
 import market
@@ -398,6 +399,12 @@ def stock_detail(h, rates_now, fx):
         except Exception as e:  # noqa: BLE001
             REPORT.fail(f"{name} 적정주가 템플릿", f"{type(e).__name__}: {e}")
     det["qtrs"] = QTRS.get(tkr) if tkr else None  # 분기 실적 한눈에 (상세 화면 전용)
+    det["kq"] = None
+    if mkt == "KR" and not h.get("data_code"):  # 최신 분기 실적(잠정) vs 컨센서스
+        try:
+            det["kq"] = kq.collect(code)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("최신 분기 실적", f"{name}: {str(e)[:60]}")
     det["card"] = {
         "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl, "dart_check": dart_check,
         "score": checks_score, "us_tpl": us_tpl, "div_check": div_check, "mdd": mdd, "pre": pre,
@@ -429,6 +436,11 @@ def stock_detail(h, rates_now, fx):
         "fv": _fair_table(bands, hist, price, currency,
                           [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
     }
+    k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적이 3일 안에 반영됐거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
+    if k.get("seen") and (now_kst().date() - pd.Timestamp(k["seen"]).date()).days <= 3:
+        det["card"]["kq_new"] = k["latest"]
+    if k.get("waiting"):
+        det["card"]["kq_wait"] = (k.get("next") or {}).get("q")
     return det
 
 
@@ -637,6 +649,8 @@ def main():
     write_json(DATA / "earnings.json", load_yaml("earnings.yaml") or {})  # 실적발표(컨퍼런스콜) 요약
     write_json(CACHE / "ltg_gap.json", LTG_GAP)
     write_json(CACHE / "quarters.json", QTRS)
+    write_json(CACHE / "q_cons.json", kq.CONS)  # 발표 전 컨센서스 (예상 대비 계산용)
+    write_json(CACHE / "q_hist.json", kq.HIST)
     write_json(DATA / "somong.json", load_yaml("somong.yaml") or {})  # 강의 체크리스트 (지갑털이·올리고폴리·아무나이겨라·굿보스 등)  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)
 
     print("■ 동종업계")
