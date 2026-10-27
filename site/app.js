@@ -502,14 +502,18 @@ function cmpCols() {
   for (const [k, l] of [...SM_KEYS, ["good_boss", "굿보스"], ["giant", "거인의<br>어깨"]]) c["sm_" + k] = { h: l.replace("이겨라", "<br>이겨라"), v: smv(k), f: smf(k) };
   c.ath = { h: "최고가<br>대비", v: (s) => s.mdd?.dd ?? null, f: (v) => (v == null ? "-" : n(v, 0) + "%") };
   c.nev = { h: "다음<br>이벤트", v: (s) => nextEvent(smData(s))?.date ?? null, f: (v, s) => { const e = nextEvent(smData(s)); return e ? `<span class="evt">${esc(e.date)}<br><span class="src">${esc(String(e.what).slice(0, 14))}</span></span>` : "-"; } };
-  c.roic = { h: "ROIC<br>최근 연간", v: t("roic"), f: R(0) };
+  // ROIC: 확정 연간 → 최근 4분기 → 앞으로 예상 (설비투자가 늘어도 수익률이 유지되는지)
+  const rs = DASH.stocks.find((s) => s.tbl?.roic_e?.length)?.tbl || {};
+  c.roic = { h: `ROIC<br>${rs.roic_fy ? esc(rs.roic_fy) + " 확정" : "최근 연간"}`, v: t("roic"), f: R(0) };
+  c.roicT = { h: "ROIC<br>최근 4분기", v: t("roic_ttm"), f: R(0) };
+  for (let i = 0; i < 2; i++) c["roicE" + i] = { h: `ROIC<br>${esc((rs.roic_e?.[i] || [])[0] || (i ? "27E" : "26E"))} 예상`, v: (s) => (s.tbl?.roic_e?.[i] || [])[1] ?? null, f: R(0) };
   c.psr = { h: `PSR<br>${ys[1]}`, v: t("psr"), f: P(1) };
   return c;
 }
 const CMP_GROUPS = [
   ["sum", "요약", ["cap", "salesC", "opC", "per12", "peg", "opm1", "roe1", "debt1", "pf0", "dy0", "dd"]],
   ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC"]],
-  ["qual", "수익성", ["gpm0", "opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2", "roic"]],
+  ["qual", "수익성", ["gpm0", "opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2", "roic", "roicT", "roicE0", "roicE1"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "psr", "pf0", "pf1", "pf2"]],
   ["fin", "재무·배당", ["nc", "ncp", "ncx", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
   ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
@@ -517,9 +521,9 @@ const CMP_GROUPS = [
 ];
 // 미국은 무료로 받을 수 있는 숫자가 달라서 (추정은 EPS·매출 위주, 나머지는 최근 실적) 칸 구성을 따로
 const CMP_GROUPS_US = [
-  ["sum", "요약", ["cap", "sg0", "sg1", "epsC", "per12", "peg", "gpm0", "opm0", "roic", "ncx", "fcfT", "fcfY", "dy0", "dd"]],
+  ["sum", "요약", ["cap", "sg0", "sg1", "epsC", "per12", "peg", "gpm0", "opm0", "roic", "roicE1", "ncx", "fcfT", "fcfY", "dy0", "dd"]],
   ["grow", "성장", ["sg0", "sg1", "epsC"]],
-  ["qual", "수익성", ["gpm0", "gpm1", "gpm2", "opm0", "roe0", "roic"]],
+  ["qual", "수익성", ["gpm0", "gpm1", "gpm2", "opm0", "roe0", "roic", "roicT", "roicE0", "roicE1"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "psr"]],
   ["fin", "재무·배당", ["nc", "ncp", "ncx", "ncxp", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "dy0", "dd"]],
   ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],

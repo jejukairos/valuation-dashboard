@@ -35,7 +35,7 @@ def fin(tkr):
             "liab": (bs, "Total Liabilities Net Minority Interest"), "cash": (bs, "Cash Cash Equivalents And Short Term Investments"),
             "cfo": (cf, "Operating Cash Flow"), "cfi": (cf, "Investing Cash Flow"), "cff": (cf, "Financing Cash Flow"),
             "fcf": (cf, "Free Cash Flow")}
-    out = {"years": [c.year for c in inc.columns]}
+    out = {"years": [c.year for c in inc.columns], "fy_month": inc.columns[0].month if len(inc.columns) else 12}
     for k, (df, row) in pick.items():
         out[k] = [float(v) if v == v else None for v in df.loc[row].values] if row in df.index else []
     return out
@@ -268,3 +268,33 @@ def us_extra(f, cap):
     roic = rnd(op * (1 - tax) / ic * 100, 1) if (op and ic and ic > 0) else None
     return {"fy": [str(v)[2:] for v in ys[:3]], "gpm": gpm, "roic": roic,
             "fcf3": [rnd(v, 0) if v is not None else None for v in (f.get("fcf") or [])[:3]]}  # 원 또는 달러 그대로
+
+
+def roic_more(f, qtrs, fwd):
+    """ROIC 세 가지: 확정 연간(us_extra 의 roic) 외에 최근 4분기, 앞으로 예상(26E·27E).
+    ROIC = 세후 영업이익(NOPAT) ÷ 투하자본(차입금 + 자기자본 − 현금). fwd = [(라벨, 예상 영업이익 또는 None, 예상 순이익 또는 None)].
+    예상 ROIC 의 분모는 해마다 '재투자(최근 4분기 NOPAT − FCF)'만큼 투하자본이 늘어난다고 보고 계산 (설비투자가 많으면 분모가 커짐).
+    shortcut: 미국은 예상 영업이익이 무료로 없어 예상 순이익(이자수익 포함)으로 대신 — 현금이 많은 회사는 조금 높게 나옴."""
+    if not f:
+        return {}
+    tax, debt, eq, cash = _at(f, "tax") or 0.21, _at(f, "debt") or 0, _at(f, "eq"), _at(f, "cash") or 0
+    ic = (debt + eq - cash) if eq else None
+    if not ic or ic <= 0:
+        return {}
+    fy = int((f.get("years") or [0])[0] or 0)
+    if fy and (f.get("fy_month") or 12) < 4:  # 1~3월 결산(엔비디아 1월)은 화면 연도와 맞게 한 해 앞당김
+        fy -= 1
+    out = {"roic_fy": str(fy)[2:]}
+    qs = [q for _, q in sorted((qtrs or {}).items())[-4:]]
+    reinvest = 0.0
+    if len(qs) == 4 and all(q.get("op") is not None for q in qs):
+        nopat = sum(q["op"] for q in qs) * (1 - tax)
+        out["roic_ttm"] = rnd(nopat / ic * 100, 1)
+        if all(q.get("fcf") is not None for q in qs):
+            reinvest = max(0.0, nopat - sum(q["fcf"] for q in qs))
+    out["roic_e"] = []
+    for lab, op, ni in fwd:
+        v = op * (1 - tax) if op is not None else ni
+        k = max(0, 2000 + int(lab[:2]) - fy) if fy else 0  # 마지막 확정 연도부터 몇 년 뒤인지
+        out["roic_e"].append([lab, rnd(v / (ic + reinvest * k) * 100, 1) if v is not None else None])
+    return out

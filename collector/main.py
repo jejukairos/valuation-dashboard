@@ -334,6 +334,13 @@ def stock_detail(h, rates_now, fx):
     if tbl is not None:  # 엑셀 '간단 벨류'의 GPM·ROIC·FCF, PSR (한국·미국 공통)
         tbl.update(score.us_extra(fins, now.get("market_cap")))
         tbl["psr"] = rnd(psr, 2)
+        # 예상 ROIC: 한국 = 와이즈리포트 예상 영업이익, 미국 = 예상 EPS × 주식 수(세후 순이익으로 NOPAT 대신)
+        e_ys = [yy for yy in (y0, y0 + 1) if yy in hist]  # 칸을 26E·27E 로 맞춤 (6월 결산 MS 처럼 이미 확정된 해면 그 실적)
+        shares = (now.get("market_cap") / price) if (mkt == "US" and now.get("market_cap") and price) else None
+        fwd = [(C.ylabel(yy), ((wise or {}).get(yy) or {}).get("op") * 1e8 if mkt == "KR" and ((wise or {}).get(yy) or {}).get("op") is not None else None,
+                hist[yy]["eps"] * shares if shares and hist[yy].get("eps") is not None else None) for yy in e_ys]
+        if not h.get("data_code"):
+            tbl.update(score.roic_more(fins, QTRS.get(tkr), fwd))
     st5 = (bands.get("PER") or {}).get("periods", {})
     per5 = (st5.get("5y") or st5.get("all") or {}).get("avg")
     stp = (bands.get("PBR") or {}).get("periods", {})
