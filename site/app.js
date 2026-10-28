@@ -892,7 +892,10 @@ function kqBars(title, qs, f, est, color, cur) {
   qs.forEach((q, i) => {
     const cx = x0 + bw * i + bw / 2, last = i === li;
     g += `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(q.q)}</text>`;
-    if (q[f] == null) return;
+    if (q[f] == null) {  // 실적이 아직 없는 칸 (잠정실적엔 EPS 가 없음): 예상만 회색으로, 실적 자리는 비워 둠
+      if (last && ev != null) g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--axis)") + lab(cx - bw * 0.21, ly(ev), ev, "qv", "var(--muted)");
+      return;
+    }
     if (q.est) { g += bar(cx, bw * 0.5, q[f], "var(--axis)") + lab(cx, ly(q[f]), q[f], "qv", "var(--muted)"); return; }
     if (last && ev != null) {  // 예상(회색) vs 실적(색) 나란히 — 숫자가 겹치면 높은 쪽 글자를 한 줄 위로
       let ye = ly(ev), ya = ly(q[f]);
@@ -901,7 +904,7 @@ function kqBars(title, qs, f, est, color, cur) {
         + lab(cx - bw * 0.21, ye, ev, "qv", "var(--muted)") + lab(cx + bw * 0.21, ya, q[f], "qv b", color);
     } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? color : null);
   });
-  const s = ev != null && ev > 0 && qs[n0 - 1][f] != null ? (qs[n0 - 1][f] / ev - 1) * 100 : null;
+  const s = ev != null && ev > 0 && qs[li]?.[f] != null ? (qs[li][f] / ev - 1) * 100 : null;  // 마지막 실적 분기 (뒤에 예상 E 가 붙어도)
   const tag = s == null ? "" : `<span class="qtag${s < 0 ? " bad" : ""}">예상대비 ${s >= 0 ? "+" : ""}${n(s, 1)}%</span>`;
   return `<div class="qp"><div class="qt"><b>${title}</b>${tag}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg>
     ${ev != null || qs.some((q) => q.est) ? `<div class="src" style="text-align:right;padding:0 4px 4px"><span style="color:var(--axis)">■</span> ${ev != null ? "예상(컨센서스)" : "추정(E)"} · <span style="color:${color}">■</span> 실적</div>` : ""}</div>`;
@@ -909,7 +912,9 @@ function kqBars(title, qs, f, est, color, cur) {
 // 분기 / 연간 실적 막대 — 한국은 영업이익을 맨 앞에 (연간 = 와이즈리포트 연간 실적 + 추정 E)
 const KQ_MAP = {};
 function kqCharts(k, mode) {
-  const a = mode === "y" && k.annual?.length, qs = a ? k.annual.slice(-8) : k.quarters, u = a ? "연간" : "분기", est = a ? null : k.est_bar;
+  // 분기 보기: 최근 5분기 실적 + 다음 분기들 예상(E, 와이즈리포트) — 연간 보기처럼 8칸
+  const a = mode === "y" && k.annual?.length, qs = a ? k.annual.slice(-8) : k.fwd?.length ? k.quarters.slice(-5).concat(k.fwd) : k.quarters;
+  const u = a ? "연간" : "분기", est = a ? null : k.est_bar;
   // 한국은 영업이익 먼저, 미국(빅테크)은 EPS 먼저 — 자료가 있는 항목만
   const order = k.cur === "USD" ? [["eps", "EPS", "var(--s3)"], ["sales", "매출액", "var(--s1)"], ["op", "영업이익", "var(--good)"]]
     : [["op", "영업이익", "var(--good)"], ["sales", "매출액", "var(--s1)"], a ? ["ni", "순이익", "var(--s3)"] : ["eps", "EPS", "var(--s3)"]];

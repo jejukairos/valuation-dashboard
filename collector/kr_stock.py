@@ -125,15 +125,16 @@ ROWS = {
 }
 
 
-def wise_annual(code):
-    """{연도: {eps, bps, dps, roe, payout, ni(억원), estimate}} — 최근 5년 실적 + 3년 추정."""
+def wise_annual(code, freq="Y"):
+    """{연도: {eps, bps, dps, roe, payout, ni(억원), estimate}} — 최근 5년 실적 + 3년 추정.
+    freq="Q" 면 같은 페이지의 '분기' 탭: {"202612": {...}} — 최근 5분기 실적 + 보통 3분기 추정."""
     page = f"{WISE}/c1010001.aspx?cmp_cd={code}"
     r = HTTP.get(page)
     m = re.search(r"encparam\s*:\s*'([^']+)'", r.text)
     if not m:
         raise RuntimeError("와이즈리포트 페이지 형식 변경")
     rr = HTTP.get(f"{WISE}/ajax/cF1001.aspx", headers={"Referer": page},
-                  params={"cmp_cd": code, "fin_typ": "0", "freq_typ": "Y", "extY": "0", "extQ": "0",
+                  params={"cmp_cd": code, "fin_typ": "0", "freq_typ": freq, "extY": "0", "extQ": "0",
                           "encparam": m.group(1)})
     rr.encoding = "utf-8"
     tb = pd.read_html(io.StringIO(rr.text))[-1]
@@ -153,7 +154,7 @@ def wise_annual(code):
                 hit = names[names == label]
             if len(hit):
                 rec[k] = num(tb.iloc[hit.index[0], ci])
-        out[y] = rec
+        out[y if freq == "Y" else f"{y}{ym.group(2)}"] = rec
     if not out:
         raise RuntimeError("와이즈리포트 표가 비어 있음")
     return out

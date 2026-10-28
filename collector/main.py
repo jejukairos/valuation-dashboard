@@ -441,6 +441,13 @@ def stock_detail(h, rates_now, fx):
         if det["kq"] and wise:  # 연간 보기: 와이즈리포트 연간 실적 + 추정 (억원)
             det["kq"]["annual"] = [{"q": f"{str(yy)[2:]}{'E' if r.get('estimate') else ''}", "est": bool(r.get("estimate")),
                                     **{f: r.get(f) for f in ("sales", "op", "ni")}} for yy, r in sorted(wise.items()) if r.get("sales") is not None]
+        if det["kq"]:  # 분기 보기 뒤에 붙일 다음 분기들 추정 (와이즈리포트 '분기' 탭, 보통 3개 분기)
+            try:
+                wq = kr_stock.wise_annual(code, freq="Q")
+                det["kq"]["fwd"] = [{"q": kq.label(qk) + "E", "est": True, **{f: r.get(f) for f in ("sales", "op", "ni", "eps")}}
+                                    for qk, r in sorted(wq.items()) if r.get("estimate") and kq.label(qk) > det["kq"]["latest"]]
+            except Exception as e:  # noqa: BLE001
+                REPORT.block("와이즈리포트 분기 추정", f"{name}: {str(e)[:60]}")
     det["seg"] = None  # 부문별 매출 (실적 요약의 매출 비중·돈의 흐름 왼쪽)
     if mkt == "US" and SEG_US.get(code):
         s = SEG_US[code]
@@ -488,7 +495,7 @@ def stock_detail(h, rates_now, fx):
     k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적을 발표한 지 3일 안이거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
     if k.get("date") and (now_kst().date() - pd.Timestamp(k["date"]).date()).days <= 3:
         det["card"]["kq_new"] = k["latest"]
-        det["card"]["kq_brief"] = {f: k.get(f) for f in ("latest", "prelim", "date", "rows", "quarters", "est_bar", "filing", "annual")}  # 첫 화면 '🧾 실적 발표'
+        det["card"]["kq_brief"] = {f: k.get(f) for f in ("latest", "prelim", "date", "rows", "quarters", "est_bar", "filing", "annual", "fwd")}  # 첫 화면 '🧾 실적 발표'
     if k.get("waiting"):
         det["card"]["kq_wait"] = (k.get("next") or {}).get("q")
     return det
