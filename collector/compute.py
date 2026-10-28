@@ -128,10 +128,10 @@ def fwd12(hist, key):
     return w0 * a + (1 - w0) * b
 
 
-def cons_growth(hist, y0):
-    """컨센서스(증권사 추정 합산) 앞으로 3년 EPS 성장률: 작년 실적→올해E→… 중 마지막 3구간 (29E 까지 있으면 26→27→28→29).
+def cons_growth(hist, y0, key="eps"):
+    """컨센서스(증권사 추정 합산) 앞으로 3년 성장률 (key = eps 또는 op 영업이익): 작년 실적→올해E→… 중 마지막 3구간 (29E 까지 있으면 26→27→28→29).
     연평균(CAGR)을 쓰되, 한 해가 튀면(역성장, 또는 가장 큰 해가 가장 작은 해의 3배 이상) 해마다 성장률의 중앙값."""
-    e = {y: (hist.get(y) or {}).get("eps") for y in range(y0 - 1, y0 + 5)}
+    e = {y: (hist.get(y) or {}).get(key) for y in range(y0 - 1, y0 + 5)}
     ys = [y0 - 1]
     while e.get(ys[-1] + 1) and hist[ys[-1] + 1].get("estimate"):
         ys.append(ys[-1] + 1)
@@ -146,14 +146,15 @@ def cons_growth(hist, y0):
     g = statistics.median(vals) if odd else cagr
     txt = " · ".join(f"{k} {v:+.0f}%" for k, v in steps)
     how = f"해마다 성장률이 들쭉날쭉해 중앙값 {g:.1f}%" if odd else f"연평균 {g:.1f}%"
-    return g, f"컨센서스 {txt} → {how}"
+    return g, f"컨센서스 {'영업이익' if key == 'op' else 'EPS'} {txt} → {how}"
 
 
-def growth_fair(hist, adj_candidates=()):
+def growth_fair(hist, adj_candidates=(), force_adj=False):
     """내 엑셀 '소몽의 적정주가 템플릿' 방식의 적정 PER.
     평균성장률 = 21년~올해(E) EPS 전년 대비 성장률의 중앙값 (코로나·기저효과·금리 급등기 튀는 해의 영향을 줄임).
-    역성장한 해가 있거나 성장률이 50% 를 넘으면(이익 변동이 너무 큼) 보정값(앞으로 3~5년 EPS 연평균 성장률 추정) 사용.
-    적정 PER: Bear = 성장률 × 1, Base = × 1.5, Bull = × 2 (강세장·금리 낮을 때)."""
+    역성장한 해가 있거나 성장률이 50% 를 넘으면(이익 변동이 너무 큼) 보정값(앞으로 3~5년 연평균 성장률 추정) 사용.
+    force_adj: 보정값이 있으면 늘 보정값 (한국 = 컨센서스 3년 영업이익 성장률).
+    적정 PER: Bear(하방) = 성장률 × 1, Base(적정주가) = × 1.5, Bull(최대, 금리가 다시 내려갈 때) = × 2."""
     y = now_kst().year
     years = list(range(y - 6, y + 3))
     eps = {yy: (hist.get(yy) or {}).get("eps") for yy in years}
@@ -170,7 +171,9 @@ def growth_fair(hist, adj_candidates=()):
     adj_v, adj_src = min(adj) if adj else (None, None)  # 여러 추정이 있으면 보수적으로 낮은 쪽
     # 과거(중앙값)와 앞으로 예상(보정값)이 2배 넘게 다르면 과거 성장이 계속된다고 보기 어려워 보정값 (PER 상한은 두지 않음)
     gap2 = bool(med and med > 0 and adj_v and max(med, adj_v) / min(med, adj_v) >= 2)
-    if med is not None and med > 0 and not neg and med <= 50 and not gap2:
+    if force_adj and adj_v:
+        g, src = adj_v, adj_src
+    elif med is not None and med > 0 and not neg and med <= 50 and not gap2:
         g, src = med, "기본값: 21년~올해 EPS 성장률 중앙값"
     elif adj_v:
         why = ("최근 3년 중 역성장한 해가 있어" if neg else "성장률이 50% 를 넘어" if med and med > 50
@@ -210,37 +213,25 @@ def market_regime(idx, idx_name, us10y):
             "label": "긴축·약세장" if mode == "tight" else "완화·강세장"}
 
 
-def floor_cap(m, band, sector=None, sec_name=None, cur=None):
-    """성장률 PER(× 1 / 1.5 / 2)에 바닥·천장 보정.
-    Bear = 바닥(지하실): 성장률 PER · 이 종목 10년 밴드 하단(하위 10%) PER · 업종 바닥 PER 중 가장 낮은 값.
-    밴드 PER 은 '주가 ÷ 1년 뒤 실제 EPS'(증권사 12MF PER 밴드와 같은 시점, 과거 컨센서스는 무료로 없어 실제 실적).
-    지금 12MF PER(cur)이 이미 그 바닥들보다 낮으면 지금 PER 이 바닥 — 시장이 추정치를 못 믿는 구간이라
-    과거 바닥 배수를 곱하면 Bear 가 지금 가격보다 크게 높아져서 (예: 엔비디아).
-    Base·Bull 은 업종이 받아 본 보통·최고 PER 을 넘지 않게 (수출주처럼 이익이 한 해 튀어 성장률이 부풀 때 보정)."""
+def too_high(m, e12, price, band, sector=None, sec_name=None):
+    """성장률 PER 로 잡은 하방(Bear = 12MF EPS × 성장률 × 1)이 지금 가격보다 50% 넘게 높으면 성장률이 너무 센 것
+    (수출주처럼 이익이 한 해 확 튀어 3년 성장률이 부푼 경우, 예: 달바글로벌·에이피알).
+    → 업종 PER(sectors.yaml 바닥·보통·최고), 업종이 없으면 이 종목 10년 PER 밴드(하단·평균·상단)로 바꿈. 아니면 None."""
+    if not (e12 and e12 > 0 and price and e12 * m["bear"] > price * 1.5):
+        return None
+    gap = (e12 * m["bear"] / price - 1) * 100
+    why = f"성장률 PER {m['bear']:g}배로 잡은 하방이 지금 가격보다 {gap:.0f}% 높아서"
+    if sector and str(sector.get("kind", "PER")).upper() == "PER":
+        return {k: sector[k] for k in ("bear", "base", "bull")}, f"{sec_name} 업종 PER (바닥 · 보통 · 최고) — {why}"
     st = (band or {}).get("periods", {})
     st = st.get("10y") or st.get("all") or {}
-    sec = sector if sector and str(sector.get("kind", "PER")).upper() == "PER" else None
-    floors = [("성장률", m["bear"])]
     if st.get("low") and st["low"] > 0:
-        floors.append(("이 종목 10년 밴드 하단(하위 10%)", st["low"]))
-    if sec:
-        floors.append((f"{sec_name} 바닥", sec["bear"]))
-    if cur and cur > 0 and cur < min(v for _, v in floors):
-        floors.append(("지금 12MF PER — 이미 과거 바닥보다 낮음", cur))
-    lab, bear = min(floors, key=lambda x: x[1])
-    notes = [f"Bear = 바닥 PER {bear:.1f}배 ({lab}) — " + " · ".join(f"{k} {v:.1f}배" for k, v in floors) + " 중 가장 낮은 값"]
-    out = {"bear": bear}
-    for k, word in (("base", "보통"), ("bull", "최고")):
-        v = m[k]
-        if sec and v > sec[k]:
-            notes.append(f"{k.capitalize()} {v:.1f}배 → {sec[k]:g}배 ({sec_name} 업종이 받아 본 {word} PER 로 상한)")
-            v = sec[k]
-        out[k] = max(v, out["bear"] if k == "base" else out["base"])
-    return {k: rnd(v, 1) for k, v in out.items()}, notes
+        return {"bear": st["low"], "base": st["avg"], "bull": st["high"]}, f"이 종목 PER 밴드 (하단 · 평균 · 상단) — {why}"
+    return None
 
 
 def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
-    """적정주가 Bear / Base / Bull: 12개월 선행(12MF) EPS·BPS × 배수.
+    """적정주가 Bear(하방) / Base(적정주가) / Bull(최대): 12개월 선행(12MF) EPS·BPS × 배수.
     PER 배수는 성장률 방식(growth_fair: 성장률 × 1 / 1.5 / 2)이 있으면 그것, 업종 배수(sectors.yaml)를 고른 종목은 그것,
     둘 다 없으면 그 종목의 10년 밴드 하단·평균·상단. PBR 은 10년 밴드. PER·PBR 둘 다 쓰는 종목은 평균."""
     parts = []
@@ -251,10 +242,12 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
             continue
         if kind == "PER" and per_growth:
             m = dict(per_growth["mult"])
-            src = f"성장률 {per_growth['g']:g}%"
+            src = per_growth.get("part_src") or f"성장률 {per_growth['g']:g}%"
+            how = per_growth.get("how") or f"{per_growth.get('label') or '성장률'} {per_growth['g']:g}% × 1 · 1.5 · 2"
         elif sector and sector.get("kind", "PER").upper() == kind:
             m = {k: sector[k] for k in ("bear", "base", "bull")}
             src = sector["name"]
+            how = f"{src} 업종 PER (바닥 · 보통 · 최고)"
         else:
             b = bands.get(kind) or {}
             st = b.get("periods", {}).get("10y") or b.get("periods", {}).get("all") or {}
@@ -262,7 +255,8 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
                 continue
             m = {"bear": st["low"], "base": st["avg"], "bull": st["high"]}
             src = "10년 밴드" if st.get("from", "9999") <= f"{now_kst().year - 9}-12-31" else f"{st['from'][:4]}년~ 밴드"
-        parts.append({"kind": kind, "base_val": rnd(v, 2), "mult": {k: rnd(x, 2) for k, x in m.items()}, "src": src,
+            how = f"{src} {kind} 하단(하위 10%) · 평균 · 상단(상위 10%)"
+        parts.append({"kind": kind, "base_val": rnd(v, 2), "mult": {k: rnd(x, 2) for k, x in m.items()}, "src": src, "how": how,
                       "price": {k: v * x for k, x in m.items()}})
     if not parts:
         return None
@@ -444,3 +438,14 @@ def judge(price, fair, band_pos):
     else:
         verdict = "yellow"
     return verdict, " · ".join(why), gap
+
+
+if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% 넘게 높을 때만 업종 PER → 없으면 PER 밴드
+    m = {"bear": 40, "base": 60, "bull": 80}
+    sec = {"kind": "PER", "bear": 10, "base": 20, "bull": 30}
+    band = {"periods": {"10y": {"low": 8, "avg": 15, "high": 25}}}
+    assert too_high(m, 1000, 100000, band, sec, "화장품 브랜드") is None  # 하방 40,000 < 지금 10만
+    assert too_high(m, 1000, 20000, band, sec, "화장품 브랜드")[0] == {"bear": 10, "base": 20, "bull": 30}
+    assert too_high(m, 1000, 20000, band)[0] == {"bear": 8, "base": 15, "bull": 25}
+    assert too_high(m, 1000, 20000, {}) is None
+    print("ok")

@@ -134,29 +134,6 @@ function bondAlert(c) {
   const lim = DASH.settings.bond_signal.stock_alert_above ?? 1.0;
   return c.bond_ratio != null && c.bond_ratio >= lim;
 }
-// 카드용 주가 차트: 최근 1년 종가 + 이동평균선 (20일 빨강 · 50일 분홍 · 200일 검정) + 볼린저밴드(연하늘색)
-const BB_COLOR = "#7cc7f2";
-const maLines = () => [["ma20", "20일선", "#e53935"], ["ma50", "50일선", "#ec4899"], ["ma200", "200일선", css("--ink")]];
-function priceChartHTML(c) {
-  if (!c.chart || !c.chart.close) return "";
-  return `<div class="miniband" onclick="event.stopPropagation()">
-    <div class="chart-title" style="margin-top:8px">주가 · 이동평균선 <span class="src">최근 1년 · 눌러서 가격 보기</span></div>
-    <div class="chart-box mini"><canvas id="pc-${esc(c.code)}"></canvas></div>
-    ${legend([["종가", css("--s1"), false], ...maLines().map(([, l, col]) => [l, col, false]), ...(c.chart.bb_up ? [["볼린저밴드", BB_COLOR, false]] : [])])}
-  </div>`;
-}
-function drawPriceCharts(list) {
-  for (const c of list) {
-    const p = c.chart, cv = p && document.getElementById(`pc-${c.code}`);
-    if (!cv) continue;
-    const bb = p.bb_up ? [{ label: "볼린저 상단", data: p.bb_up, borderColor: BB_COLOR, borderWidth: 1 },
-      { label: "볼린저 하단", data: p.bb_dn, borderColor: BB_COLOR, borderWidth: 1, fill: "-1", backgroundColor: BB_COLOR + "26" }] : [];
-    const ds = [...bb, { label: "종가", data: p.close, borderColor: css("--s1"), borderWidth: 2 },
-      ...maLines().map(([k, l, col]) => ({ label: l, data: p[k], borderColor: col, borderWidth: 1.3 }))];
-    const usd = c.currency === "USD";
-    makeChart(cv, p.dates, ds, { fmt: (v) => (usd ? "$" + n(v, 2) : n(v) + "원"), yfmt: (v) => (usd ? "$" + n(v) : v >= 10000 ? n(v / 10000, 0) + "만" : n(v)) });
-  }
-}
 // 적정주가 표: 행 = 5년·10년 저점/평균/고점 배수, 열 = 연도별 EPS(BPS) × 배수 (지금보다 몇 %)
 function fairTableHTML(c) {
   const fv = c.fv || {};
@@ -180,60 +157,52 @@ function scenHTML(c) {
   if (!s || !s.base) return "";
   const usd = c.currency === "USD";
   const fmtP = (v) => (usd ? "$" + n(v, 0) + krw(v) : n(v));
-  const pts = [["bear", "Bear", "보수적"], ["base", "Base", "중간"], ["bull", "Bull", "낙관적"]];
-  // 시장 국면: 긴축·약세장이면 적정가 = Bear(× 1)·상방 Base(× 1.5), 완화·강세장이면 적정가 = Base·상방 Bull(× 2)
-  const reg = s.regime, fk = s.fair_key || "base", tight = fk === "bear", up1 = tight ? "base" : "bull";
+  // Bear = 하방(이 정도면 바닥, 더 빠지면 안전마진) · Base = 적정주가(평균) · Bull = 최대(금리가 다시 내려갈 때)
+  const pts = [["bear", "Bear", "하방"], ["base", "Base", "적정주가"], ["bull", "Bull", "최대"]];
   const lo0 = Math.min(c.price, s.bear), hi0 = Math.max(c.price, s.bull);
   const pad = (hi0 - lo0) * 0.08 || hi0 * 0.05;
   const lo = Math.max(0, lo0 - pad), hi = hi0 + pad;
   const at = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
-  const where = c.price < s.bear ? "Bear 보다 낮아요" : c.price < s.base ? "Bear 와 Base 사이예요" : c.price < s.bull ? "Base 와 Bull 사이예요" : "Bull 보다 높아요";
-  const parts = s.parts || [];
-  const kinds = parts.map((p) => p.kind);
-  // Bear·Base·Bull 칸: 가격 → 근거(EPS·BPS × 배수) → 지금 가격 대비 %
-  function scenBoxes(v, parts, lab) {
-    const fmtB = (x) => (usd ? "$" + n(x, 2) : n(x) + "원");
+  const fmtB = (x) => (usd ? "$" + n(x, 2) : n(x) + "원");
+  const baseOf = (parts, lab) => (parts || []).map((p) => `${lab} ${p.kind === "PER" ? "EPS" : "BPS"} ${fmtB(p.base_val)}`).join(" · ");
+  // 칸: 가격 → 배수 → 지금 가격 대비 % (EPS·BPS 는 제목에 한 번만)
+  function scenBoxes(v, parts) {
     return `<div class="scen3">${pts.map(([k, l, ko]) => {
       const up = (v[k] / c.price - 1) * 100;
-      const tag = k === fk ? "적정가" : k === up1 ? "상방" : tight && k === "bull" ? "완화장에서만" : "";
-      const why = (parts || []).map((p) => `${lab} ${p.kind === "PER" ? "EPS" : "BPS"} ${fmtB(p.base_val)} × ${p.kind} ${n(p.mult[k], p.kind === "PBR" ? 2 : 1)}배`).join(" / ") + ((parts || []).length > 1 ? " 의 평균" : "");
-      return `<div class="${k}${k === fk ? " on" : ""}"${tight && k === "bull" ? ' style="opacity:.55"' : ""}><span>${l} <span class="src">${tag ? `<b>${tag}</b>` : ko}</span></span><b>${fmtP(v[k])}</b><span class="src basis">${why}</span><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></div>`;
+      const why = (parts || []).map((p) => `${p.kind} ${n(p.mult[k], p.kind === "PBR" ? 2 : 1)}배`).join(" · ") + ((parts || []).length > 1 ? " 평균" : "");
+      return `<div class="${k}${k === "base" ? " on" : ""}"><span>${l} <b>${ko}</b></span><b>${fmtP(v[k])}</b><span class="src basis">${why}</span><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></div>`;
     }).join("")}</div>`;
   }
-  const multLine = kinds.map((k) => {
-    const m = (c.fwd_mult || {})[k] || {};
-    const ys = Object.keys(m).filter((y) => y !== "12MF" && m[y] != null);
-    const avg = (c.band_avg || {})[k];
-    return `<div>지금 가격 = ${ys.map((y) => `${y} ${k} <b>${n(m[y], k === "PBR" ? 2 : 1)}배</b>`).join(" · ")}${avg ? ` <span class="src">(밴드 평균 ${n(avg, k === "PBR" ? 2 : 1)}배)</span>` : ""}</div>`;
-  }).join("");
-  const how = parts.map((p) => `12MF ${p.kind === "PER" ? "EPS" : "BPS"} ${fmtP(p.base_val)} × ${p.kind} ${n(p.mult.bear, 1)} / ${n(p.mult.base, 1)} / ${n(p.mult.bull, 1)}배 (${esc(p.src)})`).join("<br>");
   return `<div class="scen" onclick="event.stopPropagation()">
-    <div class="chart-title" style="margin-top:12px"><b>① 앞으로 실적으로 본 적정주가</b> <span class="src">12개월 선행(12MF)</span></div>
+    <div class="chart-title" style="margin-top:12px"><b>① 앞으로 실적으로 본 적정주가</b> <span class="src">${baseOf(s.parts, "12MF")}</span></div>
     <div class="scenbar" style="background:linear-gradient(90deg, var(--good-bg) 0 ${at(s.base)}%, var(--warn-bg) ${at(s.base)}% ${at(s.bull)}%, var(--bad-bg) ${at(s.bull)}%)">
       ${pts.map(([k, l]) => `<span class="tick" style="left:${at(s[k])}%"></span><span class="tl" style="left:${at(s[k])}%">${l}</span>`).join("")}
       <span class="dot" style="left:${at(c.price)}%"></span><span class="now" style="left:${at(c.price)}%">지금</span>
     </div>
-    ${scenBoxes(s, s.parts, "12MF")}
-    ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 Bear · Base · Bull <span class="src">같은 배수 × ${esc(s.y2.label)} 실적 · 눌러서 보기</span></summary>${scenBoxes(s.y2, s.y2.parts, s.y2.label)}</details>` : ""}
-    ${reg ? `<div class="note">🌡 시장 국면 <b>${esc(reg.label)}</b>${reg.manual ? " (직접 고정)" : ""} → 적정가 = 성장률 PER × ${tight ? "1" : "1.5"}, 상방 × ${tight ? "1.5" : "2"}까지 <span class="src">${reg.why.map(esc).join(" · ")}</span></div>` : ""}
-    <div class="note">지금 가격은 <b>${where}</b>${s.note ? ` · ${esc(s.note)}` : ""}</div>
-    <div class="note fm">${multLine}</div>
-    <div class="note src">${how}</div>
+    ${scenBoxes(s, s.parts)}
+    ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}</span></summary>${scenBoxes(s.y2, s.y2.parts)}</details>` : ""}
+    ${multHTML(s)}
     ${floorHTML(c)}
     ${growthHTML(c)}
   </div>`;
 }
-// Bear = 바닥(지하실) PER, Base·Bull = 업종이 받아 본 PER 상한 · 네이버 업종 PER · 리레이팅 상태
+// 배수를 어떻게 정했는지 한 줄 (성장률 × 1·1.5·2 / 업종 PER / 10년 밴드)
+function multHTML(s) {
+  return (s.parts || []).map((p) => {
+    const m = p.mult, d = p.kind === "PBR" ? 2 : 1;
+    return `<div class="note src">📐 ${p.kind} ${n(m.bear, d)} · ${n(m.base, d)} · ${n(m.bull, d)}배 = ${esc(p.how || p.src)}</div>`;
+  }).join("");
+}
+// 하방이 지금 가격보다 50% 넘게 높으면 경고 + 업종 PER 역사 · 네이버 업종 PER · 리레이팅 메모 (접어 둠)
 function floorHTML(c) {
-  const s = c.scen, g = s.growth, ind = s.ind, sec = s.sector;
+  const s = c.scen, ind = s.ind, sec = s.sector;
+  const warn = s.bear > c.price * 1.5 ? `<div class="warnbox" style="margin-top:6px">⚠ 하방(Bear)이 지금 가격보다 ${pct((s.bear / c.price - 1) * 100, 0)} 높아요. 추정 EPS 가 너무 높거나 이익이 한 해 튄 건 아닌지 확인이 필요해요.</div>` : "";
   const out = [];
-  if (s.bear > c.price * 1.5) out.push(`<div class="warnbox" style="margin-top:6px">⚠ Bear(바닥)가 지금 가격보다 ${pct((s.bear / c.price - 1) * 100, 0)} 높아요. 바닥은 지금 가격 근처나 아래여야 정상이라, 추정 EPS 가 너무 높거나 이익이 한 해 튄 건 아닌지 확인하세요.</div>`);
-  (g?.limit || []).forEach((x) => out.push(`<div class="note src">📏 ${esc(x)}</div>`));
   if (sec) out.push(`<div class="note src">🏷 ${esc(sec.name)} PER 역사: 바닥 ${n(sec.bear, 1)} · 보통 ${n(sec.base, 1)} · 최고 ${n(sec.bull, 1)}배${sec.history ? ` — ${esc(sec.history)}` : ""}</div>`);
   (sec?.notes || []).forEach((x) => out.push(`<div class="note src">📝 ${esc(x.date)} ${esc(x.source)}: ${esc(x.text)}</div>`));
   if (ind && (ind.per || ind.peer_med)) out.push(`<div class="note src">🏭 네이버 업종 PER${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 최근 4분기 ${ind.per == null ? "-" : n(ind.per, 1) + "배"}${ind.peer_med ? ` · 같은 업종 ${ind.peers.length}곳 중앙값 <b>${n(ind.peer_med, 1)}배</b> (${ind.peers.filter((p) => p.per).map((p) => `${esc(p.name)} ${n(p.per, 1)}${p.fwd ? "" : "*"}`).join(" · ")})` : ""}${ind.peers.some((p) => p.per && !p.fwd) ? " <span>* 추정치 없어 현재 PER</span>" : ""}</div>`);
   if (s.rerating) out.push(`<div class="note src">🔁 리레이팅: ${esc(s.rerating)}</div>`);
-  return out.join("");
+  return warn + (out.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🏷 업종 PER · 리레이팅 메모</summary>${out.join("")}</details>` : "");
 }
 // 성장률 방식 (내 엑셀 '소몽의 적정주가 템플릿'): 성장률 = EPS 전년 대비 성장률 중앙값, PER = 성장률 × 1 / 1.5 / 2
 function growthHTML(c) {
@@ -245,7 +214,7 @@ function growthHTML(c) {
   const e27 = c.scen.e27, alt = c.scen.alt;
   const warn = alt ? `<div class="warnbox" style="margin-top:6px">⚠ 과거 성장률과 앞으로 예상 성장률이 2배 넘게 달라요. 다른 쪽(${n(alt.g, 1)}%)으로 계산하면
     Bear ${fmtP(alt.bear)} · <b>Base ${fmtP(alt.base)}</b> (${pct((alt.base / c.price - 1) * 100, 0, true)}) · Bull ${fmtP(alt.bull)}</div>` : "";
-  return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:8px">📐 성장률로 정한 PER <b>${n(g.g, 1)}%</b> → Bear ${n(g.mult.bear, 1)} · Base ${n(g.mult.base, 1)} · Bull ${n(g.mult.bull, 1)}배${alt ? ' <span class="pill yellow">⚠ 성장률 차이 큼</span>' : ""}${c.scen.ltg_cmp && (saAge(c) == null || saAge(c) > 90) ? ' <span class="pill red">🔴 시킹알파 갱신 필요</span>' : ""}</summary>${warn}
+  return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🔎 성장률 계산 자세히 <span class="src">출처 · 연도별</span>${alt ? ' <span class="pill yellow">⚠ 성장률 차이 큼</span>' : ""}${c.scen.ltg_cmp && (saAge(c) == null || saAge(c) > 90) ? ' <span class="pill red">🔴 시킹알파 갱신 필요</span>' : ""}</summary>${warn}
     ${waysHTML(c, fmtP)}
     <div class="note">쓴 성장률: <b>${esc(g.src)}</b></div>
     <div class="note">기본값(${esc(g.window)} EPS 성장률 중앙값) <b>${g.median == null ? "-" : n(g.median, 1) + "%"}</b> · 보정값 ${g.adj == null ? "-" : `<b>${n(g.adj, 1)}%</b> <span class="src">${esc(g.adj_src || "")}</span>`}</div>
@@ -253,13 +222,13 @@ function growthHTML(c) {
       <tr><td>EPS</td>${g.eps.map((v) => `<td>${fmtE(v)}</td>`).join("")}</tr>
       <tr><td>성장률</td>${g.yoy.map((v) => `<td class="${v != null && v < 0 ? "dear" : ""}">${v == null ? "-" : n(v, 0) + "%"}</td>`).join("")}</tr></tbody></table></div>
     <table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">적정 PER</th><th>배수</th><th>× 12MF EPS</th>${e27 ? "<th>× 27E EPS</th>" : ""}</tr></thead><tbody>
-      ${[["Bear (바닥 PER)", "bear"], ["Base (× 1.5, 업종 보통까지)", "base"], ["Bull (× 2, 업종 최고까지)", "bull"]].map(([l, k]) => `<tr><td>${l}</td><td style="text-align:right">${n(g.mult[k], 1)}배${g.raw && g.raw[k] !== g.mult[k] ? `<br><span class="src">성장률만 ${n(g.raw[k], 1)}</span>` : ""}</td>
+      ${[["Bear 하방 (× 1)", "bear"], ["Base 적정주가 (× 1.5)", "base"], ["Bull 최대 (× 2)", "bull"]].map(([l, k]) => `<tr><td>${l}</td><td style="text-align:right">${n(g.mult[k], 1)}배${g.raw && g.raw[k] !== g.mult[k] ? `<br><span class="src">성장률로는 ${n(g.raw[k], 1)}</span>` : ""}</td>
         <td style="text-align:right"><b>${fmtP(c.scen[k])}</b></td>${e27 ? `<td style="text-align:right">${fmtP(e27[k])}</td>` : ""}</tr>`).join("")}</tbody></table>
     ${c.eps_srcs && Object.keys(c.eps_srcs).length ? `<div class="chart-title" style="margin-top:8px"><b>EPS 추정치 출처</b> <span class="src">시킹알파(유료) 대신 받을 수 있는 출처들의 평균을 써요</span></div>
       <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">연도</th>${["야후", "나스닥", "Finviz", "평균"].map((k) => `<th>${k}</th>`).join("")}</tr></thead><tbody>
       ${Object.entries(c.eps_srcs).map(([y, s]) => `<tr><td>${esc(y)}${s.note ? " ⚠" : ""}</td>${["야후", "나스닥", "Finviz", "평균"].map((k) => `<td${k === "평균" ? ' style="font-weight:700"' : ""}>${s[k] == null ? "-" : n(s[k], 2)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
       ${Object.values(c.eps_srcs).some((s) => s.note) ? `<div class="note src">⚠ = 출처끼리 15% 넘게 달라서 평균 대신 야후 값을 썼어요 (일회성 이익 포함 여부 등 기준 차이)</div>` : ""}` : ""}
-    <div class="note src">내 엑셀 방식: 성장률(기대수익률)과 PER 이 비슷하면 보통, 호황·강세장에선 더 받음 · 최근 3년 중 역성장이 있거나, 성장률이 50% 를 넘거나, 과거와 앞으로 예상 성장률이 2배 넘게 다르면 보정값(앞으로 3~5년 EPS 연평균 성장률 추정) 사용 · Bear 는 바닥(지하실)이라 성장률 PER·이 종목 10년 밴드 하단(하위 10%)·업종 바닥 중 가장 낮은 값 (지금 12MF PER 이 그보다 더 낮으면 지금 PER) · 밴드 PER = 주가 ÷ 1년 뒤 실제 EPS (월가 NTM·여의도 12MF PER 밴드와 같은 '앞으로 12개월' 시점, 과거 컨센서스는 무료로 없어 실제 실적으로 대신), Base·Bull 은 업종이 받아 본 보통·최고 PER 까지만 (config/sectors.yaml) · PER+PBR 을 같이 보는 종목은 PBR 밴드 값과 평균</div>
+    <div class="note src">내 엑셀 방식: 하방 = 성장률 × 1 (더 빠지면 안전마진), 적정주가 = × 1.5, 최대 = × 2 (금리가 다시 내려갈 때) · 한국은 컨센서스 3년 영업이익 성장률, 미국은 3~5년 EPS 성장률 · 성장률로 잡은 하방이 지금 가격보다 50% 넘게 높으면 성장률이 너무 센 것이라 업종 PER(없으면 이 종목 PER 밴드) · PER·PBR 을 같이 보는 종목은 PBR 밴드 값과 평균</div>
   </details>`;
 }
 // 내 엑셀의 적정주가 방법 4가지를 나란히: ① 기본값 ② 보정값 ③ Finviz (성장률 × 1 / 1.5 / 2) ④ 내가 정한 PER (somong.yaml my.my_per)
@@ -279,7 +248,7 @@ function waysHTML(c, fmtP) {
   const stale = c.scen.ltg_cmp ? (sa == null ? `<div class="warnbox" style="margin-top:6px">⚠ <b>시킹알파 값이 비어 있어요.</b> 시킹알파 → ${esc(c.code)} → Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)' 숫자를 config/somong.yaml 의 sa_ltg 에 적어 주세요.</div>`
     : age > 90 ? `<div class="warnbox" style="margin-top:6px;border-color:var(--bad);background:var(--bad-bg)">🔴 <b>시킹알파 값 갱신 필요!</b> 마지막 확인 ${esc(c.scen.sa_date)} (${age}일 전) — 한 분기가 지났어요. 실적 발표 뒤 바뀌었을 수 있으니 Growth 탭에서 다시 확인해 주세요.${(c.scen.ways || []).some((w) => w.name === "보정값" && /대체/.test(w.src)) ? " 그동안은 평소 시킹알파와 가장 가까웠던 출처로 대신 계산하고 있어요." : ""}</div>`
     : `<div class="note src">시킹알파 값 확인일 ${esc(c.scen.sa_date || "-")} (${age ?? "-"}일 전) · 90일이 지나면 빨간 표시로 갱신하라고 알려줘요</div>`) : "";
-  return `${stale}<div class="chart-title" style="margin-top:8px"><b>적정주가 4가지 비교</b> <span class="src">12MF EPS ${fmtP(e12)} 기준 · ✔ = 위 Bear/Base/Bull 에 쓴 방법 · 바닥·업종 상한 보정 전 값${(c.scen.parts || []).length > 1 ? " (위 값은 PBR 밴드와 평균이라 다를 수 있어요)" : ""}</span></div>
+  return `${stale}<div class="chart-title" style="margin-top:8px"><b>적정주가 4가지 비교</b> <span class="src">12MF EPS ${fmtP(e12)} 기준 · ✔ = 위 Bear/Base/Bull 에 쓴 방법 · 업종 PER 로 바꾸기 전 값${(c.scen.parts || []).length > 1 ? " (위 값은 PBR 밴드와 평균이라 다를 수 있어요)" : ""}</span></div>
     <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">방법</th><th>성장률</th><th>Bear ×1</th><th>Base ×1.5</th><th>Bull ×2</th></tr></thead><tbody>${rows}${mine}</tbody></table></div>${cmp}${c.scen.ltg_note ? `<div class="note src">${esc(c.scen.ltg_note)}</div>` : ""}`;
 }
 // 시킹알파 3-5Y 성장률을 마지막으로 확인한 뒤 지난 날 수 (직접 입력값이라 분기마다 갱신 필요)
@@ -440,7 +409,7 @@ function stockCard(c) {
     ${readerHTML(c)}
     ${fairTableHTML(c)}
     ${somongHTML(c)}
-    ${priceChartHTML(c)}
+    ${priceBox(c, 6, "span")}
     ${mine}
     <div class="pills">${pills.join("")}</div>
   </button>`;
@@ -454,7 +423,6 @@ function renderCards() {
   if (sortMode === "cheap") list.sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
   else list.sort((a, b) => mk(a) - mk(b) || a.order - b.order);
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
-  drawPriceCharts(list);
   drawGauges(list);
 }
 
@@ -941,14 +909,15 @@ function kqTable(k) {
 // 주가: 기간 탭 (1개월~1년 = 일봉 종가, 3년~10년 = 상세 데이터의 주봉 종가) — 부드러운 선 + 색 채움 + 오른쪽 눈금 + 마지막 가격
 const PX_TABS = [[1, "1개월"], [3, "3개월"], [6, "6개월"], [12, "1년"], [36, "3년"], [60, "5년"], [120, "10년"]];
 const PX_LONG = {};  // 코드 → 주봉 종가 (밴드 계산에 쓰는 가격)
-function priceBox(c, m = 6) {
-  return `<div class="pbox" data-code="${esc(c.code)}"><div class="seg pseg" style="margin-top:8px">${PX_TABS.map(([mm, l]) => `<button data-m="${mm}" class="${mm === m ? "on" : ""}">${l}</button>`).join("")}</div>
+function priceBox(c, m = 6, tag = "button") {  // 종목 카드는 카드 자체가 <button> 이라 탭을 span 으로 (button 안 button 은 HTML 이 깨짐)
+  if (!c.chart?.dates?.length) return "";
+  return `<div class="pbox" data-code="${esc(c.code)}"><div class="seg pseg" style="margin-top:8px">${PX_TABS.map(([mm, l]) => `<${tag} data-m="${mm}" class="${mm === m ? "on" : ""}">${l}</${tag}>`).join("")}</div>
     <div class="pbox-in">${priceSpark(c, m)}</div></div>`;
 }
 document.addEventListener("click", async (e) => {
-  const b = e.target.closest(".pbox .pseg button"); if (!b) return;
+  const b = e.target.closest(".pbox .pseg [data-m]"); if (!b) return;
   const box = b.closest(".pbox"), c = DASH.stocks.find((x) => x.code === box.dataset.code), m = +b.dataset.m, el = box.querySelector(".pbox-in");
-  box.querySelectorAll(".pseg button").forEach((x) => x.classList.toggle("on", x === b));
+  box.querySelectorAll(".pseg [data-m]").forEach((x) => x.classList.toggle("on", x === b));
   if (m > 12 && !PX_LONG[c.code]) {
     el.innerHTML = `<div class="empty">불러오는 중…</div>`;
     try {
@@ -2233,7 +2202,6 @@ function renderGroup(g, el) {
   const rank = { green: 0, yellow: 1, red: 2, na: 3 }, mk = (c) => (c.market === "US" ? 1 : 0);
   const list = DASH.stocks.filter((c) => grp(c) === g).sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
   $(el).innerHTML = list.map(stockCard).join("") || `<div class="empty">config/stocks.yaml 의 ${g === "공동" ? "joint" : "watchlist"} 에 종목을 넣으면 여기에 보여요.</div>`;
-  drawPriceCharts(list);
   drawGauges(list);
 }
 
@@ -2469,7 +2437,7 @@ async function load() {
 }
 
 for (const id of ["#stockCards", "#watchFull", "#jointCards"]) $(id).addEventListener("click", (e) => {
-  const b = e.target.closest(".stock"); if (!b) return;
+  const b = e.target.closest(".stock"); if (!b || e.target.closest(".pseg")) return;  // 주가 기간 탭은 상세로 넘어가지 않음
   location.hash = `#stock/${b.dataset.code}`;
 });
 $("#watchSort").addEventListener("change", (e) => {

@@ -210,18 +210,22 @@ def stock_detail(h, rates_now, fx):
         else:
             adj = [(ltg, f"시킹알파 값 미입력 → 임시로 나스닥 컨센서스 {C.ylabel(y0)}→{C.ylabel(ests[-1])} EPS 연평균")] if ltg and ltg > 0 else [(fv5, "Finviz EPS next 5Y")]
     else:
-        # 한국은 시킹알파 같은 3~5년 성장률이 없어 네이버·에프앤가이드 컨센서스(증권사 추정 합산) 앞으로 3년 EPS 성장률
-        cg = C.cons_growth(hist, y0)
+        # 한국은 시킹알파 같은 3~5년 성장률이 없어 네이버·에프앤가이드 컨센서스(증권사 추정 합산) 앞으로 3년 영업이익 성장률
+        # (한국은 영업이익이 더 중요). 영업이익 추정이 없으면 EPS
+        cg = C.cons_growth(wise or {}, y0, key="op") or C.cons_growth(hist, y0)
         ltg = cg[0] if cg else None
         adj = [cg or (None, "")]
-    pg = C.growth_fair(hist, adj) if ("PER" in fm and "PER" in bands) else None
+    pg = C.growth_fair(hist, adj, force_adj=mkt == "KR") if ("PER" in fm and "PER" in bands) else None
     sec_name = h.get("sector") if h.get("fair_mode") == "sector" else None  # 업종 배수는 fair_mode: sector 로 고른 종목만
     sec = dict(SECTORS[sec_name], name=sec_name) if sec_name in SECTORS else None
-    if pg:  # Bear 는 바닥 PER, Base·Bull 은 업종이 받아 본 PER 까지만 (sectors.yaml)
-        pg["raw"] = dict(pg["mult"])
-        e12_ = C.fwd12(hist, "eps")
-        pg["mult"], pg["limit"] = C.floor_cap(pg["mult"], bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"),
-                                              cur=price / e12_ if e12_ and e12_ > 0 else None)
+    if pg:
+        pg["label"] = "3년 영업이익 성장률" if mkt == "KR" and "영업이익" in pg["src"] else "EPS 성장률"
+        # 성장률이 너무 세서 하방이 지금 가격보다 50% 넘게 높으면 → 업종 PER, 없으면 이 종목 PER 밴드
+        hi = C.too_high(pg["mult"], C.fwd12(hist, "eps"), price, bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"))
+        if hi:
+            pg["raw"], pg["how"] = dict(pg["mult"]), hi[1]
+            pg["mult"] = {k: rnd(v, 1) for k, v in hi[0].items()}
+            pg["part_src"] = f"{h['sector']} 업종 PER" if "업종" in hi[1] else "PER 밴드"
     scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg)
     if scen and pg:
         scen["growth"] = pg
@@ -245,12 +249,7 @@ def stock_detail(h, rates_now, fx):
             scen["sa_date"] = sa_d or None
             scen["ltg_note"] = ltg_note
     if scen:
-        # 시장 국면: 긴축·약세장이면 성장률 PER 은 × 1(Bear 칸)이 적정가, 완화·강세장이면 × 1.5(Base 칸). 밴드·업종 배수 부분은 늘 Base
-        reg = (rates_now.get("regime") or {}).get(mkt)
-        grow = any(p["src"].startswith("성장률") for p in scen["parts"])
-        fk = "bear" if grow and reg and reg["mode"] == "tight" else "base"
-        fair = sum(p["price"][fk if p["src"].startswith("성장률") else "base"] for p in scen["parts"]) / len(scen["parts"])
-        scen["regime"], scen["fair_key"] = (reg if grow else None), fk
+        fair = scen["base"]  # 적정가 = Base (하방 × 1 과 최대 × 2 의 평균)
         s_ = SECTORS.get(h.get("sector")) or {}
         scen["rerating"] = h.get("rerating") or s_.get("rerating")
         scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "history", "notes")}} if s_ else None
@@ -504,10 +503,7 @@ def stock_detail(h, rates_now, fx):
 def _scen_text(scen):
     """'12MF EPS × Base PER 22.5배 (화장품 브랜드)' 처럼."""
     base = {"PER": "EPS", "PBR": "BPS"}
-    fk = scen.get("fair_key", "base")
-    reg = f", {scen['regime']['label']}" if scen.get("regime") else ""
     parts = [f"12MF {base[p['kind']]} × {p['src']} 평균 {p['kind']}" if "밴드" in p["src"] else
-             f"12MF EPS × PER {p['mult'][fk]:g}배 ({'Bear' if fk == 'bear' else 'Base'} 칸 · {p['src']}{reg})" if p["src"].startswith("성장률") else
              f"12MF {base[p['kind']]} × {p['kind']} {p['mult']['base']:g}배 ({p['src']})" for p in scen["parts"]]
     return parts[0] if len(parts) == 1 else "두 값 평균: " + " / ".join(parts)
 
@@ -519,20 +515,14 @@ def _round_scen(scen, dg):
             "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12"),
             "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date"), "ltg_note": scen.get("ltg_note"),
             "rerating": scen.get("rerating"), "sector": scen.get("sector"), "ind": scen.get("ind"),
-            "regime": scen.get("regime"), "fair_key": scen.get("fair_key"), "y2": scen.get("y2")}
+            "y2": scen.get("y2")}
 
 
 def _price_chart(px, currency, days=250):
-    """카드용 주가 차트: 최근 1년 종가 + 20·50·200일 이동평균선 + 볼린저밴드(20일, ±2σ)."""
-    s = px.dropna().astype(float)
+    """카드·실적 카드 주가 그림 (1개월~1년 탭): 최근 1년 일봉 종가. 3년 이상은 화면이 상세 데이터의 주봉을 씀."""
+    t = px.dropna().astype(float).iloc[-days:]
     dg = 2 if currency == "USD" else 0
-    ma = {n: s.rolling(n).mean() for n in (20, 50, 200)}
-    sd = s.rolling(20).std(ddof=0)
-    t = s.iloc[-days:]
-    f = lambda ser: [rnd(v, dg) if v == v else None for v in ser.loc[t.index]]  # noqa: E731 (NaN → None)
-    return {"dates": [d.strftime("%Y-%m-%d") for d in t.index], "close": f(s),
-            "ma20": f(ma[20]), "ma50": f(ma[50]), "ma200": f(ma[200]),
-            "bb_up": f(ma[20] + 2 * sd), "bb_dn": f(ma[20] - 2 * sd)}
+    return {"dates": [d.strftime("%Y-%m-%d") for d in t.index], "close": [rnd(v, dg) for v in t]}
 
 
 def _fair_table(bands, hist, price, currency, kinds):

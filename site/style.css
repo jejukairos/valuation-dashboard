@@ -154,11 +154,12 @@ table.flow tr.now td { background: var(--surface-2); }
 /* 종목 카드 */
 .toolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .seg { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
-.seg button {
+.seg button, .seg span[data-m] {
   border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 13px;
   padding: 6px 12px; border-radius: 8px; cursor: pointer; min-height: 34px;
 }
-.seg button.on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+.seg span[data-m] { display: inline-flex; align-items: center; box-sizing: border-box; }
+.seg button.on, .seg span[data-m].on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
 .stock {
   display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
 }
@@ -182,7 +183,6 @@ table.flow tr.now td { background: var(--surface-2); }
 .bandbar .dot { position: absolute; top: -4px; width: 16px; height: 16px; border-radius: 50%;
   background: var(--ink); border: 2px solid var(--surface); transform: translateX(-50%); }
 .bandlbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
-.miniband { margin: 4px 0 2px; cursor: default; text-align: left; }
 /* Bear / Base / Bull 적정주가 자 */
 .scen { cursor: default; text-align: left; }
 .scenbar { position: relative; height: 10px; border-radius: 5px; margin: 26px 0 8px; }
@@ -312,7 +312,6 @@ details.post a { color: var(--s1); font-size: 12px; }
 #kf-seg { max-width: 100%; overflow-x: auto; }
 #kf-seg button { padding: 6px 9px; }
 .chart-box.nvbox { height: 300px; }
-.miniband .legend { font-size: 11px; gap: 8px; }
 .stale { font-size: 11px; color: var(--warn-ink); }
 
 /* 상세 시트 */
