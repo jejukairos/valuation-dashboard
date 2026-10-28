@@ -58,3 +58,5 @@ TSLA: {own: [테슬라], rivals: [BYD, 웨이모, 리비안], en: [Tesla]}
 "069960": {own: [현대백화점], rivals: [롯데백화점, 신세계백화점]}
 "329180": {own: [HD현대중공업], rivals: [한화오션, 삼성중공업, 중국 조선], en: [HD Hyundai Heavy]}
 "010140": {own: [삼성중공업], rivals: [한화오션, HD현대중공업, 중국 조선], en: [Samsung Heavy Industries]}
+"009150": {own: [삼성전기, MLCC], rivals: [무라타, LG이노텍, 이비덴], en: [Samsung Electro-Mechanics]}
+"071970": {own: [HD현대마린엔진, STX중공업], rivals: [한화엔진, WinGD], en: [HD Hyundai Marine Engine]}
