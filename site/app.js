@@ -1461,6 +1461,46 @@ function wireManheim() {
   draw();
 }
 
+/* ---------- ✈️ 한국 출입국 관광통계 (config/tourism.yaml, 손으로 적음 — 롯데쇼핑 상세 맨 아래) ---------- */
+let TOUR = null;
+const TOUR_K = [["out", "아웃바운드", "내국인 출국", "s1"], ["in", "인바운드", "외국인 입국", "s2"], ["cn", "중국인 입국", "외국인 중", "s3"]];
+async function tourBlock(code) {
+  if (!TOUR) { try { TOUR = await (await fetch("data/tourism.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { TOUR = {}; } }
+  if (!(TOUR.codes || []).includes(code) || !TOUR.months) return "";
+  const ms = Object.keys(TOUR.months).sort(), last = ms[ms.length - 1], L = TOUR.months[last], P = TOUR.months[ms[ms.length - 2]] || {};
+  const mo = +last.slice(5), man = (v) => n(v / 1e4, 0) + "만 명";
+  const tile = ([k, lab, sub]) => { const x = L[k] || {}; return `<div class="tile"><div class="tl">${esc(lab)} <span class="src">${esc(sub)}</span></div><div class="tv" style="font-size:20px">${man(x.v)}</div>
+    <div class="src">전월 ${pct(x.mom, 1, true)} · 전년 ${pct(x.yoy, 1, true)}<br>2019년 같은 달의 <b>${n(x.vs19, 1)}%</b></div></div>`; };
+  const move = (k) => (P[k]?.vs19 ? `${n(P[k].vs19, 1)}% → ${n(L[k].vs19, 1)}%` : `${n(L[k].vs19, 1)}%`);
+  return `<h3>✈️ 한국 출입국 관광통계 <span class="src">${last.slice(0, 4)}년 ${mo}월</span></h3><div class="card">
+    <div class="tiles">${TOUR_K.map(tile).join("")}</div>
+    <div class="chart-title" style="margin-top:12px"><b>${mo}월끼리 비교</b> <span class="src">만 명 · 2018·2019·${+last.slice(0, 4) - 1}년은 원문의 '대비 %'로 거꾸로 계산</span></div>
+    <div id="tour-leg1"></div><div class="chart-box"><canvas id="tour-bar"></canvas></div>
+    <div class="chart-title" style="margin-top:12px"><b>코로나 전(2019년 같은 달) 대비</b> <span class="src">100% = 2019년 수준 · 매달 쌓여요</span></div>
+    <div id="tour-leg2"></div><div class="chart-box"><canvas id="tour-line"></canvas></div>
+    <div class="memo" style="margin-top:10px">
+      <b>롯데쇼핑과 어떤 관계?</b>
+      <br>· 외국인, 특히 중국인 관광객이 늘면 백화점(명동 본점·잠실 등) 외국인 매출에 도움이 돼요. 롯데면세점은 호텔롯데 회사라 롯데쇼핑 실적에는 직접 안 들어가요.
+      <br>· 내국인 해외여행(아웃바운드)이 늘면 국내에서 쓸 돈이 해외로 빠져서 백화점·마트에는 부담이 될 수 있어요.
+      <br><b>${mo}월</b>: 중국인 입국 2019년 대비 ${move("cn")} (전월 ${pct(L.cn?.mom, 1, true)}, 전년 ${pct(L.cn?.yoy, 1, true)}) · 외국인 전체 ${move("in")} · 내국인 출국 ${move("out")}
+    </div>
+    <div class="note src">출처: ${TOUR.url ? `<a href="${esc(TOUR.url)}" target="_blank" rel="noopener">${esc(TOUR.source)}</a>` : esc(TOUR.source || "")} · config/tourism.yaml 에 매달 손으로 적음${Object.values(TOUR.months).some((m) => m.out?.est) ? " · 명 수가 원문에 없는 달은 다음 달 값 ÷ (1 + 전월 대비)로 계산" : ""}</div>
+  </div>`;
+}
+function drawTour() {
+  if (!document.getElementById("tour-bar")) return;
+  const C = themeColors(), ms = Object.keys(TOUR.months).sort(), last = ms[ms.length - 1], L = TOUR.months[last], y = +last.slice(0, 4);
+  const yrs = [["2018년", C.muted, (x) => x.v / (x.vs18 / 100)], ["2019년", C.s4, (x) => x.v / (x.vs19 / 100)],
+    [`${y - 1}년`, C.s3, (x) => x.v / (1 + x.yoy / 100)], [`${y}년`, C.s1, (x) => x.v]];
+  const bars = yrs.map(([label, col, f]) => ({ label, backgroundColor: col, borderColor: col, data: TOUR_K.map(([k]) => (L[k] ? f(L[k]) / 1e4 : null)) }));
+  document.getElementById("tour-leg1").innerHTML = legend(yrs.map(([l, c]) => [l, c]));
+  makeChart(document.getElementById("tour-bar"), TOUR_K.map((k) => k[1]), bars, { type: "bar", zero: true, fmt: (v) => n(v, 1) + "만 명", yfmt: (v) => n(v, 0) });
+  const lines = TOUR_K.map(([k, lab, , s]) => ({ label: lab, borderColor: C[s], backgroundColor: C[s], pointRadius: 3, data: ms.map((m) => TOUR.months[m][k]?.vs19 ?? null) }));
+  lines.push({ label: "2019년 수준", data: ms.map(() => 100), borderColor: C.muted, borderDash: [4, 3], borderWidth: 1, pointRadius: 0 });
+  document.getElementById("tour-leg2").innerHTML = legend(lines.map((d) => [d.label, d.borderColor, !!d.borderDash]));
+  makeChart(document.getElementById("tour-line"), ms, lines, { fmt: (v) => n(v, 1) + "%", yfmt: (v) => v.toFixed(0) + "%" });
+}
+
 /* ---------- 증권사 목표주가 트래킹 (config/broker_targets.yaml, 손으로 적음) ---------- */
 let BROKER = null;
 async function brokerBlock(code, price, cur) {
@@ -1716,7 +1756,8 @@ async function openStock(code) {
     const holderHtml = await holdersBlock(code);
     const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml;
+    const tourHtml = await tourBlock(code);
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawProfile(code);
     wirePrecheck();
@@ -1724,6 +1765,7 @@ async function openStock(code) {
     drawOrders(code);
     drawHolders(code);
     drawPeers(code);
+    drawTour();
   } catch (e) {
     $("#sheetBody").innerHTML = `<div class="empty">상세 데이터를 불러오지 못했어요.</div>`;
   }
