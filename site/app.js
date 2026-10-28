@@ -1239,7 +1239,7 @@ function drawBand(id, band, kind, period) {
   const nm = kind === "DIV" ? "배당수익률" : kind;
   $(`#${id}-stats`).innerHTML =
     `현재 ${nm} <b>${n(cur, 2)}${unit}</b> · 평균 ${n(st.avg, 2)}${unit} · 하단 ${n(st.low, 2)} · 상단 ${n(st.high, 2)} (최저 ${n(st.min, 2)} / 최고 ${n(st.max, 2)}) · 밴드 위치 <b>${n(st.pos, 0)}%</b>
-    <br><span class="src">기간 ${esc(st.from)} ~ · 주간 종가 기준 · ${band.basis === "forward" ? "<b>선행 PER</b>: 각 시점의 1년 뒤 실적(최근은 추정치)으로 계산" : "직전 연도 확정 실적 사용"} · 하단/상단 = 하위 ${DASH.settings.band.low_pct}% / 상위 ${100 - DASH.settings.band.high_pct}% 지점</span>`;
+    <br><span class="src">기간 ${esc(st.from)} ~ · 주간 종가 기준 · ${band.basis !== "forward" ? "직전 연도 확정 실적 사용" : kind === "PBR" ? "<b>그해 BPS</b>: 각 시점의 그해 BPS(올해는 추정치)로 계산 · BPS 가 빨리 늘 때 PBR 이 부풀지 않게" : "<b>선행 PER</b>: 각 시점의 1년 뒤 실적(최근은 추정치)으로 계산"} · 하단/상단 = 하위 ${DASH.settings.band.low_pct}% / 상위 ${100 - DASH.settings.band.high_pct}% 지점</span>`;
 }
 function wireBand(id, band, kind) {
   const seg = document.getElementById(`${id}-seg`);
@@ -1480,7 +1480,7 @@ function detailHTML(d) {
         <div class="k">ROE 5년 평균</div><div class="v">${pct(p.roe5)}</div>
         <div class="k">ROE 10년 평균 <span class="src">${p.roe10_years}년치</span></div><div class="v">${pct(p.roe10)}</div>
         <div class="k">요구수익률 (국고채 3년 + ${DASH.settings ? "" : ""}위험 프리미엄)</div><div class="v">${pct(p.req_return, 2)}</div>
-        <div class="k">적정 PBR ≈ ROE ÷ 요구수익률</div><div class="v">${times(p.fair_pbr, 2)}</div>
+        <div class="k">적정 PBR ≈ ROE ÷ 요구수익률 <span class="src">${esc(p.fair_roe || "")}</span></div><div class="v">${times(p.fair_pbr, 2)}</div>
         <div class="k">현재 PBR <span class="src">올해 추정 BPS 기준</span></div><div class="v">${times(p.cur_pbr, 2)}</div></div>
       ${p.verdict ? `<div class="note"><b>${esc(p.verdict)}</b></div>` : ""}</div>`;
   }
@@ -1578,6 +1578,32 @@ function wireManheim() {
 /* ---------- ✈️ 한국 출입국 관광통계 (config/tourism.yaml, 손으로 적음 — 롯데쇼핑 상세 맨 아래) ---------- */
 let TOUR = null;
 const TOUR_K = [["out", "아웃바운드", "내국인 출국", "s1"], ["in", "인바운드", "외국인 입국", "s2"], ["cn", "중국인 입국", "외국인 중", "s3"]];
+// 👥 누가 어느 가격에 샀나: KRX 투자자별 순매수 거래대금(억원) × 그날 종가, 최근 1년
+const FLOW_G = [["외국인", "--s1"], ["기관", "--s3"], ["개인", "--s4"]];
+function flowHTML(d) {
+  const f = d.flow;
+  if (!f || !(f.zones || []).length) return "";
+  const sg = (v) => (v == null ? "N/A" : (v > 0 ? "+" : "") + kqFmt(v)), pw = (v) => (v >= 1e5 ? n(v / 1e4, 0) + "만" : n(v));
+  const mx = Math.max(1, ...f.zones.flatMap((z) => FLOW_G.map(([g]) => Math.abs(z[g] || 0))));
+  const tile = ([g, col]) => {
+    const x = f.groups[g] || {}, z = f.zones[x.top];
+    return `<div class="tile"><div class="tl" style="color:var(${col})"><b>${g}</b> 1년 순매수</div><div class="tv" style="font-size:20px">${sg(x.sum)}</div>
+      <div class="src">최근 20거래일 ${sg(x.m1)}<br>순매수한 날 평균 ${x.avg_buy ? pw(x.avg_buy) + "원" : "N/A"}<br>가장 많이 산 가격대 ${z ? `<b>${pw(z.lo)}~${pw(z.hi)}원</b>` : "없음 (내내 순매도)"}</div></div>`;
+  };
+  const rows = f.zones.slice().reverse().map((z) => {
+    const now = d.price >= z.lo && d.price <= z.hi;
+    return `<tr${now ? ' class="now"' : ""}><td>${pw(z.lo)}~${pw(z.hi)}${now ? " <b>◀ 지금</b>" : ""}<br><span class="src">${z.days}일</span></td>${FLOW_G.map(([g, col]) => {
+      const v = z[g] || 0, w = (Math.abs(v) / mx) * 50;
+      return `<td><div class="fz"><i style="${v >= 0 ? "left" : "right"}:50%;width:${w}%;background:var(${col});opacity:${v >= 0 ? 1 : 0.4}"></i></div><span class="src">${z.days ? sg(v) : ""}</span></td>`;
+    }).join("")}</tr>`;
+  }).join("");
+  return `<h3>👥 누가 어느 가격에 샀나 <span class="src">${esc(f.from)} ~ ${esc(f.to)} · 순매수 = 산 돈 − 판 돈</span></h3><div class="card">
+    <div class="tiles t3">${FLOW_G.map(tile).join("")}</div>
+    <table class="flow"><thead><tr><th>가격대 (그날 종가)</th>${FLOW_G.map(([g, col]) => `<th style="color:var(${col})">${g}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>
+    <div class="note src">막대가 가운데 선 오른쪽이면 그 가격대에서 순매수, 왼쪽(흐린 색)이면 순매도예요. 외국인·기관·개인·기타법인을 모두 더하면 0이에요 (누가 사면 누군가는 팔아요).
+      '평균'은 순매수한 날의 종가를 주식 수로 평균한 값이라 실제 체결가와는 조금 달라요. 출처: ${esc(f.src)}</div>
+  </div>`;
+}
 async function tourBlock(code) {
   if (!TOUR) { try { TOUR = await (await fetch("data/tourism.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { TOUR = {}; } }
   if (!(TOUR.codes || []).includes(code) || !TOUR.months) return "";
@@ -1871,7 +1897,7 @@ async function openStock(code) {
     const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawProfile(code);
     wirePrecheck();

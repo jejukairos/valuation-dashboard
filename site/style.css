@@ -139,6 +139,14 @@ td.hot { font-weight: 700; }
 .tile { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; min-width: 0; }
 .tile .tl { font-size: 12px; color: var(--ink-2); }
 .tile .tv { font-size: 26px; font-weight: 700; line-height: 1.25; }
+.tiles.t3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+/* 👥 누가 어느 가격에 샀나 */
+table.flow { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; font-variant-numeric: tabular-nums; }
+table.flow th, table.flow td { padding: 5px 4px; border-bottom: 1px solid var(--grid); text-align: center; vertical-align: middle; }
+table.flow th:first-child, table.flow td:first-child { text-align: left; width: 31%; }
+table.flow tr.now td { background: var(--surface-2); }
+.fz { position: relative; height: 10px; margin-bottom: 2px; background: linear-gradient(var(--axis), var(--axis)) center / 1px 100% no-repeat; }
+.fz i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
 .chart-box { position: relative; height: 170px; margin-top: 10px; }
 .chart-box.tall { height: 290px; }
 .chart-title { font-size: 13px; color: var(--ink-2); margin-top: 12px; }

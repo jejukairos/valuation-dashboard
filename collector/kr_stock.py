@@ -463,6 +463,7 @@ def merged_history(code, splits=()):
                             continue
                         if v <= 0 or not 0.5 < nxt / v < 2:
                             hist[y]["bps"] = None
+                            hist[y]["roe"] = None  # 같은 자본 숫자로 낸 ROE 도 틀림 (현대백화점 2017~20년 ROE 200%대)
                         else:
                             nxt = v
                 continue

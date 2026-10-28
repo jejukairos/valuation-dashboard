@@ -29,7 +29,7 @@ def row(cfg, holdings):
     method = (cfg.get("fair") or "PER").upper()
     key = "eps" if method == "PER" else "bps"
     px = price_history(code)
-    band = C.build_band(C.weekly_close(px), hist, key, shift=1 if method == "PER" else 0)
+    band = C.build_band(C.weekly_close(px), hist, key, shift=1)  # PER = 1년 뒤 EPS, PBR = 그해 BPS
     # 52주 최고가는 액면분할이 반영된 '수정주가'로 (네이버 요약값은 분할 전 가격이 섞일 때가 있음)
     recent = px[px.index >= px.index[-1] - pd.Timedelta(days=365)]
     adj_high = float(recent.max()) if len(recent) else None

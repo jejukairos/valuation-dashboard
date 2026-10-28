@@ -46,8 +46,8 @@ def pct_rank(values, cur):
 
 def build_band(price_w, hist, key, invert=False, shift=0):
     """key: eps → PER, bps → PBR, dps → 배당수익률.
-    shift=1 이면 '조정 PER': 그 시점 기준 1년 뒤 실적(아직 안 나온 해는 추정치)으로 나눈다.
-    이익이 빠르게 늘던 시기에 지난 실적 PER 이 부풀려지는 것을 바로잡는다.
+    shift=1 이면 '조정 PER'·'그해 BPS': 그 시점 기준 1년 뒤 실적(아직 안 나온 해는 추정치)으로 나눈다.
+    이익·자본이 빠르게 늘던 시기에 지난 실적 PER·PBR 이 부풀려지는 것을 바로잡는다.
     반환: 주간 날짜·가격·주당값·배수 배열 + 기간별 통계."""
     dates, prices, base, mult = [], [], [], []
     # 각 실적을 '언제부터 쓸 수 있었는지' (결산 후 보고서 제출 시점). 한국 12월 결산 = 다음 해 4월 1일
@@ -59,6 +59,8 @@ def build_band(price_w, hist, key, invert=False, shift=0):
             continue
         fy = max(known) + shift
         rec = hist.get(fy)
+        if shift and (rec or {}).get(key) is None:  # 추정치가 없는 종목은 최근 구간만 직전 확정치로
+            rec = hist.get(fy - shift)
         if not rec or (rec.get("estimate") and not shift) or rec.get(key) is None:
             continue
         b = rec[key]
@@ -337,7 +339,7 @@ def per_section(price, hist, band):
     return {"eps": eps, "fwd_per": fwd_per, "matrix": matrix, "rerating_warning": warn}
 
 
-def pbr_section(price, hist, band, kr3y):
+def pbr_section(price, hist, band, kr3y, cyclical=False):
     ys = fwd_years(hist)
     bps = {ylabel(y): hist.get(y, {}).get("bps") for y in ys}
     p10 = band["periods"].get("10y") or {}
@@ -351,17 +353,22 @@ def pbr_section(price, hist, band, kr3y):
     roe_now = hist.get(ys[0], {}).get("roe")
     roe_last = hist[actual[-1]]["roe"] if actual else None
     req = (kr3y + SETTINGS["pbr"]["risk_premium"]) if kr3y is not None else None
-    roe_basis = roe_now if roe_now is not None else roe_last
+    roe_cur = roe_now if roe_now is not None else roe_last
+    roe_avg10 = sum(roe10) / len(roe10) if roe10 else None
+    # 이익이 출렁이는 업종은 10년 평균 ROE 로: 고점 ROE(하이닉스 26E 103%)를 쓰면 PBR 이 늘 싸 보이는 착시
+    norm = bool(cyclical and roe_avg10 and roe_avg10 > 0)
+    roe_basis = roe_avg10 if norm else roe_cur
     fair_pbr = roe_basis / req if (roe_basis is not None and req) else None
     cur_bps = bps.get(ylabel(ys[0])) or (hist.get(actual[-1], {}).get("bps") if actual else None)
     cur_pbr = price / cur_bps if cur_bps else None
     verdict = None
-    if fair_pbr and cur_pbr:
+    if fair_pbr and fair_pbr > 0 and cur_pbr:
         r = cur_pbr / fair_pbr
         verdict = ("ROE 에 비해 PBR 이 낮아요 (싸 보임)" if r < 0.8 else
                    "ROE 에 비해 PBR 이 높아요 (비싸 보임)" if r > 1.2 else "ROE 에 맞는 수준의 PBR 이에요")
     return {"bps": bps, "matrix": rows, "roe5": rnd(sum(roe5) / len(roe5)) if roe5 else None,
-            "roe10": rnd(sum(roe10) / len(roe10)) if roe10 else None, "roe_now": rnd(roe_basis),
+            "roe10": rnd(roe_avg10), "roe_now": rnd(roe_cur),
+            "fair_roe": "ROE 10년 평균 기준 (이익이 출렁이는 업종)" if norm else "ROE 현재 기준",
             "roe_now_label": f"{ylabel(ys[0])} 추정" if roe_now is not None else f"{actual[-1]}년 실적" if actual else "",
             "req_return": rnd(req), "fair_pbr": rnd(fair_pbr), "cur_pbr": rnd(cur_pbr), "verdict": verdict,
             "roe10_years": len(roe10)}

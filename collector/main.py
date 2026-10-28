@@ -7,6 +7,7 @@ import traceback
 import pandas as pd
 
 import compute as C
+import flows
 import kq
 import kr_stock
 import manheim
@@ -119,7 +120,8 @@ def stock_detail(h, rates_now, fx):
     for key, label in (("eps", "PER"), ("bps", "PBR"), ("dps", "DIV")):
         if label in methods or (label == "PBR" and "PER" in methods):
             basis = h.get("per_basis") or SETTINGS["band"].get("per_basis", "trailing")
-            shift = 1 if (key == "eps" and basis == "forward") else 0
+            # PBR 은 늘 '그해 BPS' 로: BPS 가 1년에 몇 배씩 늘 때(메모리 호황) 지난 BPS 로 나누면 PBR 밴드가 부풀어요
+            shift = 1 if key == "bps" or (key == "eps" and basis == "forward") else 0
             b = C.build_band(pw, hist, key, invert=(key == "dps"), shift=shift)
             if b:
                 bands[label] = b
@@ -152,7 +154,7 @@ def stock_detail(h, rates_now, fx):
         if e and mult("PER") and "PER" in fm:
             fairs.append(("PER", e * mult("PER")))
     if "PBR" in methods and "PBR" in bands:
-        det["pbr"] = C.pbr_section(price, hist, bands["PBR"], rate_kr3y)
+        det["pbr"] = C.pbr_section(price, hist, bands["PBR"], rate_kr3y, cyclical=fm == ["PBR"] or bool(h.get("cyclical")))
         b = hist.get(yr, {}).get("bps")
         if b and mult("PBR") and "PBR" in fm:
             fairs.append(("PBR", b * mult("PBR")))
@@ -429,6 +431,12 @@ def stock_detail(h, rates_now, fx):
             det["kq"] = kq.collect_us(code, QTRS.get(tkr), hist)
         except Exception as e:  # noqa: BLE001
             REPORT.block("최신 분기 실적 (미국)", f"{name}: {str(e)[:60]}")
+    det["flow"] = None
+    if mkt == "KR" and not h.get("data_code"):  # 외국인·기관·개인이 1년 동안 어느 가격대에서 샀나 (KRX)
+        try:
+            det["flow"] = flows.collect(code, px)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("투자자별 매매 (KRX)", f"{name}: {str(e)[:60]}")
     if mkt == "KR" and not h.get("data_code"):
         if det["kq"] and wise:  # 연간 보기: 와이즈리포트 연간 실적 + 추정 (억원)
             det["kq"]["annual"] = [{"q": f"{str(yy)[2:]}{'E' if r.get('estimate') else ''}", "est": bool(r.get("estimate")),
