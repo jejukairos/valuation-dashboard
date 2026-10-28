@@ -2059,10 +2059,12 @@ function pbrCard(it, base, i) {
   </div>`;
 }
 function showView() {
-  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news" }[location.hash] || "main";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#industry": "industry" }[location.hash] || "main";
   $("#pbrView").hidden = view !== "pbr";
   $("#newsView").hidden = view !== "news";
   if (view === "news") loadNews();
+  $("#industryView").hidden = view !== "industry";
+  if (view === "industry") loadIndustry();
   $("#marketView").hidden = view !== "market";
   $("#scoreView").hidden = view !== "score";
   if (view === "score") renderScore();
@@ -2088,6 +2090,69 @@ function renderGroup(g, el) {
   drawPriceCharts(list);
   drawGauges(list);
 }
+
+/* ---------- 🏭 산업 탭: 아마존 K-뷰티 Top100 품목 수 (config/amazon_kbeauty.yaml, 날마다 손으로 적음) ---------- */
+let AMZ = null, AMZ_B = "";
+async function loadIndustry() {
+  if (!AMZ) {
+    try { AMZ = await (await fetch("data/amazon_kbeauty.json?t=" + Date.now(), { cache: "no-store" })).json(); }
+    catch (e) { $("#industryBody").innerHTML = `<div class="empty">산업 데이터를 불러오지 못했어요.</div>`; return; }
+  }
+  $("#industryBody").innerHTML = amzHTML();
+  drawAmz();
+}
+const amzSum = (a) => (a || []).reduce((x, y) => x + y, 0);
+function amzHTML() {
+  const A = AMZ, ds = Object.keys(A.days).sort(), d = ds[ds.length - 1], p = ds[ds.length - 2];
+  const cur = A.days[d].counts, prv = p ? A.days[p].counts : null;
+  const brands = Object.keys(cur).sort((a, b) => amzSum(cur[b]) - amzSum(cur[a]));
+  const cell = (v, pv, total) => {
+    const df = prv ? v - (pv ?? 0) : 0;
+    const arrow = df ? ` <span style="color:var(${df > 0 ? "--good-ink" : "--bad-ink"});font-weight:700">${df > 0 ? "▲" : "▼"}${Math.abs(df)}</span>` : "";
+    return !v && !df && !total ? '<span class="src">–</span>' : `${total ? `<b>${v}</b>` : v}${arrow}`;
+  };
+  const tag = (b) => {
+    const m = (A.brands || {})[b], c = m && DASH.stocks.find((x) => x.code === m.stock);
+    return m ? ` <span class="src">${esc(m.company)}</span>${c ? `<span class="tag">${esc(c.group)}</span>` : ""}` : "";
+  };
+  const rows = brands.map((b) => {
+    const v = cur[b], pv = prv?.[b] || [];
+    const moved = prv && v.some((x, i) => x !== (pv[i] ?? 0));
+    return `<tr${moved ? ' style="background:var(--na-bg)"' : ""}><td style="text-align:left">${esc(b)}${tag(b)}</td>${v.map((x, i) => `<td>${cell(x, pv[i])}</td>`).join("")}<td>${cell(amzSum(v), amzSum(pv), true)}</td></tr>`;
+  }).join("");
+  const colSum = (day, i) => Object.values(day || {}).reduce((s, a) => s + (a[i] || 0), 0);
+  const tot = A.countries.map((_, i) => `<td>${cell(colSum(cur, i), prv ? colSum(prv, i) : null, true)}</td>`).join("");
+  const all = (day) => A.countries.reduce((s, _, i) => s + colSum(day, i), 0);
+  const fl = (c) => A.flags?.[A.countries.indexOf(c)] || "";
+  const mv = (A.days[d].moves || []).map((m) => {
+    const ic = m.out ? "❌" : m.new ? "🆕" : m.chg > 0 ? "⚡" : "⚠️";
+    const what = m.out ? `#${m.rank} → 탈락` : m.new ? `#${m.rank} 새로 진입` : `#${m.rank} ${m.chg > 0 ? "▲" : "▼"}${Math.abs(m.chg)}`;
+    return `<li>${ic} ${fl(m.c)} <b>${esc(m.b)}</b> ${m.u ? `<a href="${esc(m.u)}" target="_blank" rel="noopener">${esc(m.t)}</a>` : esc(m.t)} <span class="src">${esc(what)}</span></li>`;
+  }).join("");
+  const chips = ["", ...brands].map((b) => `<button data-b="${esc(b)}" class="chip ${b === AMZ_B ? "on" : ""}">${b ? esc(b) : "브랜드별 합계"}</button>`).join("");
+  return `<h3>💄 아마존 K-뷰티 Top100 품목 수 <span class="src">${esc(d)}${p ? ` · ▲▼ = ${esc(p.slice(5).replace("-", "/"))} 대비` : ""}</span></h3>
+  <div class="card">
+    <div class="tbl-wrap"><table class="compact" style="width:100%;text-align:center"><thead><tr><th style="text-align:left">브랜드</th>${A.countries.map((c, i) => `<th>${A.flags?.[i] || ""} ${esc(c)}</th>`).join("")}<th>합계</th></tr></thead>
+      <tbody>${rows}<tr style="border-top:2px solid var(--border)"><td style="text-align:left"><b>합계</b></td>${tot}<td>${cell(all(cur), prv ? all(prv) : null, true)}</td></tr></tbody></table></div>
+    ${mv ? `<div class="chart-title" style="margin-top:12px"><b>오늘 순위 변동</b> <span class="src">⚡ 크게 오름 · ⚠️ 크게 내림 · ❌ Top100 탈락 · 🆕 새로 진입</span></div><ul class="irl">${mv}</ul>` : ""}
+    <div class="chart-title" style="margin-top:12px"><b>추이</b> <span class="src">날마다 쌓여요 · 브랜드를 누르면 나라별</span></div>
+    <div class="chips" id="amz-chips" style="margin:6px 0">${chips}</div>
+    <div id="amz-leg"></div><div class="chart-box"><canvas id="amz-chart"></canvas></div>
+    <div class="note src">출처: ${esc(A.source || "")} · 상장사 연결: 메디큐브 = 에이피알, 달바 = 달바글로벌, COSRX = 아모레퍼시픽 자회사${ds.some((x) => A.days[x].derived) ? ` · ${ds.filter((x) => A.days[x].derived).map((x) => x.slice(5).replace("-", "/")).join(", ")}은 다음 날 표의 ▲▼로 거꾸로 계산` : ""}</div>
+  </div>`;
+}
+function drawAmz() {
+  const C = themeColors(), A = AMZ, ds = Object.keys(A.days).sort(), last = A.days[ds[ds.length - 1]].counts;
+  const cols = [C.s1, C.s2, C.s3, C.s4, C.s7, C.ink2, C.muted];
+  const top = Object.keys(last).sort((a, b) => amzSum(last[b]) - amzSum(last[a])).slice(0, 7);
+  const sets = AMZ_B
+    ? A.countries.map((c, i) => ({ label: `${A.flags?.[i] || ""} ${c}`, data: ds.map((d) => A.days[d].counts[AMZ_B]?.[i] ?? 0) }))
+    : top.map((b) => ({ label: b, data: ds.map((d) => amzSum(A.days[d].counts[b])) }));
+  sets.forEach((s, i) => Object.assign(s, { borderColor: cols[i % cols.length], backgroundColor: cols[i % cols.length], pointRadius: 3 }));
+  document.getElementById("amz-leg").innerHTML = legend(sets.map((s) => [s.label, s.borderColor]));
+  makeChart(document.getElementById("amz-chart"), ds.map((d) => d.slice(5).replace("-", "/")), sets, { zero: true, fmt: (v) => v + "개", yfmt: (v) => v.toFixed(0) });
+}
+$("#industryBody").addEventListener("click", (e) => { const b = e.target.closest("#amz-chips button"); if (!b) return; AMZ_B = b.dataset.b; loadIndustry(); });
 
 /* ---------- 📰 뉴스 탭: 내 종목 · 경쟁사 · 외신 (config/news.yaml, Google 뉴스 30일치 쌓임) ---------- */
 let NEWS = null, NEWS_GRP = "전체";

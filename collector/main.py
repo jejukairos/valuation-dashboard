@@ -684,6 +684,7 @@ def main():
 
     write_json(DATA / "broker_targets.json", load_yaml("broker_targets.yaml") or {})  # 손으로 적는 증권사 목표주가
     write_json(DATA / "tourism.json", load_yaml("tourism.yaml") or {})  # 출입국 관광통계 (롯데쇼핑 상세)
+    write_json(DATA / "amazon_kbeauty.json", load_yaml("amazon_kbeauty.yaml") or {})  # 🏭 산업 탭: 아마존 K-뷰티 Top100
     write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})
     write_json(DATA / "earnings.json", load_yaml("earnings.yaml") or {})  # 실적발표(컨퍼런스콜) 요약
     write_json(CACHE / "ltg_gap.json", LTG_GAP)

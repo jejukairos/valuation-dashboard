@@ -1,0 +1,47 @@
+# 💄 아마존 K-뷰티 Top100 — 🏭 산업 탭
+# 각 나라 아마존 Top 100 안에 든 K-뷰티 브랜드 품목 수 (텔레그램 'Amazon K-Beauty 데일리' 글을 날마다 적음)
+# counts: 브랜드: [미국, 영국, 독일, 프랑스, 스페인, 이탈리아] 순서, Top100 에 없으면 0
+# moves: 그날 순위 변동 — {c: 나라, b: 브랜드, t: 품목, rank: 순위, chg: 순위 변화(+ = 오름), out: true = Top100 탈락, new: true = 새로 진입, u: 아마존 주소}
+# derived: true = 다음 날 표의 ▲▼ 로 거꾸로 계산한 날
+source: "텔레그램 'Amazon K-Beauty 데일리' (보내 주신 글)"
+countries: [미국, 영국, 독일, 프랑스, 스페인, 이탈리아]
+flags: ["🇺🇸", "🇬🇧", "🇩🇪", "🇫🇷", "🇪🇸", "🇮🇹"]
+brands:   # 상장 회사와 연결 (stock = 종목 코드, 보유·관심이면 표시)
+  메디큐브: {company: 에이피알, stock: "278470"}
+  달바: {company: 달바글로벌, stock: "483650"}
+  COSRX: {company: 아모레퍼시픽, stock: "090430"}
+  센텔리안24: {company: 동국제약, stock: "086450"}
+days:
+  "2026-10-28":
+    counts:
+      메디큐브: [9, 5, 3, 9, 10, 10]
+      바이오던스: [2, 2, 1, 2, 2, 2]
+      달바: [0, 0, 2, 0, 4, 0]
+      셀리맥스: [1, 1, 1, 1, 1, 1]
+      닥터엘시아: [1, 0, 1, 1, 1, 1]
+      아누아: [2, 0, 2, 0, 1, 0]
+      조선미녀: [0, 1, 2, 0, 0, 0]
+      COSRX: [0, 1, 0, 0, 0, 0]
+      센텔리안24: [0, 0, 0, 0, 1, 0]
+    moves:
+      - {c: 영국, b: 메디큐브, t: "medicube PDRN Pink Peptide Serum with…", rank: 79, chg: 19, u: "https://www.amazon.co.uk/dp/B0DBF65JYY"}
+      - {c: 독일, b: 메디큐브, t: "medicube PDRN Pink Peptid Serum mit L…", rank: 82, chg: -20, u: "https://www.amazon.de/dp/B0DBF65JYY"}
+      - {c: 독일, b: 메디큐브, t: "medicube NAD EGF Straffendes Serum fü…", rank: 97, out: true}
+      - {c: 독일, b: COSRX, t: "PDRN Exosome Overnight Wrapping Mask,…", rank: 100, out: true}
+      - {c: 프랑스, b: 메디큐브, t: "medicube Sérum Contour des Yeux PDRN…", rank: 65, chg: -16, u: "https://www.amazon.fr/dp/B0DWMSM6Y9"}
+      - {c: 프랑스, b: 메디큐브, t: "medicube Body Peel Shot à l’Acide hyp…", rank: 99, chg: -16, u: "https://www.amazon.fr/dp/B0FPCC599C"}
+      - {c: 프랑스, b: 메디큐브, t: "medicube Sérum PDRN Pink Peptides à l…", rank: 94, out: true}
+      - {c: 스페인, b: COSRX, t: "Pink Peptide Collagen Hydrogel Eye Pa…", rank: 89, out: true}
+      - {c: 스페인, b: 메디큐브, t: "medicube Triple Collagen Cream", rank: 90, out: true}
+  "2026-10-27":
+    derived: true
+    counts:
+      메디큐브: [9, 5, 4, 10, 11, 10]
+      바이오던스: [2, 2, 1, 2, 2, 2]
+      달바: [0, 0, 2, 0, 4, 0]
+      셀리맥스: [1, 1, 1, 1, 1, 1]
+      닥터엘시아: [1, 0, 1, 1, 1, 1]
+      아누아: [2, 0, 2, 0, 1, 0]
+      조선미녀: [0, 1, 2, 0, 0, 0]
+      COSRX: [0, 1, 1, 0, 1, 0]
+      센텔리안24: [0, 0, 0, 0, 1, 0]
