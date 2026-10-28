@@ -155,7 +155,9 @@ def collect(code):
     nxt = sorted(k for k in cons if k > last)
     # 잠정실적 공시는 났는데 공시 숫자도 못 읽었고 네이버 숫자도 아직 컨센서스면 '반영 대기'
     waiting = bool(filing and nxt and filing["date"] > _qend(nxt[0]))
-    return {"latest": label(last), "prelim": hist[last].get("prelim"), "seen": hist[last].get("seen"), "rows": rows, "est_date": (cons.get(last) or {}).get("date"), "quarters": qs,
+    # 발표일: 이 분기의 잠정실적 공시일 (공시를 안 내는 회사는 우리가 처음 본 날)
+    ann = filing["date"] if (filing and not waiting and filing["date"] > _qend(last)) else hist[last].get("seen")
+    return {"latest": label(last), "prelim": hist[last].get("prelim"), "seen": hist[last].get("seen"), "date": ann, "rows": rows, "est_date": (cons.get(last) or {}).get("date"), "quarters": qs,
             "est_bar": est, "points": points(qs, est), "filing": filing, "waiting": waiting,
             "next": {"q": label(nxt[0]), **{f: cons[nxt[0]].get(f) for f in ROWS}, "date": cons[nxt[0]].get("date")} if nxt else None}
 
@@ -218,7 +220,7 @@ def collect_us(tkr, qtrs, hist):
     qs = [{"q": _qlabel(k), **{f: val(k, f) for f in ("sales", "op", "eps")}, "ni": (qtrs.get(k) or {}).get("ni")} for k in keys]
     annual = [{"q": f"{str(y)[2:]}{'E' if r.get('estimate') else ''}", "est": bool(r.get("estimate")), "eps": r.get("eps")}
               for y, r in sorted((hist or {}).items()) if isinstance(r, dict) and r.get("eps") is not None][-8:]
-    return {"cur": "USD", "latest": lab, "prelim": None, "seen": seen[last]["seen"], "rows": rows, "quarters": qs, "est_bar": est,
+    return {"cur": "USD", "latest": lab, "prelim": None, "seen": seen[last]["seen"], "date": (eps.get(last) or {}).get("date") or seen[last]["seen"], "rows": rows, "quarters": qs, "est_bar": est,
             "est_date": (cons.get(lab) or {}).get("date"), "points": [], "waiting": False, "annual": annual,
             "filing": {"date": (eps.get(last) or {}).get("date"), "name": "실적발표 (야후)", "url": f"https://finance.yahoo.com/quote/{tkr}/"},
             "next": {"q": _qlabel(nxt_end), "eps": up[2], "sales": (cons.get(_qlabel(nxt_end)) or {}).get("sales"), "date": up[0]} if up else None}

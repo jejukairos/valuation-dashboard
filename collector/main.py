@@ -485,10 +485,10 @@ def stock_detail(h, rates_now, fx):
         "fv": _fair_table(bands, hist, price, currency,
                           [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
     }
-    k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적이 3일 안에 반영됐거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
-    if k.get("seen") and (now_kst().date() - pd.Timestamp(k["seen"]).date()).days <= 3:
+    k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적을 발표한 지 3일 안이거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
+    if k.get("date") and (now_kst().date() - pd.Timestamp(k["date"]).date()).days <= 3:
         det["card"]["kq_new"] = k["latest"]
-        det["card"]["kq_brief"] = {f: k.get(f) for f in ("latest", "prelim", "rows", "quarters", "est_bar", "filing", "annual")}  # 첫 화면 '🧾 실적 발표'
+        det["card"]["kq_brief"] = {f: k.get(f) for f in ("latest", "prelim", "date", "rows", "quarters", "est_bar", "filing", "annual")}  # 첫 화면 '🧾 실적 발표'
     if k.get("waiting"):
         det["card"]["kq_wait"] = (k.get("next") or {}).get("q")
     return det

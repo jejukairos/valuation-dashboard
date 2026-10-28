@@ -989,7 +989,9 @@ function priceSpark(c, months = 6) {
 }
 // 첫 화면: 최근 3일 안에 실적이 나온 보유·관심 종목 (예상 vs 실적 막대) + 잠정실적 공시는 났는데 숫자 반영을 기다리는 종목
 function kqNewsHTML() {
-  const list = DASH.stocks.filter((c) => c.kq_brief), wait = DASH.stocks.filter((c) => !c.kq_brief && c.kq_wait);
+  // 최근 발표일 먼저 (같은 날이면 보유 → 관심 순서 그대로)
+  const list = DASH.stocks.filter((c) => c.kq_brief).sort((a, b) => (b.kq_brief.date || "").localeCompare(a.kq_brief.date || ""));
+  const wait = DASH.stocks.filter((c) => !c.kq_brief && c.kq_wait);
   if (!list.length && !wait.length) return "";
   const waitHtml = wait.length ? `<div class="note">⏳ 잠정실적 공시는 났고 숫자를 읽는 중 (다음 갱신 때 반영): ${wait.map((c) => `<a href="#stock/${esc(c.code)}">${esc(c.name)}</a> ${esc(c.kq_wait || "")}`).join(" · ")}</div>` : "";
   return `<h2>🧾 실적 발표 <span class="src">최근 3일 · 회색 = 발표 전 예상(컨센서스), 색 = 실적</span></h2>${waitHtml}<div class="grid">${list.map((c) => {
