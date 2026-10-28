@@ -2016,8 +2016,10 @@ function pbrCard(it, base, i) {
   </div>`;
 }
 function showView() {
-  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score" }[location.hash] || "main";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news" }[location.hash] || "main";
   $("#pbrView").hidden = view !== "pbr";
+  $("#newsView").hidden = view !== "news";
+  if (view === "news") loadNews();
   $("#marketView").hidden = view !== "market";
   $("#scoreView").hidden = view !== "score";
   if (view === "score") renderScore();
@@ -2043,6 +2045,39 @@ function renderGroup(g, el) {
   drawPriceCharts(list);
   drawGauges(list);
 }
+
+/* ---------- 📰 뉴스 탭: 내 종목 · 경쟁사 · 외신 (config/news.yaml, Google 뉴스 30일치 쌓임) ---------- */
+let NEWS = null, NEWS_GRP = "전체";
+async function loadNews() {
+  if (!NEWS) {
+    try { NEWS = await (await fetch("data/news.json?t=" + Date.now(), { cache: "no-store" })).json(); }
+    catch (e) { $("#newsCards").innerHTML = `<div class="empty">뉴스를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
+  }
+  const nNew = (r) => ["own", "rivals", "en"].reduce((a, k) => a + (r[k] || []).filter((x) => x.new).length, 0);
+  const grps = ["전체", ...new Set(NEWS.stocks.map((r) => r.group)), "🆕 새 기사"];
+  $("#newsIntro").innerHTML = `${NEWS.stocks.length}개 종목 · 갱신 ${esc(NEWS.updated_at)} · 🆕 = 지난 갱신 뒤 새 기사 · 같은 기사를 여러 언론사가 쓰면 하나로 묶어 '외 N곳'<br><span class="src">${esc(NEWS.source)}</span>`;
+  $("#newsGrp").innerHTML = grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === NEWS_GRP ? "on" : ""}">${esc(g)}</button>`).join("");
+  const list = NEWS.stocks.filter((r) => NEWS_GRP === "전체" || r.group === NEWS_GRP || (NEWS_GRP === "🆕 새 기사" && nNew(r)));
+  $("#newsCards").innerHTML = list.map((r) => newsCard(r, nNew(r))).join("") || `<div class="empty">새 기사가 없어요.</div>`;
+}
+function newsList(xs, showK) {
+  const li = (x) => `<li><a href="${esc(x.u)}" target="_blank" rel="noopener">${x.new ? '<span class="pill green">🆕</span> ' : ""}${esc(x.t)}</a>
+    <span class="src">${esc(x.d.slice(5).replace("-", "/"))} · ${esc(x.s)}${x.n > 1 ? ` 외 ${x.n - 1}곳` : ""}${showK && x.k ? ` · ${esc(x.k)}` : ""}</span></li>`;
+  if (!xs.length) return `<div class="src">최근 30일 기사 없음</div>`;
+  return `<ul class="news">${xs.slice(0, 4).map(li).join("")}</ul>${xs.length > 4 ? `<details><summary class="src">더 보기 (${xs.length - 4}건)</summary><ul class="news">${xs.slice(4).map(li).join("")}</ul></details>` : ""}`;
+}
+function newsCard(r, nNew) {
+  const pin = (p) => `<li>📌 <a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t)}</a><span class="src">${esc(p.d || "")} · ${esc(p.s || "")}</span>${p.memo ? `<span class="note">${esc(p.memo)}</span>` : ""}</li>`;
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:17px">${esc(r.name)}</b>
+      <span class="src">${esc(r.group)}${nNew ? ` · 🆕 ${nNew}건` : ""} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>
+    ${r.pins.length ? `<ul class="news">${r.pins.map(pin).join("")}</ul>` : ""}
+    <div class="news-h">📰 내 종목</div>${newsList(r.own)}
+    ${r.rival_terms.length ? `<div class="news-h">⚔️ 경쟁사 <span class="src">${esc(r.rival_terms.join(" · "))}</span></div>${newsList(r.rivals, true)}` : ""}
+    ${r.en.length ? `<div class="news-h">🌍 외신 (영어)</div>${newsList(r.en)}` : ""}
+  </div>`;
+}
+$("#newsGrp").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; NEWS_GRP = b.dataset.g; loadNews(); });
 
 /* ---------- 관심종목 탭 (내 시트 '빠른 판단' 자동화) ---------- */
 let WATCH = null;

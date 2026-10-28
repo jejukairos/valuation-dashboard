@@ -21,6 +21,7 @@
   <nav class="tabbar" id="tabbar">
     <a href="#" data-view="main" class="on">🇰🇷 보유</a>
     <a href="#us" data-view="us">🇺🇸 보유</a>
+    <a href="#news" data-view="news">📰 뉴스</a>
     <a href="#score" data-view="score">✅ 점수</a>
     <a href="#market" data-view="market">🚦 시장</a>
     <a href="#watch" data-view="watch">⭐ 관심</a>
@@ -50,6 +51,12 @@
       <option value="sheet">내 시트 순서</option>
     </select></div>
   <div class="grid g3" id="watchCards"></div>
+</main>
+<main class="wrap" id="newsView" hidden>
+  <h2>뉴스</h2>
+  <p class="sub" id="newsIntro"></p>
+  <div class="chips" id="newsGrp" style="margin-bottom:10px"></div>
+  <div class="grid g2" id="newsCards"></div>
 </main>
 <main class="wrap" id="jointView" hidden>
   <h2>공동자산</h2>

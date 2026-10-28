@@ -1,0 +1,60 @@
+# 📰 뉴스 탭: 보유·관심·공동 종목마다 '내 종목' · '경쟁사' · '외신(영어)' 뉴스 (Google 뉴스 RSS, 무료)
+# 매 갱신마다 최근 7일 기사를 받아 30일치를 쌓아요. 여러 언론사가 쓴 같은 기사는 하나로 묶어요.
+# 종목 코드마다 (없는 칸은 비워도 돼요):
+#   own:    내 종목 검색어 (비우면 종목 이름). 회사 이름 없이 제품 이름만 나오는 기사도 잡으려면 제품 이름도 (예: K9, 불닭)
+#   rivals: 경쟁사·경쟁 제품 이름
+#   en:     외신(영어) 검색어
+#   not:    제목에 이 말이 있으면 뺌 (예: 두산 → 베어스 야구 기사)
+#   pins:   내가 보낸 기사 (맨 위에 📌 로 고정) — {t: 제목, u: 주소, d: 날짜, s: 언론사, memo: 한 줄 메모}
+# 검색어는 기사 '제목'에 들어 있어야 보여요 (본문에만 나오는 관계없는 기사를 빼려고).
+
+# ---------- 보유 ----------
+"003230": {own: [삼양식품, 불닭], rivals: [농심, 오뚜기, 닛신], en: [Samyang Foods, Buldak]}
+"278470": {own: [에이피알, 메디큐브], rivals: [아모레퍼시픽, LG생활건강, 달바], en: [Medicube]}
+"483650": {own: [달바글로벌, 달바], rivals: [에이피알, 아모레퍼시픽, LG생활건강], en: ["d'Alba"]}
+"012450":
+  own: [한화에어로스페이스, 한화에어로, K9, 천무, 레드백]   # '자주포'는 북한 자주포 기사가 섞여서 뺌
+  rivals: [라인메탈, KNDS, BAE시스템즈, 엘빗]
+  en: [Hanwha Aerospace, K9 howitzer, K9A2]
+  pins:
+    - {t: "인도 K9 바지라 뛰어넘는 K9A2 개발…중국·파키스탄 긴장시킬 화력", u: "https://navbharattimes.indiatimes.com/world/asian-countries/south-korea-k9a2-upgraded-next-generation-variant-of-india-k9-vajra-know-specifications/articleshow/135226812.cms",
+       d: "2026-10-28", s: "나브바라트 타임스 (인도)", memo: "인도 K9 300문+ 추가 도입 원칙 승인 단계 · K9A2 채택은 미정 (자동장전, 분당 6→8발, 운용 5→3명)"}
+"064350":
+  own: [현대로템, K2 전차]
+  rivals: [에이브럼스, 레오파르트2, KNDS, 알스톰]
+  en: [Hyundai Rotem, K2 tank, K2 Black Panther]
+  pins:
+    - {t: "흑해의 NATO 방파제, 한국으로 눈 돌리다…루마니아 K2 최대 300대 도입 가능, 에이브럼스 54대 주문", u: "https://www.centrum.cz/clanek/naraznik-nato-u-cerneho-more-miri-ke-koreji-rumunsko-muze-koupit-az-300-tanku-k2-abramsu-objednalo-54-330453?lp=1",
+       d: "2026-10-28", s: "Centrum (체코)", memo: "루마니아 신규 전차 216대·계열차량 76대 경쟁입찰 예정 (K2 vs 레오파르트2) · 300대는 전망치, 업체 선정 아님"}
+"023530": {own: [롯데쇼핑, 롯데백화점, 롯데마트], rivals: [신세계, 현대백화점, 쿠팡], en: [Lotte Shopping]}
+"005380": {own: [현대차, 현대자동차], rivals: [도요타, 폭스바겐, BYD, GM], en: [Hyundai Motor]}
+"000270": {own: [기아], rivals: [도요타, 폭스바겐, BYD], en: [Kia]}
+"005930": {own: [삼성전자], rivals: [마이크론, TSMC, CXMT], en: [Samsung Electronics]}
+"000660": {own: [SK하이닉스], rivals: [마이크론, 키옥시아, CXMT, 샌디스크], en: [SK Hynix]}
+"035420": {own: [네이버, NAVER], rivals: [카카오, 쿠팡], en: [Naver]}
+"036620": {own: [감성코퍼레이션, 스노우피크], rivals: [F&F, 더네이쳐홀딩스, 영원무역]}
+META: {own: [메타, 저커버그], not: [메타버스], rivals: [틱톡, 오픈AI, 스냅], en: [Meta Platforms, Zuckerberg]}
+GOOG: {own: [구글, 알파벳], rivals: [오픈AI, 퍼플렉시티, 앤트로픽], en: [Alphabet, Google]}
+MSFT: {own: [마이크로소프트], rivals: [아마존 AWS, 오라클, 구글 클라우드], en: [Microsoft]}
+NVDA: {own: [엔비디아, 젠슨 황], rivals: [AMD, 브로드컴, 구글 TPU], en: [Nvidia]}
+TSLA: {own: [테슬라], rivals: [BYD, 웨이모, 리비안], en: [Tesla]}
+
+# ---------- 관심 ----------
+"012330": {own: [현대모비스], rivals: [보쉬, 콘티넨탈, HL만도], en: [Hyundai Mobis]}
+"015760": {own: [한국전력, 한전], rivals: [전기요금, 한수원], en: [KEPCO]}
+"352820": {own: [하이브], rivals: [SM엔터, JYP, YG엔터], en: [HYBE]}
+"003490": {own: [대한항공], rivals: [제주항공, 티웨이항공, 에어프레미아], en: [Korean Air]}
+"079550": {own: [LIG디펜스앤에어로스페이스, LIG디펜스, LIG넥스원, 천궁], rivals: [한화시스템, 레이시온, 라파엘], en: [LIG Nex1]}
+"047810": {own: [한국항공우주, KAI, FA-50, KF-21], rivals: [보잉, 록히드마틴, 사브], en: [Korea Aerospace Industries, FA-50, KF-21]}
+"039490": {own: [키움증권], rivals: [미래에셋증권, 한국투자증권, 토스증권]}
+"034020": {own: [두산에너빌리티], rivals: [웨스팅하우스, GE베르노바, 지멘스에너지], en: [Doosan Enerbility]}
+"000720": {own: [현대건설], rivals: [삼성물산, 대우건설, DL이앤씨], en: [Hyundai E&C]}
+"458870": {own: [씨어스테크놀로지, 씨어스], rivals: [메쥬, 휴이노, 에이티센스]}
+"214150": {own: [클래시스], rivals: [제이시스메디칼, 원텍, 울쎄라], en: [Classys]}
+"126340": {own: [비나텍], rivals: [LS머트리얼즈]}
+"000150": {own: [두산], not: [베어스, 야구, KBO, 감독]}
+"042660": {own: [한화오션], rivals: [HD현대중공업, 삼성중공업, 중국 조선], en: [Hanwha Ocean]}
+"004170": {own: [신세계], rivals: [롯데쇼핑, 현대백화점, 쿠팡], en: [Shinsegae]}
+"069960": {own: [현대백화점], rivals: [롯데백화점, 신세계백화점]}
+"329180": {own: [HD현대중공업], rivals: [한화오션, 삼성중공업, 중국 조선], en: [HD Hyundai Heavy]}
+"010140": {own: [삼성중공업], rivals: [한화오션, HD현대중공업, 중국 조선], en: [Samsung Heavy Industries]}

@@ -336,3 +336,11 @@ details.fail { margin-top: 6px; font-size: 13px; }
 details.fail summary { cursor: pointer; }
 footer { margin-top: 32px; font-size: 12px; color: var(--ink-2); border-top: 1px solid var(--border); padding-top: 12px; }
 .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+
+/* 📰 뉴스 탭 */
+.news-h { font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 12px; }
+ul.news { list-style: none; margin: 4px 0 6px; padding: 0; }
+ul.news li { padding: 7px 0; border-top: 1px solid var(--border); font-size: 14px; line-height: 1.45; }
+ul.news li a { color: var(--ink); text-decoration: none; }
+ul.news li a:visited { color: var(--muted); }
+ul.news li .src, ul.news li .note { display: block; margin-top: 2px; }
