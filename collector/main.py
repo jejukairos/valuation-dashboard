@@ -417,12 +417,19 @@ def stock_detail(h, rates_now, fx):
             REPORT.fail(f"{name} 적정주가 템플릿", f"{type(e).__name__}: {e}")
     det["qtrs"] = QTRS.get(tkr) if tkr else None  # 분기 실적 한눈에 (상세 화면 전용)
     det["pl_year"] = (fins or {}).get("pl")  # 최근 연간 손익 (돈의 흐름 연간판)
+    det["qtrs_y"] = (fins or {}).get("annual")  # 실적 요약 그림 연간 보기
     det["kq"] = None
     if mkt == "KR" and not h.get("data_code"):  # 최신 분기 실적(잠정) vs 컨센서스
         try:
             det["kq"] = kq.collect(code)
         except Exception as e:  # noqa: BLE001
             REPORT.block("최신 분기 실적", f"{name}: {str(e)[:60]}")
+    elif mkt == "US":  # 미국: EPS 예상 vs 발표 + 매출·영업이익 (야후)
+        try:
+            det["kq"] = kq.collect_us(code, QTRS.get(tkr), hist)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("최신 분기 실적 (미국)", f"{name}: {str(e)[:60]}")
+    if mkt == "KR" and not h.get("data_code"):
         if det["kq"] and wise:  # 연간 보기: 와이즈리포트 연간 실적 + 추정 (억원)
             det["kq"]["annual"] = [{"q": f"{str(yy)[2:]}{'E' if r.get('estimate') else ''}", "est": bool(r.get("estimate")),
                                     **{f: r.get(f) for f in ("sales", "op", "ni")}} for yy, r in sorted(wise.items()) if r.get("sales") is not None]

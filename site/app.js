@@ -873,8 +873,9 @@ function qSankey(q, usd, prev, segs) {
 }
 // 최신 분기 실적(잠정) vs 컨센서스 — 8분기 막대, 마지막 분기는 회색(발표 전 예상) + 색(실적) 나란히
 const kqFmt = (v) => (Math.abs(v) >= 10000 ? n(v / 10000, 1) + "조" : n(v, 0) + "억");  // 억원 → 1조 넘으면 '104.6조'
-function kqBars(title, qs, f, est, color) {
-  const F = f === "eps" ? (v) => n(v, 0) + "원" : kqFmt;  // EPS 는 원, 나머지는 억원
+const kqF = (f, cur) => (cur === "USD" ? (f === "eps" ? (v) => "$" + n(v, 2) : (v) => qMoney(v, true)) : f === "eps" ? (v) => n(v, 0) + "원" : kqFmt);
+function kqBars(title, qs, f, est, color, cur) {
+  const F = kqF(f, cur);  // 한국: EPS 원·나머지 억원 / 미국: 달러
   const W = 320, x0 = 44, x1 = W - 6, n0 = qs.length, bw = (x1 - x0) / n0;
   const ev = est && est[f] != null ? est[f] : null, vals = qs.map((q) => q[f]).concat(ev ?? []).filter((v) => v != null);
   const hi0 = Math.max(0, ...vals), lo0 = Math.min(0, ...vals), raw = (hi0 - lo0) / 4 || 1, p = 10 ** Math.floor(Math.log10(raw));
@@ -909,8 +910,10 @@ function kqBars(title, qs, f, est, color) {
 const KQ_MAP = {};
 function kqCharts(k, mode) {
   const a = mode === "y" && k.annual?.length, qs = a ? k.annual.slice(-8) : k.quarters, u = a ? "연간" : "분기", est = a ? null : k.est_bar;
-  return kqBars(`영업이익 (${u})`, qs, "op", est, "var(--good)") + kqBars(`매출액 (${u})`, qs, "sales", est, "var(--s1)")
-    + (a ? kqBars("순이익 (연간)", qs, "ni", null, "var(--s3)") : kqBars("EPS (분기)", qs, "eps", est, "var(--s3)"));
+  // 한국은 영업이익 먼저, 미국(빅테크)은 EPS 먼저 — 자료가 있는 항목만
+  const order = k.cur === "USD" ? [["eps", "EPS", "var(--s3)"], ["sales", "매출액", "var(--s1)"], ["op", "영업이익", "var(--good)"]]
+    : [["op", "영업이익", "var(--good)"], ["sales", "매출액", "var(--s1)"], a ? ["ni", "순이익", "var(--s3)"] : ["eps", "EPS", "var(--s3)"]];
+  return order.filter(([f]) => qs.some((q) => q[f] != null)).map(([f, t, c]) => kqBars(`${t} (${u})`, qs, f, est, c, k.cur)).join("");
 }
 function kqBox(k, code) {
   KQ_MAP[code] = k;
@@ -927,7 +930,7 @@ document.addEventListener("click", (e) => {
 function kqTable(k) {
   const P = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${v >= 0 ? "+" : ""}${n(v, 1)}%</span>`);
   return `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(k.latest)}${k.prelim ? " 잠정" : ""}</th><th>실적</th><th>예상</th><th>예상 대비</th><th>QoQ</th><th>YoY</th></tr></thead><tbody>
-    ${k.rows.map((r) => `<tr><td>${esc(r.item)}</td><td><b>${r.act == null ? "-" : kqFmt(r.act)}</b></td><td>${r.est == null ? "-" : kqFmt(r.est)}</td><td>${P(r.vs_est)}</td><td>${P(r.qoq)}</td><td>${P(r.yoy)}</td></tr>`).join("")}
+    ${k.rows.map((r) => `<tr><td>${esc(r.item)}</td><td><b>${r.act == null ? "-" : kqF(r.f, k.cur)(r.act)}</b></td><td>${r.est == null ? "-" : kqF(r.f, k.cur)(r.est)}</td><td>${P(r.vs_est)}</td><td>${P(r.qoq)}</td><td>${P(r.yoy)}</td></tr>`).join("")}
   </tbody></table></div>`;
 }
 // 주가: 기간 탭 (1개월~1년 = 일봉 종가, 3년~10년 = 상세 데이터의 주봉 종가) — 부드러운 선 + 색 채움 + 오른쪽 눈금 + 마지막 가격
@@ -994,7 +997,7 @@ function kqNewsHTML() {
     const head = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:18px;color:var(--s1)">${esc(c.name)} (${esc(c.code)})</b>
       <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${bigWon(c.market_cap)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
     return `<div class="card">${head}
-      <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} 공시</a>` : ""}</div>
+      <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${k.cur === "USD" ? "발표" : "공시"}</a>` : ""}</div>
       ${priceBox(c)}
       ${kqTable(k)}
       ${kqBox(k, c.code)}
@@ -1005,26 +1008,34 @@ function kqHTML(d) {
   const k = d.kq;
   if (!k) return "";
   const nx = k.next;
-  return `<h3>🧾 최신 분기 실적 <span class="src">${esc(k.latest)}${k.prelim ? " 잠정" : ""} · 네이버 증권(FnGuide) · 억원${k.est_date ? ` · 예상 = ${esc(k.est_date)} 저장한 컨센서스` : ""}</span></h3><div class="card">
+  return `<h3>🧾 최신 분기 실적 <span class="src">${esc(k.latest)}${k.prelim ? " 잠정" : ""} · ${k.cur === "USD" ? "야후 파이낸스 · 달러 · EPS = 야후 발표 EPS" : "네이버 증권(FnGuide) · 억원"}${k.est_date ? ` · 예상 = ${esc(k.est_date)} 저장한 컨센서스` : ""}</span></h3><div class="card">
     ${k.waiting && nx ? `<div class="warnbox">🧾 ${esc(nx.q)} 잠정실적 공시가 났어요 (${esc(k.filing.date)}). 네이버 숫자에 반영되면 예상 대비가 자동으로 계산돼요. <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">공시 보기</a></div>` : ""}
     ${k.prelim && k.filing ? `<div class="note">🧾 ${esc(k.latest)} 숫자는 <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">DART 잠정실적 공시(${esc(k.filing.date)})</a> 값이에요. 네이버에 확정 숫자가 들어오면 자동으로 바뀌어요 (EPS 는 그때 채워짐).</div>` : ""}
     ${kqTable(k)}
     ${(k.points || []).length ? `<div class="chart-title" style="margin-top:8px"><b>✦ 포인트</b></div><ul class="irl">${k.points.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${kqBox(k, d.code)}
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">분기</th><th>매출액</th><th>영업이익</th><th>순이익</th><th>EPS</th></tr></thead><tbody>
-      ${k.quarters.slice().reverse().map((q) => `<tr><td>${esc(q.q)}${q.prelim ? ' <span class="src">잠정</span>' : ""}</td><td>${n(q.sales, 0)}억</td><td>${q.op == null ? "-" : n(q.op, 0) + "억"}</td><td>${q.ni == null ? "-" : n(q.ni, 0) + "억"}</td><td>${q.eps == null ? "-" : n(q.eps, 0) + "원"}</td></tr>`).join("")}
+      ${k.quarters.slice().reverse().map((q) => `<tr><td>${esc(q.q)}${q.prelim ? ' <span class="src">잠정</span>' : ""}</td>${["sales", "op", "ni", "eps"].map((f) => `<td>${q[f] == null ? "-" : kqF(f, k.cur)(q[f])}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div>
-    ${nx ? `<div class="note">📌 다음 ${esc(nx.q)} 컨센서스: 매출 ${n(nx.sales, 0)}억 · 영업이익 ${nx.op == null ? "-" : n(nx.op, 0) + "억"}${nx.ni == null ? "" : ` · 순이익 ${n(nx.ni, 0)}억`} <span class="src">(${esc(nx.date)} 기준, 발표되면 이 값과 비교해요)</span></div>` : ""}
-    ${k.filing ? `<div class="note src">공시: <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${esc(k.filing.name)}</a></div>` : ""}
+    ${nx ? `<div class="note">📌 다음 ${esc(nx.q)} 컨센서스: ${[["sales", "매출"], ["op", "영업이익"], ["ni", "순이익"], ["eps", "EPS"]].filter(([f]) => nx[f] != null).map(([f, l]) => `${l} ${kqF(f, k.cur)(nx[f])}`).join(" · ")} <span class="src">(${esc(nx.date)} ${k.cur === "USD" ? "발표 예정" : "기준"}, 발표되면 이 값과 비교해요)</span></div>` : ""}
+    ${k.filing ? `<div class="note src">${k.cur === "USD" ? "발표" : "공시"}: <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${esc(k.filing.name)}</a></div>` : ""}
   </div>`;
 }
-function qtrHTML(d) {
-  const all = Object.entries(d.qtrs || {}).filter(([, q]) => q.rev);
+const QTR_MAP = {};
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".qtrbox .qseg button"); if (!b) return;
+  const box = b.closest(".qtrbox");
+  box.outerHTML = qtrHTML(QTR_MAP[box.dataset.code], b.dataset.q);
+});
+function qtrHTML(d, mode = "q") {  // mode: q = 분기, y = 연간 (야후 연간 재무제표)
+  const yr = mode === "y" && Object.keys(d.qtrs_y || {}).length >= 2, U = yr ? "년" : "분기";
+  QTR_MAP[(d.card || d).code] = d;
+  const all = Object.entries((yr ? d.qtrs_y : d.qtrs) || {}).filter(([, q]) => q.rev);
   if (all.length < 2) return "";
   const usd = (d.card || d).currency === "USD";
   const getQ = (end) => (all.find(([e]) => nearDay(e, new Date(end) - 365 * 864e5)) || [])[1];  // 1년 전 같은 분기 (끝 날짜 ±40일)
   const get = (end, k) => getQ(end)?.[k] ?? null;
-  const qs = all.slice(-5), labels = qs.map(([e]) => qLabel(e)), L = qs.length - 1;
+  const qs = all.slice(-5), labels = qs.map(([e]) => (yr ? `FY${e.slice(2, 4)}` : qLabel(e))), L = qs.length - 1;
   const rev = qs.map(([, q]) => q.rev), op = qs.map(([, q]) => q.op ?? null);
   const yoy = qs.map(([e, q]) => { const p = get(e, "rev"); return p && p > 0 ? (q.rev / p - 1) * 100 : null; });
   const opm = qs.map(([, q]) => (q.op != null ? (q.op / q.rev) * 100 : null));
@@ -1033,10 +1044,10 @@ function qtrHTML(d) {
   // 한 줄 꼬리표: 최근 분기 변화 (몇 분기 연속인지까지)
   const streak = (a) => { let c = 0; for (let i = L; i > 0 && a[i] != null && a[i - 1] != null && a[i] > a[i - 1]; i--) c++; return c; };
   const kR = streak(yoy), kG = streak(gpm);
-  const tRev = yoy[L] == null ? "" : yoy[L] < 0 ? "역성장" : kR >= 2 ? `${kR}분기 연속 성장 가속` : kR ? "성장 가속" : yoy[L - 1] != null ? "성장 둔화" : "";
+  const tRev = yoy[L] == null ? "" : yoy[L] < 0 ? "역성장" : kR >= 2 ? `${kR}${U} 연속 성장 가속` : kR ? "성장 가속" : yoy[L - 1] != null ? "성장 둔화" : "";
   const tOp = op[L] != null && op[L - 1] != null ? (op[L - 1] <= 0 && op[L] > 0 ? "흑자 전환" : op[L - 1] > 0 && op[L] <= 0 ? "적자 전환" : opm[L] > opm[L - 1] ? `이익률 +${n(opm[L] - opm[L - 1], 1)}%p` : `이익률 ${n(opm[L] - opm[L - 1], 1)}%p`) : "";
   const dG = gpm[L] != null && gpm[L - 1] != null ? gpm[L] - gpm[L - 1] : null;
-  const tG = dG == null ? "" : kG >= 2 ? `${kG}분기 연속 마진 가속화` : Math.abs(dG) < 0.05 ? "마진 유지" : dG > 0 ? `마진 +${n(dG, 1)}%p` : `마진 ${n(dG, 1)}%p`;
+  const tG = dG == null ? "" : kG >= 2 ? `${kG}${U} 연속 마진 가속화` : Math.abs(dG) < 0.05 ? "마진 유지" : dG > 0 ? `마진 +${n(dG, 1)}%p` : `마진 ${n(dG, 1)}%p`;
   const tF = fcf[L] != null && fcf[L - 1] != null ? (fcf[L - 1] > 0 && fcf[L] < 0 ? "현금흐름 적자 전환" : fcf[L - 1] < 0 && fcf[L] > 0 ? "현금흐름 흑자 전환" : "") : "";
   const prevC = capex.slice(0, L).filter((v) => v != null), avgC = prevC.length ? prevC.reduce((a, b) => a + b, 0) / prevC.length : null;
   const tC = capex[L] != null && avgC ? (capex[L] > avgC * 1.5 ? "CapEx 대폭 상향" : capex[L] < avgC * 0.67 ? "CapEx 줄어듦" : "") : "";
@@ -1047,19 +1058,19 @@ function qtrHTML(d) {
   const segs = sp ? Object.keys(col).filter((s) => sp[1][s]).map((s) => [s, sp[2] ? sp[2][s] : (last[1].rev * sp[1][s]) / 100,
     sp[2] && spa?.[2]?.[s] > 0 ? (sp[2][s] / spa[2][s] - 1) * 100 : null, col[s], sp[1][s], !sp[2]]) : null;
   const nm = (d.card || d).name || "";
-  return `<h3>📊 ${esc(nm)} 실적 요약 (핵심지표) · ${esc(labels[L])} <span class="src">${esc(last[0])} 끝난 분기 · 야후 파이낸스${d.seg ? " · 부문: " + esc(d.seg.src || "") : ""} · ${usd ? "달러" : "원"}</span></h3><div class="card">
+  return `<div class="qtrbox" data-code="${esc((d.card || d).code || "")}"><h3>📊 ${esc(nm)} 실적 요약 (핵심지표) · ${esc(labels[L])} <span class="src">${esc(last[0])} 끝난 ${yr ? "회계연도" : "분기"} · 야후 파이낸스${d.seg ? " · 부문: " + esc(d.seg.src || "") : ""} · ${usd ? "달러" : "원"}</span></h3><div class="card">${Object.keys(d.qtrs_y || {}).length >= 2 ? `<div class="seg qseg" style="margin-bottom:8px"><button data-q="q" class="${yr ? "" : "on"}">분기</button><button data-q="y" class="${yr ? "on" : ""}">연간</button></div>` : ""}
     <div class="qgrid">
       ${qPanel("매출 & 성장률 (1년 전 대비)", tRev, labels, rev, yoy.some((v) => v != null) ? yoy : null, usd, "var(--ink-2)")}
       ${qPanel("영업이익 & 영업이익률", tOp, labels, op, opm, usd, "var(--good)")}
       ${gpv.filter((v) => v != null).length >= 2 ? qPanel("매출총이익 & 매출총이익률", tG, labels, gpv, gpm, usd, "var(--s3)") : ""}
-      ${ps.length ? segDonut(ps, col, d.seg) : ""}
+      ${!yr && ps.length ? segDonut(ps, col, d.seg) : ""}
       ${qPanel("잉여현금흐름 (FCF)", tF, labels, fcf, null, usd, "var(--good)")}
       ${qPanel("설비투자 (CapEx)", tC, labels, capex, null, usd, "var(--warn)")}
-      ${ps.length > 1 ? segStack(ps, col) : ""}
+      ${!yr && ps.length > 1 ? segStack(ps, col) : ""}
     </div>
-    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 돈의 흐름</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 (매출 대비 %, 1년 전 같은 분기 대비)</span></div>
+    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 돈의 흐름</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
     ${qSankey(last[1], usd, getQ(last[0]), segs)}
-    ${(() => {  // 최근 4분기 합계(TTM) · 최근 연간 — 분기는 계절성이 있어 1년치로도 보기
+    ${yr ? "" : (() => {  // 최근 4분기 합계(TTM) · 최근 연간 — 분기는 계절성이 있어 1년치로도 보기
       const q4 = all.slice(-4).map(([, q]) => q), out = [];
       if (q4.length === 4 && q4.every((q) => q.rev && q.op != null)) {
         const sum = {};
@@ -1070,8 +1081,8 @@ function qtrHTML(d) {
       if (py?.rev) out.push([`최근 연간 (${py.end.slice(0, 7)} 결산)`, py]);
       return out.map(([t, q]) => `<details class="fvt"><summary class="chart-title">💸 ${esc(t)} <span class="src">매출 ${qMoney(q.rev, usd)} · 영업이익률 ${n((q.op / q.rev) * 100, 1)}% · 눌러서 보기</span></summary>${qSankey(q, usd)}</details>`).join("");
     })()}
-    <div class="note src">성장률은 1년 전 같은 분기 대비 (분기 자료가 쌓이면 빈 칸이 채워져요) · 한국 종목은 야후 반영이 실적 발표보다 늦을 수 있어요</div>
-  </div>`;
+    <div class="note src">성장률은 1년 전 ${yr ? "" : "같은 분기 "}대비 (${yr ? "야후 연간 재무제표 최근 4년" : "분기 자료가 쌓이면 빈 칸이 채워져요"}) · 한국 종목은 야후 반영이 실적 발표보다 늦을 수 있어요</div>
+  </div></div>`;
 }
 /* ---------- 실적발표(컨퍼런스콜) 요약: 분기 목록 → 누르면 자세한 요약, 맨 아래 '핵심만' (config/earnings.yaml) ---------- */
 let EARNINGS = {}, IRCAL = { items: [] };

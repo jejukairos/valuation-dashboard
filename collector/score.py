@@ -48,27 +48,35 @@ def fin(tkr):
             pl[k] = float(v)
     if pl.get("rev") and pl.get("op") is not None:
         out["pl"] = {**pl, "end": str(inc.columns[0].date())}
+    out["annual"] = dict(sorted(_by_period(inc, cf).items()))  # 실적 요약 그림 '연간' 보기 (최근 4년)
     return out
 
 
-def quarters(tkr, saved=None):
-    """분기 실적 {분기 끝 날짜: {rev, cogs, gp, rnd, sm, ga, opex, op, ni, fcf, capex}} (원 또는 달러).
-    야후는 최근 5~6분기만 주므로 예전에 받아 둔 분기(saved)와 합쳐 1년 전 같은 분기 대비 성장률을 계산할 수 있게 쌓는다."""
-    tk = yf.Ticker(tkr)
-    inc, cf = tk.quarterly_income_stmt, tk.quarterly_cashflow
+def _by_period(inc, cf):
+    """손익·현금흐름표 → {기간 끝 날짜: {rev, cogs, gp, rnd, sm, ga, sga, opex, op, ni, fcf, capex}} (분기·연간 같은 모양)."""
     rows = {"rev": (inc, "Total Revenue"), "cogs": (inc, "Cost Of Revenue"), "gp": (inc, "Gross Profit"),
             "rnd": (inc, "Research And Development"), "sm": (inc, "Selling And Marketing Expense"),
             "ga": (inc, "General And Administrative Expense"), "sga": (inc, "Selling General And Administration"),
             "opex": (inc, "Operating Expense"), "op": (inc, "Operating Income"), "ni": (inc, "Net Income"),
             "fcf": (cf, "Free Cash Flow"), "capex": (cf, "Capital Expenditure")}
-    out = dict(saved or {})
+    out = {}
     for col in inc.columns:
         d = {}
         for k, (df, row) in rows.items():
             v = df.loc[row].get(col) if row in df.index and col in df.columns else None
             d[k] = float(v) if v is not None and v == v else None
         if d["rev"] is not None and d["op"] is not None:
-            out[str(col.date())] = {**(out.get(str(col.date())) or {}), **{k: v for k, v in d.items() if v is not None}}
+            out[str(col.date())] = {k: v for k, v in d.items() if v is not None}
+    return out
+
+
+def quarters(tkr, saved=None):
+    """분기 실적 {분기 끝 날짜: {…}} (원 또는 달러).
+    야후는 최근 5~6분기만 주므로 예전에 받아 둔 분기(saved)와 합쳐 1년 전 같은 분기 대비 성장률을 계산할 수 있게 쌓는다."""
+    tk = yf.Ticker(tkr)
+    out = dict(saved or {})
+    for e, d in _by_period(tk.quarterly_income_stmt, tk.quarterly_cashflow).items():
+        out[e] = {**(out.get(e) or {}), **d}
     return dict(sorted(out.items())[-12:])
 
 

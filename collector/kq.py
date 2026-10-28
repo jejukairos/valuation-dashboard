@@ -147,6 +147,64 @@ def collect(code):
             "next": {"q": label(nxt[0]), **{f: cons[nxt[0]].get(f) for f in ROWS}, "date": cons[nxt[0]].get("date")} if nxt else None}
 
 
+def _qlabel(end):
+    """'2026-07-27' → '26.7월', '2026-09-30' → '26.3Q' (화면의 qLabel 과 같게)"""
+    m = int(end[5:7])
+    return f"{end[2:4]}.{m // 3}Q" if m % 3 == 0 else f"{end[2:4]}.{m}월"
+
+
+def collect_us(tkr, qtrs, hist):
+    """미국: 야후 실적발표 표(조정 EPS 예상 vs 발표) + 분기 재무제표(매출·영업이익, qtrs) + 발표 전 매출 예상(저장해 둠).
+    한국 collect() 와 같은 모양으로 돌려줘서 화면을 같이 쓴다 (cur = USD)."""
+    import yfinance as yf
+    if not qtrs:
+        return None
+    tk = yf.Ticker(tkr)
+    ed = tk.get_earnings_dates(limit=16)
+    if ed is None or ed.empty:
+        return None
+    today, key = now_kst().strftime("%Y-%m-%d"), "US:" + tkr
+    first = key not in HIST
+    cons, seen = CONS.setdefault(key, {}), HIST.setdefault(key, {})
+    ends = sorted(qtrs)
+    f_ = lambda v: None if v != v else float(v)  # noqa: E731 (NaN → None)
+    rep = [(dt.strftime("%Y-%m-%d"), f_(r["Reported EPS"]), f_(r["EPS Estimate"])) for dt, r in ed.sort_index().iterrows()]
+    eps = {}
+    for d, a, e in (x for x in rep if x[1] is not None):
+        # 발표일 10~75일 전에 끝난 분기 = 그 발표가 다룬 분기. 재무제표가 아직 안 들어온 새 분기면 마지막 분기 + 91일
+        q = next((x for x in reversed(ends) if 10 <= (pd.Timestamp(d) - pd.Timestamp(x)).days <= 75), None)
+        if q is None and d > ends[-1]:
+            q = (pd.Timestamp(ends[-1]) + pd.Timedelta(days=91)).strftime("%Y-%m-%d")
+        if q and q < d:
+            eps[q] = {"eps": a, "est": e, "date": d}
+    keys = sorted(set(ends) | set(eps))[-8:]
+    last = max(eps) if eps else keys[-1]
+    keys = [k for k in keys if k <= last]
+    seen.setdefault(last, {"seen": "" if first else today})
+    lab, nxt_end = _qlabel(last), (pd.Timestamp(last) + pd.Timedelta(days=91)).strftime("%Y-%m-%d")
+    up = next((x for x in rep if x[1] is None and x[0] >= today), None)
+    try:  # 다음 분기(아직 발표 전) 매출 예상을 저장 → 발표되면 '예상 대비'
+        rv = tk.revenue_estimate
+        if up is not None and rv is not None and "0q" in rv.index:
+            cons[_qlabel(nxt_end)] = {"sales": f_(rv.loc["0q", "avg"]), "eps": up[2], "date": today}
+    except Exception:  # noqa: BLE001
+        pass
+    val = lambda k, f: None if k is None else (eps.get(k) or {}).get("eps") if f == "eps" else (qtrs.get(k) or {}).get("rev" if f == "sales" else f)  # noqa: E731
+    prev = keys[-2] if len(keys) > 1 else None
+    yago = next((k for k in keys if 330 <= (pd.Timestamp(last) - pd.Timestamp(k)).days <= 400), None)
+    est = {"eps": (eps.get(last) or {}).get("est"), "sales": (cons.get(lab) or {}).get("sales")}
+    rows = [{"item": nm, "f": f, "act": val(last, f), "est": est.get(f), "vs_est": _pct(val(last, f), est.get(f)),
+             "qoq": _pct(val(last, f), val(prev, f)), "yoy": _pct(val(last, f), val(yago, f))}
+            for f, nm in (("eps", "EPS"), ("sales", "매출액"), ("op", "영업이익"))]
+    qs = [{"q": _qlabel(k), **{f: val(k, f) for f in ("sales", "op", "eps")}, "ni": (qtrs.get(k) or {}).get("ni")} for k in keys]
+    annual = [{"q": f"{str(y)[2:]}{'E' if r.get('estimate') else ''}", "est": bool(r.get("estimate")), "eps": r.get("eps")}
+              for y, r in sorted((hist or {}).items()) if isinstance(r, dict) and r.get("eps") is not None][-8:]
+    return {"cur": "USD", "latest": lab, "prelim": None, "seen": seen[last]["seen"], "rows": rows, "quarters": qs, "est_bar": est,
+            "est_date": (cons.get(lab) or {}).get("date"), "points": [], "waiting": False, "annual": annual,
+            "filing": {"date": (eps.get(last) or {}).get("date"), "name": "실적발표 (야후)", "url": f"https://finance.yahoo.com/quote/{tkr}/"},
+            "next": {"q": _qlabel(nxt_end), "eps": up[2], "sales": (cons.get(_qlabel(nxt_end)) or {}).get("sales"), "date": up[0]} if up else None}
+
+
 def _qend(k):
     """분기 마지막 날 'YYYY-MM-DD' (이 날 이후 공시면 그 분기 실적 공시가 아니라 다음 분기)."""
     return (pd.Timestamp(f"{k[:4]}-{k[4:]}-01") + pd.offsets.MonthEnd(0)).strftime("%Y-%m-%d")
