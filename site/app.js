@@ -872,43 +872,145 @@ function qSankey(q, usd, prev, segs) {
   return (sg ? `<div class="sk-wrap">${svg}</div>` : svg) + loss;
 }
 // 최신 분기 실적(잠정) vs 컨센서스 — 8분기 막대, 마지막 분기는 회색(발표 전 예상) + 색(실적) 나란히
+const kqFmt = (v) => (Math.abs(v) >= 10000 ? n(v / 10000, 1) + "조" : n(v, 0) + "억");  // 억원 → 1조 넘으면 '104.6조'
 function kqBars(title, qs, f, est, color) {
-  const W = 300, x0 = 14, n0 = qs.length, bw = (W - 2 * x0) / n0;
+  const F = f === "eps" ? (v) => n(v, 0) + "원" : kqFmt;  // EPS 는 원, 나머지는 억원
+  const W = 320, x0 = 44, x1 = W - 6, n0 = qs.length, bw = (x1 - x0) / n0;
   const ev = est && est[f] != null ? est[f] : null, vals = qs.map((q) => q[f]).concat(ev ?? []).filter((v) => v != null);
-  const hi = Math.max(0, ...vals), lo = Math.min(0, ...vals), top = 34, bot = lo < 0 ? 140 : 150, sc = (bot - top) / ((hi - lo) || 1), zero = top + hi * sc;
-  let g = `<line x1="${x0}" x2="${W - x0}" y1="${zero}" y2="${zero}" stroke="var(--axis)"/>`;
-  const bar = (cx, w, v, fill, cls) => {
-    const y = v >= 0 ? zero - v * sc : zero, h = Math.max(1, Math.abs(v) * sc);
-    const t = cls ? `<text x="${cx}" y="${v >= 0 ? y - 4 : y + h + 11}" text-anchor="middle" class="${cls}">${n(v, 0)}억</text>` : "";
-    return `<rect x="${cx - w / 2}" y="${y}" width="${w}" height="${h}" rx="2" fill="${v < 0 ? "var(--bad)" : fill}"/>${t}`;
-  };
+  const hi0 = Math.max(0, ...vals), lo0 = Math.min(0, ...vals), raw = (hi0 - lo0) / 4 || 1, p = 10 ** Math.floor(Math.log10(raw));
+  const step = p * (raw / p <= 1 ? 1 : raw / p <= 2 ? 2 : raw / p <= 5 ? 5 : 10);  // 눈금 간격 (1·2·5 단위)
+  const hi = Math.ceil((hi0 * 1.08) / step) * step || step, lo = lo0 < 0 ? Math.floor(lo0 / step) * step : 0;
+  const top = 30, bot = 150, sc = (bot - top) / (hi - lo), Y = (v) => bot - (v - lo) * sc, zero = Y(0);
+  let g = "";
+  for (let t = lo; t <= hi + step / 2; t += step) g += `<line x1="${x0}" x2="${x1}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)"/><text x="${x0 - 4}" y="${Y(t) + 3}" text-anchor="end" class="qx">${F(t)}</text>`;
+  g += `<line x1="${x0}" x2="${x1}" y1="${zero}" y2="${zero}" stroke="var(--axis)"/>`;
+  const bar = (cx, w, v, fill) => { const y = v >= 0 ? Y(v) : zero; return `<rect x="${cx - w / 2}" y="${y}" width="${w}" height="${Math.max(1, Math.abs(Y(v) - zero))}" rx="2" fill="${v < 0 ? "var(--bad)" : fill}"/>`; };
+  const lab = (cx, y, v, cls, fill) => `<text x="${cx}" y="${y}" text-anchor="middle" class="${cls}"${fill ? ` style="fill:${fill}"` : ""}>${F(v)}</text>`;
+  const ly = (v) => (v >= 0 ? Y(v) - 4 : zero + Math.abs(Y(v) - zero) + 11);
+  const li = qs.map((q) => !q.est).lastIndexOf(true);  // 연간 보기: 추정 연도(E)는 회색, 마지막 실적 연도를 색으로
   qs.forEach((q, i) => {
-    const cx = x0 + bw * i + bw / 2, last = i === n0 - 1;
+    const cx = x0 + bw * i + bw / 2, last = i === li;
     g += `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(q.q)}</text>`;
     if (q[f] == null) return;
-    if (last && ev != null) g += bar(cx - bw * 0.2, bw * 0.36, ev, "var(--axis)", null) + bar(cx + bw * 0.2, bw * 0.36, q[f], color, "qv b");  // 예상(회색)은 표에 숫자가 있어 글자 생략
-    else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)", last ? "qv b" : "qv");
+    if (q.est) { g += bar(cx, bw * 0.5, q[f], "var(--axis)") + lab(cx, ly(q[f]), q[f], "qv", "var(--muted)"); return; }
+    if (last && ev != null) {  // 예상(회색) vs 실적(색) 나란히 — 숫자가 겹치면 높은 쪽 글자를 한 줄 위로
+      let ye = ly(ev), ya = ly(q[f]);
+      if (Math.abs(ye - ya) < 11) { if (ya <= ye) ya = ye - 11; else ye = ya - 11; }
+      g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--axis)") + bar(cx + bw * 0.21, bw * 0.38, q[f], color)
+        + lab(cx - bw * 0.21, ye, ev, "qv", "var(--muted)") + lab(cx + bw * 0.21, ya, q[f], "qv b", color);
+    } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? color : null);
   });
   const s = ev != null && ev > 0 && qs[n0 - 1][f] != null ? (qs[n0 - 1][f] / ev - 1) * 100 : null;
   const tag = s == null ? "" : `<span class="qtag${s < 0 ? " bad" : ""}">예상대비 ${s >= 0 ? "+" : ""}${n(s, 1)}%</span>`;
-  return `<div class="qp"><div class="qt"><b>${title}</b>${tag}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg></div>`;
+  return `<div class="qp"><div class="qt"><b>${title}</b>${tag}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg>
+    ${ev != null || qs.some((q) => q.est) ? `<div class="src" style="text-align:right;padding:0 4px 4px"><span style="color:var(--axis)">■</span> ${ev != null ? "예상(컨센서스)" : "추정(E)"} · <span style="color:${color}">■</span> 실적</div>` : ""}</div>`;
+}
+// 분기 / 연간 실적 막대 — 한국은 영업이익을 맨 앞에 (연간 = 와이즈리포트 연간 실적 + 추정 E)
+const KQ_MAP = {};
+function kqCharts(k, mode) {
+  const a = mode === "y" && k.annual?.length, qs = a ? k.annual.slice(-8) : k.quarters, u = a ? "연간" : "분기", est = a ? null : k.est_bar;
+  return kqBars(`영업이익 (${u})`, qs, "op", est, "var(--good)") + kqBars(`매출액 (${u})`, qs, "sales", est, "var(--s1)")
+    + (a ? kqBars("순이익 (연간)", qs, "ni", null, "var(--s3)") : kqBars("EPS (분기)", qs, "eps", est, "var(--s3)"));
+}
+function kqBox(k, code) {
+  KQ_MAP[code] = k;
+  return `<div class="kqbox" data-code="${esc(code)}">${k.annual?.length ? `<div class="seg kseg" style="margin-top:8px"><button data-k="q" class="on">분기</button><button data-k="y">연간</button></div>` : ""}
+    <div class="qgrid" style="margin-top:8px">${kqCharts(k, "q")}</div></div>`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".kqbox .kseg button"); if (!b) return;
+  const box = b.closest(".kqbox");
+  box.querySelectorAll(".kseg button").forEach((x) => x.classList.toggle("on", x === b));
+  box.querySelector(".qgrid").innerHTML = kqCharts(KQ_MAP[box.dataset.code], b.dataset.k);
+});
+// 실적 · 예상 · 예상 대비 · QoQ · YoY 표 (상세 화면과 첫 화면 '🧾 실적 발표' 같이 씀)
+function kqTable(k) {
+  const P = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${v >= 0 ? "+" : ""}${n(v, 1)}%</span>`);
+  return `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(k.latest)}${k.prelim ? " 잠정" : ""}</th><th>실적</th><th>예상</th><th>예상 대비</th><th>QoQ</th><th>YoY</th></tr></thead><tbody>
+    ${k.rows.map((r) => `<tr><td>${esc(r.item)}</td><td><b>${r.act == null ? "-" : kqFmt(r.act)}</b></td><td>${r.est == null ? "-" : kqFmt(r.est)}</td><td>${P(r.vs_est)}</td><td>${P(r.qoq)}</td><td>${P(r.yoy)}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+// 주가: 기간 탭 (1개월~1년 = 일봉 종가, 3년~10년 = 상세 데이터의 주봉 종가) — 부드러운 선 + 색 채움 + 오른쪽 눈금 + 마지막 가격
+const PX_TABS = [[1, "1개월"], [3, "3개월"], [6, "6개월"], [12, "1년"], [36, "3년"], [60, "5년"], [120, "10년"]];
+const PX_LONG = {};  // 코드 → 주봉 종가 (밴드 계산에 쓰는 가격)
+function priceBox(c, m = 6) {
+  return `<div class="pbox" data-code="${esc(c.code)}"><div class="seg pseg" style="margin-top:8px">${PX_TABS.map(([mm, l]) => `<button data-m="${mm}" class="${mm === m ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="pbox-in">${priceSpark(c, m)}</div></div>`;
+}
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest(".pbox .pseg button"); if (!b) return;
+  const box = b.closest(".pbox"), c = DASH.stocks.find((x) => x.code === box.dataset.code), m = +b.dataset.m, el = box.querySelector(".pbox-in");
+  box.querySelectorAll(".pseg button").forEach((x) => x.classList.toggle("on", x === b));
+  if (m > 12 && !PX_LONG[c.code]) {
+    el.innerHTML = `<div class="empty">불러오는 중…</div>`;
+    try {
+      const d = await (await fetch(`data/stocks/${c.code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json();
+      const bd = Object.values(d.bands || {}).sort((x, y) => (x.dates?.length || 0) - (y.dates?.length || 0)).pop();
+      PX_LONG[c.code] = bd ? { dates: bd.dates, close: bd.price } : null;
+    } catch (_) { PX_LONG[c.code] = null; }
+  }
+  el.innerHTML = priceSpark(c, m) || `<div class="empty">이 기간 주가 자료가 없어요.</div>`;
+});
+function priceSpark(c, months = 6) {
+  const ch = months > 12 ? PX_LONG[c.code] : c.chart, wk = months > 12;
+  if (!ch?.dates?.length) return "";
+  const end = new Date(ch.dates[ch.dates.length - 1]), cut = new Date(end); cut.setMonth(cut.getMonth() - months);
+  const i0 = Math.max(0, ch.dates.findIndex((d) => d >= cut.toISOString().slice(0, 10)));
+  const ds = ch.dates.slice(i0), v = ch.close.slice(i0), ok = v.filter((x) => x != null);
+  if (ok.length < 5) return "";
+  const W = 640, x0 = 6, x1 = 560, top = 12, bot = 168;
+  const lo0 = Math.min(...ok), hi0 = Math.max(...ok), raw = (hi0 - lo0) / 4 || 1, p = 10 ** Math.floor(Math.log10(raw));
+  const step = p * (raw / p <= 1 ? 1 : raw / p <= 2 ? 2 : raw / p <= 2.5 ? 2.5 : raw / p <= 5 ? 5 : 10);
+  const lo = Math.floor(lo0 / step) * step, hi = Math.ceil(hi0 / step) * step;
+  const X = (i) => x0 + ((x1 - x0) * i) / (v.length - 1), Y = (y) => bot - ((y - lo) / (hi - lo || 1)) * (bot - top);
+  const pts = v.map((y, i) => [X(i), Y(y ?? ok[0])]);
+  let d = `M${pts[0][0]},${pts[0][1]}`;  // 곡선 (Catmull-Rom → 베지어)
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i - 1] || pts[i], b = pts[i], c2 = pts[i + 1], e = pts[i + 2] || c2;
+    d += ` C${b[0] + (c2[0] - a[0]) / 6},${b[1] + (c2[1] - a[1]) / 6} ${c2[0] - (e[0] - b[0]) / 6},${c2[1] - (e[1] - b[1]) / 6} ${c2[0]},${c2[1]}`;
+  }
+  const gid = `pg-${c.code}`, last = pts[pts.length - 1], cur = c.currency === "USD" ? "$" : "";
+  let g = "";
+  for (let t = lo; t <= hi + step / 2; t += step) g += `<line x1="${x0}" x2="${x1}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)"/><text x="${x1 + 8}" y="${Y(t) + 4}" class="qx" style="font-size:11px">${cur}${n(t, t < 100 ? 1 : 0)}</text>`;
+  const xl = (i, t) => `<text x="${X(i)}" y="${bot + 18}" text-anchor="middle" class="qx" style="font-size:11px">${t}</text>`;
+  ds.forEach((dt, i) => {
+    if (months <= 1) { if (i % 5 === 2) g += xl(i, `${+dt.slice(5, 7)}/${+dt.slice(8)}`); }  // 1개월: 주마다 날짜
+    else if (wk) { if (i && dt.slice(0, 4) !== ds[i - 1].slice(0, 4)) g += xl(i, `${dt.slice(2, 4)}년`); }  // 3년 이상: 해 바뀔 때
+    else if (i && dt.slice(5, 7) !== ds[i - 1].slice(5, 7)) g += xl(i, `${dt.slice(5, 7)}월`);
+  });
+  const lbl = (PX_TABS.find((x) => x[0] === months) || [0, `${months}개월`])[1];
+  return `<div class="qp" style="margin-top:8px"><div class="qt"><b>주가 (${lbl}, ${wk ? "주봉" : "일봉"} 종가)</b>${wk && new Date(ds[0]) - cut > 60 * 864e5 ? `<span class="src">${esc(ds[0])} 부터 (자료 있는 기간)</span>` : ""}</div><svg viewBox="0 0 ${W} 192" role="img" aria-label="${esc(c.name)} 주가 ${months}개월">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--s1);stop-opacity:.35"/><stop offset="1" style="stop-color:var(--s1);stop-opacity:.03"/></linearGradient></defs>
+    ${g}<path d="${d} L${last[0]},${bot} L${x0},${bot} Z" fill="url(#${gid})"/><path d="${d}" fill="none" stroke="var(--s1)" stroke-width="2.5"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="4" fill="var(--s1)"/><text x="${last[0] - 8}" y="${last[1] - 10}" text-anchor="end" class="qv b" style="fill:var(--s1);font-size:13px;paint-order:stroke;stroke:var(--surface);stroke-width:3px">${cur}${n(v[v.length - 1], cur ? 2 : 0)}${cur ? "" : "원"}</text></svg></div>`;
+}
+// 첫 화면: 최근 3일 안에 실적이 나온 보유·관심 종목 (예상 vs 실적 막대) + 잠정실적 공시는 났는데 숫자 반영을 기다리는 종목
+function kqNewsHTML() {
+  const list = DASH.stocks.filter((c) => c.kq_brief), wait = DASH.stocks.filter((c) => !c.kq_brief && c.kq_wait);
+  if (!list.length && !wait.length) return "";
+  const waitHtml = wait.length ? `<div class="note">⏳ 잠정실적 공시는 났고 숫자를 읽는 중 (다음 갱신 때 반영): ${wait.map((c) => `<a href="#stock/${esc(c.code)}">${esc(c.name)}</a> ${esc(c.kq_wait || "")}`).join(" · ")}</div>` : "";
+  return `<h2>🧾 실적 발표 <span class="src">최근 3일 · 회색 = 발표 전 예상(컨센서스), 색 = 실적</span></h2>${waitHtml}<div class="grid">${list.map((c) => {
+    const k = c.kq_brief;
+    const head = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:18px;color:var(--s1)">${esc(c.name)} (${esc(c.code)})</b>
+      <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${bigWon(c.market_cap)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
+    return `<div class="card">${head}
+      <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} 공시</a>` : ""}</div>
+      ${priceBox(c)}
+      ${kqTable(k)}
+      ${kqBox(k, c.code)}
+    </div>`;
+  }).join("")}</div>`;
 }
 function kqHTML(d) {
   const k = d.kq;
   if (!k) return "";
-  const P = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${v >= 0 ? "+" : ""}${n(v, 1)}%</span>`);
   const nx = k.next;
   return `<h3>🧾 최신 분기 실적 <span class="src">${esc(k.latest)}${k.prelim ? " 잠정" : ""} · 네이버 증권(FnGuide) · 억원${k.est_date ? ` · 예상 = ${esc(k.est_date)} 저장한 컨센서스` : ""}</span></h3><div class="card">
     ${k.waiting && nx ? `<div class="warnbox">🧾 ${esc(nx.q)} 잠정실적 공시가 났어요 (${esc(k.filing.date)}). 네이버 숫자에 반영되면 예상 대비가 자동으로 계산돼요. <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">공시 보기</a></div>` : ""}
     ${k.prelim && k.filing ? `<div class="note">🧾 ${esc(k.latest)} 숫자는 <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">DART 잠정실적 공시(${esc(k.filing.date)})</a> 값이에요. 네이버에 확정 숫자가 들어오면 자동으로 바뀌어요 (EPS 는 그때 채워짐).</div>` : ""}
-    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(k.latest)}</th><th>실적</th><th>예상</th><th>예상 대비</th><th>QoQ</th><th>YoY</th></tr></thead><tbody>
-      ${k.rows.map((r) => `<tr><td>${esc(r.item)}</td><td><b>${r.act == null ? "-" : n(r.act, 0) + "억"}</b></td><td>${r.est == null ? "-" : n(r.est, 0) + "억"}</td><td>${P(r.vs_est)}</td><td>${P(r.qoq)}</td><td>${P(r.yoy)}</td></tr>`).join("")}
-    </tbody></table></div>
+    ${kqTable(k)}
     ${(k.points || []).length ? `<div class="chart-title" style="margin-top:8px"><b>✦ 포인트</b></div><ul class="irl">${k.points.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
-    <div class="qgrid" style="margin-top:8px">
-      ${kqBars("매출액 (분기)", k.quarters, "sales", k.est_bar, "var(--s1)")}
-      ${kqBars("영업이익 (분기)", k.quarters, "op", k.est_bar, "var(--good)")}
-    </div>
+    ${kqBox(k, d.code)}
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">분기</th><th>매출액</th><th>영업이익</th><th>순이익</th><th>EPS</th></tr></thead><tbody>
       ${k.quarters.slice().reverse().map((q) => `<tr><td>${esc(q.q)}${q.prelim ? ' <span class="src">잠정</span>' : ""}</td><td>${n(q.sales, 0)}억</td><td>${q.op == null ? "-" : n(q.op, 0) + "억"}</td><td>${q.ni == null ? "-" : n(q.ni, 0) + "억"}</td><td>${q.eps == null ? "-" : n(q.eps, 0) + "원"}</td></tr>`).join("")}
     </tbody></table></div>
@@ -2290,6 +2392,7 @@ function renderAll() {
     marketCard(DASH.signals.us, DASH.rates.us10y, null, "us") +
     marketCard(DASH.signals.kr, DASH.rates.kr3y, DASH.rates.kr10y ? { label: "국고채 10년", latest: DASH.rates.kr10y.latest } : null, "kr");
   drawMarketCharts();
+  $("#kqNews").innerHTML = kqNewsHTML();
   $("#irCal").innerHTML = irCalHTML();
   renderCmp();
   renderCards();

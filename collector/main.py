@@ -423,6 +423,9 @@ def stock_detail(h, rates_now, fx):
             det["kq"] = kq.collect(code)
         except Exception as e:  # noqa: BLE001
             REPORT.block("최신 분기 실적", f"{name}: {str(e)[:60]}")
+        if det["kq"] and wise:  # 연간 보기: 와이즈리포트 연간 실적 + 추정 (억원)
+            det["kq"]["annual"] = [{"q": f"{str(yy)[2:]}{'E' if r.get('estimate') else ''}", "est": bool(r.get("estimate")),
+                                    **{f: r.get(f) for f in ("sales", "op", "ni")}} for yy, r in sorted(wise.items()) if r.get("sales") is not None]
     det["seg"] = None  # 부문별 매출 (실적 요약의 매출 비중·돈의 흐름 왼쪽)
     if mkt == "US" and SEG_US.get(code):
         s = SEG_US[code]
@@ -470,6 +473,7 @@ def stock_detail(h, rates_now, fx):
     k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적이 3일 안에 반영됐거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
     if k.get("seen") and (now_kst().date() - pd.Timestamp(k["seen"]).date()).days <= 3:
         det["card"]["kq_new"] = k["latest"]
+        det["card"]["kq_brief"] = {f: k.get(f) for f in ("latest", "prelim", "rows", "quarters", "est_bar", "filing", "annual")}  # 첫 화면 '🧾 실적 발표'
     if k.get("waiting"):
         det["card"]["kq_wait"] = (k.get("next") or {}).get("q")
     return det

@@ -344,3 +344,4 @@ ul.news li { padding: 7px 0; border-top: 1px solid var(--border); font-size: 14p
 ul.news li a { color: var(--ink); text-decoration: none; }
 ul.news li a:visited { color: var(--muted); }
 ul.news li .src, ul.news li .note { display: block; margin-top: 2px; }
+.kqbox .qgrid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
