@@ -31,7 +31,10 @@ def _filing(code, days=14):
     j = HTTP.get("https://opendart.fss.or.kr/api/list.json",
                  params={"crtfc_key": key, "corp_code": kr_stock.corp_code(code), "pblntf_ty": "I", "page_count": 100,
                          "bgn_de": (end - pd.Timedelta(days=days)).strftime("%Y%m%d"), "end_de": end.strftime("%Y%m%d")}).json()
-    hit = next((r for r in j.get("list", []) if "잠정" in r.get("report_nm", "") and "실적" in r.get("report_nm", "")), None)
+    cands = [r for r in j.get("list", []) if "잠정" in r.get("report_nm", "") and "실적" in r.get("report_nm", "")]
+    # 같은 날 연결·별도 두 공시를 내는 회사(대한항공 등)는 연결 쪽 (컨센서스·네이버 숫자가 연결 기준)
+    same = [r for r in cands if cands and r["rcept_dt"] == cands[0]["rcept_dt"]]
+    hit = next((r for r in same if "연결" in r["report_nm"]), cands[0] if cands else None)
     return {"date": f"{hit['rcept_dt'][:4]}-{hit['rcept_dt'][4:6]}-{hit['rcept_dt'][6:]}", "name": hit["report_nm"].strip(),
             "rcept_no": hit["rcept_no"], "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={hit['rcept_no']}"} if hit else None
 
@@ -119,7 +122,9 @@ def collect(code):
     except Exception:  # noqa: BLE001
         filing = None
     # 잠정실적 공시는 났는데 네이버 숫자가 아직 컨센서스면, 공시 표의 숫자로 먼저 채운다 (네이버가 바뀌면 덮어씀)
-    nxt = sorted(k for k in cons if k > max(hist, default=""))
+    # 잠정 숫자는 네이버가 확정 숫자로 바꿀 때까지 매번 다시 읽음 (정정 공시·연결 공시도 반영)
+    base = max((k for k, v in hist.items() if not v.get("prelim")), default="")
+    nxt = sorted(k for k in cons if k > base)
     if filing and nxt and filing["date"] > _qend(nxt[0]):
         try:
             p = _prelim(filing, nxt[0])
