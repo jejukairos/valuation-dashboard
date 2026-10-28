@@ -983,15 +983,16 @@ function irCalHTML() {
   if (!items.length) return "";
   const gl = { 보유: "", 관심: " ⭐", 공동: " 🤝" };
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">보유·관심·공동 · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
-    <ul class="irl">${items.map((e) => `<li>${irWhen(e)} <a href="#stock/${esc(e.code)}">${esc(e.name)}</a>${gl[e.group] || ""} · ${esc(e.title || "")}${e.live ? " · 🔴 라이브" : ""}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}</li>`).join("")}</ul></details>`;
+    <ul class="irl">${items.map((e) => `<li>${irWhen(e)} <a href="#stock/${esc(e.code)}">${esc(e.name)}</a>${gl[e.group] || ""} · ${esc(e.title || "")}${e.live ? " · 🔴 라이브" : ""}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${e.script_url ? ` · <a href="${esc(e.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</li>`).join("")}</ul></details>`;
 }
 function earningsHTML(code) {
   const list = EARNINGS[code] || [];
   const ev = (IRCAL.items || []).find((e) => e.code === code && e.dday >= -7);
-  const next = ev ? `<div class="note">📅 ${irWhen(ev)} ${esc(ev.title || "")}${ev.live ? " · 🔴 라이브 컨퍼런스콜" : ""}${ev.url ? ` · <a href="${esc(ev.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}</div>` : "";
+  const next = ev ? `<div class="note">📅 ${irWhen(ev)} ${esc(ev.title || "")}${ev.live ? " · 🔴 라이브 컨퍼런스콜" : ""}${ev.url ? ` · <a href="${esc(ev.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${ev.script_url ? ` · <a href="${esc(ev.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</div>` : "";
   if (!list.length) return next ? `<h3>📞 실적발표</h3><div class="card">${next}<div class="note src">발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 여기에 넣어요.</div></div>` : "";
   return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">${next}
     ${list.map((e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
+      ${e.transcript ? `<div class="note">📜 <a href="${esc(e.transcript)}" target="_blank" rel="noopener">발표 자막 원문 보기 (발표·질의응답 전체)</a></div>` : ""}
       ${(e.short || []).length ? `<div class="warnbox" style="margin-top:6px"><b>⚡ 핵심만</b><ul class="irl">${e.short.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
     </details>`).join("")}

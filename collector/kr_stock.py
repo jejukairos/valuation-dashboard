@@ -72,7 +72,8 @@ def ir_schedule(code):
     ec = (HTTP.get(f"https://stock.naver.com/api/stockSecurity/earning-calls/v1/{code}").json() or {}).get("earningCall") or {}
     if ec.get("eventDatetime"):
         out.update(when=ec["eventDatetime"], time_unknown=bool(ec.get("isEventTimeUnknown")), live=ec.get("contentType") == "LIVE",
-                   title=f"{ec.get('fiscalYear')}년 {ec.get('fiscalQuarter')}분기 어닝콜", replay=bool(ec.get("isReplayProvided")))
+                   title=f"{ec.get('fiscalYear')}년 {ec.get('fiscalQuarter')}분기 어닝콜", replay=bool(ec.get("isReplayProvided")),
+                   script_url=ec.get("aspUrl"), media=ec.get("mediaStatus"))  # 네이버가 공개하는 실시간 발표 자막 화면
     ir = (HTTP.get(f"https://m.stock.naver.com/api/stock/{code}/integration").json() or {}).get("irScheduleInfo") or {}
     if ir.get("irScheduleDate") and not out.get("when"):
         out.update(when=ir["irScheduleDate"], time_unknown=True, title=ir.get("title"))
