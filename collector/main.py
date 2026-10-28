@@ -22,6 +22,8 @@ SECTORS = load_yaml("sectors.yaml") or {}
 SOMONG = load_yaml("somong.yaml") or {}
 LTG_GAP = read_json(CACHE / "ltg_gap.json") or {}
 QTRS = read_json(CACHE / "quarters.json") or {}  # 분기 실적 (야후는 최근 5~6분기만 줘서 쌓아 둠)  # 종목 → 시킹알파 확인일 → Zacks·나스닥과의 차이(%p)
+SEGS = read_json(CACHE / "segments.json") or {}  # 한국 '주요제품 매출구성'(%)을 보고서 시점별로 쌓음 → 부문 비중 추이
+SEG_US = load_yaml("segments.yaml") or {}  # 미국 부문별 매출 (공식 실적 자료를 보고 직접 적음)
 
 
 def keep_prev(new, prev, label):
@@ -421,6 +423,19 @@ def stock_detail(h, rates_now, fx):
             det["kq"] = kq.collect(code)
         except Exception as e:  # noqa: BLE001
             REPORT.block("최신 분기 실적", f"{name}: {str(e)[:60]}")
+    det["seg"] = None  # 부문별 매출 (실적 요약의 매출 비중·돈의 흐름 왼쪽)
+    if mkt == "US" and SEG_US.get(code):
+        s = SEG_US[code]
+        det["seg"] = {"unit": "amt", "src": s.get("src"), "hist": {q: {k: v * 1e6 for k, v in m.items()} for q, m in s["quarters"].items()}}
+    elif mkt == "KR":
+        try:
+            pm = kr_stock.product_mix(fcode)
+            if pm and pm["asof"]:
+                SEGS[fcode] = dict(sorted({**SEGS.get(fcode, {}), pm["asof"]: pm["mix"]}.items())[-8:])
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("주요제품 매출구성", f"{name}: {str(e)[:60]}")
+        if SEGS.get(fcode):
+            det["seg"] = {"unit": "pct", "src": "와이즈리포트 주요제품 매출구성 (분기·반기·사업보고서)", "hist": SEGS[fcode]}
     det["card"] = {
         "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl, "dart_check": dart_check,
         "score": checks_score, "us_tpl": us_tpl, "div_check": div_check, "mdd": mdd, "pre": pre,
@@ -668,6 +683,7 @@ def main():
     write_json(DATA / "earnings.json", load_yaml("earnings.yaml") or {})  # 실적발표(컨퍼런스콜) 요약
     write_json(CACHE / "ltg_gap.json", LTG_GAP)
     write_json(CACHE / "quarters.json", QTRS)
+    write_json(CACHE / "segments.json", SEGS)
     write_json(CACHE / "q_cons.json", kq.CONS)  # 발표 전 컨센서스 (예상 대비 계산용)
     write_json(CACHE / "q_hist.json", kq.HIST)
     write_json(DATA / "somong.json", load_yaml("somong.yaml") or {})  # 강의 체크리스트 (지갑털이·올리고폴리·아무나이겨라·굿보스 등)  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)

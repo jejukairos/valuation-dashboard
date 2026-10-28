@@ -28,6 +28,8 @@ jobs:
     timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main               # 앞 갱신이 끝나길 기다렸다 돌 때도 그 결과 위에서 시작
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -52,5 +54,6 @@ jobs:
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "데이터 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           # 갱신 중에 코드가 새로 올라왔으면 그 위에 얹어서 다시 저장 (최대 3번)
-          for i in 1 2 3; do git push && exit 0; git pull --rebase -q || exit 1; done
+          # 데이터 파일이 겹치면 방금 만든 새 데이터로 (-X theirs = 다시 얹는 이 커밋 쪽)
+          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done
           exit 1

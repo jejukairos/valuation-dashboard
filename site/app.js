@@ -488,9 +488,9 @@ function cmpCols() {
     c["per" + i] = { h: `PER<br>${ys[i]}`, v: t("per", i), f: P(1) };
     c["pbr" + i] = { h: `PBR<br>${ys[i]}`, v: t("pbr", i), f: P(2) };
     c["roe" + i] = { h: `ROE<br>${ys[i]}`, v: t("roe", i), f: R(0) };
-    c["pf" + i] = { h: `P/FCF<br>${ys[i + 1]}`, v: t("pfcf", i), f: P(1) };
   }
   for (let i = 0; i < 4; i++) {
+    c["pf" + i] = { h: `P/FCF<br>${ys[i]}`, v: t("pfcf", i), f: P(1) };
     c["opm" + i] = { h: `OPM<br>${ys[i]}`, v: t("opm", i), f: R(1) };
     c["debt" + i] = { h: `부채비율<br>${ys[i]}`, v: t("debt", i), f: (v) => (v == null ? "-" : n(v) + "%") };
   }
@@ -521,11 +521,11 @@ function cmpCols() {
 }
 const CMP_GROUPS = [
   // 앞쪽은 올해(26E) 한눈에, "|" 뒤로는 같은 지표를 연도순으로 이어서 (기울기·연속성 보기)
-  ["sum", "요약", ["cap", "salesC", "opC", "per12", "peg", "opm1", "roe1", "debt1", "pf0", "dy0", "dd",
-    "|", "opm0", "opm1", "opm2", "opm3", "|", "roe0", "roe1", "roe2", "|", "debt0", "debt1", "debt2", "debt3", "|", "pf0", "pf1", "pf2"]],
+  ["sum", "요약", ["cap", "salesC", "opC", "per12", "peg", "opm1", "roe1", "debt1", "pf1", "dy0", "dd",
+    "|", "opm0", "opm1", "opm2", "opm3", "|", "roe0", "roe1", "roe2", "|", "debt0", "debt1", "debt2", "debt3", "|", "pf0", "pf1", "pf2", "pf3"]],
   ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC"]],
   ["qual", "수익성", ["gpm0", "opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2", "roic", "roicT", "roicE0", "roicE1"]],
-  ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "psr", "pf0", "pf1", "pf2"]],
+  ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "psr", "pf0", "pf1", "pf2", "pf3"]],
   ["fin", "재무·배당", ["nc", "ncp", "ncx", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
   ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
   ["all", "전체", null],
@@ -570,7 +570,7 @@ function renderCmp() {
       ${keys.map((k, i) => `<td${sepAt.has(i) ? ' class="sep"' : ""}>${cols[k].f(cols[k].v(s), s)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   $("#cmpNote").innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · 종목을 누르면 상세 화면 · 3년 연평균 = 25년 실적 → 28년 추정 ·
     PEG = 12MF PER ÷ EPS 3년 연평균 성장률(%) (1 아래면 성장에 비해 싼 편, 피터 린치 기준) · * = 이익이 크게 출렁이는 업종이라 PER·PEG 가 실제보다 싸 보일 수 있음 ·
-    P/FCF = 시가총액 ÷ 잉여현금흐름 · PSR = 시가총액 ÷ 올해 예상 매출 · 순현금 = 현금·단기투자 − 총차입금(최근 분기, 야후) · GPM·ROIC·FCF = 야후 연간 실적 ·
+    P/FCF = 지금 시가총액 ÷ 그해 잉여현금흐름 (25 = 확정 실적) · PSR = 시가총액 ÷ 올해 예상 매출 · 순현금 = 현금·단기투자 − 총차입금(최근 분기, 야후) · GPM·ROIC·FCF = 야후 연간 실적 ·
     ${MKT === "US" ? "미국: 추정치는 야후·나스닥 컨센서스(EPS·매출), 나머지는 최근 실적 · 25 PER 은 지금 주가 ÷ 작년 EPS" : "25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준"}`;
   try { localStorage.setItem("cmp", JSON.stringify(CMP)); } catch (_) {}
 }
@@ -724,56 +724,152 @@ function qPanel(title, tag, labels, bars, line, usd, color) {
     const pts = line.map((v, i) => (v == null ? null : [x0 + bw * i + bw / 2, 56 - (v - ll) * ls]));
     const seg = pts.filter(Boolean);
     if (seg.length > 1) g += `<polyline points="${seg.map((p) => p.join(",")).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
-    pts.forEach((p, i) => { if (p) g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${p[0]}" y="${p[1] - 8}" text-anchor="middle" class="qv${i === line.length - 1 ? " b" : ""}"${line[i] < 0 ? ' fill="var(--bad-ink)"' : ""}>${n(line[i], 0)}%</text>`; });
+    pts.forEach((p, i) => { if (p) g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${p[0]}" y="${p[1] - 8}" text-anchor="middle" class="qv${i === line.length - 1 ? " b hi" : ""}"${line[i] < 0 ? ' style="fill:var(--bad-ink)"' : ""}>${n(line[i], 0)}%</text>`; });
   }
-  return `<div class="qp"><div class="qt"><b>${title}</b>${tag ? `<span class="qtag${/-|적자|둔화/.test(tag) ? " bad" : /늘어|줄어/.test(tag) ? " warn" : ""}">${esc(tag)}</span>` : ""}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg></div>`;
+  return `<div class="qp"><div class="qt"><b>${title}</b>${qTag(tag)}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg></div>`;
 }
-// 매출 → 매출원가 / 매출총이익 → 영업비용(연구개발·판매·관리·기타) / 영업이익
-function qSankey(q, usd) {
+function qTag(tag) { return tag ? `<span class="qtag${/-|적자|둔화|역성장|하락/.test(tag) ? " bad" : /늘어|줄어|CapEx/.test(tag) ? " warn" : ""}">${esc(tag)}</span>` : ""; }
+// 부문별 매출 → [[기간 끝, {부문: 비중%}, {부문: 금액}|null], …] 오래된 순. 한국은 비중(%)만 있어 음수(부문 간 내부거래 제거분)는 빼고 100%로 맞춤
+const SEG_COL = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s7)", "var(--muted)"];
+const nearDay = (a, b, days = 40) => Math.abs(new Date(a) - new Date(b)) < days * 864e5;
+function segPeriods(seg) {
+  if (!seg?.hist) return [];
+  return Object.entries(seg.hist).map(([k, m]) => {
+    const pos = Object.entries(m).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]), o = {};
+    pos.forEach(([s, v], i) => { const t = pos.length <= 6 || i < 5 ? s : "기타"; o[t] = (o[t] || 0) + v; });  // 화면에 6칸까지
+    const tot = pos.reduce((a, [, v]) => a + v, 0);
+    return [k.replace("/", "-"), Object.fromEntries(Object.entries(o).map(([s, v]) => [s, (v / tot) * 100])), seg.unit === "amt" ? o : null];
+  }).filter(([, sh]) => Object.keys(sh).length > 1).sort(([a], [b]) => a.localeCompare(b));
+}
+const segAgo = (ps, k) => ps.find(([e]) => nearDay(e, new Date(k) - 365 * 864e5));
+function segColors(ps) {  // 최근 비중이 큰 순서로 색을 정해 도넛·추이·돈의 흐름에서 같은 색
+  const last = ps.at(-1)[1];
+  const names = [...Object.keys(last).sort((a, b) => last[b] - last[a]), ...new Set(ps.flatMap(([, s]) => Object.keys(s)).filter((s) => !(s in last)))];
+  return Object.fromEntries(names.map((s, i) => [s, SEG_COL[Math.min(i, SEG_COL.length - 1)]]));
+}
+const cut = (s, k) => (s.length > k ? s.slice(0, k - 1) + "…" : s);
+// 부문별 매출 비중 도넛 + 1년 전 대비 (금액이 있으면 성장률, 비중만 있으면 %p)
+function segDonut(ps, col, seg) {
+  const [k, sh, amt] = ps.at(-1), pa = segAgo(ps, k), names = Object.keys(sh).sort((a, b) => sh[b] - sh[a]);
+  const cx = 74, cy = 90, R = 62, r = 36, pt = (rr, a) => `${cx + rr * Math.cos(a)},${cy + rr * Math.sin(a)}`;
+  let a0 = -Math.PI / 2, g = "";
+  names.forEach((s) => {
+    const a1 = a0 + (sh[s] / 100) * 2 * Math.PI, big = a1 - a0 > Math.PI ? 1 : 0;
+    g += `<path d="M${pt(R, a0)} A${R},${R} 0 ${big} 1 ${pt(R, a1)} L${pt(r, a1)} A${r},${r} 0 ${big} 0 ${pt(r, a0)} Z" fill="${col[s]}" stroke="var(--surface)" stroke-width="1.5"/>`;
+    a0 = a1;
+  });
+  g += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" class="qv b">${esc(qLabel(k))}</text>`;
+  const chg = (s) => (amt && pa?.[2]?.[s] > 0 ? (amt[s] / pa[2][s] - 1) * 100 : null), pp = (s) => (pa && !amt && pa[1][s] != null ? sh[s] - pa[1][s] : null);
+  const rh = Math.min(27, 156 / names.length);
+  names.forEach((s, i) => {  // 범례 두 줄: 부문 이름 / 비중 · 1년 전 대비
+    const y = 18 + i * rh, c = chg(s), p = pp(s);
+    const t2 = `${n(sh[s], 1)}%${c != null ? ` · ${c >= 0 ? "+" : ""}${n(c, 0)}% YoY` : p != null ? ` · ${p >= 0 ? "+" : ""}${n(p, 1)}%p` : ""}`;
+    g += `<rect x="150" y="${y - 8}" width="9" height="9" rx="2" fill="${col[s]}"/><text x="164" y="${y}" class="qv b">${esc(cut(s, 13))}</text>`
+      + `<text x="164" y="${y + 11}" class="qv"${(c ?? p) < 0 ? ' style="fill:var(--bad-ink)"' : ""}>${esc(t2)}</text>`;
+  });
+  let tag = "";
+  if (pa) {
+    const top0 = Object.keys(pa[1]).sort((a, b) => pa[1][b] - pa[1][a])[0];
+    const best = names.map((s) => [s, chg(s) ?? pp(s)]).filter(([, v]) => v != null).sort((a, b) => b[1] - a[1])[0];
+    tag = top0 !== names[0] ? `${cut(names[0], 8)} 최대 부문 등극` : best ? `${cut(best[0], 8)} ${best[1] >= 0 ? "+" : ""}${n(best[1], amt ? 0 : 1)}${amt ? "%" : "%p"}` : "";
+  }
+  const sub = amt ? "1년 전 대비 성장률" : `${esc(k.replace("-", "/"))} 보고서 비중`;
+  return `<div class="qp"><div class="qt"><b>부문별 매출 비중 <span class="src">${sub}</span></b>${qTag(tag)}</div><svg viewBox="0 0 300 172" role="img" aria-label="부문별 매출 비중">${g}</svg></div>`;
+}
+// 부문별 매출 비중 추이 (100% 막대)
+function segStack(ps, col) {
+  const P = ps.slice(-5), W = 300, x0 = 14, bw = (W - 2 * x0) / P.length, top = 14, bot = 150;
+  let g = "";
+  P.forEach(([k, sh], i) => {
+    const cx = x0 + bw * i + bw / 2, w = Math.min(bw * 0.62, 60);
+    let y = bot;
+    Object.keys(col).filter((s) => sh[s]).forEach((s) => {
+      const h = (sh[s] / 100) * (bot - top);
+      y -= h;
+      g += `<rect x="${cx - w / 2}" y="${y}" width="${w}" height="${h}" fill="${col[s]}"/>`;
+      if (sh[s] >= 9) g += `<text x="${cx}" y="${y + h / 2 + 3.5}" text-anchor="middle" class="qv sw">${n(sh[s], 0)}%</text>`;
+    });
+    g += `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(qLabel(k))}</text>`;
+  });
+  const a = P[0][1], b = P.at(-1)[1], up = Object.keys(b).map((s) => [s, b[s] - (a[s] || 0)]).sort((x, y) => y[1] - x[1])[0];
+  const tag = up && up[1] >= 1 ? `${cut(up[0], 8)} 비중 +${n(up[1], 0)}%p` : "";
+  return `<div class="qp"><div class="qt"><b>부문별 매출 비중 추이</b>${qTag(tag)}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="부문별 매출 비중 추이">${g}</svg></div>`;
+}
+// [부문별 매출 →] 매출 → 매출원가 / 매출총이익 → 영업비용(연구개발·판매·관리·기타) / 영업이익
+// prev = 1년 전 같은 분기 (YoY·마진 %p), segs = [[부문, 금액, YoY, 색, 비중%, 추정?], …]
+function qSankey(q, usd, prev, segs) {
   const rev = q.rev, cogs = q.cogs ?? (q.gp != null ? rev - q.gp : null), gp = q.gp ?? (cogs != null ? rev - cogs : rev);
   const opex = q.opex ?? gp - q.op;
   const pos = (v) => (v != null && v > 0 ? v : 0);
-  let items = [["연구개발", pos(q.rnd)], ["판매·마케팅", pos(q.sm)], ["관리", pos(q.ga)]];
-  if (!items.some(([, v]) => v) && q.sga) items = [["판매·관리", pos(q.sga)]];
+  let items = [["연구개발", pos(q.rnd), "rnd"], ["판매·마케팅", pos(q.sm), "sm"], ["관리", pos(q.ga), "ga"]];
+  if (!items.some(([, v]) => v) && q.sga) items = [["판매·관리", pos(q.sga), "sga"]];
   const known = items.reduce((a, [, v]) => a + v, 0);
-  if (opex - known > opex * 0.02) items.push(["기타 영업비용", opex - known]);
+  if (opex - known > opex * 0.02) items.push(["기타 영업비용", opex - known, null]);
   items = items.filter(([, v]) => v > 0);
-  const W = 480, H = 240, T = 20, k = H / rev, x = [58, 178, 308], nw = 12;  // 휴대폰에서 글자가 작아지지 않게 좁게
-  const pct = (v) => `${n((v / rev) * 100, 0)}%`;
+  const sg = segs && segs.length > 1 ? segs : null;
+  // 휴대폰에서 글자가 작아지지 않게 좁게 (부문이 있으면 넓은 그림을 옆으로 밀어 보기)
+  const W = sg ? 700 : 480, H = 240, T = sg ? 46 : 20, k = H / rev, x = sg ? [244, 374, 504] : [58, 178, 308], nw = 12;
+  const pct = (v) => `${n((v / rev) * 100, 1)}%`;
+  const yo = (key, v) => (key && prev?.[key] > 0 && v != null ? (v / prev[key] - 1) * 100 : null);
+  const yoT = (g, tail = " YoY") => (g == null ? "" : `${g >= 0 ? "+" : ""}${n(g, 0)}%${tail}`);
+  const pp = (key, v) => (key && prev?.[key] != null && prev.rev ? (v / rev - prev[key] / prev.rev) * 100 : null);
+  const ppT = (d) => (d == null ? "" : `${d >= 0 ? "+" : ""}${n(d, 1)}%p`);
+  const tone = (d) => (d == null ? "var(--muted)" : d >= 0 ? "var(--good-ink)" : "var(--bad-ink)");
   let low = T + H;  // 그림·글자가 내려간 가장 아래 (잘리지 않게 높이를 여기에 맞춤)
   let flows = "", nodes = "", labels = "";
   const band = (x1, a1, b1, x2, a2, b2, col) => { const m = (x1 + x2) / 2; flows += `<path d="M${x1},${a1} C${m},${a1} ${m},${a2} ${x2},${a2} L${x2},${b2} C${m},${b2} ${m},${b1} ${x1},${b1} Z" fill="${col}" opacity=".28"/>`; };
   const node = (xx, y, h, col) => { nodes += `<rect x="${xx}" y="${y}" width="${nw}" height="${Math.max(h, 1.5)}" fill="${col}" rx="2"/>`; };
-  const lab = (xx, y, t1, t2, anchor = "start", col = "var(--ink)") => { labels += `<text x="${xx}" y="${y}" text-anchor="${anchor}" class="sk"><tspan font-weight="700" fill="${col}">${esc(t1)}</tspan><tspan x="${xx}" dy="14" class="sk2">${esc(t2)}</tspan></text>`; };
+  const lab = (xx, y, t1, t2, anchor = "start", col = "var(--ink)", t3 = "", c3 = "var(--muted)") => {
+    labels += `<text x="${xx}" y="${y}" text-anchor="${anchor}" class="sk"><tspan font-weight="700" fill="${col}">${esc(t1)}</tspan><tspan x="${xx}" dy="14" class="sk2">${esc(t2)}</tspan>`
+      + `${t3 ? `<tspan x="${xx}" dy="13" class="sk2" style="fill:${c3}">${esc(t3)}</tspan>` : ""}</text>`;
+  };
+  const gapOf = (t3) => (t3 ? 46 : 32);  // 글자 줄 수만큼 다음 칸을 띄움
   node(x[0], T, rev * k, "var(--ink-2)");
-  lab(x[0] - 6, T + rev * k / 2 - 4, "매출", qMoney(rev, usd), "end");
+  const gR = yo("rev", rev);
+  if (sg) {  // 부문 → 매출: 왼쪽에 부문 막대를 띄엄띄엄, 매출 막대로는 붙여서 들어감
+    lab(x[0] + nw / 2, T - 26, "총매출", `${qMoney(rev, usd)}${gR != null ? " · " + yoT(gR) : ""}`, "middle");
+    const xs = 124;
+    let sy = T, ty = T;
+    sg.forEach(([s, v, g, col, sh, est]) => {
+      const h = (sh / 100) * H, t3 = g != null ? yoT(g) : "";
+      band(xs + nw, ty, ty + h, x[0], sy, sy + h, col); node(xs, ty, h, col);
+      lab(xs - 6, ty + 12, cut(s, 10), `${est ? "≈" : ""}${qMoney(v, usd)} · ${n(sh, 1)}%`, "end", "var(--ink)", t3, tone(g));
+      low = Math.max(low, ty + h, ty + gapOf(t3));
+      sy += h; ty += Math.max(h, gapOf(t3)) + 6;
+    });
+  } else lab(x[0] - 6, T + rev * k / 2 - 10, "매출", qMoney(rev, usd), "end", "var(--ink)", yoT(gR, ""), tone(gR));
   const noCogs = !(cogs > rev * 0.01);  // 네이버처럼 매출원가를 따로 안 나누는 회사
   const gH = (noCogs ? rev : pos(gp)) * k, cH = noCogs ? 0 : pos(cogs) * k, gY = T, cY = T + gH + 14;
   node(x[1], gY, gH, "var(--good)");
   band(x[0] + nw, T, T + gH, x[1], gY, gY + gH, "var(--good)");
-  lab(x[1] + nw + 6, gY + 12, "매출총이익",`${qMoney(noCogs ? rev : gp, usd)} · ${pct(noCogs ? rev : gp)}`, "start", "var(--good-ink)");
+  const dG = noCogs ? null : pp("gp", gp);
+  lab(x[1] + nw + 6, gY + 12, "매출총이익", `${qMoney(noCogs ? rev : gp, usd)} · 마진 ${pct(noCogs ? rev : gp)}`, "start", "var(--good-ink)", dG != null ? `${ppT(dG)} YoY` : "", tone(dG));
   if (!noCogs) {
     node(x[1], cY, cH, "var(--bad)");
     band(x[0] + nw, T + gH, T + gH + cH, x[1], cY, cY + cH, "var(--bad)");
-    lab(x[1] + nw + 6, cY + 12, "매출원가", `${qMoney(cogs, usd)} · ${pct(cogs)}`, "start", "var(--bad-ink)");
-    low = Math.max(low, cY + cH, cY + 32);
+    lab(x[1] + nw + 6, cY + 12, "매출원가", `${qMoney(cogs, usd)} · 매출의 ${pct(cogs)}`, "start", "var(--bad-ink)", yoT(yo("cogs", cogs)));
+    low = Math.max(low, cY + cH, cY + 46);
   }
   // 매출총이익 → 영업이익(위) + 비용들(아래)
-  const outs = (q.op > 0 ? [["영업이익", q.op, "var(--good)", "var(--good-ink)"]] : []).concat(items.map(([l, v]) => [l, v, "var(--bad)", "var(--bad-ink)"]));
+  const outs = (q.op > 0 ? [["영업이익", q.op, "var(--good)", "var(--good-ink)", "op"]] : []).concat(items.map(([l, v, key]) => [l, v, "var(--bad)", "var(--bad-ink)", key]));
   let sy = gY, ty = T;
   const gpv = noCogs ? rev : gp;
   const tot = outs.reduce((a, [, v]) => a + v, 0), f = tot > gpv ? gpv / tot : 1;  // 영업손실이면 비용을 매출총이익 폭에 맞춰 줄여 그림
-  outs.forEach(([l, v, col, ink]) => {
-    const h = v * k * f;
+  outs.forEach(([l, v, col, ink, key]) => {
+    const h = v * k * f, d = pp(key, v);
+    const t3 = key === "op" ? (d != null ? `${ppT(d)} YoY (1년 전 ${n((prev.op / prev.rev) * 100, 1)}%)` : "")
+      : [yoT(yo(key, v)), d != null ? `(${ppT(d)})` : ""].filter(Boolean).join(" ");
     band(x[1] + nw, sy, sy + h, x[2], ty, ty + h, col); node(x[2], ty, h, col);
-    lab(x[2] + nw + 6, ty + 12, l, `${qMoney(v, usd)} · ${pct(v)}`, "start", ink);
-    low = Math.max(low, ty + h, ty + 32);
-    sy += h; ty += Math.max(h, 32) + 6;  // 두 줄 글자가 다음 칸과 겹치지 않게
+    lab(x[2] + nw + 6, ty + 12, l, `${qMoney(v, usd)} · ${key === "op" ? "마진" : "매출의"} ${pct(v)}`, "start", ink, t3, key === "op" ? tone(d) : "var(--muted)");
+    low = Math.max(low, ty + h, ty + gapOf(t3));
+    sy += h; ty += Math.max(h, gapOf(t3)) + 6;  // 글자가 다음 칸과 겹치지 않게
   });
   const vh = low + 8;
   const loss = (q.op <= 0 ? `<div class="note" style="color:var(--bad-ink)">영업손실 ${qMoney(q.op, usd)} — 영업비용이 매출총이익보다 많아요</div>` : "")
-    + (noCogs ? `<div class="note src">이 회사는 매출원가를 따로 나누지 않고 비용을 한꺼번에 영업비용으로 적어서, 매출 = 매출총이익으로 그렸어요.</div>` : "");
-  return `<svg viewBox="0 0 ${W} ${vh}" class="sankey" role="img" aria-label="매출에서 영업이익까지 돈의 흐름">${flows}${nodes}${labels}</svg>${loss}`;
+    + (noCogs ? `<div class="note src">이 회사는 매출원가를 따로 나누지 않고 비용을 한꺼번에 영업비용으로 적어서, 매출 = 매출총이익으로 그렸어요.</div>` : "")
+    + (sg?.some((s) => s[5]) ? `<div class="note src">≈ 부문 금액 = 이 분기 매출 × 보고서의 부문 비중 (회사가 분기별 부문 금액을 따로 안 줘서 나눠 본 추정)</div>` : "");
+  const svg = `<svg viewBox="0 0 ${W} ${vh}" class="sankey${sg ? " wide" : ""}" role="img" aria-label="매출에서 영업이익까지 돈의 흐름">${flows}${nodes}${labels}</svg>`;
+  return (sg ? `<div class="sk-wrap">${svg}</div>` : svg) + loss;
 }
 // 최신 분기 실적(잠정) vs 컨센서스 — 8분기 막대, 마지막 분기는 회색(발표 전 예상) + 색(실적) 나란히
 function kqBars(title, qs, f, est, color) {
@@ -823,32 +919,43 @@ function qtrHTML(d) {
   const all = Object.entries(d.qtrs || {}).filter(([, q]) => q.rev);
   if (all.length < 2) return "";
   const usd = (d.card || d).currency === "USD";
-  const get = (end, k) => { // 1년 전 같은 분기 (끝 날짜 ±40일)
-    const t = new Date(end) - 365 * 864e5;
-    const hit = all.find(([e]) => Math.abs(new Date(e) - t) < 40 * 864e5);
-    return hit ? hit[1][k] : null;
-  };
+  const getQ = (end) => (all.find(([e]) => nearDay(e, new Date(end) - 365 * 864e5)) || [])[1];  // 1년 전 같은 분기 (끝 날짜 ±40일)
+  const get = (end, k) => getQ(end)?.[k] ?? null;
   const qs = all.slice(-5), labels = qs.map(([e]) => qLabel(e)), L = qs.length - 1;
   const rev = qs.map(([, q]) => q.rev), op = qs.map(([, q]) => q.op ?? null);
   const yoy = qs.map(([e, q]) => { const p = get(e, "rev"); return p && p > 0 ? (q.rev / p - 1) * 100 : null; });
   const opm = qs.map(([, q]) => (q.op != null ? (q.op / q.rev) * 100 : null));
+  const gpv = qs.map(([, q]) => (q.gp != null && q.gp < q.rev * 0.995 ? q.gp : null)), gpm = qs.map(([, q], i) => (gpv[i] != null ? (gpv[i] / q.rev) * 100 : null));
   const fcf = qs.map(([, q]) => q.fcf ?? null), capex = qs.map(([, q]) => (q.capex != null ? Math.abs(q.capex) : null));
-  // 한 줄 꼬리표: 최근 분기 변화
-  const tRev = yoy[L] != null && yoy[L - 1] != null ? (yoy[L] > yoy[L - 1] ? "성장 가속" : "성장 둔화") : "";
+  // 한 줄 꼬리표: 최근 분기 변화 (몇 분기 연속인지까지)
+  const streak = (a) => { let c = 0; for (let i = L; i > 0 && a[i] != null && a[i - 1] != null && a[i] > a[i - 1]; i--) c++; return c; };
+  const kR = streak(yoy), kG = streak(gpm);
+  const tRev = yoy[L] == null ? "" : yoy[L] < 0 ? "역성장" : kR >= 2 ? `${kR}분기 연속 성장 가속` : kR ? "성장 가속" : yoy[L - 1] != null ? "성장 둔화" : "";
   const tOp = op[L] != null && op[L - 1] != null ? (op[L - 1] <= 0 && op[L] > 0 ? "흑자 전환" : op[L - 1] > 0 && op[L] <= 0 ? "적자 전환" : opm[L] > opm[L - 1] ? `이익률 +${n(opm[L] - opm[L - 1], 1)}%p` : `이익률 ${n(opm[L] - opm[L - 1], 1)}%p`) : "";
+  const dG = gpm[L] != null && gpm[L - 1] != null ? gpm[L] - gpm[L - 1] : null;
+  const tG = dG == null ? "" : kG >= 2 ? `${kG}분기 연속 마진 가속화` : Math.abs(dG) < 0.05 ? "마진 유지" : dG > 0 ? `마진 +${n(dG, 1)}%p` : `마진 ${n(dG, 1)}%p`;
   const tF = fcf[L] != null && fcf[L - 1] != null ? (fcf[L - 1] > 0 && fcf[L] < 0 ? "현금흐름 적자 전환" : fcf[L - 1] < 0 && fcf[L] > 0 ? "현금흐름 흑자 전환" : "") : "";
   const prevC = capex.slice(0, L).filter((v) => v != null), avgC = prevC.length ? prevC.reduce((a, b) => a + b, 0) / prevC.length : null;
-  const tC = capex[L] != null && avgC ? (capex[L] > avgC * 1.5 ? "CapEx 크게 늘어남" : capex[L] < avgC * 0.67 ? "CapEx 줄어듦" : "") : "";
+  const tC = capex[L] != null && avgC ? (capex[L] > avgC * 1.5 ? "CapEx 대폭 상향" : capex[L] < avgC * 0.67 ? "CapEx 줄어듦" : "") : "";
   const last = qs[L];
-  return `<h3>📊 분기 실적 한눈에 <span class="src">${esc(labels[L])} (${esc(last[0])} 끝난 분기) · 야후 파이낸스 · ${usd ? "달러" : "원"}</span></h3><div class="card">
+  // 부문별 매출: 돈의 흐름 왼쪽은 이 분기와 같은 시점 자료가 있을 때만
+  const ps = segPeriods(d.seg), col = ps.length ? segColors(ps) : null;
+  const sp = ps.find(([e]) => nearDay(e, last[0])), spa = sp && segAgo(ps, sp[0]);
+  const segs = sp ? Object.keys(col).filter((s) => sp[1][s]).map((s) => [s, sp[2] ? sp[2][s] : (last[1].rev * sp[1][s]) / 100,
+    sp[2] && spa?.[2]?.[s] > 0 ? (sp[2][s] / spa[2][s] - 1) * 100 : null, col[s], sp[1][s], !sp[2]]) : null;
+  const nm = (d.card || d).name || "";
+  return `<h3>📊 ${esc(nm)} 실적 요약 (핵심지표) · ${esc(labels[L])} <span class="src">${esc(last[0])} 끝난 분기 · 야후 파이낸스${d.seg ? " · 부문: " + esc(d.seg.src || "") : ""} · ${usd ? "달러" : "원"}</span></h3><div class="card">
     <div class="qgrid">
-      ${qPanel("매출 · 1년 전 대비 성장률", tRev, labels, rev, yoy.some((v) => v != null) ? yoy : null, usd, "var(--ink-2)")}
-      ${qPanel("영업이익 · 영업이익률", tOp, labels, op, opm, usd, "var(--good)")}
+      ${qPanel("매출 & 성장률 (1년 전 대비)", tRev, labels, rev, yoy.some((v) => v != null) ? yoy : null, usd, "var(--ink-2)")}
+      ${qPanel("영업이익 & 영업이익률", tOp, labels, op, opm, usd, "var(--good)")}
+      ${gpv.filter((v) => v != null).length >= 2 ? qPanel("매출총이익 & 매출총이익률", tG, labels, gpv, gpm, usd, "var(--s3)") : ""}
+      ${ps.length ? segDonut(ps, col, d.seg) : ""}
       ${qPanel("잉여현금흐름 (FCF)", tF, labels, fcf, null, usd, "var(--good)")}
       ${qPanel("설비투자 (CapEx)", tC, labels, capex, null, usd, "var(--warn)")}
+      ${ps.length > 1 ? segStack(ps, col) : ""}
     </div>
-    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(labels[L])} 돈의 흐름</b> <span class="src">매출 → 원가·비용 → 영업이익 (매출 대비 %)</span></div>
-    ${qSankey(last[1], usd)}
+    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 돈의 흐름</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 (매출 대비 %, 1년 전 같은 분기 대비)</span></div>
+    ${qSankey(last[1], usd, getQ(last[0]), segs)}
     ${(() => {  // 최근 4분기 합계(TTM) · 최근 연간 — 분기는 계절성이 있어 1년치로도 보기
       const q4 = all.slice(-4).map(([, q]) => q), out = [];
       if (q4.length === 4 && q4.every((q) => q.rev && q.op != null)) {

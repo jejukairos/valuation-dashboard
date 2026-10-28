@@ -68,9 +68,8 @@ def kr_row(wise, hist, price, cap, px, own_cap=True):
         "debt": [rnd(w(v, "debt"), 0) for v in ys],
         "dd52": _drawdown(px),
         "dy": [rnd(w(v, "dps") / price * 100, 2) if w(v, "dps") is not None else None for v in (y, y + 1)],
-        # P/FCF = 시가총액 ÷ 잉여현금흐름(억원) — 버핏이 말하는 '주주 몫 이익'에 가까운 현금 기준 배수
-        "pfcf": [rnd(cap / (w(v, "fcf") * 1e8), 1) if (own_cap and cap and (w(v, "fcf") or 0) > 0) else None
-                 for v in (y, y + 1, y + 2)],
+        # P/FCF = 지금 시가총액 ÷ 잉여현금흐름(억원) — 버핏이 말하는 '주주 몫 이익'에 가까운 현금 기준 배수 (25 = 확정 실적)
+        "pfcf": [rnd(cap / (w(v, "fcf") * 1e8), 1) if (own_cap and cap and (w(v, "fcf") or 0) > 0) else None for v in ys],
     }
 
 
@@ -83,7 +82,7 @@ def us_row(code, hist, price, cap, px):
     y = now_kst().year
     out = {"years": [f"{str(y - 1)[2:]}", f"{str(y)[2:]}E", f"{str(y + 1)[2:]}E", f"{str(y + 2)[2:]}E"],
            "sales_g": [None, None, None], "op_g": [None, None, None], "opm": [None] * 4, "debt": [None] * 4,
-           "roe": [None] * 3, "pbr": [None] * 3, "pfcf": [None] * 3, "dy": [None, None]}
+           "roe": [None] * 3, "pbr": [None] * 3, "pfcf": [None] * 4, "dy": [None, None]}
     try:
         re_ = tk.revenue_estimate
         for i, k in enumerate(("0y", "+1y")):

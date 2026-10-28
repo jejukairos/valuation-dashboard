@@ -99,6 +99,22 @@ def sector_per(code):
     return {"wics": w.group(1).strip() if w else None, "per": num(m.group(1)) if m else None, "peers": peers, "peer_med": med}
 
 
+def product_mix(code):
+    """와이즈리포트 기업개요 '주요제품 매출구성'(최근 분기·반기·사업보고서, %) → {"asof": "2026/06", "mix": {제품: %}}.
+    '기타'가 음수면 부문 사이 내부거래를 뺀 몫이라 그대로 둔다 (화면에서 양수만 100%로 맞춤)."""
+    import html
+    t = HTTP.get(f"{WISE}/c1020001.aspx?cmp_cd={code}").text
+    i = t.find('id="cTB203"')
+    if i < 0:
+        return None
+    body = t[i:t.find("</table>", i)]
+    mix = {html.unescape(k).strip(): num(v) for k, v in
+           re.findall(r'<th scope="row"[^>]*title="([^"]+)".*?<td[^>]*>\s*([-\d.,]+)\s*</td>', body, re.S)}
+    mix = {k: v for k, v in mix.items() if v is not None}
+    m = re.search(r"주요제품 매출구성\((\d{4})\s*/\s*(\d{2})\)", t)
+    return {"asof": f"{m.group(1)}/{m.group(2)}" if m else None, "mix": mix} if mix else None
+
+
 # ---------- 와이즈리포트 (네이버 종목분석) ----------
 ROWS = {
     "eps": "EPS", "bps": "BPS", "dps": "현금DPS", "roe": "ROE", "payout": "현금배당성향",
