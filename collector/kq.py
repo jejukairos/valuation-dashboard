@@ -51,14 +51,15 @@ def parse_prelim(t, k):
     if (m and "-".join(m.groups()) != _qend(k)) or (not m and not (q and q.groups() == (k[2:4], str(int(k[4:]) // 3)))):
         return None
     u = re.search(r"단위\s*:\s*(천원|백만원|억원|원)", t)
-    out = {}
+    out, prev = {}, {}
+    num_ = lambda s: (lambda x: round(-x if s[0] in "△-(" else x))(float(re.sub(r"[^\d]", "", s)) * UNIT[u.group(1) if u else "억원"])  # noqa: E731
     for f, lab in (("sales", r"매출액(?:\([^)]*\))?"), ("op", r"영업이익(?:\([^)]*\))?"), ("ni", r"당기순이익(?:\([^)]*\))?")):
-        v = re.search(lab + r"[\s|]*당해실적[\s|]*([△-]?\(?[\d,]+\)?)", t)
+        v = re.search(lab + r"[\s|]*당해실적[\s|]*([△-]?\(?[\d,]+\)?)(?:[\s|]+([△-]?\(?[\d,]+\)?))?", t)
         if v:
-            s = v.group(1)
-            x = float(re.sub(r"[^\d]", "", s)) * UNIT[u.group(1) if u else "억원"]
-            out[f] = round(-x if s[0] in "△-(" else x)
-    return out if out.get("sales") is not None else None
+            out[f] = num_(v.group(1))
+            if v.group(2):
+                prev[f] = num_(v.group(2))  # 같은 표의 '전기실적' (기준 확인용)
+    return {**out, "prev": prev} if out.get("sales") is not None else None
 
 
 def _prelim(filing, k):
@@ -128,8 +129,15 @@ def collect(code):
     if filing and nxt and filing["date"] > _qend(nxt[0]):
         try:
             p = _prelim(filing, nxt[0])
+            pq = (hist.get(_prev_q(nxt[0])) or {}).get("sales")
+            # 공시 표의 '전기실적'이 네이버 직전 분기와 5% 넘게 다르면 기준이 다른 공시(연결 회사의 별도 공시 등) → 안 씀
+            if p and pq and p["prev"].get("sales") and abs(p["prev"]["sales"] / pq - 1) > 0.05:
+                p = None
             if p:
+                p.pop("prev", None)
                 hist[nxt[0]] = {"eps": None, **p, "prelim": True, "seen": (hist.get(nxt[0]) or {}).get("seen", today)}
+            elif (hist.get(nxt[0]) or {}).get("prelim"):
+                del hist[nxt[0]]  # 예전에 잘못 넣은 잠정 숫자 지움
         except Exception:  # noqa: BLE001 - 못 읽으면 '반영 대기'로 남김
             pass
     keys = sorted(hist)[-8:]
@@ -150,6 +158,12 @@ def collect(code):
     return {"latest": label(last), "prelim": hist[last].get("prelim"), "seen": hist[last].get("seen"), "rows": rows, "est_date": (cons.get(last) or {}).get("date"), "quarters": qs,
             "est_bar": est, "points": points(qs, est), "filing": filing, "waiting": waiting,
             "next": {"q": label(nxt[0]), **{f: cons[nxt[0]].get(f) for f in ROWS}, "date": cons[nxt[0]].get("date")} if nxt else None}
+
+
+def _prev_q(k):
+    """'202609' → '202606', '202603' → '202512'"""
+    y, m = int(k[:4]), int(k[4:])
+    return f"{y - 1}12" if m <= 3 else f"{y}{m - 3:02d}"
 
 
 def _qlabel(end):
@@ -219,7 +233,9 @@ if __name__ == "__main__":  # 잠정실적 표 읽기 점검 (HD현대중공업 
     t = ("당기실적 | 2026-07-01 | ~ | 2026-09-30 | 1. 실적내용 | 단위 : 억원, % | (26년 3분기) | "
          "매출액 | 당해실적 | 57,325 | 63,136 | -9.2 | 누계실적 | 179,453 | 영업이익 | | 당해실적 | | 8,917 | 10,357 | "
          "당기순이익 | 당해실적 | △1,234 | 8,179")
-    assert parse_prelim(t, "202609") == {"sales": 57325, "op": 8917, "ni": -1234}, parse_prelim(t, "202609")
+    assert parse_prelim(t, "202609") == {"sales": 57325, "op": 8917, "ni": -1234,
+                                         "prev": {"sales": 63136, "op": 10357, "ni": 8179}}, parse_prelim(t, "202609")
+    assert _prev_q("202609") == "202606" and _prev_q("202603") == "202512"
     assert parse_prelim(t.replace("단위 : 억원", "단위 : 백만원"), "202609")["sales"] == 573
     assert parse_prelim(t, "202606") is None and parse_prelim(t.replace("당기실적 | 2026-07-01 | ~ | 2026-09-30 | ", ""), "202609")
     print("ok")
