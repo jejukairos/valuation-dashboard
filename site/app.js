@@ -2130,16 +2130,44 @@ function amzHTML() {
     return `<li>${ic} ${fl(m.c)} <b>${esc(m.b)}</b> ${m.u ? `<a href="${esc(m.u)}" target="_blank" rel="noopener">${esc(m.t)}</a>` : esc(m.t)} <span class="src">${esc(what)}</span></li>`;
   }).join("");
   const chips = ["", ...brands].map((b) => `<button data-b="${esc(b)}" class="chip ${b === AMZ_B ? "on" : ""}">${b ? esc(b) : "브랜드별 합계"}</button>`).join("");
+  const how = A.days[d].how;
   return `<h3>💄 아마존 K-뷰티 Top100 품목 수 <span class="src">${esc(d)}${p ? ` · ▲▼ = ${esc(p.slice(5).replace("-", "/"))} 대비` : ""}</span></h3>
   <div class="card">
+    ${how ? `<div class="${how.startsWith("추정") ? "warnbox" : "note src"}" style="margin:0 0 8px">표 출처: ${esc(how)}</div>` : ""}
     <div class="tbl-wrap"><table class="compact" style="width:100%;text-align:center"><thead><tr><th style="text-align:left">브랜드</th>${A.countries.map((c, i) => `<th>${A.flags?.[i] || ""} ${esc(c)}</th>`).join("")}<th>합계</th></tr></thead>
       <tbody>${rows}<tr style="border-top:2px solid var(--border)"><td style="text-align:left"><b>합계</b></td>${tot}<td>${cell(all(cur), prv ? all(prv) : null, true)}</td></tr></tbody></table></div>
     ${mv ? `<div class="chart-title" style="margin-top:12px"><b>오늘 순위 변동</b> <span class="src">⚡ 크게 오름 · ⚠️ 크게 내림 · ❌ Top100 탈락 · 🆕 새로 진입</span></div><ul class="irl">${mv}</ul>` : ""}
     <div class="chart-title" style="margin-top:12px"><b>추이</b> <span class="src">날마다 쌓여요 · 브랜드를 누르면 나라별</span></div>
     <div class="chips" id="amz-chips" style="margin:6px 0">${chips}</div>
     <div id="amz-leg"></div><div class="chart-box"><canvas id="amz-chart"></canvas></div>
-    <div class="note src">출처: ${esc(A.source || "")} · 상장사 연결: 메디큐브 = 에이피알, 달바 = 달바글로벌, COSRX = 아모레퍼시픽 자회사${ds.some((x) => A.days[x].derived) ? ` · ${ds.filter((x) => A.days[x].derived).map((x) => x.slice(5).replace("-", "/")).join(", ")}은 다음 날 표의 ▲▼로 거꾸로 계산` : ""}</div>
+    ${amzCross(A.days[d], cur)}
+    <div class="note src">출처: ${esc(A.source || "")}${A.channels ? ` (${Object.entries({ daol: "다올", kyobo: "교보", kmj: "한투" }).map(([k, l]) => `<a href="${esc(A.channels[k])}" target="_blank" rel="noopener">${l}</a>`).join(" · ")})` : ""} · 상장사 연결: 메디큐브 = 에이피알, 달바 = 달바글로벌, COSRX = 아모레퍼시픽 자회사${ds.some((x) => A.days[x].derived) ? ` · ${ds.filter((x) => A.days[x].derived).map((x) => x.slice(5).replace("-", "/")).join(", ")}은 다음 날 표의 ▲▼로 거꾸로 계산` : ""}</div>
   </div>`;
+}
+// 크로스체크: 다올 표 vs 교보(나라별 K-뷰티 수·브랜드 합계) vs 한투(브랜드×나라, 이탈리아 빼고) — 다른 칸은 빨간 글씨
+function amzCross(day, cur) {
+  const K = day.kyobo, M = day.kmj, ci = AMZ.countries, IT = ci.indexOf("이탈리아");
+  if (!K && !M) return "";
+  let bad = 0;
+  const td = (v, ref) => { const x = v != null && ref != null && v !== ref; bad += x; return `<td${x ? ' style="color:var(--bad-ink);font-weight:700"' : ""}>${v ?? '<span class="src">–</span>'}</td>`; };
+  const src = (o, l) => (o?.url ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${l}</a>` : l);
+  const col = (i) => Object.values(cur).reduce((s, a) => s + (a[i] || 0), 0), all = ci.reduce((s, _, i) => s + col(i), 0);
+  let rows = K ? `<tr><td style="text-align:left"><b>K-뷰티 전체</b></td><td>다올</td>${ci.map((_, i) => `<td>${col(i)}</td>`).join("")}<td>${all}</td></tr>
+    <tr><td></td><td>${src(K, "교보")}</td>${ci.map((c, i) => td(K.countries?.[c], col(i))).join("")}${td(K.total, all)}</tr>` : "";
+  const bs = [...new Set([...Object.keys(M?.brands || {}), ...Object.keys(K?.brands || {}).filter((b) => cur[b])])].sort((a, b) => amzSum(cur[b]) - amzSum(cur[a]));
+  for (const b of bs) {
+    const v = cur[b] || ci.map(() => 0), m = M?.brands?.[b];
+    rows += `<tr style="border-top:1px solid var(--border)"><td style="text-align:left"><b>${esc(b)}</b></td><td>다올</td>${v.map((x) => `<td>${x}</td>`).join("")}<td>${amzSum(v)}</td></tr>`;
+    if (m) rows += `<tr><td></td><td>${src(M, "한투")}</td>${ci.map((c, i) => (i === IT ? '<td class="src">안 셈</td>' : td(m[c] || 0, v[i]))).join("")}${td(amzSum(Object.values(m)), amzSum(v) - v[IT])}</tr>`;
+    if (K?.brands?.[b] != null) rows += `<tr><td></td><td>${src(K, "교보")}</td><td colspan="${ci.length}" class="src">나라별 숫자 없음</td>${td(K.brands[b], amzSum(v))}</tr>`;
+  }
+  const R = M?.ranks || {};
+  const rk = Object.keys(R).map((b) => `<details ${["메디큐브", "달바"].includes(b) ? "open" : ""}><summary><b>${esc(b)}</b> 제품별 순위 <span class="src">한투 · 숫자 = 그 나라 Top100 순위</span></summary>
+    <div class="tbl-wrap"><table class="compact" style="width:100%;text-align:center"><thead><tr><th style="text-align:left">제품</th>${ci.slice(0, IT).map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
+    <tbody>${Object.entries(R[b]).map(([p, r]) => `<tr><td style="text-align:left">${esc(p)}</td>${ci.slice(0, IT).map((c) => `<td>${r[c] ? (r[c] <= 10 ? `<b>${r[c]}</b>` : r[c]) : '<span class="src">–</span>'}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>`).join("");
+  return `<div class="chart-title" style="margin-top:14px"><b>🔍 크로스체크 (같은 날 세 채널)</b> <span class="src">${bad ? `다른 칸 ${bad}개 (빨간 글씨) — 채널마다 순위를 잰 시각이 달라서 조금씩 차이가 나요` : "세 채널 숫자가 모두 같아요"} · 한투 합계는 이탈리아 빼고 비교</span></div>
+    <div class="tbl-wrap"><table class="compact" style="width:100%;text-align:center"><thead><tr><th style="text-align:left">브랜드</th><th>출처</th>${ci.map((c, i) => `<th>${AMZ.flags?.[i] || ""}</th>`).join("")}<th>합계</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${rk ? `<div style="margin-top:10px">${rk}</div>` : ""}`;
 }
 function drawAmz() {
   const C = themeColors(), A = AMZ, ds = Object.keys(A.days).sort(), last = A.days[ds[ds.length - 1]].counts;

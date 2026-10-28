@@ -16,13 +16,19 @@ $claude = Join-Path $env:USERPROFILE ".local\bin\claude.exe"
 $edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 $port = 9355
 
-function Publish($msg) {
-    # 요약 파일이 읽히면 사이트용 json 도 만들고 그 두 파일만 올림
-    & $py tools\earnings_check.py export
-    if ($LASTEXITCODE -ne 0) { Log "earnings.yaml 읽기 실패 - 올리지 않음"; return $false }
-    git add config/earnings.yaml config/segments.yaml site/data/earnings.json
-    git commit -q -m "$msg`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- config/earnings.yaml config/segments.yaml site/data/earnings.json
-    for ($i = 0; $i -lt 3; $i++) { git pull --rebase --autostash -q; git push -q; if ($LASTEXITCODE -eq 0) { return $true } }
+function Publish($msg, $files = @("config/earnings.yaml", "config/segments.yaml", "site/data/earnings.json")) {
+    # 요약 파일이 읽히면 사이트용 json 도 만들고 그 파일들만 올림
+    if ($files -contains "site/data/earnings.json") {
+        & $py tools\earnings_check.py export
+        if ($LASTEXITCODE -ne 0) { Log "earnings.yaml 읽기 실패 - 올리지 않음"; return $false }
+    }
+    git add $files
+    git commit -q -m "$msg`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- $files
+    for ($i = 0; $i -lt 3; $i++) {
+        git pull --rebase --autostash -X theirs -q  # 겹치면 지금 올리는 쪽(새 요약·새 표)이 이김
+        if ($LASTEXITCODE -ne 0) { git rebase --abort 2>$null; Start-Sleep 20; continue }
+        git push -q; if ($LASTEXITCODE -eq 0) { return $true }
+    }
     Log "push 실패"; return $false
 }
 
@@ -49,6 +55,37 @@ foreach ($e in @($cal.items | Where-Object { $_.market -eq "KR" })) {
     & $py tools\earnings_check.py has $e.code $qtr
     if ($LASTEXITCODE -eq 0 -and (Publish "$($e.name) $qtr 실적발표 요약 (발표 자막)")) { New-Item "$txt.done" -ItemType File -Force | Out-Null; Log "$($e.name) $qtr 요약 올림" }
     else { Log "$($e.name) $qtr 요약 실패 - 다음 실행 때 다시" }
+}
+
+# 매일 아침: 다올 'Amazon K-Beauty 데일리' 그림 표 → Claude 가 옮김 → 합계 점검(tools/amazon_img.py) → 🏭 산업 탭 (하루 3번까지)
+$today = Get-Date -Format "yyyy-MM-dd"
+$astamp = Join-Path $td ".amazon_$(Get-Date -Format yyyyMMdd)"
+$tries = if (Test-Path $astamp) { [int](Get-Content $astamp) } else { 0 }
+if ($now.Hour -ge 7 -and $tries -lt 3 -and -not (Test-Path "$astamp.done")) {
+    $post = $null
+    try {
+        $h = (Invoke-WebRequest "https://t.me/s/alexppark?q=Amazon%20K-Beauty" -UseBasicParsing -TimeoutSec 30).Content
+        $post = $h -split 'data-post="' | Select-Object -Skip 1 | Where-Object { $_ -match "\($today\)" -and $_ -match "photo_wrap" } | Select-Object -Last 1
+    } catch { Log "다올 채널 읽기 실패: $_" }
+    if ($post) {  # 오늘 글이 아직 없으면 다음 실행 때 다시
+        Set-Content $astamp ($tries + 1)
+        $ad = Join-Path $td "amazon"; New-Item -ItemType Directory -Force $ad | Out-Null
+        $img = [regex]::Match($post, "photo_wrap[^>]*background-image:url\('([^']+)'\)").Groups[1].Value
+        Invoke-WebRequest $img -OutFile (Join-Path $ad "$today.jpg") -UseBasicParsing
+        $res = Join-Path $ad "$today.txt"
+        $prompt = "transcripts\amazon\$today.jpg 는 아마존 K-뷰티 브랜드별 Top100 품목 수 표 그림이야. 그림을 읽고 JSON 한 줄만 출력해: " +
+            '{"date":"YYYY-MM-DD","counts":{"브랜드":[미국,영국,독일,프랑스,스페인,이탈리아]},"row_totals":{"브랜드":합계칸},"col_totals":[합계 줄의 미국~이탈리아 6칸]} ' +
+            "— 숫자는 품목 수만 (▲▼ 옆 변화 숫자는 빼고, – 는 0). 다른 말은 하지 마."
+        & $claude -p $prompt --allowedTools "Read" 2>&1 | Out-File -FilePath $res -Encoding utf8
+        & $py tools\amazon_img.py $today "https://t.me/$(($post -split '"')[0])" $res | ForEach-Object { Log "아마존 표: $_" }
+        if ($LASTEXITCODE -eq 0) {
+            & $py collector\kbeauty.py | Out-Null
+            git checkout -- cache/kbeauty.json 2>$null  # 채널 글 묶음은 GitHub 갱신이 관리
+            if (Publish "아마존 K-뷰티 $today 표 (다올 그림, Claude 옮김·합계 점검)" @("cache/kbeauty_img.json", "site/data/amazon_kbeauty.json")) {
+                New-Item "$astamp.done" -ItemType File -Force | Out-Null; Log "아마존 표 $today 올림"
+            }
+        }
+    }
 }
 
 # 매일 아침 한 번: 미국 공식 원문 등 빠진 요약 (earnings_task.md)
