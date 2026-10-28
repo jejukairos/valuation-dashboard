@@ -898,8 +898,9 @@ function kqHTML(d) {
   if (!k) return "";
   const P = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${v >= 0 ? "+" : ""}${n(v, 1)}%</span>`);
   const nx = k.next;
-  return `<h3>🧾 최신 분기 실적 <span class="src">${esc(k.latest)} · 네이버 증권(FnGuide) · 억원${k.est_date ? ` · 예상 = ${esc(k.est_date)} 저장한 컨센서스` : ""}</span></h3><div class="card">
+  return `<h3>🧾 최신 분기 실적 <span class="src">${esc(k.latest)}${k.prelim ? " 잠정" : ""} · 네이버 증권(FnGuide) · 억원${k.est_date ? ` · 예상 = ${esc(k.est_date)} 저장한 컨센서스` : ""}</span></h3><div class="card">
     ${k.waiting && nx ? `<div class="warnbox">🧾 ${esc(nx.q)} 잠정실적 공시가 났어요 (${esc(k.filing.date)}). 네이버 숫자에 반영되면 예상 대비가 자동으로 계산돼요. <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">공시 보기</a></div>` : ""}
+    ${k.prelim && k.filing ? `<div class="note">🧾 ${esc(k.latest)} 숫자는 <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">DART 잠정실적 공시(${esc(k.filing.date)})</a> 값이에요. 네이버에 확정 숫자가 들어오면 자동으로 바뀌어요 (EPS 는 그때 채워짐).</div>` : ""}
     <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(k.latest)}</th><th>실적</th><th>예상</th><th>예상 대비</th><th>QoQ</th><th>YoY</th></tr></thead><tbody>
       ${k.rows.map((r) => `<tr><td>${esc(r.item)}</td><td><b>${r.act == null ? "-" : n(r.act, 0) + "억"}</b></td><td>${r.est == null ? "-" : n(r.est, 0) + "억"}</td><td>${P(r.vs_est)}</td><td>${P(r.qoq)}</td><td>${P(r.yoy)}</td></tr>`).join("")}
     </tbody></table></div>
@@ -909,7 +910,7 @@ function kqHTML(d) {
       ${kqBars("영업이익 (분기)", k.quarters, "op", k.est_bar, "var(--good)")}
     </div>
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">분기</th><th>매출액</th><th>영업이익</th><th>순이익</th><th>EPS</th></tr></thead><tbody>
-      ${k.quarters.slice().reverse().map((q) => `<tr><td>${esc(q.q)}</td><td>${n(q.sales, 0)}억</td><td>${q.op == null ? "-" : n(q.op, 0) + "억"}</td><td>${q.ni == null ? "-" : n(q.ni, 0) + "억"}</td><td>${q.eps == null ? "-" : n(q.eps, 0) + "원"}</td></tr>`).join("")}
+      ${k.quarters.slice().reverse().map((q) => `<tr><td>${esc(q.q)}${q.prelim ? ' <span class="src">잠정</span>' : ""}</td><td>${n(q.sales, 0)}억</td><td>${q.op == null ? "-" : n(q.op, 0) + "억"}</td><td>${q.ni == null ? "-" : n(q.ni, 0) + "억"}</td><td>${q.eps == null ? "-" : n(q.eps, 0) + "원"}</td></tr>`).join("")}
     </tbody></table></div>
     ${nx ? `<div class="note">📌 다음 ${esc(nx.q)} 컨센서스: 매출 ${n(nx.sales, 0)}억 · 영업이익 ${nx.op == null ? "-" : n(nx.op, 0) + "억"}${nx.ni == null ? "" : ` · 순이익 ${n(nx.ni, 0)}억`} <span class="src">(${esc(nx.date)} 기준, 발표되면 이 값과 비교해요)</span></div>` : ""}
     ${k.filing ? `<div class="note src">공시: <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${esc(k.filing.name)}</a></div>` : ""}
