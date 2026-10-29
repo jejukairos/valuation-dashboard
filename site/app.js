@@ -188,10 +188,27 @@ function scenHTML(c) {
 }
 // 배수를 어떻게 정했는지 한 줄 (성장률 × 1·1.5·2 / 업종 PER / 10년 밴드)
 function multHTML(s) {
+  const r = s.sa_ref, ref = r && (r["5y"] != null || r.sector != null)  // 시킹알파 같은 줄의 참고값
+    ? ` <span style="opacity:.8">(참고: 이 종목 5년 평균 ${r["5y"] == null ? "-" : n(r["5y"], 1) + "%"} · 업종 중앙값 ${r.sector == null ? "-" : n(r.sector, 1) + "%"})</span>` : "";
   return (s.parts || []).map((p) => {
     const m = p.mult, d = p.kind === "PBR" ? 2 : 1;
-    return `<div class="note src">📐 ${p.kind} ${n(m.bear, d)} · ${n(m.base, d)} · ${n(m.bull, d)}배 = ${esc(p.how || p.src)}</div>`;
+    return `<div class="note src">📐 ${p.kind} ${n(m.bear, d)} · ${n(m.base, d)} · ${n(m.bull, d)}배 = ${esc(p.how || p.src)}${p.kind === "PER" && /성장률/.test(p.how || "") ? ref : ""}</div>`;
   }).join("");
+}
+// 배당주 점검 (리얼티 인컴 등): somong.yaml my.sa_div 에 적은 시킹알파 숫자
+function divSaHTML(c) {
+  const v = c.sa_div;
+  if (!v) return "";
+  const g = v.growth || {}, est = Object.entries(v.est || {}), P = (x) => (x == null ? "-" : n(x, 2) + "%");
+  return `<div class="chart-title" style="margin-top:12px"><b>📬 배당 점검</b> <span class="src">시킹알파 ${esc(v.date || "")} 확인</span></div>
+    <div class="kv">
+      <div class="k">배당수익률 <span class="src">앞으로 1년 · 4년 평균 ${P(v.yield_avg4)}</span></div><div class="v">${P(v.yield_fwd)}</div>
+      <div class="k">연간 배당 예상 <span class="src">컨센서스</span></div><div class="v">${est.map(([y, x]) => `${esc(String(y).slice(2))}E $${n(x, 2)}`).join(" → ")}</div>
+      <div class="k">배당 성장률 <span class="src">1년 · 3년 · 5년 · 10년 (연평균)</span></div><div class="v">${[g.ttm, g.cagr3, g.cagr5, g.cagr10].map(P).join(" · ")}</div>
+      <div class="k">연속 배당 인상</div><div class="v">${v.years == null ? "-" : n(v.years) + "년"}</div>
+      <div class="k">AFFO 배당성향 <span class="src">번 돈(AFFO) 중 배당으로 주는 비율 · 앞으로 1년</span></div><div class="v">${P(v.affo_payout_fwd)}</div>
+      <div class="k">AFFO 수익률 · 성장률 <span class="src">앞으로 1년</span></div><div class="v">${P(v.affo_yield_fwd)} · ${P(v.affo_growth_fwd)}</div>
+    </div>${v.revisions_down ? `<div class="note src">최근 90일 올해 배당 추정 하향 ${n(v.revisions_down)}건${v.revisions_up != null ? ` · 상향 ${n(v.revisions_up)}건` : ""}</div>` : ""}`;
 }
 // 하방이 지금 가격보다 50% 넘게 높으면 경고 + 업종 PER 역사 · 네이버 업종 PER · 리레이팅 메모 (접어 둠)
 function floorHTML(c) {
@@ -404,6 +421,7 @@ function stockCard(c) {
       <div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)}</div>
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>`}
+    ${divSaHTML(c)}
     ${c.scen ? `<div class="chart-title" style="margin-top:14px"><b>② 지난 10년 밴드에서 지금 위치</b> <span class="src">0% = 10년 중 가장 싼 쪽 · 100% = 가장 비싼 쪽</span></div>` : ""}
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
     <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
@@ -607,6 +625,7 @@ function drawProfile(code) {
 let SOMONG = {};
 const SM_KEYS = [["wallet", "지갑털이"], ["oligopoly", "올리고폴리"], ["anyone_wins", "아무나이겨라"]];
 function smData(c) { return SOMONG[c.code] || (c.code === "005935" ? SOMONG["005930"] : null); }
+const smChecked = (s) => (s && SM_KEYS.some(([k]) => s[k]) ? s : null);  // 체크리스트 조사가 있는 종목만 (my 칸만 있는 종목은 빈 표를 안 그림)
 function smVerdict(s, k) { return s?.my?.override?.[k] || s?.[k]?.v; } // 내가 고친 값이 있으면 그걸
 function smScore(s) {
   if (!s) return null;
@@ -621,7 +640,7 @@ function nextEvent(s) {
   return (s?.events || []).filter((e) => String(e.date).slice(0, 7) >= today).sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
 }
 function somongHTMLcard(c) {
-  const s = smData(c);
+  const s = smChecked(smData(c));
   const sc = smScore(s);
   const m = c.mdd, d = c.div_check;
   if (!s && !m && !d) return "";

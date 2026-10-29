@@ -221,11 +221,13 @@ def stock_detail(h, rates_now, fx):
         cg = C.cons_growth(wise or {}, y0, key="op") or C.cons_growth(hist, y0)
         ltg = cg[0] if cg else None
         adj = [cg or (None, "")]
-    pg = C.growth_fair(hist, adj, force_adj=mkt == "KR") if ("PER" in fm and "PER" in bands) else None
+    # 한국 = 컨센서스 3년 영업이익 성장률, 미국 = 시킹알파 3~5년 EPS 성장률(적어 둔 종목)을 늘 씀
+    pg = C.growth_fair(hist, adj, force_adj=mkt == "KR" or bool(mkt == "US" and sa)) if ("PER" in fm and "PER" in bands) else None
     sec_name = h.get("sector") if h.get("fair_mode") == "sector" else None  # 업종 배수는 fair_mode: sector 로 고른 종목만
     sec = dict(SECTORS[sec_name], name=sec_name) if sec_name in SECTORS else None
     if pg:
-        pg["label"] = "3년 영업이익 성장률" if mkt == "KR" and "영업이익" in pg["src"] else "EPS 성장률"
+        pg["label"] = ("3년 영업이익 성장률" if mkt == "KR" and "영업이익" in pg["src"] else
+                       "시킹알파 3~5년 EPS 성장률" if "시킹알파" in pg["src"] else "EPS 성장률")
         # 성장률이 너무 세서 하방이 지금 가격보다 50% 넘게 높으면 → 업종 PER, 없으면 이 종목 PER 밴드
         hi = C.too_high(pg["mult"], C.fwd12(hist, "eps"), price, bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"))
         if hi:
@@ -253,6 +255,7 @@ def stock_detail(h, rates_now, fx):
         if mkt == "US":
             scen["ltg_cmp"] = ltg_cmp
             scen["sa_date"] = sa_d or None
+            scen["sa_ref"] = {k: my.get(f"sa_ltg_{k}") for k in ("5y", "sector")} if sa else None  # 참고: 5년 평균·업종 중앙값
             scen["ltg_note"] = ltg_note
     if scen:
         fair = scen["base"]  # 적정가 = Base (하방 × 1 과 최대 × 2 의 평균)
@@ -503,6 +506,7 @@ def stock_detail(h, rates_now, fx):
         if qk not in dict(qf):
             qf.append((qk, v * (1e6 if mkt == "US" else 1e8)))  # 미국 백만 달러, 한국 억원
     det["card"]["fcf"] = qf[-2:] if len(qf) >= 2 else None
+    det["card"]["sa_div"] = ((SOMONG.get(code) or {}).get("my") or {}).get("sa_div")  # 배당주 점검 (시킹알파 숫자를 직접 적은 것)
     k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적을 발표한 지 3일 안이거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
     if k.get("date") and (now_kst().date() - pd.Timestamp(k["date"]).date()).days <= 3:
         det["card"]["kq_new"] = k["latest"]
@@ -527,7 +531,7 @@ def _round_scen(scen, dg):
             "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12"),
             "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date"), "ltg_note": scen.get("ltg_note"),
             "rerating": scen.get("rerating"), "sector": scen.get("sector"), "ind": scen.get("ind"),
-            "y2": scen.get("y2")}
+            "y2": scen.get("y2"), "sa_ref": scen.get("sa_ref")}
 
 
 def _price_chart(px, currency, days=250):

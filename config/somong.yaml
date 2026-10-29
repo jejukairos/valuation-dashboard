@@ -3,7 +3,9 @@
 # 'my' 아래는 직접 적는 칸: why_bought(내가 이걸 왜 샀지), review(유지/축소/종료), rank(순위), greed_price(욕망시),
 #   override 에 wallet: X 처럼 적으면 조사 결과 대신 내 판단으로 점수를 계산해요.
 #   my_per(내가 정한 PER, 엑셀 '③ 직접 계산') · my_per_note(이유) 를 적으면 적정주가 4가지 비교표 ④ 에 나와요.
-#   sa_ltg(미국): 시킹알파 → 종목 → Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)' 의 % 숫자, sa_ltg_date 는 확인한 날. ② 보정값으로 써요.
+#   sa_ltg(미국): 시킹알파 → 종목 → Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)' 의 % 숫자, sa_ltg_date 는 확인한 날. 있으면 적정주가 성장률로 써요.
+#     같은 줄의 'Sector Median' 은 sa_ltg_sector, '5Y Avg' 는 sa_ltg_5y — 화면에 참고로 작게 보여요.
+#   sa_div(배당주): 시킹알파 Dividends 탭 숫자 (리얼티 인컴 등) — 카드에 '배당 점검' 칸으로 보여요.
 '003230':
   name: 삼양식품
   wallet:
@@ -780,3 +782,34 @@ TSLA:
     my_per_note: 밸류를 얼마나 더 줘야, 옵티머스로봇, 자율주행(FSD), 스페이스X지분, Xai(그록)
     sa_ltg: 32.73
     sa_ltg_date: '2026-10-26'
+# ---------- 공동자산 (체크리스트 조사 전 — 직접 적는 칸만) ----------
+AMZN:
+  name: 아마존
+  my:
+    sa_ltg: 21.11
+    sa_ltg_5y: 25.87
+    sa_ltg_sector: 11.79
+    sa_ltg_date: '2026-10-28'
+PLTR:
+  name: 팔란티어
+  my:
+    sa_ltg: 53.43
+    sa_ltg_5y: 44.76
+    sa_ltg_sector: 20.31
+    sa_ltg_date: '2026-10-28'
+O:
+  name: 리얼티 인컴
+  my:
+    sa_div:
+      date: '2026-10-28'
+      yield_fwd: 5.73        # 배당수익률 (앞으로 1년)
+      yield_avg4: 5.37       # 4년 평균 배당수익률
+      payout_fwd: 3.26       # 연간 배당 (앞으로 1년, 달러)
+      est: {"2026": 3.26, "2027": 3.35, "2028": 3.44}   # 배당 컨센서스 (17·17·13명)
+      growth: {ttm: 1.25, fwd: 2.29, cagr3: 2.26, cagr5: 3.52, cagr10: 3.53}   # 배당 성장률 %
+      years: 32              # 연속 배당 인상 해
+      affo_payout_fwd: 73.44 # AFFO 배당성향 (앞으로 1년)
+      affo_yield_fwd: 8.03   # AFFO 수익률 (주가 대비)
+      affo_growth_fwd: 2.89  # AFFO 성장률 (앞으로 1년)
+      revisions_down: 11     # 최근 90일 올해(FY1) 배당 추정 하향 건수
+      revisions_up: 0

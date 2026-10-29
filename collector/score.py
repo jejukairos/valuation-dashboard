@@ -208,11 +208,14 @@ def checklist(code, c, tbl, f, per5_avg, pbr10_avg, psr):
 
 
 def us_dps(code):
-    """미국: 야후 배당 지급 내역 → {연도: 연간 주당배당금} (올해는 아직 다 안 줬으니 뺌)."""
+    """미국: 야후 배당 지급 내역 → {연도: 연간 주당배당금} (올해는 아직 다 안 줬으니 뺌).
+    매달 주는 종목(리얼티 인컴 등)은 배당락일이 1월 2일·12월 31일로 오가서 한 해에 11번·13번이 잡히므로 (평균 × 12)."""
     d = yf.Ticker(code).dividends
     if d is None or d.empty:
         return {}
-    s = d.groupby(d.index.year).sum()
+    g = d.groupby(d.index.year)
+    monthly = g.count().median() >= 10
+    s = g.mean() * 12 if monthly else g.sum()
     return {int(y): float(v) for y, v in s.items() if int(y) < now_kst().year}
 
 
