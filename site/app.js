@@ -1110,7 +1110,7 @@ function easyNewsHTML() {
   if (!items.length) return "";
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>🐣 오늘의 쉬운 요약</b> <span class="src">최근 3일 · 실적발표·공시·증권사 전망 변화 · 핵심만 쉬운 말로</span></summary>
     ${items.map((e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
-      <ul class="irl">${e.easy.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
+      <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
 }
 function earningsHTML(code) {
   const list = EARNINGS[code] || [];
@@ -1119,7 +1119,7 @@ function earningsHTML(code) {
   if (!list.length) return next ? `<h3>📞 실적발표</h3><div class="card">${next}<div class="note src">발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 여기에 넣어요.</div></div>` : "";
   return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">${next}
     ${list.map((e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
-      ${(e.easy || []).length ? `<div class="kidbox">🐣 <b>주린이를 위한 핵심 간단 요약</b><ul class="irl">${e.easy.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      ${(e.easy || []).length ? `<div class="kidbox">🐣 <b>주린이를 위한 핵심 간단 요약</b><ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       ${e.transcript ? `<div class="note">📜 <a href="${esc(e.transcript)}" target="_blank" rel="noopener">발표 자막 원문 보기 (발표·질의응답 전체)</a></div>` : ""}
       ${(e.short || []).length ? `<div class="warnbox" style="margin-top:6px"><b>⚡ 핵심만</b><ul class="irl">${e.short.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
@@ -1649,6 +1649,36 @@ function comboHTML(d) {
   return `<div class="qp"><div class="qt"><b>📊 분기 매출 · 영업이익 · 영업이익률</b><span class="src">${unit}</span></div><svg viewBox="0 0 ${W} 172" role="img" aria-label="분기 매출 영업이익 영업이익률">${g}</svg>
     <div class="src" style="padding:0 4px 4px"><span style="color:var(--s1)">■</span> 매출 · <span style="color:var(--s4)">■</span> 영업이익 · <span style="color:var(--ink-2)">●</span> 영업이익률</div></div>`;
 }
+// 📦 수주 읽는 법: 신규 수주 vs 수주잔고(누적) · 언제 매출이 되나(kpi.yaml orders_lag) · 수주÷매출, 잔고÷연 매출 계산
+function ordersGuideHTML(k, d) {
+  const stack = (k.charts || []).find((c) => c.kind === "stack"), bl = (k.charts || []).find((c) => /잔고/.test(c.t));
+  if (!k.orders_lag && !stack && !bl) return "";
+  // 조원으로: $B × 10억 × 환율 ÷ 1조 = $B × 환율 ÷ 1,000
+  const fx = DASH.fx || null, toJo = (v, u) => (u === "조원" ? v : u === "억원" ? v / 1e4 : u === "$B" && fx ? (v * fx) / 1e3 : u === "$M" && fx ? (v * fx) / 1e6 : null);
+  const ann = Object.fromEntries((d.kq?.annual || []).filter((r) => !r.est && r.sales).map((r) => [`20${r.q}`, r.sales / 1e4]));  // 연도 → 매출(조원)
+  const out = [];
+  if (stack) {  // 신규 수주 ÷ 그해 매출 (Book-to-Bill)
+    const bb = Object.keys(ann).sort().slice(-3).map((y) => {
+      const t = stack.s.reduce((a, s) => a + (s.v?.[y] || 0), 0), j = t ? toJo(t, stack.u) : null;
+      return j && y !== String(stack.ytd) ? `${y.slice(2)}년 ${n(j / ann[y], 1)}배` : null;
+    }).filter(Boolean);
+    if (bb.length) out.push(`① <b>신규 수주 ÷ 그해 매출</b>: ${bb.join(" · ")} <span class="src">1배보다 크면 일감이 쌓이는 중, 작으면 줄어드는 중${stack.u.startsWith("$") ? ` · 달러 수주는 지금 환율 ${n(fx, 0)}원으로 바꿔서 대략` : ""}</span>`);
+  }
+  if (bl) {  // 수주잔고 ÷ 최근 연 매출 = 몇 년 치 일감
+    const s = bl.s[0], q = Object.keys(s.v || {}).sort().at(-1), j = q ? toJo(s.v[q], bl.u) : null, y = Object.keys(ann).sort().at(-1);
+    if (j && y) out.push(`② <b>수주잔고 ÷ 연 매출</b>: ${esc(q)} 잔고 ${n(j, 1)}조 ÷ ${y.slice(2)}년 매출 ${n(ann[y], 1)}조 = <b>약 ${n(j / ann[y], 1)}년 치 일감</b>${bl.u.startsWith("$") ? ` <span class="src">(달러는 환율 ${n(fx, 0)}원으로 바꿈)</span>` : ""}`);
+  }
+  out.push("③ <b>비싸게 받은 주문이 언제 매출로 들어오는지</b> (위 '언제 매출이 되나') — 그때 이익률이 올라가요");
+  out.push("④ 수주가 많아도 원가(강재·인건비)가 오르거나 환율이 불리하면 이익은 줄 수 있어요 — 영업이익률을 같이 보기");
+  return `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>📦 수주 읽는 법</b>
+    <ul class="irl" style="margin-top:4px">
+      <li>🆕 <b>신규 수주</b> = 그해 새로 받은 주문 (앞으로 매출이 될 씨앗)${stack ? " — 위 '연간 신규 수주' 막대" : ""}</li>
+      <li>📦 <b>수주잔고(누적 수주)</b> = 받아 놓고 아직 매출로 안 바뀐 주문 전체 = 남은 일감${bl ? ` — 위 '${esc(bl.t)}'` : ""}</li>
+      <li>🔁 올해 말 잔고 = 작년 말 잔고 + 올해 신규 수주 − 올해 매출로 바뀐 만큼</li>
+      ${k.orders_lag ? `<li>⏳ <b>언제 매출이 되나</b>: ${esc(k.orders_lag)}</li>` : ""}
+    </ul>
+    <div class="kidbox" style="margin-top:6px">👀 <b>수주에서 꼭 볼 것</b><ul class="irl">${out.map((x) => `<li>${x}</li>`).join("")}</ul></div></div>`;
+}
 // 연간 매출 & 영업이익률 (와이즈리포트 실적 + 추정 E): 막대 = 매출, 선 = 영업이익률(OPM)
 function annualOpmHTML(d) {
   const a = (d.kq?.annual || []).filter((r) => r.sales != null).slice(-8);
@@ -1712,6 +1742,7 @@ async function kpiBlock(code, d) {
   return `<h3>🔑 핵심 지표 <span class="src">${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김</span></h3><div class="card kpi">
     <div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key || "")}</div>
     <div class="qgrid" style="margin-top:8px">${ch.join("")}</div>
+    ${ordersGuideHTML(k, d)}
     ${k.memo ? `<div class="note src">${esc(k.memo)}</div>` : ""}
     <div class="note src">출처: ${(k.src || []).map((s) => (s.u ? `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>` : esc(s.t))).join(" · ")}</div>
   </div>`;
