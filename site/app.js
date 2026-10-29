@@ -2268,7 +2268,7 @@ function showView() {
 // 보유 말고도 보유종목처럼 다 추적하는 묶음 (stocks.yaml 의 watchlist = 관심, joint = 공동자산) — 매력적인 순
 function renderGroup(g, el) {
   const rank = { green: 0, yellow: 1, red: 2, na: 3 }, mk = (c) => (c.market === "US" ? 1 : 0);
-  const list = DASH.stocks.filter((c) => grp(c) === g).sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
+  const list = DASH.stocks.filter((c) => grp(c) === g || (c.also || []).includes(g)).sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
   $(el).innerHTML = list.map(stockCard).join("") || `<div class="empty">config/stocks.yaml 의 ${g === "공동" ? "joint" : "watchlist"} 에 종목을 넣으면 여기에 보여요.</div>`;
   drawGauges(list);
 }
@@ -2372,10 +2372,10 @@ async function loadNews() {
     catch (e) { $("#newsCards").innerHTML = `<div class="empty">뉴스를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
   }
   const nNew = (r) => ["own", "rivals", "en"].reduce((a, k) => a + (r[k] || []).filter((x) => x.new).length, 0);
-  const grps = ["전체", ...new Set(NEWS.stocks.map((r) => r.group)), "🆕 새 기사"];
+  const grps = ["전체", ...new Set(NEWS.stocks.flatMap((r) => [r.group, ...(r.also || [])])), "🆕 새 기사"];
   $("#newsIntro").innerHTML = `${NEWS.stocks.length}개 종목 · 갱신 ${esc(NEWS.updated_at)} · 🆕 = 지난 갱신 뒤 새 기사 · 같은 기사를 여러 언론사가 쓰면 하나로 묶어 '외 N곳'<br><span class="src">${esc(NEWS.source)}</span>`;
   $("#newsGrp").innerHTML = grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === NEWS_GRP ? "on" : ""}">${esc(g)}</button>`).join("");
-  const list = NEWS.stocks.filter((r) => NEWS_GRP === "전체" || r.group === NEWS_GRP || (NEWS_GRP === "🆕 새 기사" && nNew(r)));
+  const list = NEWS.stocks.filter((r) => NEWS_GRP === "전체" || r.group === NEWS_GRP || (r.also || []).includes(NEWS_GRP) || (NEWS_GRP === "🆕 새 기사" && nNew(r)));
   $("#newsCards").innerHTML = list.map((r) => newsCard(r, nNew(r))).join("") || `<div class="empty">새 기사가 없어요.</div>`;
 }
 function newsList(xs, showK) {

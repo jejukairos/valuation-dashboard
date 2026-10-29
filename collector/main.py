@@ -98,9 +98,14 @@ def stock_detail(h, rates_now, fx):
     methods = [m.upper() for m in h.get("methods", ["PER"])]
     if mkt == "US":
         now = us_stock.now_info(code)
-        px = us_stock.price_history(code)
+        px = us_stock.price_history(code, div="DIV" in methods)
         hist = us_stock.history(code)
         wise = None
+        if "DIV" in methods:  # 미국 배당주(리츠 등): 야후 배당 내역 → 연도별 DPS, 올해는 지금 연간 배당(dividendRate)
+            for y, v in score.us_dps(code).items():
+                hist.setdefault(y, {"estimate": False, "src": "야후 배당 내역"})["dps"] = v
+            if now.get("div_rate"):
+                hist.setdefault(now_kst().year, {"estimate": True, "src": "야후 연간 배당"})["dps"] = float(now["div_rate"])
         rate, bond_label, currency = rates_now.get("us10y"), "미국채 10년", "USD"
         sources = {"price": "야후 파이낸스", "consensus": "야후 파이낸스 컨센서스",
                    "history": next((r["src"] for r in hist.values() if not r.get("estimate")), "")}
@@ -628,13 +633,21 @@ def main():
     prev_cards = {c["code"]: c for c in prev.get("stocks", [])}
     sy = load_yaml("stocks.yaml")
     # 보유 + 관심(watchlist) + 공동자산(joint) 모두 같은 계산. 화면은 group 으로 탭을 나눠 보여줌
-    todo = [(h, g) for key, g in (("holdings", "보유"), ("watchlist", "관심"), ("joint", "공동")) for h in (sy.get(key) or [])]
+    # 같은 종목이 여러 묶음에 있으면(예: 보유이면서 공동자산) 한 번만 계산하고, 나머지 묶음은 카드의 also 로 → 그 탭에도 보임
+    todo, first = [], {}
+    for key, g in (("holdings", "보유"), ("watchlist", "관심"), ("joint", "공동")):
+        for h in sy.get(key) or []:
+            if str(h["code"]) in first:
+                first[str(h["code"])]["_also"].append(g)
+            else:
+                first[str(h["code"])] = dict(h, _also=[])
+                todo.append((first[str(h["code"])], g))
     for i, (h, g) in enumerate(todo):
         code = str(h["code"])
         try:
             det = stock_detail(h, {"us10y": us10, "kr3y": kr3, "regime": regime}, fx)
             det["card"]["order"] = i
-            det["card"]["group"] = g
+            det["card"]["group"], det["card"]["also"] = g, h["_also"]
             # 텔레그램 채널 글 중 지난 갱신 때 없던 글에 🆕 표시 (처음 모으는 날은 표시 안 함)
             posts = ((det["card"].get("us_tpl") or {}).get("street") or {}).get("posts") or []
             old_st = ((prev_cards.get(code) or {}).get("us_tpl") or {}).get("street") or {}
@@ -653,7 +666,7 @@ def main():
             traceback.print_exc()
             REPORT.fail(f"{h['name']} 종목", f"{type(e).__name__}: {e}")
             if code in prev_cards:
-                c = dict(prev_cards[code], stale=True, order=i, group=g)
+                c = dict(prev_cards[code], stale=True, order=i, group=g, also=h["_also"])
                 cards.append(c)
 
     print("■ 실적발표·컨퍼런스콜 일정")

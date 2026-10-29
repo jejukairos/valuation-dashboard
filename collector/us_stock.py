@@ -18,8 +18,9 @@ def _ticker(t):
     return yf.Ticker(t)
 
 
-def price_history(t):
-    h = _ticker(t).history(period="max", auto_adjust=True)["Close"]
+def price_history(t, div=False):
+    # div: 배당 방식 종목(리츠 등)은 배당만큼 깎지 않은 주가 (배당으로 깎은 주가로 재면 과거 배당수익률이 부풀어요). 액면분할은 둘 다 반영
+    h = _ticker(t).history(period="max", auto_adjust=not div)["Close"]
     if h.empty:
         raise RuntimeError("야후 가격 데이터 없음")
     h.index = h.index.tz_localize(None)
@@ -33,7 +34,7 @@ def now_info(t):
         raise RuntimeError("야후 현재가 없음")
     return {"name": i.get("shortName"), "price": float(price), "market_cap": i.get("marketCap"),
             "currency": i.get("currency", "USD"), "fwd_eps": i.get("forwardEps"), "eps": i.get("trailingEps"),
-            "last_fy_end": i.get("lastFiscalYearEnd"), "div_yield": i.get("dividendYield")}
+            "last_fy_end": i.get("lastFiscalYearEnd"), "div_yield": i.get("dividendYield"), "div_rate": i.get("dividendRate")}
 
 
 def _splits(t):

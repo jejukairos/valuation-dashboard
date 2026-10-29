@@ -211,4 +211,17 @@ watchlist:
 
 # ---------- 공동자산 — 🤝 공동자산 탭 ----------
 # 형식은 holdings 와 같아요 (예: - {name: 삼성전자, market: KR, code: "005930", industry: 반도체, methods: [PBR, PER], fair_methods: [PBR]})
-joint: []
+# 보유·관심에 이미 있는 종목은 한 번만 계산하고 이 탭에도 같이 보여요 (설정은 먼저 적힌 쪽을 써요)
+joint:
+  - {name: 알파벳, market: US, code: GOOG, industry: 인터넷, methods: [PER]}
+  - {name: 엔비디아, market: US, code: NVDA, industry: 반도체, methods: [PER]}
+  - {name: 팔란티어, market: US, code: PLTR, industry: 소프트웨어, methods: [PER]}
+  - {name: 아마존, market: US, code: AMZN, industry: 인터넷, methods: [PER]}
+  - {name: 리얼티 인컴, market: US, code: O, industry: 리츠, methods: [DIV], note: "매달 배당을 주는 미국 상업용 부동산 리츠 — 이익(EPS)보다 배당으로 적정가를 봐요 (배당수익률 10년 밴드)."}
+  - {name: 테슬라, market: US, code: TSLA, industry: 자동차, methods: [PER]}
+  - {name: 삼성전자, market: KR, code: "005930", industry: 반도체, methods: [PBR, PER, DIV], fair_methods: [PBR]}
+  - {name: NAVER, market: KR, code: "035420", industry: 인터넷, methods: [PER], sector: 인터넷}
+  - {name: 하이브, market: KR, code: "352820", industry: 엔터, methods: [PER]}
+  - {name: 에스엠, market: KR, code: "041510", industry: 엔터, methods: [PER]}
+  - {name: JYP Ent., market: KR, code: "035900", industry: 엔터, methods: [PER]}
+  - {name: 덕산네오룩스, market: KR, code: "213420", industry: OLED 소재, methods: [PER]}

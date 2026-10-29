@@ -71,7 +71,7 @@ def collect(todo):
             continue
         code, c = str(h["code"]), cfg.get(str(h["code"])) or {}
         mine = cache.setdefault(code, {})
-        row = {"code": code, "name": h["name"], "group": g, "market": h.get("market", "KR").upper(),
+        row = {"code": code, "name": h["name"], "group": g, "also": h.get("_also") or [], "market": h.get("market", "KR").upper(),
                "rival_terms": c.get("rivals") or [], "pins": c.get("pins") or []}
         for kind, terms, lang in (("own", c.get("own") or [h["name"]], "ko"), ("rivals", c.get("rivals"), "ko"),
                                   ("en", c.get("en"), "en")):

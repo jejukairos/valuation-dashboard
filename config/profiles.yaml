@@ -628,3 +628,132 @@ TSLA:
   code: 005935
   name_ko: 삼성전자우
   ir: *id001
+
+PLTR:
+  code: PLTR
+  name_ko: 팔란티어
+  checked_at: '2026-10-29'
+  one_liner: 정부(국방·정보기관)와 기업이 흩어진 데이터를 한곳에 모아 AI로 판단하고 실행하게 돕는 소프트웨어(고담·파운드리·AIP)를 팔아요. 2026년 2분기 매출이 1년 새 93% 늘었고, 미국 기업 고객 매출은 149% 늘었어요.
+  oligopoly:
+    growth: 성장 중이에요. 2025년 매출 44.8억 달러로 56% 늘었고, 2026년 2분기는 19.4억 달러로 1년 전보다 93% 늘었어요. 회사는 2026년 매출을 81.5억~81.58억 달러(약 82% 성장)로 내다봐요.
+    share: 믿을 만한 최신 점유율(%) 자료는 찾지 못했어요. IDC가 2021년 AI 플랫폼 소프트웨어 시장(142억 달러)에서 매출·점유율 1위로 꼽았다고 회사가 발표했지만(2022-09-20) 비율은 나오지 않았어요. 고객 수는 1,049곳(2026년 6월)으로 적은 대신 큰 고객 위주예요.
+    barriers: 고객의 데이터와 업무 흐름을 하나로 엮는 '온톨로지' 위에 AI를 올려서 한번 깔면 바꾸기 어려워요. 상위 3개 고객은 평균 10년째 쓰고 있고, 정부 기밀 사업을 하려면 보안 시설 허가가 필요해 새 회사가 들어오기 어려워요. 다만 큰 소프트웨어 회사·방산 업체·자체 개발과 경쟁해요.
+    verdict: △
+  pick_and_shovel:
+    verdict: △
+    why: AIP는 여러 회사의 AI 모델(대형 언어 모델)을 골라 쓰게 해 줘서, 어느 AI 모델이 이기든 그 위에서 쓰일 수 있어요. 하지만 칩·클라우드처럼 모두가 꼭 사야 하는 장비는 아니고, 다른 소프트웨어 회사와 직접 경쟁해서 이겨야 해요.
+  pricing_power:
+    verdict: O
+    why: 매출총이익률이 2024년 80%에서 2025년 82%로 올랐고, 2026년 2분기 조정 영업이익률은 62%예요. 기존 고객이 쓰는 돈은 1년 전의 157% 수준으로 늘었어요(2026년 2분기, 컨퍼런스콜 보도 기준). 구체적인 가격 인상 발표 사례는 확인하지 못했어요.
+  data_company:
+    verdict: △
+    why: 고객의 데이터를 모아 분석하는 일을 하지만 데이터 주인은 고객(정부·기업)이에요. 구글·메타처럼 직접 사용자 데이터를 모아 광고로 돈을 버는 회사는 아니에요.
+  wallet:
+    verdict: △
+    why: 개인 소비자에게 파는 서비스는 없어요. 대신 정부·기업이 여러 해짜리 계약으로 소프트웨어 이용료를 꾸준히 내요. 미국 기업 고객과 맺은 계약 중 아직 매출로 잡히지 않은 금액이 62.4억 달러예요(2026년 6월).
+  human_indicator: 2026년 6월 말 주가가 연초보다 36% 빠졌다가, 8월 실적 발표 다음 날 하루에 29% 오르고 10월에 사상 최고 종가(209.05달러)를 찍었어요. 10월 23일 주가는 2026년 예상 이익의 약 121배라 '성장이 조금만 느려져도 위험하다'는 걱정과 기대가 함께 있는 분위기예요. (TIKR, 2026-10-25 기사 기준)
+  gpm:
+    value: 82.4
+    period: FY2025
+    over30: true
+    source: https://www.sec.gov/Archives/edgar/data/1321655/000132165526000011/pltr-20251231.htm
+  revenue_geo:
+    period: FY2025
+    items:
+    - name: 미국
+      pct: 74.2
+    - name: 영국
+      pct: 9.5
+    - name: 기타 국가
+      pct: 16.3
+    source: https://www.sec.gov/Archives/edgar/data/1321655/000132165526000011/pltr-20251231.htm
+    note: 고객 본사·기관이 있는 곳 기준이에요(10-K). 영국 말고 10%를 넘는 나라는 없어요. 2026년 2분기에는 미국 비중이 81%로 더 커졌어요(10-Q).
+  revenue_segment:
+    period: FY2025 (총매출 44.75억 달러)
+    items:
+    - name: 미국 정부
+      pct: 41.4
+    - name: 미국 기업(상업)
+      pct: 32.7
+    - name: 미국 외 기업(상업)
+      pct: 13.6
+    - name: 미국 외 정부
+      pct: 12.2
+    source: https://www.sec.gov/Archives/edgar/data/1321655/000132165526000011/pltr-20251231.htm
+  ir:
+  - label: FY2025 연간보고서(10-K)
+    url: https://www.sec.gov/Archives/edgar/data/1321655/000132165526000011/pltr-20251231.htm
+  - label: FY2024 연간보고서(10-K)
+    url: https://www.sec.gov/Archives/edgar/data/1321655/000132165525000022/pltr-20241231.htm
+  - label: FY2023 연간보고서(10-K)
+    url: https://www.sec.gov/Archives/edgar/data/1321655/000132165524000022/0001321655-24-000022-index.htm
+  - label: 2026년 2분기 실적 발표문(8-K, 2026-08-03)
+    url: https://www.sec.gov/Archives/edgar/data/1321655/000132165526000039/a2026q2ex991pressrelease.htm
+  - label: 2026년 2분기 분기보고서(10-Q)
+    url: https://www.sec.gov/Archives/edgar/data/1321655/000132165526000041/pltr-20260630.htm
+  - label: 분기 실적 자료 모음
+    url: https://investors.palantir.com/financials/quarterly-results
+  - label: 팔란티어 IR 메인
+    url: https://investors.palantir.com/
+  notes: 2026년 3분기 실적은 11월 2일 발표 예정이라 아직 반영하지 못했어요(최신은 2026년 2분기). 매출총이익률 82.4%는 10-K의 매출 44.75억·매출총이익 36.86억 달러로 계산했고, 2026년 2분기는 약 84.7%예요. 사업별 비율은 10-K의 정부 24.02억·상업 20.73억 달러에서 실적 발표문의 미국 정부 18.55억·미국 상업 14.65억 달러를 빼서 미국 외를 계산했어요.
+    믿을 만한 최신 점유율(%) 자료가 없어 시장 점유율 칸은 비웠어요. 상위 3개 고객이 2025년 매출의 16%를 차지해요. 기존 고객 매출 증가율(NDR) 157%와 인간지표는 2차 기사(TIKR) 기준이에요. FY2023 10-K는 공시 목록 주소만 확인했어요.
+
+'041510':
+  code: '041510'
+  name_ko: 에스엠
+  ir:
+  - label: IR 메인 (경영실적)
+    url: https://www.smentertainment.com/ir/business-results/
+  - label: 2026 2분기 실적발표 (PDF)
+    url: https://cdn2.smentertainment.com/wp-content/uploads/2026/08/05110654/2Q26_PPT_%EC%8B%A4%EC%A0%81%EB%B0%9C%ED%91%9C_Kor_F.pdf
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://cdn2.smentertainment.com/wp-content/uploads/2026/02/11122954/4Q25_%EC%8B%A4%EC%A0%81%EB%B0%9C%ED%91%9C_Kor_vF.pdf
+  - label: 2026 반기보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002930
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260317000781
+  - label: 2024 사업보고서 [기재정정] (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250718000170
+  - label: 2023 사업보고서 [기재정정] (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240322000886
+  ir_notes: '실적발표마다 PPT·실적 스크립트·CEO 메시지 PDF(한글·영문)를 함께 올림. 2026 3분기 실적발표 컨퍼런스콜 2026-11-04 14:00 예정 (DART 기업설명회 공시), 자료도 같은 날 IR 경영실적 메뉴에 게재 예정.'
+'035900':
+  code: '035900'
+  name_ko: JYP Ent.
+  ir:
+  - label: IR 메인 (IR 자료실)
+    url: https://www.jype.com/board/ir-data
+  - label: 2026 2분기 실적발표 (PDF)
+    url: https://d1meds70430yck.cloudfront.net/general/1786516255489-7f6f43bd.pdf
+  - label: 2026 2분기 IR Factsheet (엑셀)
+    url: https://d1meds70430yck.cloudfront.net/general/1786516278592-827a1e1e.xlsx
+  - label: 2025 4분기 실적발표 (PDF)
+    url: https://d1meds70430yck.cloudfront.net/general/1773129093329-95fd4a97.pdf
+  - label: 2026 반기보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003204
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260318001519
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250317000598
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240318000479
+  ir_notes: '실적자료는 영문 PDF + 분기 Factsheet 엑셀(부문·지역·비용 분기 표), 1~2일 뒤 Earnings Note(웹 글). 3분기 실적 일정은 아직 공시 전 (2026-10-29 기준).'
+'213420':
+  code: '213420'
+  name_ko: 덕산네오룩스
+  ir:
+  - label: IR 메인 (IR자료실)
+    url: https://www.dsnl.co.kr/ir_reports.aspx
+  - label: 2026 2분기 IR 자료 (PDF)
+    url: https://www.dsnl.co.kr/IR_Reference/IR_Report/kr/2026/DSNL_26.2Q(KR).pdf
+  - label: 2025 4분기 IR 자료 (PDF)
+    url: https://www.dsnl.co.kr/IR_Reference/IR_Report/kr/2025/DSNL_25.4Q(KR).pdf
+  - label: 2026 반기보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260813001263
+  - label: 2025 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260318001436
+  - label: 2024 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250319000933
+  - label: 2023 사업보고서 (DART)
+    url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240318000867
+  ir_notes: '예전 주소 dsneolux.co.kr 은 dsnl.co.kr 로 옮겨짐. 25.4Q IR 자료는 대부분 25.3Q 내용을 다시 쓴 것(4분기 연결 실적 일부만 반영)이라 26.1Q 자료를 함께 보는 게 나음: https://www.dsnl.co.kr/IR_Reference/IR_Report/kr/2026/DSNL_26.1Q(KR).pdf . 2025년 인수한 현대중공업터보기계가 연결 실적에 포함됨. 3분기 실적은 아직 발표 전 (2026-10-29 기준).'

@@ -60,3 +60,11 @@ TSLA: {own: [테슬라], rivals: [BYD, 웨이모, 리비안], en: [Tesla]}
 "010140": {own: [삼성중공업], rivals: [한화오션, HD현대중공업, 중국 조선], en: [Samsung Heavy Industries]}
 "009150": {own: [삼성전기, MLCC], rivals: [무라타, LG이노텍, 이비덴], en: [Samsung Electro-Mechanics]}
 "071970": {own: [HD현대마린엔진, STX중공업], rivals: [한화엔진, WinGD], en: [HD Hyundai Marine Engine]}
+
+# ---------- 공동자산 (보유·관심에 없는 종목만 — 나머지는 위 검색어를 같이 써요) ----------
+PLTR: {own: [팔란티어], rivals: [스노우플레이크, 데이터브릭스, C3.ai], en: [Palantir]}
+AMZN: {own: [아마존, AWS], not: [아마존 정글, 아마존 열대우림, 아마존강], rivals: [마이크로소프트 애저, 구글 클라우드, 월마트, 쿠팡], en: [Amazon AWS, Amazon.com]}
+O: {own: [리얼티인컴, 리얼티 인컴], en: [Realty Income]}
+"041510": {own: [에스엠, SM엔터], not: [에스엠코어, 에스엠벡셀, 에스엠씨지, 에스엠라이프], rivals: [하이브, JYP, YG엔터], en: [SM Entertainment]}
+"035900": {own: [JYP], rivals: [하이브, SM엔터, YG엔터], en: [JYP Entertainment]}
+"213420": {own: [덕산네오룩스], rivals: [삼성SDI, 솔루스첨단소재, 피엔에이치테크, 유니버설디스플레이], en: [Duksan Neolux]}
