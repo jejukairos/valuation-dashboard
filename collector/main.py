@@ -321,6 +321,9 @@ def stock_detail(h, rates_now, fx):
             QTRS[tkr] = score.quarters(tkr, QTRS.get(tkr))
         except Exception as e:  # noqa: BLE001
             REPORT.block("야후 분기 실적", f"{name}: {str(e)[:60]}")
+        # 야후에 아직 없는 최신 분기 손익은 kpi.yaml qtr_add (보도자료, 미국 백만 달러 · 한국 억원). 야후가 그 분기를 주면 야후 값이 덮어씀
+        for e, v in ((KPI_CFG.get(fcode) or {}).get("qtr_add") or {}).items():
+            QTRS.setdefault(tkr, {}).setdefault(str(e), {k: x * (1e6 if mkt == "US" else 1e8) for k, x in v.items()})
     if tbl is not None and tkr and not h.get("data_code"):  # 순현금 (우선주는 회사 전체 값이라 뺌)
         try:
             nc = table.net_cash(tkr, now.get("market_cap"))
@@ -540,10 +543,21 @@ def _round_scen(scen, dg):
 
 
 def _price_chart(px, currency, days=250):
-    """카드·실적 카드 주가 그림 (1개월~1년 탭): 최근 1년 일봉 종가. 3년 이상은 화면이 상세 데이터의 주봉을 씀."""
-    t = px.dropna().astype(float).iloc[-days:]
+    """카드·실적 카드 주가 그림 (1개월~1년 탭): 최근 1년 일봉 종가 + 200일 이동평균선. 3년 이상은 화면이 상세 데이터의 주봉을 씀.
+    ma200_state: 200일선 이격(%) · 200일선 방향(20거래일 전보다 오르나) · 최근 20거래일 안에 아래→위로 다시 올라온 날."""
+    s = px.dropna().astype(float)
+    ma = s.rolling(200).mean()
+    t = s.iloc[-days:]
     dg = 2 if currency == "USD" else 0
-    return {"dates": [d.strftime("%Y-%m-%d") for d in t.index], "close": [rnd(v, dg) for v in t]}
+    out = {"dates": [d.strftime("%Y-%m-%d") for d in t.index], "close": [rnd(v, dg) for v in t],
+           "ma200": [rnd(v, dg) if v == v else None for v in ma.loc[t.index]]}  # NaN → None
+    if len(s) > 221 and ma.iloc[-1] == ma.iloc[-1]:
+        above = (s > ma).iloc[-21:]
+        up = [i for i in range(1, len(above)) if above.iloc[i] and not above.iloc[i - 1]]  # 아래 → 위
+        out["ma200_state"] = {"gap": rnd((s.iloc[-1] / ma.iloc[-1] - 1) * 100, 1), "rising": bool(ma.iloc[-1] > ma.iloc[-21]),
+                              "turning": bool(ma.iloc[-1] < ma.iloc[-6]),  # 최근 5거래일은 내려감 = 꺾이는 중 (하락 전환)
+                              "cross_up": above.index[up[-1]].strftime("%Y-%m-%d") if up and above.iloc[-1] else None}
+    return out
 
 
 def _fair_table(bands, hist, price, currency, kinds):

@@ -396,6 +396,9 @@ function stockCard(c) {
   const newPosts = (c.us_tpl?.street?.posts || []).filter((p) => p.new).length;
   if (newPosts) pills.push(`<span class="pill green">🆕 채널 새 글 ${newPosts}개</span>`);
   if (c.dart_check?.warn) pills.push(`<span class="pill yellow">⚠ DART 공시와 숫자 차이</span>`);
+  const m2 = c.chart?.ma200_state;  // 200일선: 다시 위로 올라왔거나(🔔) 아래에 있을 때만 표시
+  if (m2?.cross_up) pills.push(`<span class="pill green">🔔 200일선 위로 다시 올라옴 (${esc(m2.cross_up.slice(5).replace("-", "/"))})</span>`);
+  else if (m2 && m2.gap < 0) pills.push(`<span class="pill ${ma200Sig(m2) === "🔴" ? "red" : "yellow"}">${ma200Sig(m2)} 200일선 아래 ${pct(m2.gap, 1)} · 선 ${ma200Dir(m2)}</span>`);
   if (c.fcf?.length === 2 && (c.fcf[0][1] < 0 || c.fcf[1][1] < 0)) {  // 현금흐름이 마이너스이거나 막 플러스로 돌아선 종목만
     const [[, a], [q, b]] = c.fcf, [t, cls] = fcfTag(a, b);
     pills.push(`<span class="pill ${cls === "bad" ? "red" : cls ? "yellow" : "green"}">💸 현금흐름 ${t} ${qMoney(b, c.currency === "USD")} (${esc(q)})</span>`);
@@ -959,8 +962,11 @@ function priceSpark(c, months = 6) {
   const i0 = Math.max(0, ch.dates.findIndex((d) => d >= cut.toISOString().slice(0, 10)));
   const ds = ch.dates.slice(i0), v = ch.close.slice(i0), ok = v.filter((x) => x != null);
   if (ok.length < 5) return "";
+  // 200일 이동평균선: 일봉은 수집기가 계산한 값, 주봉(3년~)은 40주 평균 (≈ 200거래일)
+  const maAll = wk ? ch.close.map((_, i, a) => (i >= 39 ? a.slice(i - 39, i + 1).reduce((s, x) => s + (x || 0), 0) / 40 : null)) : ch.ma200 || [];
+  const ma = maAll.slice(i0), mok = ma.filter((x) => x != null);
   const W = 640, x0 = 6, x1 = 560, top = 12, bot = 168;
-  const lo0 = Math.min(...ok), hi0 = Math.max(...ok), raw = (hi0 - lo0) / 4 || 1, p = 10 ** Math.floor(Math.log10(raw));
+  const lo0 = Math.min(...ok, ...mok), hi0 = Math.max(...ok, ...mok), raw = (hi0 - lo0) / 4 || 1, p = 10 ** Math.floor(Math.log10(raw));
   const step = p * (raw / p <= 1 ? 1 : raw / p <= 2 ? 2 : raw / p <= 2.5 ? 2.5 : raw / p <= 5 ? 5 : 10);
   const lo = Math.floor(lo0 / step) * step, hi = Math.ceil(hi0 / step) * step;
   const X = (i) => x0 + ((x1 - x0) * i) / (v.length - 1), Y = (y) => bot - ((y - lo) / (hi - lo || 1)) * (bot - top);
@@ -980,10 +986,21 @@ function priceSpark(c, months = 6) {
     else if (i && dt.slice(5, 7) !== ds[i - 1].slice(5, 7)) g += xl(i, `${dt.slice(5, 7)}월`);
   });
   const lbl = (PX_TABS.find((x) => x[0] === months) || [0, `${months}개월`])[1];
-  return `<div class="qp" style="margin-top:8px"><div class="qt"><b>주가 (${lbl}, ${wk ? "주봉" : "일봉"} 종가)</b>${wk && new Date(ds[0]) - cut > 60 * 864e5 ? `<span class="src">${esc(ds[0])} 부터 (자료 있는 기간)</span>` : ""}</div><svg viewBox="0 0 ${W} 192" role="img" aria-label="${esc(c.name)} 주가 ${months}개월">
+  const maPts = ma.map((y, i) => (y == null ? null : [X(i), Y(y)])), mseg = maPts.filter(Boolean);
+  const maPath = mseg.length > 1 ? `<path d="${mseg.map((p, j) => `${j ? "L" : "M"}${p[0]},${p[1]}`).join(" ")}" fill="none" stroke="var(--s2)" stroke-width="2" stroke-dasharray="6 3"/>` : "";
+  return `<div class="qp" style="margin-top:8px"><div class="qt"><b>주가 (${lbl}, ${wk ? "주봉" : "일봉"} 종가)</b>${wk && new Date(ds[0]) - cut > 60 * 864e5 ? `<span class="src">${esc(ds[0])} 부터 (자료 있는 기간)</span>` : ""}</div>
+    ${ma200Line(c)}<svg viewBox="0 0 ${W} 192" role="img" aria-label="${esc(c.name)} 주가 ${months}개월">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--s1);stop-opacity:.35"/><stop offset="1" style="stop-color:var(--s1);stop-opacity:.03"/></linearGradient></defs>
-    ${g}<path d="${d} L${last[0]},${bot} L${x0},${bot} Z" fill="url(#${gid})"/><path d="${d}" fill="none" stroke="var(--s1)" stroke-width="2.5"/>
+    ${g}<path d="${d} L${last[0]},${bot} L${x0},${bot} Z" fill="url(#${gid})"/><path d="${d}" fill="none" stroke="var(--s1)" stroke-width="2.5"/>${maPath}
     <circle cx="${last[0]}" cy="${last[1]}" r="4" fill="var(--s1)"/><text x="${last[0] - 8}" y="${last[1] - 10}" text-anchor="end" class="qv b" style="fill:var(--s1);font-size:13px;paint-order:stroke;stroke:var(--surface);stroke-width:3px">${cur}${n(v[v.length - 1], cur ? 2 : 0)}${cur ? "" : "원"}</text></svg></div>`;
+}
+// 📈 200일 이동평균선 상태 (미국 주식에서 특히 중요): 🟢 선 위 + 선 오름 · 🟡 하나만 · 🔴 선 아래 + 선 내림 · 🔔 최근 아래→위로 다시 올라옴
+function ma200Sig(m) { return !m ? null : m.gap >= 0 && m.rising && !m.turning ? "🟢" : m.gap < 0 && (!m.rising || m.turning) ? "🔴" : "🟡"; }
+const ma200Dir = (m) => (m.rising && !m.turning ? "오르는 중" : m.rising ? "꺾이는 중 (최근 5일 하락)" : "내려가는 중");
+function ma200Line(c) {
+  const m = c.chart?.ma200_state;
+  if (!m) return "";
+  return `<div class="src" style="padding:0 2px">${ma200Sig(m)} <b style="color:var(--s2)">┅ 200일선</b> 이격 <b>${pct(m.gap, 1, true)}</b> (${m.gap >= 0 ? "선 위" : "선 아래"}) · 200일선 ${ma200Dir(m)}${m.cross_up ? ` · 🔔 <b>${esc(m.cross_up.slice(5).replace("-", "/"))} 200일선 위로 다시 올라옴</b> (이격이 0보다 커진 구간 — 메모해 둘 자리)` : ""}</div>`;
 }
 // 첫 화면: 최근 3일 안에 실적이 나온 보유·관심 종목 (예상 vs 실적 막대) + 잠정실적 공시는 났는데 숫자 반영을 기다리는 종목
 function kqNewsHTML() {
@@ -1068,7 +1085,7 @@ function qtrHTML(d, mode = "q") {  // mode: q = 분기, y = 연간 (야후 연�
       ${qPanel("설비투자 (CapEx)", tC, labels, capex, null, usd, "var(--warn)")}
       ${!yr && ps.length > 1 ? segStack(ps, col) : ""}
     </div>
-    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 돈의 흐름</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
+    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 얼마 벌어서 어디에 썼나</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
     ${qSankey(last[1], usd, getQ(last[0]), segs)}
     ${yr ? "" : (() => {  // 최근 4분기 합계(TTM) · 최근 연간 — 분기는 계절성이 있어 1년치로도 보기
       const q4 = all.slice(-4).map(([, q]) => q), out = [];
@@ -1120,6 +1137,8 @@ function earningsHTML(code) {
   return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">${next}
     ${list.map((e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
       ${(e.easy || []).length ? `<div class="kidbox">🐣 <b>주린이를 위한 핵심 간단 요약</b><ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      ${(e.keys || []).length ? `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🎤 어닝콜 핵심</b>${e.keys.map((x, j) => `<div style="margin-top:6px"><b style="color:${x.tone === "bad" ? "var(--bad-ink)" : "var(--good-ink)"}">${"①②③④⑤⑥"[j] || "·"} ${esc(x.h)}</b> ${x.tone === "bad" ? "⚠" : "✔"}
+        ${(x.q || []).map((t) => `<div class="src" style="margin-left:18px">${/^[(（]/.test(t) ? esc(t) : `“${esc(t)}”`}</div>`).join("")}</div>`).join("")}</div>` : ""}
       ${e.transcript ? `<div class="note">📜 <a href="${esc(e.transcript)}" target="_blank" rel="noopener">발표 자막 원문 보기 (발표·질의응답 전체)</a></div>` : ""}
       ${(e.short || []).length ? `<div class="warnbox" style="margin-top:6px"><b>⚡ 핵심만</b><ul class="irl">${e.short.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
