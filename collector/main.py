@@ -446,7 +446,8 @@ def stock_detail(h, rates_now, fx):
             det["kq"] = kq.collect_us(code, QTRS.get(tkr), hist)
         except Exception as e:  # noqa: BLE001
             REPORT.block("최신 분기 실적 (미국)", f"{name}: {str(e)[:60]}")
-    det["op_yoy"] = op_yoy(code, mkt, det["kq"], QTRS.get(tkr), (KPI_CFG.get(code) or {}).get("op_yoy")) if not h.get("data_code") else None
+    oc = str(h.get("data_code") or code)  # 우선주는 보통주 실적으로
+    det["op_yoy"] = op_yoy(oc, mkt, det["kq"], QTRS.get(tkr), (KPI_CFG.get(oc) or {}).get("op_yoy"))
     det["flow"] = None
     if mkt == "KR" and not h.get("data_code"):  # 외국인·기관·개인이 1년 동안 어느 가격대에서 샀나 (KRX)
         try:
