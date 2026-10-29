@@ -1829,6 +1829,15 @@ function fcfBars(d, k) {
   return kqBars("💸 현금흐름 (FCF)", s.map((x) => ({ q: x.q, fcf: usd ? x.fcf : x.fcf / 1e8 })), "fcf", null, "var(--s1)", usd ? "USD" : "KRW",
     { tag: `<span class="qtag ${cls}">${t}</span>`, sub });
 }
+// 🔁 반복되는 패턴 메모 (kpi.yaml patterns): 예전 같은 일 → 그 뒤 숫자 흐름 → 이번 · 다음에 확인할 것 · 확인 결과
+function patternHTML(p) {
+  const li = (x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`;
+  return `<div class="warnbox" style="margin-top:8px"><b>🔁 ${esc(p.t)}</b> <span class="src">${esc(p.date || "")}</span>
+    ${(p.steps || []).length ? `<div style="margin-top:4px">${p.steps.map((s) => `<b>${esc(s.q)}</b> ${esc(s.v)}${s.note ? ` <span class="src">(${esc(s.note)})</span>` : ""}`).join(" → ")}</div>` : ""}
+    <ul class="irl">${(p.lines || []).map(li).join("")}</ul>
+    ${p.check ? `<div>👀 <b>확인할 때</b>: ${esc(p.check)}</div>` : ""}${p.result ? `<div>✅ <b>결과</b>: ${esc(p.result)}</div>` : ""}
+    ${p.src ? `<div class="src" style="margin-top:4px">출처: ${esc(p.src)}</div>` : ""}</div>`;
+}
 async function kpiBlock(code, d) {
   if (KPI === null) { try { KPI = (await (await fetch("data/kpi.json?v=" + encodeURIComponent(DASH.updated_at))).json()) || {}; } catch (_) { KPI = {}; } }
   const k = KPI[code] || KPI[KPI_ALIAS[code]];
@@ -1838,6 +1847,7 @@ async function kpiBlock(code, d) {
   ch.splice(2, 0, opYoyHTML(d, k), fcfBars(d, k), annualOpmHTML(d));  // 매출 성장률 다음에 영업이익 성장률 · 현금흐름 · 연간 매출 & 영업이익률
   return `<h3>🔑 핵심 지표 <span class="src">${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김</span></h3><div class="card kpi">
     <div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key || "")}</div>
+    ${(k.patterns || []).map(patternHTML).join("")}
     <div class="qgrid" style="margin-top:8px">${ch.join("")}</div>
     ${ordersGuideHTML(k, d)}
     ${k.memo ? `<div class="note src">${esc(k.memo)}</div>` : ""}
