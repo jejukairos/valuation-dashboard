@@ -1554,6 +1554,49 @@ function wireManheim() {
 /* ---------- ✈️ 한국 출입국 관광통계 (config/tourism.yaml, 손으로 적음 — 롯데쇼핑 상세 맨 아래) ---------- */
 let TOUR = null;
 const TOUR_K = [["out", "아웃바운드", "내국인 출국", "s1"], ["in", "인바운드", "외국인 입국", "s2"], ["cn", "중국인 입국", "외국인 중", "s3"]];
+// 🔑 핵심 지표: 종목마다 주가를 움직이는 숫자 (config/kpi.yaml — 실적발표·컨퍼런스콜·전자공시에서 옮김, 분기마다 이어 적음)
+let KPI = null;
+const KPI_ALIAS = { "005935": "005930" };  // 삼성전자우 = 보통주 지표
+const KPI_COL = ["var(--s1)", "var(--bad)", "var(--s3)", "var(--s4)"];
+const kpiF = (v, u = "") => (u.startsWith("$") ? "$" + n(v, Number.isInteger(v) ? 0 : 1) + u.slice(1) : n(v, Number.isInteger(v) ? 0 : 1) + u);
+function kpiChart(ch) {
+  const qs = [...new Set(ch.s.flatMap((s) => Object.keys(s.v || {})))].sort();
+  const vals = ch.s.flatMap((s) => Object.values(s.v || {})).filter((v) => v != null);
+  if (qs.length < 2 || !vals.length) return "";
+  const many = ch.s.length > 1, W = 320, x0 = 26, x1 = W - (many ? 62 : 26), top = 28, bot = 138;  // 선이 여러 개면 끝 숫자를 오른쪽에
+  const lo0 = Math.min(...vals), hi0 = Math.max(...vals), pad = (hi0 - lo0) * 0.18 || Math.abs(hi0) * 0.2 || 1;
+  const lo = lo0 - pad, hi = hi0 + pad, Y = (v) => bot - ((v - lo) / (hi - lo)) * (bot - top), X = (i) => x0 + ((x1 - x0) * i) / (qs.length - 1);
+  let g = qs.map((q, i) => `<line x1="${X(i)}" x2="${X(i)}" y1="${top - 6}" y2="${bot}" stroke="var(--grid)"/><text x="${X(i)}" y="${bot + 16}" text-anchor="middle" class="qx">${esc(q)}</text>`).join("");
+  if (lo0 < 0 && hi0 > 0) g += `<line x1="${x0 - 10}" x2="${x1 + 10}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)" stroke-dasharray="3 3"/>`;
+  const ends = [];  // 선이 여러 개면 마지막 값만 글자로 (겹치지 않게 아래로 밀기)
+  ch.s.forEach((s, si) => {
+    const col = KPI_COL[si % 4], pts = qs.map((q, i) => [i, s.v?.[q]]).filter(([, v]) => v != null);
+    g += `<path d="${pts.map(([i, v], j) => `${j ? "L" : "M"}${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round"/>`;
+    pts.forEach(([i, v], j) => {
+      const last = j === pts.length - 1;
+      g += `<circle cx="${X(i)}" cy="${Y(v)}" r="4" fill="var(--surface)" stroke="${col}" stroke-width="2.5"/>`;
+      if (last) ends.push([X(i), Y(v), v, col]);
+      else if (!many) g += `<text x="${X(i)}" y="${Y(v) - 9}" text-anchor="middle" class="qv">${kpiF(v, ch.u)}</text>`;
+    });
+  });
+  ends.sort((a, b) => a[1] - b[1]).forEach((e, i, a) => { if (i && e[1] - a[i - 1][1] < 14) e[1] = a[i - 1][1] + 14; });
+  const over = ends.length ? ends[ends.length - 1][1] - (bot - 4) : 0;  // 아래 분기 이름과 겹치면 통째로 위로
+  if (over > 0) ends.forEach((e) => { e[1] -= over; });
+  ends.forEach(([x, y, v, col]) => { g += `<text x="${many ? x + 8 : x - 2}" y="${many ? y + 4 : y - 9}" text-anchor="${many ? "start" : "end"}" class="qv b" style="fill:${col};font-size:13px;paint-order:stroke;stroke:var(--surface);stroke-width:3px">${kpiF(v, ch.u)}</text>`; });
+  const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}</div>`;
+}
+async function kpiBlock(code) {
+  if (KPI === null) { try { KPI = (await (await fetch("data/kpi.json?v=" + encodeURIComponent(DASH.updated_at))).json()) || {}; } catch (_) { KPI = {}; } }
+  const k = KPI[code] || KPI[KPI_ALIAS[code]];
+  if (!k?.charts?.length) return "";
+  return `<h3>🔑 핵심 지표 <span class="src">${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김</span></h3><div class="card kpi">
+    <div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key || "")}</div>
+    <div class="qgrid" style="margin-top:8px">${k.charts.map(kpiChart).join("")}</div>
+    ${k.memo ? `<div class="note src">${esc(k.memo)}</div>` : ""}
+    <div class="note src">출처: ${(k.src || []).map((s) => (s.u ? `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>` : esc(s.t))).join(" · ")}</div>
+  </div>`;
+}
 // 👥 누가 어느 가격에 샀나: KRX 투자자별 순매수 거래대금(억원) × 그날 종가, 최근 1년
 const FLOW_G = [["외국인", "--s1"], ["기관", "--s3"], ["개인", "--s4"]];
 function flowHTML(d) {
@@ -1873,7 +1916,8 @@ async function openStock(code) {
     const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    const kpiHtml = await kpiBlock(code);
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + kpiHtml + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawProfile(code);
     wirePrecheck();
