@@ -180,8 +180,9 @@ function scenHTML(c) {
       <span class="dot" style="left:${at(c.price)}%"></span><span class="now" style="left:${at(c.price)}%">지금</span>
     </div>
     ${scenBoxes(s, s.parts)}
-    ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}</span></summary>${scenBoxes(s.y2, s.y2.parts)}</details>` : ""}
+    ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}${c.notes?.y2?.length ? ` · 🗒 메모 ${c.notes.y2.length}` : ""}</span></summary>${scenBoxes(s.y2, s.y2.parts)}${notesHTML(c.notes?.y2, c, s.y2)}</details>` : ""}
     ${multHTML(s)}
+    ${c.notes?.memo?.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🗒 증권사 메모 <span class="src">${c.notes.memo.length}개</span></summary>${notesHTML(c.notes.memo, c)}</details>` : ""}
     ${floorHTML(c)}
     ${growthHTML(c)}
   </div>`;
@@ -697,17 +698,17 @@ function qMoney(v, usd) {
   return a >= 1e12 ? `${s}${n(a / 1e12, 1)}조` : `${s}${n(a / 1e8, 0)}억`;
 }
 // 막대(값) + 선(%) 미니 차트. 음수 막대는 빨강, 마지막 분기는 진하게
-function qPanel(title, tag, labels, bars, line, usd, color) {
-  const W = 300, x0 = 14, bw = (W - 2 * x0) / labels.length;
+function qPanel(title, tag, labels, bars, line, usd, color, est = null) {  // est: 칸마다 추정(E) 여부 → 회색, 강조는 마지막 실적 칸
+  const W = 300, x0 = 14, bw = (W - 2 * x0) / labels.length, li = est ? est.lastIndexOf(false) : bars.length - 1;
   const vals = bars.filter((v) => v != null), hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
   const top = line ? 78 : 40, bot = lo < 0 ? 138 : 150, sc = (bot - top) / ((hi - lo) || 1), zero = top + hi * sc;  // 음수 막대 글자 자리
   let g = `<line x1="${x0}" x2="${W - x0}" y1="${zero}" y2="${zero}" stroke="var(--axis)"/>`;
   bars.forEach((v, i) => {
-    const cx = x0 + bw * i + bw / 2, last = i === bars.length - 1;
+    const cx = x0 + bw * i + bw / 2, last = i === li;
     g += `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(labels[i])}</text>`;
     if (v == null) return;
     const y = v >= 0 ? zero - v * sc : zero, h = Math.max(1, Math.abs(v) * sc);
-    g += `<rect x="${cx - bw * 0.32}" y="${y}" width="${bw * 0.64}" height="${h}" rx="2" fill="${v < 0 ? "var(--bad)" : color}" opacity="${last ? 1 : 0.55}"/>`;
+    g += `<rect x="${cx - bw * 0.32}" y="${y}" width="${bw * 0.64}" height="${h}" rx="2" fill="${v < 0 ? "var(--bad)" : est?.[i] ? "var(--axis)" : color}" opacity="${last || est?.[i] ? 1 : 0.55}"/>`;
     g += `<text x="${cx}" y="${v >= 0 ? y - 4 : y + h + 11}" text-anchor="middle" class="qv${last ? " b" : ""}">${qMoney(v, usd)}</text>`;
   });
   if (line) {
@@ -715,7 +716,7 @@ function qPanel(title, tag, labels, bars, line, usd, color) {
     const pts = line.map((v, i) => (v == null ? null : [x0 + bw * i + bw / 2, 56 - (v - ll) * ls]));
     const seg = pts.filter(Boolean);
     if (seg.length > 1) g += `<polyline points="${seg.map((p) => p.join(",")).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
-    pts.forEach((p, i) => { if (p) g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${p[0]}" y="${p[1] - 8}" text-anchor="middle" class="qv${i === line.length - 1 ? " b hi" : ""}"${line[i] < 0 ? ' style="fill:var(--bad-ink)"' : ""}>${n(line[i], 0)}%</text>`; });
+    pts.forEach((p, i) => { if (p) g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${p[0]}" y="${p[1] - 8}" text-anchor="middle" class="qv${i === li ? " b hi" : ""}"${line[i] < 0 ? ' style="fill:var(--bad-ink)"' : ""}>${n(line[i], 0)}%</text>`; });
   }
   return `<div class="qp"><div class="qt"><b>${title}</b>${qTag(tag)}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg></div>`;
 }
@@ -1096,7 +1097,7 @@ function irCalHTML() {
   if (!items.length) return "";
   const gl = { 보유: "", 관심: " ⭐", 공동: " 🤝" };
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">보유·관심·공동 · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
-    <ul class="irl">${items.map((e) => `<li>${irWhen(e)} <a href="#stock/${esc(e.code)}">${esc(e.name)}</a>${gl[e.group] || ""} · ${esc(e.title || "")}${e.live ? " · 🔴 라이브" : ""}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${e.script_url ? ` · <a href="${esc(e.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</li>`).join("")}</ul></details>`;
+    <ul class="irl">${items.map((e) => `<li>${irWhen(e)} <a href="#stock/${esc(e.code)}">${esc(e.name)}</a>${gl[e.group] || ""} · ${esc(e.title || "")}${e.live ? " · 🔴 라이브" : ""}${e.segc ? ` · <a href="#stock/${esc(e.code)}">🎯 ${esc(e.segc)} 부문 예상</a>` : ""}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${e.script_url ? ` · <a href="${esc(e.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</li>`).join("")}</ul></details>`;
 }
 function earningsHTML(code) {
   const list = EARNINGS[code] || [];
@@ -1581,8 +1582,39 @@ const TOUR_K = [["out", "아웃바운드", "내국인 출국", "s1"], ["in", "�
 let KPI = null;
 const KPI_ALIAS = { "005935": "005930" };  // 삼성전자우 = 보통주 지표
 const KPI_COL = ["var(--s1)", "var(--bad)", "var(--s3)", "var(--s4)"];
-const kpiF = (v, u = "") => (u.startsWith("$") ? "$" + n(v, Number.isInteger(v) ? 0 : 1) + u.slice(1) : n(v, Number.isInteger(v) ? 0 : 1) + u);
+const kpiF = (v, u = "") => (u.startsWith("$") ? (v < 0 ? "-$" : "$") + n(Math.abs(v), Number.isInteger(v) ? 0 : 1) + u.slice(1) : n(v, Number.isInteger(v) ? 0 : 1) + u);
+// 쌓은 막대 (연간 신규 수주 국내/중국, 빅테크 CapEx 회사별 등): 칸 위에 합계, ytd = 아직 진행 중인 해
+function kpiStack(ch) {
+  const ks = [...new Set(ch.s.flatMap((s) => Object.keys(s.v || {})))].sort();
+  if (ks.length < 2) return "";
+  const tot = ks.map((k) => ch.s.reduce((a, s) => a + (s.v?.[k] || 0), 0)), hi = Math.max(...tot) * 1.15 || 1;
+  const W = 320, x0 = 10, x1 = W - 10, top = 20, bot = 140, bw = (x1 - x0) / ks.length, Y = (v) => bot - (v / hi) * (bot - top);
+  let g = `<line x1="${x0}" x2="${x1}" y1="${bot}" y2="${bot}" stroke="var(--axis)"/>`;
+  ks.forEach((k, i) => {
+    const cx = x0 + bw * i + bw / 2, ytd = k === String(ch.ytd);
+    let acc = 0;
+    ch.s.forEach((s, si) => {
+      const v = s.v?.[k];
+      if (!v) return;
+      g += `<rect x="${cx - bw * 0.3}" y="${Y(acc + v)}" width="${bw * 0.6}" height="${Math.max(1, Y(acc) - Y(acc + v))}" fill="${KPI_COL[si % 4]}"${ytd ? ' opacity=".75"' : ""}/>`;
+      acc += v;
+    });
+    g += `<text x="${cx}" y="${Y(tot[i]) - 4}" text-anchor="middle" class="qv${i === ks.length - 1 ? " b" : ""}">${kpiF(rnd1(tot[i]), ch.u)}</text>`
+      + `<text x="${cx}" y="${bot + 15}" text-anchor="middle" class="qx">${esc(/^\d{4}$/.test(k) ? k.slice(2) : k)}${ytd ? " YTD" : ""}</text>`;
+  });
+  const leg = `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">■</span> ${esc(s.n)}`).join(" · ")}${ch.ytd_note ? ` · YTD = ${esc(ch.ytd_note)}` : ""}${ch.note ? ` · ${esc(ch.note)}` : ""}</div>`;
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b>${ch.tag || ""}</div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}</div>`;
+}
+const rnd1 = (v) => Math.round(v * 10) / 10;
+// 연간 매출 & 영업이익률 (와이즈리포트 실적 + 추정 E): 막대 = 매출, 선 = 영업이익률(OPM)
+function annualOpmHTML(d) {
+  const a = (d.kq?.annual || []).filter((r) => r.sales != null).slice(-8);
+  if (a.length < 3 || d.currency === "USD") return "";
+  return qPanel("📈 연간 매출 & 영업이익률", "회색 = 추정(E)", a.map((r) => r.q), a.map((r) => r.sales * 1e8),
+    a.map((r) => (r.op != null && r.sales ? (r.op / r.sales) * 100 : null)), false, "var(--s1)", a.map((r) => !!r.est));
+}
 function kpiChart(ch) {
+  if (ch.kind === "stack") return kpiStack(ch);
   const qs = [...new Set(ch.s.flatMap((s) => Object.keys(s.v || {})))].sort();
   const vals = ch.s.flatMap((s) => Object.values(s.v || {})).filter((v) => v != null);
   if (qs.length < 2 || !vals.length) return "";
@@ -1632,13 +1664,99 @@ async function kpiBlock(code, d) {
   const k = KPI[code] || KPI[KPI_ALIAS[code]];
   if (!k?.charts?.length) return "";
   const ch = k.charts.map(kpiChart);
-  ch.splice(1, 0, fcfBars(d, k));  // 매출 성장률 다음에 현금흐름
+  ch.splice(1, 0, fcfBars(d, k), annualOpmHTML(d));  // 매출 성장률 다음에 현금흐름 · 연간 매출 & 영업이익률
   return `<h3>🔑 핵심 지표 <span class="src">${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김</span></h3><div class="card kpi">
     <div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key || "")}</div>
     <div class="qgrid" style="margin-top:8px">${ch.join("")}</div>
     ${k.memo ? `<div class="note src">${esc(k.memo)}</div>` : ""}
     <div class="note src">출처: ${(k.src || []).map((s) => (s.u ? `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>` : esc(s.t))).join(" · ")}</div>
   </div>`;
+}
+// 🎯 사업부문별 컨센서스(예상) vs 실적 (config/seg_cons.yaml) — 실적이 비어 있으면 '다음 실적 전에 볼 예상치'
+function segcHTML(d) {
+  const sc = d.segc;
+  if (!sc) return "";
+  const du = d.currency === "USD" ? "$B" : "억원";
+  const F = (v, u) => (v == null ? "-" : u === "$" ? "$" + n(v, 2) : kpiF(v, u));
+  return Object.keys(sc).sort().reverse().slice(0, 2).map((q) => {
+    const x = sc[q], done = (x.items || []).some((i) => i.act != null);
+    const rows = (x.items || []).map((i) => {
+      const u = i.u || du, has = i.act != null && i.est != null;
+      const diff = !has ? "" : i.est > 0 ? pct((i.act / i.est - 1) * 100, 1, true) : (i.act - i.est >= 0 ? "+" : "") + F(rnd1(i.act - i.est), u);
+      const tag = !has ? "" : i.neutral ? `<span class="src">${i.act > i.est ? "예상보다 많음" : "예상보다 적음"}</span>`
+        : i.act >= i.est ? '<span class="qtag">상회</span>' : '<span class="qtag bad">하회</span>';
+      return `<tr><td style="text-align:left">${esc(i.n)}</td><td>${F(i.est, u)}</td>${done ? `<td><b>${F(i.act, u)}</b></td><td>${diff}</td><td>${tag}</td>` : ""}</tr>`;
+    }).join("");
+    return `<h3>🎯 ${esc(q)} 사업부문별 ${done ? "예상 vs 실적" : "예상 <span class=\"src\">발표 전에 살펴보세요</span>"}</h3><div class="card segc">
+      <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">항목</th><th>예상</th>${done ? "<th>실적</th><th>예상 대비</th><th></th>" : ""}</tr></thead><tbody>${rows}</tbody></table></div>
+      ${x.memo ? `<div class="note src">${esc(x.memo)}</div>` : ""}<div class="note src">출처: ${esc(x.src || "")}</div></div>`;
+  }).join("");
+}
+// 🏗 빅테크 CapEx (마이크로소프트·알파벳·메타·아마존): 데이터센터 투자가 늘어야 메모리(삼성전자·SK하이닉스)를 더 사요
+let CAPEX = null;
+function capexHTML() {
+  const cs = CAPEX?.cos || [];
+  if (!cs.length) return "";
+  const qs = [...new Set(cs.flatMap((c) => Object.keys(c.q)))].sort().slice(-6);
+  const gaps = qs.map((q) => [q, cs.filter((c) => c.q[q] == null).map((c) => c.name)]).filter(([, m]) => m.length);
+  const tot = (q) => cs.reduce((a, c) => a + (c.q[q] || 0), 0), full = (q) => cs.every((c) => c.q[q] != null);
+  const ago = (q) => `${String(+q.slice(0, 2) - 1).padStart(2, "0")}${q.slice(2)}`;
+  const lq = [...qs].reverse().find(full), yoy = lq && full(ago(lq)) ? (tot(lq) / tot(ago(lq)) - 1) * 100 : null;
+  const chart = kpiStack({ t: "빅테크 4곳 분기 CapEx (설비투자)", u: "$B", s: cs.map((c) => ({ n: c.name, v: Object.fromEntries(qs.filter((q) => c.q[q] != null).map((q) => [q, c.q[q]])) })),
+    tag: yoy == null ? "" : `<span class="qtag${yoy < 0 ? " bad" : ""}">${esc(lq)} 합계 1년 전 대비 ${pct(yoy, 0, true)}</span>`,
+    why: "데이터센터 투자가 늘어야 메모리(삼성전자·SK하이닉스)를 더 사요", note: gaps.length ? gaps.map(([q, m]) => `${q} ${m.join("·")} 빠짐`).join(" · ") + " (발표 전·야후 반영 전)" : "" });
+  const rows = cs.map((c) => {
+    const k = Object.keys(c.q).sort().at(-1), v = c.q[k], p = c.q[ago(k)], e = c.est?.[k];
+    return `<tr><td style="text-align:left">${esc(c.name)}</td><td>${esc(k)}</td><td><b>$${n(v, 1)}B</b></td><td>${p ? pct((v / p - 1) * 100, 0, true) : "-"}</td><td>${e ? `$${n(e.est, 1)}B → $${n(e.act, 1)}B${e.n !== "CapEx" ? `<br><span class="src">${esc(e.n.replace("CapEx ", ""))}</span>` : ""}` : "-"}</td></tr>`;
+  }).join("");
+  return `<h3>🏗 빅테크 CapEx <span class="src">${esc(CAPEX.updated_at || "")}</span></h3><div class="card">
+    <div class="qgrid">${chart}</div>
+    <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>최근 분기</th><th>CapEx</th><th>1년 전 대비</th><th>예상 → 발표</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="note src">${esc(CAPEX.src || "")} · 막대는 현금으로 나간 설비투자(야후 기준). 마이크로소프트가 발표하는 CapEx 는 금융리스를 더한 숫자라 더 커요</div></div>`;
+}
+// 📈 12MF PER 밴드 (증권사 그림처럼 10·15·20배 … 고정 배수 선): 각 주의 12개월 선행 EPS = 그해 EPS × 남은 기간 + 다음 해 EPS × 지난 기간
+// shortcut: 과거 시점의 선행 EPS 는 당시 컨센서스 대신 실제 연간 EPS(지난 해는 실적, 앞 해는 지금 추정)로 계산 — 무료로 과거 컨센서스를 받게 되면 바꾸기
+function per12mfSeries(d) {
+  const b = d.bands?.PER, eps = Object.fromEntries((d.history || []).map((r) => [r.year, r.eps]));
+  if (!b?.dates?.length) return null;
+  const pts = b.dates.map((ds, i) => {
+    const dt = new Date(ds), y = dt.getFullYear(), w0 = Math.max(0, (12 - dt.getMonth() - dt.getDate() / 31) / 12);
+    const a = eps[y], c = eps[y + 1], e = a != null && c != null ? w0 * a + (1 - w0) * c : null;
+    return [ds, b.price[i], e != null && e > 0 ? e : null];
+  }).filter((p) => p[2] != null).slice(-156);  // 최근 3년 (주간)
+  if (pts.length < 20) return null;
+  const r = pts.map((p) => p[1] / p[2]).sort((x, y) => x - y), lo = r[Math.floor(r.length * 0.05)], hi = r[Math.floor(r.length * 0.95)];
+  const step = [2, 2.5, 5, 10, 20, 50].find((s) => (hi - lo) / s <= 5) || 100;
+  const ms = [];
+  for (let m = Math.max(step, Math.floor(lo / step) * step); m <= Math.ceil(hi / step) * step + 1e-9 && ms.length < 6; m += step) ms.push(m);
+  return { pts, ms, now: pts.at(-1)[1] / pts.at(-1)[2] };
+}
+function per12mfHTML(d) {
+  if (!(d.methods || []).includes("PER")) return "";
+  const s = per12mfSeries(d);
+  if (!s) return "";
+  return `<h3>📈 12MF PER 밴드 <span class="src">최근 3년 · 지금 ${n(s.now, 1)}배 · ${s.ms.map((m) => n(m, 1) + "배").join(" · ")} 선</span></h3><div class="card">
+    <div id="p12-legend"></div><div class="chart-box tall"><canvas id="p12"></canvas></div>
+    <div class="note src">선 = 배수 × 그 시점의 12개월 선행 EPS. 과거 선행 EPS 는 당시 컨센서스 대신 실제 연간 EPS(앞 해는 지금 추정치)로 계산해서 증권사 그림과 조금 다를 수 있어요</div></div>`;
+}
+function drawPer12mf(d) {
+  const cv = document.getElementById("p12"), s = cv && per12mfSeries(d);
+  if (!s) return;
+  const C = themeColors(), usd = d.currency === "USD", shades = [C.muted, C.ink2, C.s3, C.s4, C.s2, C.s7];
+  const ds = [{ label: "주가", data: s.pts.map((p) => p[1]), borderColor: C.s1, borderWidth: 2.5 },
+    ...s.ms.map((m, i) => ({ label: `${n(m, 1)}배`, data: s.pts.map((p) => p[2] * m), borderColor: shades[i % shades.length], borderWidth: 1.3 }))];
+  makeChart(cv, s.pts.map((p) => p[0]), ds, { fmt: (v) => (usd ? "$" + n(v, 2) : n(v) + "원"), yfmt: (v) => (usd ? "$" + n(v) : v >= 10000 ? n(v / 10000, 0) + "만" : n(v)) });
+  document.getElementById("p12-legend").innerHTML = legend(ds.map((x) => [x.label, x.borderColor, false]));
+}
+// 🗒 증권사 메모 (config/notes.yaml) — pbr·per 배수를 적은 메모는 우리 28E BPS·EPS × 그 배수도 계산
+function notesHTML(list, c, y2) {
+  if (!list?.length) return "";
+  const usd = c.currency === "USD", fmtP = (v) => (usd ? "$" + n(v, 0) : n(v));
+  const calc = ["pbr", "per"].map((k) => {
+    const ms = [...new Set(list.flatMap((x) => x[k] || []))].sort((a, b) => a - b), base = y2?.parts?.find((p) => p.kind === k.toUpperCase())?.base_val;
+    return ms.length && base ? `<div class="note src">우리 ${esc(y2.label)} ${k === "pbr" ? "BPS" : "EPS"} ${fmtP(base)} 기준: ${ms.map((m) => `${k.toUpperCase()} ${m}배 ${fmtP(base * m)} (${pct((base * m / c.price - 1) * 100, 0, true)})`).join(" · ")}</div>` : "";
+  }).join("");
+  return `${list.map((x) => `<div class="note">🗒 <b>${esc(x.src)}</b> <span class="src">${esc(x.date || "")}</span> ${esc(x.text)}</div>`).join("")}${calc}`;
 }
 // 👥 누가 어느 가격에 샀나: KRX 투자자별 순매수 거래대금(억원) × 그날 종가, 최근 1년
 const FLOW_G = [["외국인", "--s1"], ["기관", "--s3"], ["개인", "--s4"]];
@@ -1960,8 +2078,9 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + kpiHtml + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + segcHTML(d) + kpiHtml + per12mfHTML(d) + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
+    drawPer12mf(d);
     drawProfile(code);
     wirePrecheck();
     if (usedCar) wireManheim();
@@ -2299,7 +2418,8 @@ async function loadIndustry() {
     try { AMZ = await (await fetch("data/amazon_kbeauty.json?t=" + Date.now(), { cache: "no-store" })).json(); }
     catch (e) { $("#industryBody").innerHTML = `<div class="empty">산업 데이터를 불러오지 못했어요.</div>`; return; }
   }
-  $("#industryBody").innerHTML = amzHTML();
+  if (!CAPEX) { try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CAPEX = {}; } }
+  $("#industryBody").innerHTML = capexHTML() + amzHTML();
   drawAmz();
 }
 const amzSum = (a) => (a || []).reduce((x, y) => x + y, 0);

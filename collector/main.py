@@ -26,6 +26,9 @@ QTRS = read_json(CACHE / "quarters.json") or {}  # 분기 실적 (야후는 최�
 SEGS = read_json(CACHE / "segments.json") or {}  # 한국 '주요제품 매출구성'(%)을 보고서 시점별로 쌓음 → 부문 비중 추이
 SEG_US = load_yaml("segments.yaml") or {}  # 미국 부문별 매출 (공식 실적 자료를 보고 직접 적음)
 KPI_CFG = load_yaml("kpi.yaml") or {}  # 🔑 핵심 지표 (fcf_add = 야후에 아직 없는 최신 분기 FCF, 보도자료)
+NOTES = load_yaml("notes.yaml") or {}  # 적정주가 칸 메모 (증권사 의견, 28E 칸 등)
+SEGC = load_yaml("seg_cons.yaml") or {}  # 🎯 사업부문별 컨센서스 vs 실적
+BIGTECH = [("MSFT", "마이크로소프트"), ("GOOG", "알파벳"), ("META", "메타"), ("AMZN", "아마존")]  # 🏗 빅테크 CapEx (메모리 수요)
 
 
 def keep_prev(new, prev, label):
@@ -507,6 +510,8 @@ def stock_detail(h, rates_now, fx):
             qf.append((qk, v * (1e6 if mkt == "US" else 1e8)))  # 미국 백만 달러, 한국 억원
     det["card"]["fcf"] = qf[-2:] if len(qf) >= 2 else None
     det["card"]["sa_div"] = ((SOMONG.get(code) or {}).get("my") or {}).get("sa_div")  # 배당주 점검 (시킹알파 숫자를 직접 적은 것)
+    det["card"]["notes"] = NOTES.get(code)
+    det["segc"] = SEGC.get(code)
     k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적을 발표한 지 3일 안이거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
     if k.get("date") and (now_kst().date() - pd.Timestamp(k["date"]).date()).days <= 3:
         det["card"]["kq_new"] = k["latest"]
@@ -692,8 +697,20 @@ def main():
         if ev:
             days = (pd.Timestamp(ev["when"][:10]).date() - now_kst().date()).days
             if -7 <= days <= 90:  # 지난 1주 ~ 앞으로 3개월
-                cal.append({**ev, "name": h["name"], "code": str(h["code"]), "group": g, "market": h.get("market", "KR").upper(), "dday": days})
+                # 🎯 실적이 아직 안 채워진 분기의 사업부문별 예상치가 있으면 표시 (발표 전에 살펴보기)
+                segc = next((q for q, v in (SEGC.get(str(h["code"])) or {}).items() if all(i.get("act") is None for i in v.get("items", []))), None)
+                cal.append({**ev, "name": h["name"], "code": str(h["code"]), "group": g, "market": h.get("market", "KR").upper(), "dday": days, "segc": segc})
     cal.sort(key=lambda x: x["when"])
+    # 🏗 빅테크 CapEx (분기, 십억 달러): 야후 분기 현금흐름표 + 야후에 아직 없는 최신 분기는 kpi.yaml capex_add (보도자료)
+    capex = []
+    for t, nm in BIGTECH:
+        q = {kq._qlabel(e): rnd(-v["capex"] / 1e9, 1) for e, v in sorted((QTRS.get(t) or {}).items()) if v.get("capex") is not None}
+        for qk, v in ((KPI_CFG.get(t) or {}).get("capex_add") or {}).items():
+            q.setdefault(qk, rnd(v / 1e3, 1))
+        est = {qq: next((i for i in v.get("items", []) if str(i["n"]).startswith("CapEx")), None) for qq, v in (SEGC.get(t) or {}).items()}
+        capex.append({"t": t, "name": nm, "q": dict(sorted(q.items())), "est": {k: v for k, v in est.items() if v}})
+    write_json(DATA / "capex.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "cos": capex,
+                                     "src": "야후 파이낸스 분기 현금흐름표 (설비투자) · 최신 분기는 보도자료 · 예상 = config/seg_cons.yaml"})
     write_json(DATA / "ir_calendar.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "items": cal})
 
     print("■ 수주 공시")
