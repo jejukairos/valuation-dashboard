@@ -158,12 +158,12 @@ table.flow tr.now td { background: var(--surface-2); }
 /* 종목 카드 */
 .toolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .seg { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
-.seg button, .seg span[data-m] {
+.seg button, .seg span[data-m], .seg span[data-sm] {
   border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 13px;
   padding: 6px 12px; border-radius: 8px; cursor: pointer; min-height: 34px;
 }
-.seg span[data-m] { display: inline-flex; align-items: center; box-sizing: border-box; }
-.seg button.on, .seg span[data-m].on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+.seg span[data-m], .seg span[data-sm] { display: inline-flex; align-items: center; box-sizing: border-box; }
+.seg button.on, .seg span[data-m].on, .seg span[data-sm].on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
 .stock {
   display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
 }
@@ -198,9 +198,7 @@ table.flow tr.now td { background: var(--surface-2); }
 .scen3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 22px; }
 .scen3 div { background: var(--surface-2); border-radius: 10px; padding: 6px 8px; font-size: 12px; color: var(--ink-2);
   display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
-.scen3 div.on { box-shadow: inset 0 0 0 2px var(--s1); }
-.scen3 div.bull { background: var(--good-bg); }  /* 🐂 강세장일 때 */
-table.cmp th.sep, table.cmp td.sep { border-left: 2px solid var(--axis); }
+.scen3 div.on { box-shadow: inset 0 0 0 2px var(--s1); }table.cmp th.sep, table.cmp td.sep { border-left: 2px solid var(--axis); }
 .scen3 .basis { font-size: 10.5px; line-height: 1.35; margin: 2px 0; word-break: keep-all; }
 .scen3 b { font-size: 15px; color: var(--ink); }
 .scen3 em { font-style: normal; font-weight: 700; font-size: 13px; }

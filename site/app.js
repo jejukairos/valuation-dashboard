@@ -159,10 +159,13 @@ function scenHTML(c) {
   const fmtP = (v) => (usd ? "$" + n(v, 0) + krw(v) : n(v));
   // Bear = 하방(이 정도면 바닥, 더 빠지면 안전마진) · Base = 적정주가(평균) · Bull = 최대(금리가 다시 내려갈 때)
   const pts = [["bear", "Bear", "하방"], ["base", "Base", "적정주가"], ["bull", "Bull", "최대"]];
-  const lo0 = Math.min(c.price, s.bear), hi0 = Math.max(c.price, s.bull);
-  const pad = (hi0 - lo0) * 0.08 || hi0 * 0.05;
-  const lo = Math.max(0, lo0 - pad), hi = hi0 + pad;
-  const at = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+  const bar = (v) => {  // 하방·적정·최대·지금 위치 막대 (보는 칸마다 눈금을 다시 잡음)
+    const lo0 = Math.min(c.price, v.bear), hi0 = Math.max(c.price, v.bull), pad = (hi0 - lo0) * 0.08 || hi0 * 0.05;
+    const lo = Math.max(0, lo0 - pad), hi = hi0 + pad, at = (x) => Math.max(0, Math.min(100, ((x - lo) / (hi - lo)) * 100));
+    return `<div class="scenbar" style="background:linear-gradient(90deg, var(--good-bg) 0 ${at(v.base)}%, var(--warn-bg) ${at(v.base)}% ${at(v.bull)}%, var(--bad-bg) ${at(v.bull)}%)">
+      ${pts.map(([k, l]) => `<span class="tick" style="left:${at(v[k])}%"></span><span class="tl" style="left:${at(v[k])}%">${l}</span>`).join("")}
+      <span class="dot" style="left:${at(c.price)}%"></span><span class="now" style="left:${at(c.price)}%">지금</span></div>`;
+  };
   const fmtB = (x) => (usd ? "$" + n(x, 2) : n(x) + "원");
   const baseOf = (parts, lab) => (parts || []).map((p) => `${lab} ${p.kind === "PER" ? "EPS" : "BPS"} ${fmtB(p.base_val)}`).join(" · ");
   // 칸: 가격 → 배수 → 지금 가격 대비 % (EPS·BPS 는 제목에 한 번만)
@@ -173,14 +176,20 @@ function scenHTML(c) {
       return `<div class="${k}${k === "base" ? " on" : ""}"><span>${l} <b>${ko}</b></span><b>${fmtP(v[k])}</b><span class="src basis">${why}</span><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></div>`;
     }).join("")}</div>`;
   }
+  // 🐂 강세장일 때(금리가 내려가 돈이 풀릴 때): 같은 Bear·Base·Bull 칸을 탭으로 — 성장률 × 1.5·1.75·2, 업종·밴드 PER 은 보통·1.5배·2배
+  const bm = s.bull_mkt, reg = s.regime;
+  const bv = bm ? { bear: bm.lo, base: bm.mid ?? (bm.lo + bm.hi) / 2, bull: bm.hi } : null;
+  const bparts = (s.parts || []).map((p) => ({ ...p, mult: p.bm ? { bear: p.bm.lo, base: p.bm.mid ?? (p.bm.lo + p.bm.hi) / 2, bull: p.bm.hi } : p.mult }));
+  const m0 = bv && reg?.mode === "easy" ? "bull" : "now";  // 지금 시장 국면 쪽 탭을 먼저
+  const regLine = reg ? `<div class="note src">지금 시장: <b>${reg.mode === "tight" ? "🔴" : "🟢"} ${esc(reg.label)}</b> — ${reg.why.map(esc).join(" · ")}</div>` : "";
+  // 카드(button) 안에도 들어가서 버튼 대신 span 탭
+  const tabs = bv ? `<span class="seg scenseg" style="margin-top:6px;display:inline-flex"><span data-sm="now" class="${m0 === "now" ? "on" : ""}">${reg?.mode === "tight" ? "🔴 지금 (긴축·약세장)" : "지금 시장"}</span><span data-sm="bull" class="${m0 === "bull" ? "on" : ""}">🐂 강세장일 때</span></span>` : "";
   return `<div class="scen" onclick="event.stopPropagation()">
     <div class="chart-title" style="margin-top:12px"><b>① 앞으로 실적으로 본 적정주가</b> <span class="src">${baseOf(s.parts, "12MF")}</span></div>
-    <div class="scenbar" style="background:linear-gradient(90deg, var(--good-bg) 0 ${at(s.base)}%, var(--warn-bg) ${at(s.base)}% ${at(s.bull)}%, var(--bad-bg) ${at(s.bull)}%)">
-      ${pts.map(([k, l]) => `<span class="tick" style="left:${at(s[k])}%"></span><span class="tl" style="left:${at(s[k])}%">${l}</span>`).join("")}
-      <span class="dot" style="left:${at(c.price)}%"></span><span class="now" style="left:${at(c.price)}%">지금</span>
-    </div>
-    ${scenBoxes(s, s.parts)}
-    ${bullMktHTML(s, c, fmtP)}
+    ${tabs}
+    <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}</div>
+    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · 성장률 × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)</div></div>` : ""}
+    ${regLine}
     ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}${c.notes?.y2?.length ? ` · 🗒 메모 ${c.notes.y2.length}` : ""}</span></summary>${scenBoxes(s.y2, s.y2.parts)}${notesHTML(c.notes?.y2, c, s.y2)}</details>` : ""}
     ${multHTML(s)}
     ${c.notes?.memo?.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🗒 증권사 메모 <span class="src">${c.notes.memo.length}개</span></summary>${notesHTML(c.notes.memo, c)}</details>` : ""}
@@ -188,17 +197,14 @@ function scenHTML(c) {
     ${growthHTML(c)}
   </div>`;
 }
-// 🐂 강세장일 때 (금리가 내려가 돈이 풀릴 때) 적정주가 범위: 성장률 × 1.5 ~ × 2, 업종·밴드 PER 은 보통 ~ 보통 × 2 + 지금 시장 국면
-function bullMktHTML(s, c, fmtP) {
-  const b = s.bull_mkt, ps = s.parts || [];
-  if (!b) return "";
-  const why = (k) => ps.map((p) => `${p.kind} ${n(p.bm?.[k], p.kind === "PBR" ? 2 : 1)}배`).join(" · ") + (ps.length > 1 ? " 평균" : "");
-  const box = (k, l) => { const up = (b[k] / c.price - 1) * 100; return `<div class="bull"><span>강세장 <b>${l}</b></span><b>${fmtP(b[k])}</b><span class="src basis">${why(k)}</span><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></div>`; };
-  const reg = s.regime;
-  return `<div class="chart-title" style="margin-top:10px"><b>🐂 강세장일 때</b> <span class="src">금리가 내려가 돈이 풀릴 때 · 성장률 × 1.5 ~ × 2 (업종·밴드 PER 은 보통 ~ 보통 × 2)</span></div>
-    <div class="scen3" style="grid-template-columns:1fr 1fr;margin-top:6px">${box("lo", "하방")}${box("hi", "상방")}</div>
-    ${reg ? `<div class="note src">지금 시장: <b>${reg.mode === "tight" ? "🔴" : "🟢"} ${esc(reg.label)}</b> — ${reg.why.map(esc).join(" · ")}${reg.mode === "tight" ? " → 지금은 위 '적정주가(Base)'가 기준, 이 칸은 금리가 내려간 뒤" : " → 지금은 이 칸이 기준"}</div>` : ""}`;
-}
+// 적정주가 '지금 시장 / 🐂 강세장일 때' 탭 (카드 안 버튼이라 상세로 넘어가지 않게)
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".scenseg [data-sm]"); if (!b) return;
+  e.stopPropagation();
+  const box = b.closest(".scen");
+  box.querySelectorAll(".scenseg [data-sm]").forEach((x) => x.classList.toggle("on", x === b));
+  box.querySelectorAll("[data-sm-box]").forEach((x) => { x.hidden = x.dataset.smBox !== b.dataset.sm; });
+}, true);
 // 배수를 어떻게 정했는지 한 줄 (성장률 × 1·1.5·2 / 업종 PER / 10년 밴드)
 function multHTML(s) {
   const r = s.sa_ref, ref = r && (r["5y"] != null || r.sector != null)  // 시킹알파 같은 줄의 참고값
@@ -952,9 +958,8 @@ function kqCharts(k, mode) {
   // 분기 보기: 최근 5분기 실적 + 다음 분기들 예상(E, 와이즈리포트) — 연간 보기처럼 8칸
   const a = mode === "y" && k.annual?.length, qs = a ? k.annual.slice(-8) : k.fwd?.length ? k.quarters.slice(-5).concat(k.fwd) : k.quarters;
   const u = a ? "연간" : "분기", est = a ? null : k.est_bar;
-  // 한국은 영업이익 먼저, 미국(빅테크)은 EPS 먼저 — 자료가 있는 항목만
-  const order = k.cur === "USD" ? [["eps", "EPS", "var(--s3)"], ["sales", "매출액", "var(--s1)"], ["op", "영업이익", "var(--good)"]]
-    : [["op", "영업이익", "var(--good)"], ["sales", "매출액", "var(--s1)"], a ? ["ni", "순이익", "var(--s3)"] : ["eps", "EPS", "var(--s3)"]];
+  // 한국·미국 모두 매출액 → 영업이익 → EPS (연간은 EPS 대신 순이익) — 자료가 있는 항목만
+  const order = [["sales", "매출액", "var(--s1)"], ["op", "영업이익", "var(--good)"], a ? ["ni", "순이익", "var(--s3)"] : ["eps", "EPS", "var(--s3)"]];
   return order.filter(([f]) => qs.some((q) => q[f] != null)).map(([f, t, c]) => kqBars(`${t} (${u})`, qs, f, est, c, k.cur)).join("");
 }
 function kqBox(k, code) {
@@ -1086,6 +1091,8 @@ function kqHTML(d) {
     </tbody></table></div>
     ${nx ? `<div class="note">📌 다음 ${esc(nx.q)} 컨센서스: ${[["sales", "매출"], ["op", "영업이익"], ["ni", "순이익"], ["eps", "EPS"]].filter(([f]) => nx[f] != null).map(([f, l]) => `${l} ${kqF(f, k.cur)(nx[f])}`).join(" · ")} <span class="src">(${esc(nx.date)} ${k.cur === "USD" ? "발표 예정" : "기준"}, 발표되면 이 값과 비교해요)</span></div>` : ""}
     ${k.filing ? `<div class="note src">${k.cur === "USD" ? "발표" : "공시"}: <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${esc(k.filing.name)}</a></div>` : ""}
+    ${(EARNINGS[d.card?.code] || []).length ? "" : earningsHTML(d.card?.code, true)}
+    ${qtrHTML(d, "q", true)}
   </div>`;
 }
 const QTR_MAP = {};
@@ -1094,8 +1101,9 @@ document.addEventListener("click", (e) => {
   const box = b.closest(".qtrbox");
   box.outerHTML = qtrHTML(QTR_MAP[box.dataset.code], b.dataset.q);
 });
-function qtrHTML(d, mode = "q") {  // mode: q = 분기, y = 연간 (야후 연간 재무제표)
-  const yr = mode === "y" && Object.keys(d.qtrs_y || {}).length >= 2, U = yr ? "년" : "분기";
+// inKq = '🧾 최신 분기 실적' 카드 안에 붙일 때: 위 막대·🔑 핵심 지표와 겹치는 매출·영업이익·FCF 칸과 분기/연간 탭은 빼고 나머지만
+function qtrHTML(d, mode = "q", inKq = false) {  // mode: q = 분기, y = 연간 (야후 연간 재무제표)
+  const yr = !inKq && mode === "y" && Object.keys(d.qtrs_y || {}).length >= 2, U = yr ? "년" : "분기";
   QTR_MAP[(d.card || d).code] = d;
   const all = Object.entries((yr ? d.qtrs_y : d.qtrs) || {}).filter(([, q]) => q.rev);
   if (all.length < 2) return "";
@@ -1125,17 +1133,20 @@ function qtrHTML(d, mode = "q") {  // mode: q = 분기, y = 연간 (야후 연�
   const segs = sp ? Object.keys(col).filter((s) => sp[1][s]).map((s) => [s, sp[2] ? sp[2][s] : (last[1].rev * sp[1][s]) / 100,
     sp[2] && spa?.[2]?.[s] > 0 ? (sp[2][s] / spa[2][s] - 1) * 100 : null, col[s], sp[1][s], !sp[2]]) : null;
   const nm = (d.card || d).name || "";
-  return `<div class="qtrbox" data-code="${esc((d.card || d).code || "")}"><h3>📊 ${esc(nm)} 실적 요약 (핵심지표) · ${esc(labels[L])} <span class="src">${esc(last[0])} 끝난 ${yr ? "회계연도" : "분기"} · 야후 파이낸스${d.seg ? " · 부문: " + esc(d.seg.src || "") : ""} · ${usd ? "달러" : "원"}</span></h3><div class="card">${Object.keys(d.qtrs_y || {}).length >= 2 ? `<div class="seg qseg" style="margin-bottom:8px"><button data-q="q" class="${yr ? "" : "on"}">분기</button><button data-q="y" class="${yr ? "on" : ""}">연간</button></div>` : ""}
+  const src = `${esc(last[0])} 끝난 ${yr ? "회계연도" : "분기"} · 야후 파이낸스${d.seg ? " · 부문: " + esc(d.seg.src || "") : ""} · ${usd ? "달러" : "원"}`;
+  const head = inKq ? `<div class="chart-title" style="margin-top:14px"><b>📊 손익 구조 · ${esc(labels[L])}</b> <span class="src">${src}</span></div>`
+    : `<h3>📊 ${esc(nm)} 실적 요약 (핵심지표) · ${esc(labels[L])} <span class="src">${src}</span></h3><div class="card">${Object.keys(d.qtrs_y || {}).length >= 2 ? `<div class="seg qseg" style="margin-bottom:8px"><button data-q="q" class="${yr ? "" : "on"}">분기</button><button data-q="y" class="${yr ? "on" : ""}">연간</button></div>` : ""}`;
+  return `<div class="qtrbox" data-code="${esc((d.card || d).code || "")}">${head}
     <div class="qgrid">
-      ${qPanel("매출 & 성장률 (1년 전 대비)", tRev, labels, rev, yoy.some((v) => v != null) ? yoy : null, usd, "var(--ink-2)")}
-      ${qPanel("영업이익 & 영업이익률", tOp, labels, op, opm, usd, "var(--good)")}
+      ${inKq ? "" : qPanel("매출 & 성장률 (1년 전 대비)", tRev, labels, rev, yoy.some((v) => v != null) ? yoy : null, usd, "var(--ink-2)")}
+      ${inKq ? "" : qPanel("영업이익 & 영업이익률", tOp, labels, op, opm, usd, "var(--good)")}
       ${gpv.filter((v) => v != null).length >= 2 ? qPanel("매출총이익 & 매출총이익률", tG, labels, gpv, gpm, usd, "var(--s3)") : ""}
       ${!yr && ps.length ? segDonut(ps, col, d.seg) : ""}
-      ${qPanel("잉여현금흐름 (FCF)", tF, labels, fcf, null, usd, "var(--good)")}
+      ${inKq ? "" : qPanel("잉여현금흐름 (FCF)", tF, labels, fcf, null, usd, "var(--good)")}
       ${qPanel("설비투자 (CapEx)", tC, labels, capex, null, usd, "var(--warn)")}
       ${!yr && ps.length > 1 ? segStack(ps, col) : ""}
     </div>
-    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 얼마 벌어서 어디에 썼나</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
+    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 얼마 벌어서 어디에 썼나</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 → 순이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
     ${qSankey(last[1], usd, getQ(last[0]), segs)}
     ${yr ? "" : (() => {  // 최근 4분기 합계(TTM) · 최근 연간 — 분기는 계절성이 있어 1년치로도 보기
       const q4 = all.slice(-4).map(([, q]) => q), out = [];
@@ -1149,7 +1160,7 @@ function qtrHTML(d, mode = "q") {  // mode: q = 분기, y = 연간 (야후 연�
       return out.map(([t, q]) => `<details class="fvt"><summary class="chart-title">💸 ${esc(t)} <span class="src">매출 ${qMoney(q.rev, usd)} · 영업이익률 ${n((q.op / q.rev) * 100, 1)}% · 눌러서 보기</span></summary>${qSankey(q, usd)}</details>`).join("");
     })()}
     <div class="note src">성장률은 1년 전 ${yr ? "" : "같은 분기 "}대비 (${yr ? "야후 연간 재무제표 최근 4년" : "분기 자료가 쌓이면 빈 칸이 채워져요"}) · 한국 종목은 야후 반영이 실적 발표보다 늦을 수 있어요</div>
-  </div></div>`;
+  ${inKq ? "" : "</div>"}</div>`;
 }
 /* ---------- 실적발표(컨퍼런스콜) 요약: 분기 목록 → 누르면 자세한 요약, 맨 아래 '핵심만' (config/earnings.yaml) ---------- */
 let EARNINGS = {}, IRCAL = { items: [] };
@@ -1180,10 +1191,11 @@ function easyNewsHTML() {
     ${items.map((e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
       <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
 }
-function earningsHTML(code) {
+function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없어 '🧾 최신 분기 실적' 카드 안에 일정 한 줄만
   const list = EARNINGS[code] || [];
   const ev = (IRCAL.items || []).find((e) => e.code === code && e.dday >= -7);
   const next = ev ? `<div class="note">📅 ${irWhen(ev)} ${esc(ev.title || "")}${ev.live ? " · 🔴 라이브 컨퍼런스콜" : ""}${ev.url ? ` · <a href="${esc(ev.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${ev.script_url ? ` · <a href="${esc(ev.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</div>` : "";
+  if (!list.length && inline) return next ? `${next}<div class="note src">📞 발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 바로 아래에 넣어요.</div>` : "";
   if (!list.length) return next ? `<h3>📞 실적발표</h3><div class="card">${next}<div class="note src">발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 여기에 넣어요.</div></div>` : "";
   return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">${next}
     ${list.map((e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
@@ -2327,7 +2339,7 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + segcHTML(d) + kpiHtml + per12mfHTML(d) + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + segcHTML(d) + kpiHtml + per12mfHTML(d) + (d.kq ? "" : qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
@@ -2894,7 +2906,7 @@ async function load() {
 }
 
 for (const id of ["#stockCards", "#watchFull", "#jointCards"]) $(id).addEventListener("click", (e) => {
-  const b = e.target.closest(".stock"); if (!b || e.target.closest(".pseg")) return;  // 주가 기간 탭은 상세로 넘어가지 않음
+  const b = e.target.closest(".stock"); if (!b || e.target.closest(".pseg, .scenseg")) return;  // 주가 기간·강세장 탭은 상세로 넘어가지 않음
   location.hash = `#stock/${b.dataset.code}`;
 });
 $("#watchSort").addEventListener("change", (e) => {

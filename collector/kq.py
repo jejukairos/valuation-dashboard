@@ -221,7 +221,7 @@ def collect_us(tkr, qtrs, hist):
     est = {"eps": (eps.get(last) or {}).get("est"), "sales": (cons.get(lab) or {}).get("sales")}
     rows = [{"item": nm, "f": f, "act": val(last, f), "est": est.get(f), "vs_est": _pct(val(last, f), est.get(f)),
              "qoq": _pct(val(last, f), val(prev, f)), "yoy": _pct(val(last, f), val(yago, f))}
-            for f, nm in (("eps", "EPS"), ("sales", "매출액"), ("op", "영업이익"))]
+            for f, nm in (("sales", "매출액"), ("op", "영업이익"), ("eps", "EPS"))]  # 한국과 같은 순서
     qs = [{"q": _qlabel(k), **{f: val(k, f) for f in ("sales", "op", "eps")}, "ni": (qtrs.get(k) or {}).get("ni")} for k in keys]
     annual = [{"q": f"{str(y)[2:]}{'E' if r.get('estimate') else ''}", "est": bool(r.get("estimate")), "eps": r.get("eps")}
               for y, r in sorted((hist or {}).items()) if isinstance(r, dict) and r.get("eps") is not None][-8:]

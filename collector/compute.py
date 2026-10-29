@@ -217,11 +217,14 @@ def market_regime(idx, idx_name, us10y, rate_name="미국채 10년", tight=None)
 def too_high(m, e12, price, band, sector=None, sec_name=None):
     """성장률 PER 로 잡은 하방(Bear = 12MF EPS × 성장률 × 1)이 지금 가격보다 50% 넘게 높으면 성장률이 너무 센 것
     (수출주처럼 이익이 한 해 확 튀어 3년 성장률이 부푼 경우, 예: 달바글로벌·에이피알).
-    → 업종 PER(sectors.yaml 바닥·보통·최고), 업종이 없으면 이 종목 10년 PER 밴드(하단·평균·상단)로 바꿈. 아니면 None."""
-    if not (e12 and e12 > 0 and price and e12 * m["bear"] > price * 1.5):
+    → 업종 PER(sectors.yaml 바닥·보통·최고), 업종이 없으면 이 종목 10년 PER 밴드(하단·평균·상단)로 바꿈. 아니면 None.
+    하방 배수(성장률 × 1)부터 12MF PER 상한(35배)을 넘어도 성장률 방식은 의미가 없어서 똑같이 바꿈 (두산에너빌리티 39.6%)."""
+    cap = (SETTINGS.get("market_regime") or {}).get("per_max", 35)
+    over = m["bear"] > cap
+    if not (e12 and e12 > 0 and price and (over or e12 * m["bear"] > price * 1.5)):
         return None
-    gap = (e12 * m["bear"] / price - 1) * 100
-    why = f"성장률 PER {m['bear']:g}배로 잡은 하방이 지금 가격보다 {gap:.0f}% 높아서"
+    why = (f"성장률 PER {m['bear']:g}배가 {cap:g}배를 넘어 의미가 없어서" if over else
+           f"성장률 PER {m['bear']:g}배로 잡은 하방이 지금 가격보다 {(e12 * m['bear'] / price - 1) * 100:.0f}% 높아서")
     if sector and str(sector.get("kind", "PER")).upper() == "PER":
         return {k: sector[k] for k in ("bear", "base", "bull")}, f"{sec_name} 업종 PER (바닥 · 보통 · 최고) — {why}"
     st = (band or {}).get("periods", {})
@@ -268,13 +271,14 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
             over = {k: rnd(x, 1) for k, x in {**m, **{"bm_" + kk: vv for kk, vv in bm.items()}}.items() if x and x > cap}
             m = {k: min(x, cap) for k, x in m.items()}
             bm = {k: min(x, cap) for k, x in bm.items()}
+        bm["mid"] = (bm["lo"] + bm["hi"]) / 2  # 강세장 Base = 하방·상방 가운데 (성장률 × 1.75)
         parts.append({"kind": kind, "base_val": rnd(v, 2), "mult": {k: rnd(x, 2) for k, x in m.items()}, "src": src, "how": how,
                       "price": {k: v * x for k, x in m.items()}, "bm": {k: rnd(x, 2) for k, x in bm.items()},
                       "bm_price": {k: v * x for k, x in bm.items()}, **({"capped": {"max": cap, "from": over}} if over else {})})
     if not parts:
         return None
     out = {k: sum(p["price"][k] for p in parts) / len(parts) for k in ("bear", "base", "bull")}
-    out["bull_mkt"] = {k: rnd(sum(p["bm_price"][k] for p in parts) / len(parts), 2) for k in ("lo", "hi")}
+    out["bull_mkt"] = {k: rnd(sum(p["bm_price"][k] for p in parts) / len(parts), 2) for k in ("lo", "mid", "hi")}
     for p in parts:
         p["price"] = {k: round(x, 2) for k, x in p.pop("price").items()}
         p.pop("bm_price")
@@ -456,18 +460,20 @@ def judge(price, fair, band_pos):
 
 
 if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% 넘게 높을 때만 업종 PER → 없으면 PER 밴드
-    m = {"bear": 40, "base": 60, "bull": 80}
+    m = {"bear": 30, "base": 45, "bull": 60}
     sec = {"kind": "PER", "bear": 10, "base": 20, "bull": 30}
     band = {"periods": {"10y": {"low": 8, "avg": 15, "high": 25}}}
-    assert too_high(m, 1000, 100000, band, sec, "화장품 브랜드") is None  # 하방 40,000 < 지금 10만
-    assert too_high(m, 1000, 20000, band, sec, "화장품 브랜드")[0] == {"bear": 10, "base": 20, "bull": 30}
-    assert too_high(m, 1000, 20000, band)[0] == {"bear": 8, "base": 15, "bull": 25}
-    assert too_high(m, 1000, 20000, {}) is None
+    assert too_high(m, 1000, 100000, band, sec, "화장품 브랜드") is None  # 하방 30,000 < 지금 10만
+    assert too_high(m, 1000, 15000, band, sec, "화장품 브랜드")[0] == {"bear": 10, "base": 20, "bull": 30}
+    assert too_high(m, 1000, 15000, band)[0] == {"bear": 8, "base": 15, "bull": 25}
+    assert too_high(m, 1000, 15000, {}) is None
     # 🐂 강세장 칸 + 12MF PER 35배 상한: 업종 10·20·30 → 강세장 20~35(40 은 ⚠), 성장률 25% → 25·35(37.5)·35(50), 강세장 35~35
     y = now_kst().year
     h = {y: {"eps": 1000}, y + 1: {"eps": 1000}}
     s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 20, "mult": {"bear": 10, "base": 20, "bull": 30}, "part_src": "화장품 브랜드 업종 PER"})
-    assert s["bull_mkt"] == {"lo": 20000, "hi": 35000} and s["parts"][0]["capped"]["from"] == {"bm_hi": 40}, s
+    assert s["bull_mkt"] == {"lo": 20000, "mid": 27500, "hi": 35000} and s["parts"][0]["capped"]["from"] == {"bm_hi": 40}, s
     s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 25, "mult": {"bear": 25, "base": 37.5, "bull": 50}})
-    assert (s["bear"], s["base"], s["bull"]) == (25000, 35000, 35000) and s["bull_mkt"] == {"lo": 35000, "hi": 35000}, s
+    assert (s["bear"], s["base"], s["bull"]) == (25000, 35000, 35000) and s["bull_mkt"] == {"lo": 35000, "mid": 35000, "hi": 35000}, s
+    # 하방부터 35배를 넘는 성장률(39.6%)은 성장률 방식 대신 PER 밴드로 (두산에너빌리티)
+    assert too_high({"bear": 39.6, "base": 59.4, "bull": 79.2}, 919, 56500, band)[0] == {"bear": 8, "base": 15, "bull": 25}
     print("ok")
