@@ -757,3 +757,162 @@ PLTR:
   - label: 2023 사업보고서 (DART)
     url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240318000867
   ir_notes: '예전 주소 dsneolux.co.kr 은 dsnl.co.kr 로 옮겨짐. 25.4Q IR 자료는 대부분 25.3Q 내용을 다시 쓴 것(4분기 연결 실적 일부만 반영)이라 26.1Q 자료를 함께 보는 게 나음: https://www.dsnl.co.kr/IR_Reference/IR_Report/kr/2026/DSNL_26.1Q(KR).pdf . 2025년 인수한 현대중공업터보기계가 연결 실적에 포함됨. 3분기 실적은 아직 발표 전 (2026-10-29 기준).'
+
+AMZN:
+  code: AMZN
+  name_ko: 아마존
+  checked_at: '2026-10-29'
+  one_liner: 온라인 쇼핑몰(직접 판매·입점 판매자 수수료)과 광고, 프라임 구독으로 매출 대부분을 벌고, 클라우드(AWS)가 영업이익의 절반 넘게를 벌어요. 2026년 2분기 AWS 매출이 1년 새 37% 늘어 18분기 만에 가장 빨리 컸어요.
+  oligopoly:
+    growth: 성장 중이에요. 2025년 매출 7,169억 달러로 12% 늘었고, 2026년 2분기는 2,006억 달러로 1년 전보다 20% 늘었어요.
+    share: 클라우드 인프라 시장 점유율 28%로 세계 1위예요 (마이크로소프트 20%, 구글 15%, Synergy Research 2026년 2분기). 세계 디지털 광고에서는 약 9.0%로 메타·구글 다음이에요(eMarketer 2026년 전망).
+    barriers: 미국 전역의 물류센터·배송망(같은 날·다음 날 배송), 세계 곳곳의 데이터센터와 자체 AI 칩(트레이니엄)이 있고, 최근 12개월 설비투자만 1,690억 달러라 새 경쟁자가 따라 하기 매우 어려워요.
+    verdict: O
+  pick_and_shovel:
+    verdict: △
+    why: AWS는 앤트로픽·오픈AI 같은 AI 회사에 서버와 자체 AI 칩을 빌려줘서(두 회사 모두 여러 해짜리 대형 계약) 어느 AI 모델이 이기든 돈을 벌 수 있어요. 하지만 매출의 약 80%인 쇼핑·광고·구독은 아마존이 직접 경쟁에서 이겨야 하는 사업이에요.
+  pricing_power:
+    verdict: △
+    why: AWS는 AI용 GPU 예약 요금(EC2 Capacity Blocks)을 2026년 1월 약 15%, 7월 약 20% 올렸고(Converge Digest, 2026-06-28), 멕시코 프라임 월 요금도 2026년 9월 99페소에서 129페소로 올렸어요(El CEO, 2026-09-21). 하지만 쇼핑몰은 싼 값이 손님을 모으는 무기라 물건값을 마음대로 올리기는 어려워요.
+  data_company:
+    verdict: O
+    why: 누가 무엇을 검색하고 사는지 쇼핑 데이터가 매일 쌓이고, 이걸로 광고를 맞춰 보여줘요. 광고 매출이 2025년 686억 달러로 22% 늘었어요.
+  wallet:
+    verdict: O
+    why: 프라임 회원비·프라임 비디오·음악 같은 구독 매출이 2025년 496억 달러(매출의 6.9%)이고, 기업들은 AWS 사용료를 쓴 만큼 매달 내요.
+  human_indicator: 2026년 10월 28일 주가가 254.6달러로 52주 최고가(287.2달러)보다 약 11% 낮아요. 올해 설비투자 2,200억 달러 부담과 최근 AI 주식 매도세를 걱정하는 분위기지만, AWS 성장이 빨라지는 데 대한 기대도 함께 있어요 (Motley Fool, 2026-10-17 기사 기준).
+  gpm:
+    value: 50.3
+    period: FY2025
+    over30: true
+    source: https://www.sec.gov/Archives/edgar/data/1018724/000101872426000004/amzn-20251231.htm
+  revenue_geo:
+    period: FY2025
+    items:
+    - name: 미국
+      pct: 68.3
+    - name: 독일
+      pct: 6.4
+    - name: 영국
+      pct: 6.0
+    - name: 일본
+      pct: 4.3
+    - name: 기타 국가
+      pct: 15.0
+    source: https://www.sec.gov/Archives/edgar/data/1018724/000101872426000004/amzn-20251231.htm
+    note: 나라별 쇼핑몰(AWS는 판매 법인)이 있는 나라 기준이에요(10-K). 미국 4,897억, 독일 459억, 영국 432억, 일본 307억 달러예요.
+  revenue_segment:
+    period: FY2025 (총매출 7,169억 달러)
+    items:
+    - name: 온라인 직접 판매
+      pct: 37.6
+    - name: 입점 판매자 서비스 (판매 수수료·물류 대행)
+      pct: 24.0
+    - name: AWS (클라우드)
+      pct: 18.0
+    - name: 광고
+      pct: 9.6
+    - name: 구독 (프라임·비디오·음악 등)
+      pct: 6.9
+    - name: 오프라인 매장 (홀푸드 등)
+      pct: 3.1
+    - name: 기타
+      pct: 0.8
+    source: https://www.sec.gov/Archives/edgar/data/1018724/000101872426000004/amzn-20251231.htm
+  market_share:
+    market: 클라우드 인프라 서비스 (IaaS·PaaS·호스팅 프라이빗 클라우드)
+    period: 2026년 2분기
+    items:
+    - name: 아마존(AWS)
+      pct: 28
+    - name: 마이크로소프트
+      pct: 20
+    - name: 구글
+      pct: 15
+    - name: 기타
+      pct: 37
+    top3_pct: 63
+    top3_over50: true
+    source: 'Synergy Research Group, 2026-07-30: https://www.srgresearch.com/articles/q2-cloud-market-passes-143-billion-highest-growth-rate-in-eight-years'
+    note: 조사기관 추정치예요 (전체 시장 1,430억 달러, 1년 새 43% 성장). '기타'는 100에서 상위 3곳을 뺀 값이에요. 디지털 광고 9.0%는 eMarketer 전망(Marketing Dive 보도, 2026-04-14, https://www.marketingdive.com/news/meta-to-surpass-google-in-digital-ad-revenue-for-first-time-emarketer/817384/)이에요.
+  ir:
+  - label: FY2025 연간보고서(10-K)
+    url: https://www.sec.gov/Archives/edgar/data/1018724/000101872426000004/amzn-20251231.htm
+  - label: FY2024 연간보고서(10-K)
+    url: https://www.sec.gov/Archives/edgar/data/1018724/000101872425000004/amzn-20241231.htm
+  - label: 2026년 2분기 실적 발표 (2026-07-30)
+    url: https://www.sec.gov/Archives/edgar/data/1018724/000101872426000024/amzn-20260630xex991.htm
+  - label: 2026년 2분기 분기보고서(10-Q)
+    url: https://www.sec.gov/Archives/edgar/data/1018724/000101872426000026/amzn-20260630.htm
+  - label: 아마존 IR 메인
+    url: https://ir.aboutamazon.com/
+  notes: 2026년 3분기 실적은 10월 29일 장 마감 후 발표 예정이라 아직 반영 못 했어요(최신은 2026년 2분기). 매출총이익률 50.3%는 10-K의 매출 7,169.24억·매출원가 3,564.14억 달러로 계산했어요. 아마존 매출원가에는 상품 매입가·배송비가 들어가고 물류센터 운영비(풀필먼트)와 데이터센터 비용은 다른 비용 항목이라, 다른 회사 매출총이익률과 바로 비교하긴 어려워요. 사업별·나라별 비율은 10-K 금액으로 계산했어요.
+    AWS는 2025년 영업이익 800억 달러 중 456억 달러(57%)를 벌었어요. 2026년 2분기 순이익 626억 달러에는 앤트로픽 투자 평가이익 등 영업 밖 이익(세전) 534억 달러가 들어 있어요. GPU 요금 인상은 언론 보도 기준이고 AWS 공식 공지는 직접 확인하지 못했어요. 미국 프라임 요금(2022년 연 139달러로 인상) 이후의 변화는 확인하지 못했어요. 인간지표는 언론 기사 기준이라 객관적 수치가 아니에요.
+O:
+  code: O
+  name_ko: 리얼티 인컴
+  checked_at: '2026-10-29'
+  one_liner: 편의점·마트·약국·물류창고 같은 건물 1만 5,588곳을 사서 1,798개 회사에 오래(남은 계약 평균 8.6년) 빌려주고, 받은 임대료로 매달 배당을 주는 리츠(부동산 투자회사)예요. 2026년 6월까지 115분기 연속 배당을 올렸어요.
+  oligopoly:
+    growth: 성장 중이에요. 2025년 매출 57.5억 달러로 9.1% 늘었고, 2026년 2분기도 15.5억 달러로 9.7% 늘었어요. 다만 늘어난 매출 대부분은 새 건물을 사서 생긴 것이고, 같은 건물 임대료는 1년에 1% 정도만 올라요(2026년 2분기 1.2%).
+    share: 회사 스스로 '잘게 흩어진 순임대(넷리스) 시장의 1위'라고 소개해요. 회사가 보는 전체 시장은 약 14조 달러인데 회사 기업가치는 약 890억 달러(2026년 6월)라 점유율은 1%도 안 돼요.
+    barriers: 무디스 A3·S&P A-·피치 A 신용등급이라 싸게 돈을 빌릴 수 있고, 규모가 커서 한 해 100억 달러(2026년 목표)어치 건물을 살 수 있어요. 그래도 건물을 사서 빌려주는 일 자체는 다른 리츠·사모펀드도 할 수 있어 진입 장벽이 아주 높진 않아요.
+    verdict: X
+  pick_and_shovel:
+    verdict: △
+    why: 92개 업종, 1,798개 회사에 빌려줘서 어느 가게가 이기든 그 건물에 세 들어 있으면 임대료를 받아요(가장 큰 세입자 세븐일레븐도 연 임대료의 3.3%, 2025년 말). 하지만 세입자가 망하면 임대료가 끊기고, AI 같은 새 산업과는 2026년 발표한 60억 달러 데이터센터 합작 정도로만 연결돼 있어요.
+  pricing_power:
+    verdict: △
+    why: 계약이 끝난 건물을 다시 빌려줄 때 받는 임대료가 이전보다 2.7~4.9% 높아요(재임대 임대료 회수율 102.7~104.9%, 2025년 3분기~2026년 2분기). 하지만 대부분 장기 계약이라 같은 건물 임대료는 1년에 1% 안팎만 올라요.
+  data_company:
+    verdict: X
+    why: 건물을 사서 빌려주는 회사예요. '데이터 기반 자산 관리'를 내세우긴 하지만, 사용자 데이터를 모아 돈을 버는 회사는 아니에요.
+  wallet:
+    verdict: O
+    why: 세입자 회사들이 평균 8.6년 남은 장기 계약에 따라 임대료를 꼬박꼬박 내요(입주율 98.8%, 2026년 6월). 다만 돈을 내는 쪽은 개인 소비자가 아니라 기업이에요.
+  human_indicator: 2026년 9월 하순 미국 10년 국채금리가 5.01%로 1년 중 가장 높아지자 주가가 한 달 새 9.1% 떨어졌고(247wallst, 2026-09-22), 10월 1일에는 금리가 5.26%까지 올라 주가가 53.53달러로 더 밀렸어요(MarketBeat, 2026-10-01). 금리 걱정으로 조심스러운 분위기예요.
+  gpm:
+    value: 92.5
+    period: FY2025
+    over30: true
+    source: https://www.sec.gov/Archives/edgar/data/726728/000072672826000011/o-20251231.htm
+  revenue_geo:
+    period: FY2025
+    items:
+    - name: 미국
+      pct: 83.5
+    - name: 영국
+      pct: 12.5
+    - name: 기타 유럽
+      pct: 3.9
+    source: https://www.sec.gov/Archives/edgar/data/726728/000072672826000011/o-20251231.htm
+    note: 임대료 매출(54.4억 달러) 기준이에요(10-K). 대출 이자 등 기타 매출 3.1억 달러는 나라별로 나뉘지 않아 뺐어요. 2026년 6월 말 연 임대료 기준으로는 미국 79.5%, 영국 15.0%, 유럽 대륙 5.5%로 유럽 비중이 커지고 있어요.
+  revenue_segment:
+    period: FY2025 (총매출 57.5억 달러)
+    items:
+    - name: 소매점 건물 임대 (편의점·마트·약국 등)
+      pct: 75.2
+    - name: 산업용 건물 임대 (물류창고·공장)
+      pct: 15.0
+    - name: 기타 건물 임대 (카지노·농지·데이터센터 등)
+      pct: 4.3
+    - name: 기타 매출 (대출 이자 등)
+      pct: 5.4
+    source: https://www.sec.gov/Archives/edgar/data/726728/000072672826000011/o-20251231.htm
+  ir:
+  - label: FY2025 연간보고서(10-K)
+    url: https://www.sec.gov/Archives/edgar/data/726728/000072672826000011/o-20251231.htm
+  - label: FY2024 연간보고서(10-K)
+    url: https://www.sec.gov/Archives/edgar/data/726728/000072672825000055/o-20241231.htm
+  - label: 2026년 2분기 실적 발표 (2026-08-05)
+    url: https://www.sec.gov/Archives/edgar/data/726728/000072672826000044/o-991q22026.htm
+  - label: 2026년 2분기 보충 자료(Supplemental)
+    url: https://www.sec.gov/Archives/edgar/data/726728/000072672826000044/realtyincomeq22026supple.htm
+  - label: 2026년 2분기 분기보고서(10-Q)
+    url: https://www.sec.gov/Archives/edgar/data/726728/000072672826000048/o-20260630.htm
+  - label: 2025년 3분기 투자자 설명회 자료 (PDF)
+    url: https://www.realtyincome.com/sites/realty-income/files/2025-11/quarterly-investor-presentation-q3-2025.pdf
+  - label: 리얼티 인컴 IR 메인
+    url: https://www.realtyincome.com/investors
+  notes: 2026년 3분기 실적은 11월 초 발표 예정이라 아직 반영 못 했어요(최신은 2026년 2분기). 리츠는 매출총이익을 따로 발표하지 않아서, 매출총이익률 92.5%는 10-K 총매출 57.49억 달러에서 건물 관련 비용(4.29억 달러)만 빼 계산했어요. 감가상각(25.2억)·이자(11.3억 달러)는 빠져 있어 다른 업종과 바로 비교하긴 어려워요.
+    리츠는 순이익보다 AFFO(실제로 남는 임대 현금)를 봐요. 2025년 주당 AFFO 4.28달러(2.1% 증가), 2026년 회사 전망 4.44~4.45달러예요. 14조 달러 시장 규모는 회사 추정(2025년 3분기 설명회 자료)이에요. 넷리스 시장에서 상위 회사 점유율을 공개한 믿을 만한 자료를 찾지 못해 market_share는 넣지 않았어요. 인간지표는 언론 기사 기준이에요.
