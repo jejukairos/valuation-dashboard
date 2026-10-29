@@ -1,6 +1,7 @@
 """미국 종목 10년 분기 실적을 받아 두기 (SEC EDGAR companyfacts) — 서버(GitHub)에서는 SEC 가 막혀서 이 컴퓨터에서 가끔 한 번씩 실행.
 SEC 는 요청하는 사람의 연락처를 요구해요. 본인 연락처를 SEC_CONTACT 환경변수로만 넣어요 (코드·저장소·결과 파일에는 남지 않음).
   PowerShell:  $env:SEC_CONTACT="내 이메일"; .venv\\Scripts\\python.exe tools\\sec_backfill.py
+SEC 가 이 컴퓨터를 막으면 차선으로 알파밴티지 무료 키(ALPHAVANTAGE_KEY 환경변수)를 써요 — 같은 명령에 키만 더 넣으면 됨.
 결과: cache/sec_longq.json {티커: {분기 끝 날짜: {rev, op, gp, ocf, capex, rpo}}} (백만 달러, 2014년~) — 수집기가 야후 분기와 합쳐 📈 10년 실적·⚖️ 비교 탭에 씀."""
 import json
 import os
@@ -78,20 +79,66 @@ def pull(facts):
     return out
 
 
+def av_pull(inc, cf):
+    """알파밴티지 분기 손익·현금흐름 (이미 3개월 값) → SEC 와 같은 모양 {분기 끝 날짜: {rev, op, gp, ocf, capex}} (백만 달러)."""
+    num = lambda r, k: float(r[k]) / 1e6 if r.get(k) not in (None, "", "None") else None  # noqa: E731
+    out = {}
+    for rows, keys in ((inc, (("rev", "totalRevenue"), ("op", "operatingIncome"), ("gp", "grossProfit"))),
+                       (cf, (("ocf", "operatingCashflow"), ("capex", "capitalExpenditures")))):
+        for r in (rows or {}).get("quarterlyReports") or []:
+            e = r.get("fiscalDateEnding") or ""
+            if e < "2014-01-01":
+                continue
+            for k, src in keys:
+                v = num(r, src)
+                if v is not None:
+                    out.setdefault(e, {})[k] = round(abs(v) if k == "capex" else v)
+    return out
+
+
+def alpha_vantage(tickers, saved):
+    """SEC 가 막혔을 때 차선: 알파밴티지 무료 키 (하루 25번 · 종목당 2번). 키는 ALPHAVANTAGE_KEY 환경변수로만.
+    SEC 값이 이미 있는 칸은 그대로 두고 빈 칸만 채움."""
+    key = os.environ.get("ALPHAVANTAGE_KEY")
+    if not key:
+        sys.exit("SEC 가 막혀 있어요. 차선책: https://www.alphavantage.co/support/#api-key 에서 무료 키를 받아\n"
+                 "  $env:ALPHAVANTAGE_KEY=\"받은 키\"; .venv\\Scripts\\python.exe tools\\sec_backfill.py")
+    for t in tickers:
+        got = []
+        for fn in ("INCOME_STATEMENT", "CASH_FLOW"):
+            time.sleep(1.5)
+            j = requests.get("https://www.alphavantage.co/query", params={"function": fn, "symbol": t, "apikey": key}, timeout=60).json()
+            if "quarterlyReports" not in j:  # 하루 한도·잘못된 키 → 여기까지 받은 것만 저장
+                print("  알파밴티지 멈춤:", t, str(j.get("Information") or j.get("Note") or j.get("Error Message") or j)[:120])
+                return saved
+            got.append(j)
+        new = av_pull(*got)
+        old = saved.get(t, {})
+        saved[t] = {e: {**new.get(e, {}), **old.get(e, {})} for e in sorted(set(new) | set(old))}
+        ks = sorted(saved[t])
+        print(f"  {t}: {len(ks)}개 분기 ({ks[0]} ~ {ks[-1]}) · 알파밴티지")
+    return saved
+
+
 def main():
-    contact = os.environ.get("SEC_CONTACT")
-    if not contact:
-        sys.exit("SEC_CONTACT 환경변수에 본인 연락처를 넣고 실행해 주세요 (SEC 규칙). 예: $env:SEC_CONTACT=\"내 이메일\"")
-    ua = {"User-Agent": f"personal-valuation-dashboard {contact}", "Accept-Encoding": "gzip, deflate"}
     st = yaml.safe_load(open(ROOT / "config" / "stocks.yaml", encoding="utf-8"))
     cmp_ = yaml.safe_load(open(ROOT / "config" / "compare.yaml", encoding="utf-8")) or {}
     tickers = sorted({str(h["code"]) for g in st.values() if isinstance(g, list) for h in g if isinstance(h, dict) and h.get("market") == "US"}
                      | {str(c) for c in cmp_.get("codes") or [] if not str(c).isdigit()})
-    m = requests.get("https://www.sec.gov/files/company_tickers.json", headers=ua, timeout=40).json()
-    cik = {v["ticker"].upper(): v["cik_str"] for v in m.values()}
-    cik["GOOG"] = cik.get("GOOG") or cik.get("GOOGL")
     path = ROOT / "cache" / "sec_longq.json"
     saved = json.loads(path.read_text(encoding="utf-8-sig")) if path.exists() else {}
+    contact = os.environ.get("SEC_CONTACT")
+    r = None
+    if contact:
+        ua = {"User-Agent": f"personal-valuation-dashboard {contact}", "Accept-Encoding": "gzip, deflate"}
+        r = requests.get("https://www.sec.gov/files/company_tickers.json", headers=ua, timeout=40)
+    if r is None or r.status_code != 200:  # SEC 연락처가 없거나 SEC 가 막으면 → 알파밴티지
+        print("SEC 사용 안 함:", "연락처(SEC_CONTACT) 없음" if r is None else f"SEC 응답 {r.status_code}")
+        path.write_text(json.dumps(alpha_vantage(tickers, saved), ensure_ascii=False, indent=0), encoding="utf-8")
+        print("저장:", path)
+        return
+    cik = {v["ticker"].upper(): v["cik_str"] for v in r.json().values()}
+    cik["GOOG"] = cik.get("GOOG") or cik.get("GOOGL")
     for t in tickers:
         if not cik.get(t):
             print("  CIK 없음", t)
@@ -114,6 +161,10 @@ if __name__ == "__main__":
         q = quarters([R("2024-01-01", "2024-03-31", 10), R("2024-01-01", "2024-06-30", 25), R("2024-01-01", "2024-09-30", 45),
                       R("2024-01-01", "2024-12-31", 70), R("2024-01-01", "2024-03-31", 11, "2025-06-01")])
         assert q == {"2024-03-31": 11, "2024-06-30": 14, "2024-09-30": 20, "2024-12-31": 25}, q
+        a = av_pull({"quarterlyReports": [{"fiscalDateEnding": "2026-09-30", "totalRevenue": "17103000000", "operatingIncome": "2880000000", "grossProfit": "None"},
+                                          {"fiscalDateEnding": "2013-12-31", "totalRevenue": "1"}]},
+                    {"quarterlyReports": [{"fiscalDateEnding": "2026-09-30", "operatingCashflow": "4025000000", "capitalExpenditures": "-486000000"}]})
+        assert a == {"2026-09-30": {"rev": 17103, "op": 2880, "ocf": 4025, "capex": 486}}, a
         print("ok")
     else:
         main()

@@ -1280,13 +1280,40 @@ function mcapChart(D, span) {
   return lineChart({ t: "시가총액 ($B, 주봉)", why: "지금 주식 수 × 그때 주가 — 자사주 소각·증자는 반영 못 함", labels: ds, s, fl: usdB,
     tick: (i) => (i && ds[i].slice(0, 4) !== ds[i - 1].slice(0, 4) && +ds[i].slice(2, 4) % ev === 0 ? `'${ds[i].slice(2, 4)}` : "") });
 }
+// 💵 현금 창고 (CNBC 표 모양): 현금·현금성 + 단기투자 = 현금성 자산 합계, 여기서 빚(차입금·사채·리스)을 빼면 순현금
+let CASH_MKT = "US";
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".cashmk button"); if (!b) return;
+  CASH_MKT = b.dataset.mk; $("#cashBox").outerHTML = cashHTML();
+});
+function cashHTML() {
+  const us = CASH_MKT === "US";
+  const f = (v) => (us ? (Math.abs(v) >= 1e9 ? usdB(v / 1e9) : `${v < 0 ? "-" : ""}$${n(Math.abs(v) / 1e6, 0)}M`)
+    : Math.abs(v) >= 1e12 ? `${n(v / 1e12, 1)}조` : `${n(v / 1e8, 0)}억`);
+  const rows = (DASH?.stocks || []).filter((s) => s.tbl?.cash_raw && (s.market === "US") === us)
+    .map((s) => ({ s, ...s.tbl.cash_raw, t: s.tbl.cash_raw.cash + s.tbl.cash_raw.sti })).sort((a, b) => b.t - a.t);
+  const seg = `<div class="seg cashmk" style="margin-bottom:8px"><button data-mk="US" class="${us ? "on" : ""}">🇺🇸 미국</button><button data-mk="KR" class="${us ? "" : "on"}">🇰🇷 한국</button></div>`;
+  if (!rows.length) return `<div id="cashBox"><h3>💵 현금 창고</h3><div class="card">${seg}<div class="note src">⏳ 다음 데이터 갱신 때 채워져요.</div></div></div>`;
+  const mx = Math.max(...rows.flatMap((r) => [r.cash, r.sti]), 1);
+  const bar = (v, col) => `<span class="cbar"><i style="width:${Math.max(0.15, (v / mx) * 6).toFixed(2)}em;background:${col}"></i>${f(v)}</span>`;
+  const tr = rows.map(({ s, cash, sti, debt, t }) => {
+    const nc = t - debt, pct = s.tbl.net_cash_pct;
+    return `<tr><td><a href="#stock/${esc(s.code)}">${esc(s.name)}</a><br><span class="src">${esc(s.group || "")} · ${esc((s.tbl.net_cash_asof || "").slice(2).replace("-", "."))}</span></td>
+      <td>${bar(cash, "var(--s1)")}</td><td>${bar(sti, "var(--s3)")}</td><td><b>${f(t)}</b></td><td>${f(debt)}</td>
+      <td><b class="${nc < 0 ? "neg" : ""}">${f(nc)}</b>${pct != null ? ` <span class="src">시총의 ${n(pct, Math.abs(pct) < 10 ? 1 : 0)}%</span>` : ""}</td></tr>`;
+  }).join("");
+  return `<div id="cashBox"><h3>💵 현금 창고 <span class="src">보유·관심 종목 · 최근 분기 재무상태표 (야후) · ${us ? "달러" : "원"}</span></h3><div class="card">${seg}
+    <div class="cmp-wrap"><table class="cmp cash"><thead><tr><th>종목 <span class="src">· 기준 분기</span></th><th>현금·현금성</th><th>단기투자</th><th>합계</th><th>빚 (리스 포함)</th><th>순현금</th></tr></thead><tbody>${tr}</tbody></table></div>
+    <div class="note src">합계 = 현금·현금성 + 단기투자(단기 국채·정기예금처럼 곧 현금이 되는 것) — CNBC 표의 Total 이에요. 순현금 = 합계 − 빚(차입금·사채·리스 부채). 마이너스면 가진 현금보다 빚이 많아요.
+    증권사·리츠·건설·유통처럼 빚이 사업 구조인 회사는 그대로 비교하기 어려워요. 야후에 새 분기가 올라오면 기준 분기가 바뀌어요.</div></div></div>`;
+}
 function compareHTML(span) {
   const D = CMPD || {}, cfg = D.cfg || {}, lq = (c) => D.longq?.[c] || {}, fx = (k) => D.fx_q?.[k];
   const keysOf = (...os) => [...new Set(os.flatMap((o) => Object.keys(o || {})))].sort().slice(span < 999 ? -span : 0);
   const box = (t, sub, body, note = "") => `<h3>${t} <span class="src">${sub}</span></h3><div class="card"><div class="qgrid">${body}</div>${note}</div>`;
   const wait = (what) => `<div class="note src">⏳ ${what} 자료를 모으는 중이에요 — 채워지면 그림이 나와요.</div>`;
   const opmOf = (rev, op) => rev.map((r, i) => (r && op[i] != null ? (op[i] / r) * 100 : null));
-  const out = [`<div class="seg cseg" style="margin-bottom:10px">${LONG_TABS.map(([m, l]) => `<button data-cs="${m}" class="${m === span ? "on" : ""}">${l}</button>`).join("")}</div>`];
+  const out = [cashHTML(), `<div class="seg cseg" style="margin:14px 0 10px">${LONG_TABS.map(([m, l]) => `<button data-cs="${m}" class="${m === span ? "on" : ""}">${l}</button>`).join("")}</div>`];
   // 1) 메모리 3사 — 분기, 달러 (억원 ÷ (그 분기 평균 환율 × 10) = 십억 달러)
   const hy = lq("000660"), mu = lq("MU"), ds = cfg.samsung_ds || {}, kU = (v, k) => (v == null || !fx(k) ? null : v / (fx(k) * 10));
   const mk = keysOf(hy, mu, ds.rev);

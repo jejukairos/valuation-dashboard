@@ -234,6 +234,11 @@ table.cmp tr.grp td { background: var(--surface-2); font-weight: 700; color: var
 table.cmp tbody tr.grp:hover td { background: var(--surface-2); }
 table.cmp tbody tr:hover td { background: var(--surface-2); }
 table.cmp .neg { color: var(--bad-ink); }
+table.cmp.cash th { cursor: default; }
+table.cmp.cash td:nth-child(2), table.cmp.cash td:nth-child(3), table.cmp.cash th:nth-child(2), table.cmp.cash th:nth-child(3) { text-align: left; }
+table.cmp.cash td:first-child a { color: var(--ink); text-decoration: none; }
+.cbar { display: inline-flex; align-items: center; gap: 5px; }
+.cbar i { display: inline-block; height: 14px; flex: none; border-radius: 2px; }
 table.cmp .dim { color: var(--muted); }
 /* 기업 프로필 */
 .oneliner { font-size: 15px; font-weight: 600; line-height: 1.5; }
