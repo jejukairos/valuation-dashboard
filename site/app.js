@@ -1917,7 +1917,8 @@ function capexGuideSVG(gs) {
       g += `<rect x="${x + 1}" y="${Y(mid(p))}" width="${bw - 2}" height="${bot - Y(mid(p))}" fill="${isL ? C(p.how) : "var(--ink-2)"}" opacity="${isL ? 1 : 0.2 + 0.15 * i}"/>`;
       if (isL) g += `<text x="${x + bw / 2}" y="${Y(mid(p)) - 5}" text-anchor="middle" class="qv b" style="fill:${C(p.how)}">$${n(mid(p), 0)}B</text>`;
     });
-    g += `<text x="${5 + gi * gw + gw / 2}" y="${bot + 14}" text-anchor="middle" class="qx">${esc(c.name)}</text><text x="${5 + gi * gw + gw / 2}" y="${bot + 27}" text-anchor="middle" class="qx" style="fill:${C(last.how)}">${esc(last.how || "")}</text>`;
+    const lab = last.q !== qs.at(-1) ? "발표 전" : last.how || "";  // 이번 분기 아직 발표 안 함 (예: 아마존)
+    g += `<text x="${5 + gi * gw + gw / 2}" y="${bot + 14}" text-anchor="middle" class="qx">${esc(c.name)}</text><text x="${5 + gi * gw + gw / 2}" y="${bot + 27}" text-anchor="middle" class="qx" style="fill:${lab === "발표 전" ? "var(--ink-2)" : C(last.how)}">${esc(lab)}</text>`;
   });
   const why = gs.filter((c) => c.pts.at(-1).why).map((c) => `${esc(c.name)}: ${esc(c.pts.at(-1).why)}`);
   return `<div class="qp"><div class="qt"><b>🏗 빅테크 CapEx 가이던스</b></div><div class="src">회사가 말한 1년 설비투자 계획 · 막대 = ${qs.map(esc).join(" → ")} 발표 때 (범위면 가운데 값)</div>
