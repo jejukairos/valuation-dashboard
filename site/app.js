@@ -1017,10 +1017,18 @@ function ma200Line(c) {
   return `<div class="src" style="padding:0 2px">${ma200Sig(m)} <b style="color:var(--s2)">┅ 200일선</b> 이격 <b>${pct(m.gap, 1, true)}</b> (${m.gap >= 0 ? "선 위" : "선 아래"}) · 200일선 ${ma200Dir(m)}${m.cross_up ? ` · 🔔 <b>${esc(m.cross_up.slice(5).replace("-", "/"))} 200일선 위로 다시 올라옴</b> (이격이 0보다 커진 구간 — 메모해 둘 자리)` : ""}</div>`;
 }
 // 첫 화면: 최근 3일 안에 실적이 나온 보유·관심 종목 (예상 vs 실적 막대) + 잠정실적 공시는 났는데 숫자 반영을 기다리는 종목
+// 🇰🇷 보유 탭엔 한국 종목만, 🇺🇸 보유 탭엔 미국 종목만 (실적 발표·쉬운 요약·일정) — 한국 코드는 숫자 6자리
+const mktOf = (code) => (/^\d/.test(String(code || "")) ? "KR" : "US");
+function renderTop() {
+  $("#easyNews").innerHTML = easyNewsHTML();
+  $("#kqNews").innerHTML = kqNewsHTML();
+  $("#irCal").innerHTML = irCalHTML();
+  $("#bigTech").innerHTML = bigTechHTML();
+}
 function kqNewsHTML() {
   // 최근 발표일 먼저 (같은 날이면 보유 → 관심 순서 그대로)
-  const list = DASH.stocks.filter((c) => c.kq_brief).sort((a, b) => (b.kq_brief.date || "").localeCompare(a.kq_brief.date || ""));
-  const wait = DASH.stocks.filter((c) => !c.kq_brief && c.kq_wait);
+  const list = DASH.stocks.filter((c) => c.kq_brief && mktOf(c.code) === MKT).sort((a, b) => (b.kq_brief.date || "").localeCompare(a.kq_brief.date || ""));
+  const wait = DASH.stocks.filter((c) => !c.kq_brief && c.kq_wait && mktOf(c.code) === MKT);
   if (!list.length && !wait.length) return "";
   const waitHtml = wait.length ? `<div class="note">⏳ 잠정실적 공시는 났고 숫자를 읽는 중 (다음 갱신 때 반영): ${wait.map((c) => `<a href="#stock/${esc(c.code)}">${esc(c.name)}</a> ${esc(c.kq_wait || "")}`).join(" · ")}</div>` : "";
   return `<h2>🧾 실적 발표 <span class="src">최근 3일 · 회색 = 발표 전 예상(컨센서스), 색 = 실적</span></h2>${waitHtml}<div class="grid">${list.map((c) => {
@@ -1124,7 +1132,7 @@ function irWhen(e) {
   return `<b>${esc(e.when.slice(5, 10).replace("-", "/"))}${t}</b> <span class="pill ${e.dday === 0 ? "red" : e.dday > 0 && e.dday <= 7 ? "yellow" : ""}">${dd}</span>`;
 }
 function irCalHTML() {
-  const items = (IRCAL.items || []).filter((e) => e.dday >= -2 && e.dday <= 30);
+  const items = (IRCAL.items || []).filter((e) => e.dday >= -2 && e.dday <= 30 && mktOf(e.code) === MKT);
   if (!items.length) return "";
   const gl = { 보유: "", 관심: " ⭐", 공동: " 🤝" };
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">보유·관심·공동 · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
@@ -1137,7 +1145,8 @@ function easyNewsHTML() {
   const items = [
     ...Object.entries(EARNINGS).flatMap(([code, l]) => (l[0]?.easy?.length && l[0].date >= cut ? [{ date: l[0].date, code, title: `${l[0].quarter} 실적발표`, easy: l[0].easy, sum: true }] : [])),
     ...(EVENTS || []).filter((e) => e.date >= cut && e.easy?.length),
-  ].sort((a, b) => b.date.localeCompare(a.date));
+  ].filter((e) => !(e.market || e.code) || (e.market || mktOf(e.code)) === MKT)  // 종목·시장이 없는 이벤트(업종 전체)는 두 탭 모두
+    .sort((a, b) => b.date.localeCompare(a.date));
   if (!items.length) return "";
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>🐣 오늘의 쉬운 요약</b> <span class="src">최근 3일 · 실적발표·공시·증권사 전망 변화 · 핵심만 쉬운 말로</span></summary>
     ${items.map((e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
@@ -1751,7 +1760,7 @@ function kpiChart(ch) {
   if (lo0 < 0 && hi0 > 0) g += `<line x1="${x0 - 10}" x2="${x1 + 10}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)" stroke-dasharray="3 3"/>`;
   const ends = [];  // 선이 여러 개면 마지막 값만 글자로 (겹치지 않게 아래로 밀기)
   ch.s.forEach((s, si) => {
-    const col = KPI_COL[si % 4], pts = qs.map((q, i) => [i, s.v?.[q]]).filter(([, v]) => v != null);
+    const col = (ch.col || KPI_COL)[si % (ch.col || KPI_COL).length], pts = qs.map((q, i) => [i, s.v?.[q]]).filter(([, v]) => v != null);
     g += `<path d="${pts.map(([i, v], j) => `${j ? "L" : "M"}${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round"/>`;
     pts.forEach(([i, v], j) => {
       const last = j === pts.length - 1;
@@ -1764,7 +1773,7 @@ function kpiChart(ch) {
   const over = ends.length ? ends[ends.length - 1][1] - (bot - 4) : 0;  // 아래 분기 이름과 겹치면 통째로 위로
   if (over > 0) ends.forEach((e) => { e[1] -= over; });
   ends.forEach(([x, y, v, col]) => { g += `<text x="${many ? x + 8 : x - 2}" y="${many ? y + 4 : y - 9}" text-anchor="${many ? "start" : "end"}" class="qv b" style="fill:${col};font-size:13px;paint-order:stroke;stroke:var(--surface);stroke-width:3px">${kpiF(v, ch.u)}</text>`; });
-  const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
+  const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${(ch.col || KPI_COL)[si % (ch.col || KPI_COL).length]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
   return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}</div>`;
 }
 // 📈 영업이익 성장률 (YoY): 매출 성장률 바로 아래 — 국내는 이 성장률로 PER 을 몇 배 줄지 정함 (kpi.yaml 에 같은 제목 그래프가 있으면 그걸 씀)
@@ -1845,9 +1854,75 @@ function capexHTML() {
     return `<tr><td style="text-align:left">${esc(c.name)}</td><td>${esc(k)}</td><td><b>$${n(v, 1)}B</b></td><td>${p ? pct((v / p - 1) * 100, 0, true) : "-"}</td><td>${e ? `$${n(e.est, 1)}B → $${n(e.act, 1)}B${e.n !== "CapEx" ? `<br><span class="src">${esc(e.n.replace("CapEx ", ""))}</span>` : ""}` : "-"}</td></tr>`;
   }).join("");
   return `<h3>🏗 빅테크 CapEx <span class="src">${esc(CAPEX.updated_at || "")}</span></h3><div class="card">
-    <div class="qgrid">${chart}</div>
+    ${peakHTML()}
+    <div class="qgrid">${chart}${capexGuideSVG(CAPEX.guide)}${peakChart()}</div>
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>최근 분기</th><th>CapEx</th><th>1년 전 대비</th><th>예상 → 발표</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="note src">${esc(CAPEX.src || "")} · 막대는 현금으로 나간 설비투자(야후 기준). 마이크로소프트가 발표하는 CapEx 는 금융리스를 더한 숫자라 더 커요</div></div>`;
+}
+// 💸 M7 현금흐름(FCF) 추이 + 🏗 CapEx 가이던스 (🇺🇸 보유 탭, 실적 일정 아래) — 지금은 현금을 버는지가 가장 중요 (capex.json fcf · guide)
+const M7_COL = ["var(--s1)", "var(--bad)", "var(--good)", "var(--warn)", "var(--s3)", "var(--s4)", "var(--ink-2)"];
+function bigTechHTML() {
+  if (MKT !== "US") return "";
+  const fs = (CAPEX?.fcf || []).filter((c) => Object.keys(c.q).length >= 2);
+  if (!fs.length) return "";
+  const qs = [...new Set(fs.flatMap((c) => Object.keys(c.q)))].sort().slice(-8), cur = qs.at(-1);
+  const chart = kpiChart({ t: "M7 분기 현금흐름 (FCF)", u: "$B", col: M7_COL, why: "영업으로 번 현금 − 설비투자 · 0 아래 = 번 돈보다 투자에 더 씀",
+    s: fs.map((c) => ({ n: c.name, v: Object.fromEntries(qs.filter((q) => c.q[q] != null).map((q) => [q, c.q[q]])) })) });
+  const rows = fs.map((c) => {
+    const ks = Object.keys(c.q).sort(), k = ks.at(-1), v = c.q[k], p = c.q[ks.at(-2)];
+    let down = 0; for (let i = ks.length - 1; i > 0 && c.q[ks[i]] < c.q[ks[i - 1]]; i--) down++;
+    const tag = p >= 0 && v < 0 ? ["적자 전환", "bad"] : down >= 2 ? [`${down}분기 연속 악화`, "bad"] : p == null ? ["", ""] : fcfTag(p, v);
+    return `<tr><td style="text-align:left">${esc(c.name)}</td><td>${esc(k)}${k < cur ? ` <span class="src">(${esc(cur)} 발표 전)</span>` : ""}</td><td><b>${kpiF(v, "$B")}</b></td><td>${p == null ? "-" : kpiF(p, "$B")}</td><td><span class="qtag ${tag[1]}">${tag[0]}</span></td></tr>`;
+  }).join("");
+  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>💸 빅테크 현금흐름 · CapEx 가이던스</b> <span class="src">M7 · 지금은 현금을 버는지가 가장 중요 · ${esc(CAPEX.updated_at || "")}</span></summary>
+    ${peakHTML()}
+    <div class="qgrid">${capexGuideSVG(CAPEX.guide)}${peakChart()}${chart}</div>
+    <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>최근 분기</th><th>FCF</th><th>직전 분기</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="note src">FCF = 영업현금흐름 − 설비투자(Purchases of property and equipment) · 야후 분기 재무제표 + 보도자료 · 회사마다 분기 끝 날짜가 달라 분기 끝에서 45일 뺀 달력 분기로 맞춤</div></details>`;
+}
+// ⚠️ 증시 고점 신호 점검 3가지 (config/peak.yaml) — 빅테크 CapEx 가 정체되면 관련주 고점 가능성 ↑ (참고용, 추천 아님)
+function peakHTML() {
+  const p = CAPEX?.peak;
+  if (!p) return "";
+  const f = p.forecast?.v, ks = f ? Object.keys(f).sort() : [];
+  const gr = ks.slice(1).map((k, i) => [k, (f[k] / f[ks[i]] - 1) * 100]).filter(([k]) => +k >= 25);
+  return `<div class="warnbox" style="margin:0 0 8px"><b>⚠️ ${esc(p.title || "")}</b> <span class="src">${esc(p.date || "")}</span>
+    <div style="margin-top:4px">“${esc(p.rule || "")}”</div>
+    ${p.now ? `<div style="margin-top:4px">👉 <b>${esc(p.now)}</b></div>` : ""}
+    <div style="margin-top:6px"><b>🔎 고점 신호 점검 3가지</b></div>
+    <ul class="irl">${(p.signals || []).map((s, i) => `<li>${i + 1}) <b>${esc(s.n)}</b>: <span class="qtag bad">${esc(s.s || "")}</span> ${esc(s.now || "")}${s.when ? ` <span class="src">(${esc(s.when)} 예상)</span>` : ""}</li>`).join("")}</ul>
+    ${gr.length ? `<div style="margin-top:4px">📉 ${esc(p.forecast.t || "CapEx 전망")} 증가율: ${gr.map(([k, g]) => `${k}년 <b>${pct(g, 0, true)}</b>`).join(" → ")} <span class="src">— 금액은 계속 늘지만 늘어나는 속도가 꺾이는 게 핵심</span></div>` : ""}
+    ${p.history ? `<div class="src" style="margin-top:4px">📚 ${esc(p.history)}</div>` : ""}
+    <div class="src" style="margin-top:4px">출처: ${esc(p.src || "")} · 참고용 신호 점검이에요 (매수·매도 추천 아님)</div></div>`;
+}
+function peakChart() {
+  const f = CAPEX?.peak?.forecast;
+  return f?.v ? kpiChart({ t: `${f.t} ($B)`, u: "$B", why: "그림에서 눈으로 읽은 대략값 · 26년 이후 기울기가 눕는지 보기",
+    s: [{ n: "CapEx", v: Object.fromEntries(Object.keys(f.v).sort().map((k) => [`'${k}`, f.v[k]])) }] }) : "";
+}
+// 🏗 회사별 연간 CapEx 가이던스가 실적 발표 때마다 어떻게 바뀌었나 (막대 = 범위 가운데 값, 마지막 막대 색 = 상향 파랑·유지 회색·감소 빨강)
+function capexGuideSVG(gs) {
+  gs = (gs || []).filter((g) => (g.pts || []).length);
+  if (!gs.length) return "";
+  const key = (q) => q.slice(2) + q[0], qs = [...new Set(gs.flatMap((g) => g.pts.map((p) => p.q)))].sort((a, b) => key(a).localeCompare(key(b))).slice(-4);
+  const mid = (p) => (p.lo + p.hi) / 2, hi = Math.max(...gs.flatMap((g) => g.pts.map((p) => p.hi))) * 1.18;
+  const W = 320, top = 26, bot = 132, gw = (W - 10) / gs.length, bw = Math.min(12, (gw * 0.8) / qs.length), Y = (v) => bot - (v / hi) * (bot - top);
+  const C = (h) => (/감소|하향|이연/.test(h || "") ? "var(--bad)" : /상향|첫/.test(h || "") ? "var(--s1)" : "var(--ink-2)");
+  let g = `<line x1="4" x2="${W - 4}" y1="${bot}" y2="${bot}" stroke="var(--axis)"/>`;
+  gs.forEach((c, gi) => {
+    const x0 = 5 + gi * gw + (gw - bw * qs.length) / 2, last = c.pts.at(-1);
+    qs.forEach((q, i) => {
+      const p = c.pts.find((x) => x.q === q); if (!p) return;
+      const isL = p === last, x = x0 + i * bw;
+      g += `<rect x="${x + 1}" y="${Y(mid(p))}" width="${bw - 2}" height="${bot - Y(mid(p))}" fill="${isL ? C(p.how) : "var(--ink-2)"}" opacity="${isL ? 1 : 0.2 + 0.15 * i}"/>`;
+      if (isL) g += `<text x="${x + bw / 2}" y="${Y(mid(p)) - 5}" text-anchor="middle" class="qv b" style="fill:${C(p.how)}">$${n(mid(p), 0)}B</text>`;
+    });
+    g += `<text x="${5 + gi * gw + gw / 2}" y="${bot + 14}" text-anchor="middle" class="qx">${esc(c.name)}</text><text x="${5 + gi * gw + gw / 2}" y="${bot + 27}" text-anchor="middle" class="qx" style="fill:${C(last.how)}">${esc(last.how || "")}</text>`;
+  });
+  const why = gs.filter((c) => c.pts.at(-1).why).map((c) => `${esc(c.name)}: ${esc(c.pts.at(-1).why)}`);
+  return `<div class="qp"><div class="qt"><b>🏗 빅테크 CapEx 가이던스</b></div><div class="src">회사가 말한 1년 설비투자 계획 · 막대 = ${qs.map(esc).join(" → ")} 발표 때 (범위면 가운데 값)</div>
+    <svg viewBox="0 0 ${W} 166" role="img" aria-label="빅테크 CapEx 가이던스">${g}</svg>
+    <div class="src">${gs.map((c) => `${esc(c.name)} ${c.pts.map((p) => (p.lo === p.hi ? `$${n(p.lo, 0)}B` : `$${n(p.lo, 0)}~${n(p.hi, 0)}B`)).join(" → ")}${c.pts.at(-1).y ? ` (${esc(c.pts.at(-1).y)})` : ""}`).join(" · ")}${why.length ? `<br>${why.join(" · ")}` : ""}</div></div>`;
 }
 // 📈 12MF PER 밴드 (증권사 그림처럼 10·15·20배 … 고정 배수 선): 각 주의 12개월 선행 EPS = 그해 EPS × 남은 기간 + 다음 해 EPS × 지난 기간
 // shortcut: 과거 시점의 선행 EPS 는 당시 컨센서스 대신 실제 연간 EPS(지난 해는 실적, 앞 해는 지금 추정)로 계산 — 무료로 과거 컨센서스를 받게 되면 바꾸기
@@ -2526,7 +2601,7 @@ function showView() {
   if (view === "score") renderScore();
   // 🇰🇷 보유 / 🇺🇸 보유 는 같은 화면을 시장만 바꿔서 보여준다
   const mkt = view === "us" ? "US" : "KR";
-  if ((view === "main" || view === "us") && MKT !== mkt) { MKT = mkt; renderCmp(); renderCards(); }
+  if ((view === "main" || view === "us") && MKT !== mkt) { MKT = mkt; renderTop(); renderCmp(); renderCards(); }
   $("#cmpTitle").textContent = MKT === "US" ? "미국 보유종목 비교표" : "한국 보유종목 비교표";
   $("#cardTitle").textContent = MKT === "US" ? "미국 보유종목 신호등" : "한국 보유종목 신호등";
   $("#mainView").hidden = !(view === "main" || view === "us");
@@ -2746,9 +2821,7 @@ function renderAll() {
     marketCard(DASH.signals.us, DASH.rates.us10y, null, "us") +
     marketCard(DASH.signals.kr, DASH.rates.kr3y, DASH.rates.kr10y ? { label: "국고채 10년", latest: DASH.rates.kr10y.latest } : null, "kr");
   drawMarketCharts();
-  $("#easyNews").innerHTML = easyNewsHTML();
-  $("#kqNews").innerHTML = kqNewsHTML();
-  $("#irCal").innerHTML = irCalHTML();
+  renderTop();
   renderCmp();
   renderCards();
   kospiCard();
@@ -2772,6 +2845,7 @@ async function load() {
     try { IRCAL = await (await fetch("data/ir_calendar.json?t=" + Date.now(), { cache: "no-store" })).json() || { items: [] }; } catch (_) { IRCAL = { items: [] }; }
     try { EVENTS = await (await fetch("data/events.json?t=" + Date.now(), { cache: "no-store" })).json() || []; } catch (_) { EVENTS = []; }
     try { SOMONG = await (await fetch("data/somong.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { SOMONG = {}; }
+    try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { CAPEX = {}; }  // 🇺🇸 탭 빅테크 현금흐름
   } catch (e) {
     $("#updated").textContent = "데이터를 불러오지 못했어요";
     return;

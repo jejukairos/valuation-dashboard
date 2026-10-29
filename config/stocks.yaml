@@ -208,6 +208,14 @@ watchlist:
   - {name: 삼성중공업, market: KR, code: "010140", industry: 조선, methods: [PER]}
   - {name: 삼성전기, market: KR, code: "009150", industry: 전자부품, methods: [PER]}
   - {name: HD현대마린엔진, market: KR, code: "071970", industry: 조선기자재, methods: [PER]}
+  # M7 빅테크 — 보유·공동자산에 있는 종목은 한 번만 계산하고 ⭐ 관심 탭에도 같이 보여요
+  - {name: 애플, market: US, code: AAPL, industry: 하드웨어, methods: [PER]}
+  - {name: 마이크로소프트, market: US, code: MSFT, industry: 소프트웨어, methods: [PER]}
+  - {name: 알파벳, market: US, code: GOOG, industry: 인터넷, methods: [PER]}
+  - {name: 아마존, market: US, code: AMZN, industry: 인터넷, methods: [PER]}
+  - {name: 엔비디아, market: US, code: NVDA, industry: 반도체, methods: [PER]}
+  - {name: 메타, market: US, code: META, industry: 인터넷, methods: [PER]}
+  - {name: 테슬라, market: US, code: TSLA, industry: 자동차, methods: [PER]}
 
 # ---------- 공동자산 — 🤝 공동자산 탭 ----------
 # 형식은 holdings 와 같아요 (예: - {name: 삼성전자, market: KR, code: "005930", industry: 반도체, methods: [PBR, PER], fair_methods: [PBR]})

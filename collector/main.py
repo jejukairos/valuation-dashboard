@@ -1,6 +1,7 @@
 """매일 실행: 수집 → 계산 → site/data/*.json 저장.
 실패한 항목은 직전 값을 그대로 쓰고 '실패 목록'에 남긴다."""
 import os
+import re
 import sys
 import traceback
 
@@ -29,6 +30,7 @@ KPI_CFG = load_yaml("kpi.yaml") or {}  # 🔑 핵심 지표 (fcf_add = 야후에
 NOTES = load_yaml("notes.yaml") or {}  # 적정주가 칸 메모 (증권사 의견, 28E 칸 등)
 SEGC = load_yaml("seg_cons.yaml") or {}  # 🎯 사업부문별 컨센서스 vs 실적
 BIGTECH = [("MSFT", "마이크로소프트"), ("GOOG", "알파벳"), ("META", "메타"), ("AMZN", "아마존")]  # 🏗 빅테크 CapEx (메모리 수요)
+M7 = BIGTECH + [("AAPL", "애플"), ("NVDA", "엔비디아"), ("TSLA", "테슬라")]  # 💸 M7 현금흐름·CapEx 가이던스
 
 
 def keep_prev(new, prev, label):
@@ -552,6 +554,12 @@ def _klabel(e):
     return f"{d.year % 100:02d}.{(d.month - 1) // 3 + 1}Q"
 
 
+def _mlabel(lb):
+    """kpi.yaml 분기 이름을 달력 분기로: '26.10월'(엔비디아 10월 끝) → '26.3Q', '26.3Q' 는 그대로"""
+    m = re.fullmatch(r"(\d\d)\.(\d+)월", lb)
+    return _klabel(f"20{m.group(1)}-{int(m.group(2)):02d}-28") if m else lb
+
+
 def op_yoy(code, mkt, kqd, qtrs, manual=None, n=5):
     """📈 영업이익 성장률 (YoY) {'26.3Q': %} 최근 n 분기 — 국내는 이걸로 PER 을 정함.
     쌓아 둔 야후 분기 → 네이버 분기(잠정 포함) → DART 분기보고서(1년 전 같은 분기 숫자가 같이 있음) → kpi.yaml op_yoy 순서로 덮어씀.
@@ -762,7 +770,19 @@ def main():
             q.setdefault(qk, rnd(v / 1e3, 1))
         est = {qq: next((i for i in v.get("items", []) if str(i["n"]).startswith("CapEx")), None) for qq, v in (SEGC.get(t) or {}).items()}
         capex.append({"t": t, "name": nm, "q": dict(sorted(q.items())), "est": {k: v for k, v in est.items() if v}})
-    write_json(DATA / "capex.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "cos": capex,
+    fcf, guide = [], []
+    for t, nm in M7:  # 💸 M7 현금흐름(FCF) 추이 + CapEx 가이던스 (🇺🇸 보유 탭) — 야후 분기 → 보도자료 fcf_add → 예전 분기 fcf_hist
+        kc = KPI_CFG.get(t) or {}
+        q = {_klabel(e): rnd(v["fcf"] / 1e9, 2) for e, v in sorted((QTRS.get(t) or {}).items()) if v.get("fcf") is not None}
+        for add in (kc.get("fcf_add"), kc.get("fcf_hist")):
+            for qk, v in (add or {}).items():
+                q.setdefault(_mlabel(str(qk)), rnd(v / 1e3, 2))
+        if q:
+            fcf.append({"t": t, "name": nm, "q": dict(sorted(q.items())[-10:])})
+        if kc.get("capex_guide"):
+            guide.append({"t": t, "name": nm, "pts": kc["capex_guide"]})
+    write_json(DATA / "capex.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "cos": capex, "fcf": fcf, "guide": guide,
+                                     "peak": load_yaml("peak.yaml") or None,
                                      "src": "야후 파이낸스 분기 현금흐름표 (설비투자) · 최신 분기는 보도자료 · 예상 = config/seg_cons.yaml"})
     write_json(DATA / "ir_calendar.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "items": cal})
 
