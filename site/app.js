@@ -378,6 +378,10 @@ function stockCard(c) {
   const newPosts = (c.us_tpl?.street?.posts || []).filter((p) => p.new).length;
   if (newPosts) pills.push(`<span class="pill green">🆕 채널 새 글 ${newPosts}개</span>`);
   if (c.dart_check?.warn) pills.push(`<span class="pill yellow">⚠ DART 공시와 숫자 차이</span>`);
+  if (c.fcf?.length === 2 && (c.fcf[0][1] < 0 || c.fcf[1][1] < 0)) {  // 현금흐름이 마이너스이거나 막 플러스로 돌아선 종목만
+    const [[, a], [q, b]] = c.fcf, [t, cls] = fcfTag(a, b);
+    pills.push(`<span class="pill ${cls === "bad" ? "red" : cls ? "yellow" : "green"}">💸 현금흐름 ${t} ${qMoney(b, c.currency === "USD")} (${esc(q)})</span>`);
+  }
   let mine = "";
   if (c.avg_price && c.quantity) {
     const r = (c.price / c.avg_price - 1) * 100;
@@ -842,13 +846,13 @@ function qSankey(q, usd, prev, segs) {
 // 최신 분기 실적(잠정) vs 컨센서스 — 8분기 막대, 마지막 분기는 회색(발표 전 예상) + 색(실적) 나란히
 const kqFmt = (v) => (Math.abs(v) >= 10000 ? n(v / 10000, 1) + "조" : n(v, 0) + "억");  // 억원 → 1조 넘으면 '104.6조'
 const kqF = (f, cur) => (cur === "USD" ? (f === "eps" ? (v) => "$" + n(v, 2) : (v) => qMoney(v, true)) : f === "eps" ? (v) => n(v, 0) + "원" : kqFmt);
-function kqBars(title, qs, f, est, color, cur) {
+function kqBars(title, qs, f, est, color, cur, opt = {}) {  // opt.tag = 제목 옆 꼬리표 HTML, opt.sub = 제목 아래 한 줄
   const F = kqF(f, cur);  // 한국: EPS 원·나머지 억원 / 미국: 달러
   const W = 320, x0 = 44, x1 = W - 6, n0 = qs.length, bw = (x1 - x0) / n0;
   const ev = est && est[f] != null ? est[f] : null, vals = qs.map((q) => q[f]).concat(ev ?? []).filter((v) => v != null);
   const hi0 = Math.max(0, ...vals), lo0 = Math.min(0, ...vals), raw = (hi0 - lo0) / 4 || 1, p = 10 ** Math.floor(Math.log10(raw));
   const step = p * (raw / p <= 1 ? 1 : raw / p <= 2 ? 2 : raw / p <= 5 ? 5 : 10);  // 눈금 간격 (1·2·5 단위)
-  const hi = Math.ceil((hi0 * 1.08) / step) * step || step, lo = lo0 < 0 ? Math.floor(lo0 / step) * step : 0;
+  const hi = Math.ceil((hi0 * 1.08) / step) * step || step, lo = lo0 < 0 ? Math.floor((lo0 * 1.3) / step) * step : 0;  // 음수 막대 아래 숫자 자리
   const top = 30, bot = 150, sc = (bot - top) / (hi - lo), Y = (v) => bot - (v - lo) * sc, zero = Y(0);
   let g = "";
   for (let t = lo; t <= hi + step / 2; t += step) g += `<line x1="${x0}" x2="${x1}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)"/><text x="${x0 - 4}" y="${Y(t) + 3}" text-anchor="end" class="qx">${F(t)}</text>`;
@@ -870,11 +874,11 @@ function kqBars(title, qs, f, est, color, cur) {
       if (Math.abs(ye - ya) < 11) { if (ya <= ye) ya = ye - 11; else ye = ya - 11; }
       g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--axis)") + bar(cx + bw * 0.21, bw * 0.38, q[f], color)
         + lab(cx - bw * 0.21, ye, ev, "qv", "var(--muted)") + lab(cx + bw * 0.21, ya, q[f], "qv b", color);
-    } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? color : null);
+    } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? (q[f] < 0 ? "var(--bad)" : color) : null);
   });
   const s = ev != null && ev > 0 && qs[li]?.[f] != null ? (qs[li][f] / ev - 1) * 100 : null;  // 마지막 실적 분기 (뒤에 예상 E 가 붙어도)
   const tag = s == null ? "" : `<span class="qtag${s < 0 ? " bad" : ""}">예상대비 ${s >= 0 ? "+" : ""}${n(s, 1)}%</span>`;
-  return `<div class="qp"><div class="qt"><b>${title}</b>${tag}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg>
+  return `<div class="qp"><div class="qt"><b>${title}</b>${tag || opt.tag || ""}</div>${opt.sub ? `<div class="src">${opt.sub}</div>` : ""}<svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg>
     ${ev != null || qs.some((q) => q.est) ? `<div class="src" style="text-align:right;padding:0 4px 4px"><span style="color:var(--axis)">■</span> ${ev != null ? "예상(컨센서스)" : "추정(E)"} · <span style="color:${color}">■</span> 실적</div>` : ""}</div>`;
 }
 // 분기 / 연간 실적 막대 — 한국은 영업이익을 맨 앞에 (연간 = 와이즈리포트 연간 실적 + 추정 E)
@@ -1586,13 +1590,33 @@ function kpiChart(ch) {
   const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
   return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}</div>`;
 }
-async function kpiBlock(code) {
+// 현금흐름(FCF = 영업현금흐름 − 설비투자): 야후 분기 재무제표 + 야후에 아직 없는 최신 분기는 kpi.yaml fcf_add (보도자료)
+function fcfSeries(d, k) {
+  const usd = d.currency === "USD", qs = Object.entries(d.qtrs || {}).filter(([, q]) => q.fcf != null).map(([e, q]) => ({ q: qLabel(e), fcf: q.fcf, capex: q.capex }));
+  for (const [q, v] of Object.entries(k?.fcf_add || {})) if (!qs.some((x) => x.q === q)) qs.push({ q, fcf: v * (usd ? 1e6 : 1e8), add: true });
+  return qs.slice(-6);
+}
+function fcfTag(a, b) {  // 직전 분기 a → 이번 분기 b
+  return a >= 0 && b < 0 ? ["적자 전환", "bad"] : a < 0 && b < 0 ? (b < a ? ["적자 폭 확대", "bad"] : ["적자 폭 축소", "warn"])
+    : a < 0 ? ["흑자 전환", ""] : b >= a ? ["직전 분기보다 늘어남", ""] : ["직전 분기보다 줄어듦", "warn"];
+}
+function fcfBars(d, k) {
+  const s = fcfSeries(d, k), usd = d.currency === "USD";
+  if (s.length < 2) return "";
+  const [t, cls] = fcfTag(s.at(-2).fcf, s.at(-1).fcf), cx = s.filter((x) => x.capex != null).at(-1);
+  const sub = `영업현금흐름 − 설비투자(CapEx)${cx ? ` · ${esc(cx.q)} CapEx ${qMoney(Math.abs(cx.capex), usd)}` : ""}${s.some((x) => x.add) ? ` · ${s.filter((x) => x.add).map((x) => esc(x.q)).join("·")} 는 보도자료 숫자 (야후 반영 전)` : ""}`;
+  return kqBars("💸 현금흐름 (FCF)", s.map((x) => ({ q: x.q, fcf: usd ? x.fcf : x.fcf / 1e8 })), "fcf", null, "var(--s1)", usd ? "USD" : "KRW",
+    { tag: `<span class="qtag ${cls}">${t}</span>`, sub });
+}
+async function kpiBlock(code, d) {
   if (KPI === null) { try { KPI = (await (await fetch("data/kpi.json?v=" + encodeURIComponent(DASH.updated_at))).json()) || {}; } catch (_) { KPI = {}; } }
   const k = KPI[code] || KPI[KPI_ALIAS[code]];
   if (!k?.charts?.length) return "";
+  const ch = k.charts.map(kpiChart);
+  ch.splice(1, 0, fcfBars(d, k));  // 매출 성장률 다음에 현금흐름
   return `<h3>🔑 핵심 지표 <span class="src">${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김</span></h3><div class="card kpi">
     <div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key || "")}</div>
-    <div class="qgrid" style="margin-top:8px">${k.charts.map(kpiChart).join("")}</div>
+    <div class="qgrid" style="margin-top:8px">${ch.join("")}</div>
     ${k.memo ? `<div class="note src">${esc(k.memo)}</div>` : ""}
     <div class="note src">출처: ${(k.src || []).map((s) => (s.u ? `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>` : esc(s.t))).join(" · ")}</div>
   </div>`;
@@ -1916,7 +1940,7 @@ async function openStock(code) {
     const usedCar = AUTO_CODES.includes(code) ? manheimBlock() : "";
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
-    const kpiHtml = await kpiBlock(code);
+    const kpiHtml = await kpiBlock(code, d);
     $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + kpiHtml + qtrHTML(d) + earningsHTML(code) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawProfile(code);

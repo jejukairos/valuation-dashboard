@@ -28,6 +28,9 @@
    선마다 가장 오래된 분기를 지워 5개만 남긴다. latest 를 새 분기로, src 에 이번 자료(제목·URL)를 맨 앞에 넣는다.
    값은 이번 발표 자료(보도자료·IR PDF·자막)에 있는 숫자만 — 못 찾은 선은 그 분기를 비워 둔다. 핵심 지표가 바뀌었다고 판단되면(컨퍼런스콜 질문이
    다른 숫자에 몰림) 그래프를 새로 만들지 말고 보고에 한 줄로 알린다.
+   미국 종목은 💸 현금흐름도: site/data/stocks/{티커}.json 의 qtrs 에 새 분기(끝 날짜)가 아직 없으면 kpi.yaml 그 종목에
+   fcf_add: {"26.4Q": 값} 을 넣는다 (보도자료 현금흐름표의 영업현금흐름 − 설비투자(Purchases of property and equipment), 백만 달러,
+   키는 분기 끝 달 기준 — 엔비디아 1월 끝 = "27.1월"). 야후에 들어오면 화면이 야후 값을 쓰니 지난 fcf_add 는 지워도 된다.
 4. (tools/ir_live.ps1 이 부른 경우엔 파일 수정까지만 — 확인·올리기는 스크립트가 함)
    YAML 이 읽히는지 확인(python 으로 load) → 커밋 메시지 "<종목> <분기> 실적발표 요약" + 끝에 빈 줄과
    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" → `git pull --rebase; git push`.

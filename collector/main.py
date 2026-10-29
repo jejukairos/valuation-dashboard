@@ -25,6 +25,7 @@ LTG_GAP = read_json(CACHE / "ltg_gap.json") or {}
 QTRS = read_json(CACHE / "quarters.json") or {}  # 분기 실적 (야후는 최근 5~6분기만 줘서 쌓아 둠)  # 종목 → 시킹알파 확인일 → Zacks·나스닥과의 차이(%p)
 SEGS = read_json(CACHE / "segments.json") or {}  # 한국 '주요제품 매출구성'(%)을 보고서 시점별로 쌓음 → 부문 비중 추이
 SEG_US = load_yaml("segments.yaml") or {}  # 미국 부문별 매출 (공식 실적 자료를 보고 직접 적음)
+KPI_CFG = load_yaml("kpi.yaml") or {}  # 🔑 핵심 지표 (fcf_add = 야후에 아직 없는 최신 분기 FCF, 보도자료)
 
 
 def keep_prev(new, prev, label):
@@ -491,6 +492,12 @@ def stock_detail(h, rates_now, fx):
         "fv": _fair_table(bands, hist, price, currency,
                           [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
     }
+    # 카드 꼬리표 '💸 현금흐름': 최근 두 분기 FCF (야후 분기 재무제표 + 아직 야후에 없는 최신 분기는 kpi.yaml fcf_add)
+    qf = [(kq._qlabel(e), q["fcf"]) for e, q in sorted((det["qtrs"] or {}).items()) if q.get("fcf") is not None]
+    for qk, v in ((KPI_CFG.get(str(h.get("data_code") or code)) or {}).get("fcf_add") or {}).items():
+        if qk not in dict(qf):
+            qf.append((qk, v * (1e6 if mkt == "US" else 1e8)))  # 미국 백만 달러, 한국 억원
+    det["card"]["fcf"] = qf[-2:] if len(qf) >= 2 else None
     k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적을 발표한 지 3일 안이거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
     if k.get("date") and (now_kst().date() - pd.Timestamp(k["date"]).date()).days <= 3:
         det["card"]["kq_new"] = k["latest"]
