@@ -262,6 +262,7 @@ def stock_detail(h, rates_now, fx):
             scen["ltg_note"] = ltg_note
     if scen:
         fair = scen["base"]  # 적정가 = Base (하방 × 1 과 최대 × 2 의 평균)
+        scen["regime"] = (rates_now.get("regime") or {}).get(mkt)  # 🐂 강세장 칸 옆에 '지금 시장' 표시용
         s_ = SECTORS.get(h.get("sector")) or {}
         scen["rerating"] = h.get("rerating") or s_.get("rerating")
         scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "history", "notes")}} if s_ else None
@@ -445,6 +446,7 @@ def stock_detail(h, rates_now, fx):
             det["kq"] = kq.collect_us(code, QTRS.get(tkr), hist)
         except Exception as e:  # noqa: BLE001
             REPORT.block("최신 분기 실적 (미국)", f"{name}: {str(e)[:60]}")
+    det["op_yoy"] = op_yoy(code, mkt, det["kq"], QTRS.get(tkr), (KPI_CFG.get(code) or {}).get("op_yoy")) if not h.get("data_code") else None
     det["flow"] = None
     if mkt == "KR" and not h.get("data_code"):  # 외국인·기관·개인이 1년 동안 어느 가격대에서 샀나 (KRX)
         try:
@@ -539,7 +541,41 @@ def _round_scen(scen, dg):
             "growth": scen.get("growth"), "e27": scen.get("e27"), "alt": scen.get("alt"), "ways": scen.get("ways"), "e12": scen.get("e12"),
             "ltg_cmp": scen.get("ltg_cmp"), "sa_date": scen.get("sa_date"), "ltg_note": scen.get("ltg_note"),
             "rerating": scen.get("rerating"), "sector": scen.get("sector"), "ind": scen.get("ind"),
-            "y2": scen.get("y2"), "sa_ref": scen.get("sa_ref")}
+            "y2": scen.get("y2"), "sa_ref": scen.get("sa_ref"), "regime": scen.get("regime"),
+            "bull_mkt": {k: rnd(v, dg) for k, v in (scen.get("bull_mkt") or {}).items()} or None}
+
+
+def _klabel(e):
+    """핵심 지표와 같은 분기 이름: 분기 끝 날짜에서 45일 뺀 날의 달력 분기 ('2026-07-26' → '26.2Q')"""
+    d = pd.Timestamp(e) - pd.Timedelta(days=45)
+    return f"{d.year % 100:02d}.{(d.month - 1) // 3 + 1}Q"
+
+
+def op_yoy(code, mkt, kqd, qtrs, manual=None, n=5):
+    """📈 영업이익 성장률 (YoY) {'26.3Q': %} 최근 n 분기 — 국내는 이걸로 PER 을 정함.
+    쌓아 둔 야후 분기 → 네이버 분기(잠정 포함) → DART 분기보고서(1년 전 같은 분기 숫자가 같이 있음) → kpi.yaml op_yoy 순서로 덮어씀.
+    1년 전 영업이익이 0 이하(적자)면 성장률을 안 씀."""
+    out = {}
+
+    def put(lb, cur, ago):
+        if cur is not None and ago and ago > 0:
+            out[lb] = rnd((cur / ago - 1) * 100, 1)
+
+    ago = lambda lb: f"{int(lb[:2]) - 1:02d}{lb[2:]}"
+    ops = {_klabel(e): v.get("op") for e, v in (qtrs or {}).items()}
+    for lb, v in ops.items():
+        put(lb, v, ops.get(ago(lb)))
+    if mkt == "KR":  # 미국 kq 분기는 위 야후 분기와 같은 숫자 (이름만 '26.7월' 식이라 빼요)
+        ops = {q["q"]: q.get("op") for q in (kqd or {}).get("quarters") or []}
+        for lb, v in ops.items():
+            put(lb, v, ops.get(ago(lb)))
+        try:
+            for k, r in kr_stock.dart_quarters(code).items():
+                put(kq.label(k), r.get("op"), r.get("op_ago"))
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("DART 분기 영업이익", f"{code}: {str(e)[:60]}")
+    out.update({str(k): v for k, v in (manual or {}).items()})
+    return dict(sorted(out.items())[-n:]) or None
 
 
 def _price_chart(px, currency, days=250):
@@ -648,8 +684,10 @@ def main():
 
     fx = attempt("원/달러 환율", usdkrw) or prev.get("fx")
     # 시장 국면 (긴축·약세 / 완화·강세): 종목 적정가를 성장률 × 1 로 볼지 × 1.5 로 볼지
-    regime = {mk: attempt(f"시장 국면 ({nm})", lambda t=t, nm=nm: C.market_regime(us_stock.price_history(t), nm, us10))
-              for mk, t, nm in (("KR", "^KS11", "코스피"), ("US", "^GSPC", "S&P500"))}
+    rcfg = SETTINGS.get("market_regime") or {}  # 한국 = 국고채 3년 3%, 미국 = 미국채 10년 5% 이상이면 긴축
+    regime = {mk: attempt(f"시장 국면 ({nm})", lambda t=t, nm=nm, rt=rt, rn=rn, tt=tt: C.market_regime(us_stock.price_history(t), nm, rt, rn, tt))
+              for mk, t, nm, rt, rn, tt in (("KR", "^KS11", "코스피", kr3, "국고채 3년", rcfg.get("kr3y_tight", 3.0)),
+                                           ("US", "^GSPC", "S&P500", us10, "미국채 10년", rcfg.get("us10y_tight", 5.0)))}
 
     print("■ 보유종목")
     cards = []

@@ -190,13 +190,14 @@ def growth_fair(hist, adj_candidates=(), force_adj=False):
             "window": f"{str(y - 5)[2:]}~{str(y)[2:]}E"}
 
 
-def market_regime(idx, idx_name, us10y):
-    """시장 국면: 미국채 10년이 기준 이상(긴축)이거나 지수가 200일 평균 아래·평균선이 한 달 전보다 낮으면(약세·횡보) tight.
-    셋 다 아니면(금리 낮고 지수가 오르는 평균선 위) easy."""
+def market_regime(idx, idx_name, us10y, rate_name="미국채 10년", tight=None):
+    """시장 국면: 금리(미국 = 미국채 10년 5%, 한국 = 국고채 3년 3%)가 기준 이상(긴축)이거나 지수가 200일 평균 아래·평균선이 한 달 전보다
+    낮으면(약세·횡보) tight. 셋 다 아니면(금리 낮고 지수가 오르는 평균선 위) easy. us10y 자리에 그 나라 금리를 넣음."""
     cfg = SETTINGS.get("market_regime") or {}
+    tight = cfg.get("us10y_tight", 5.0) if tight is None else tight
     why = []
-    if us10y is not None and us10y >= cfg.get("us10y_tight", 5.0):
-        why.append(f"미국채 10년 {us10y:.2f}% (≥ {cfg.get('us10y_tight', 5.0):g}%, 긴축)")
+    if us10y is not None and us10y >= tight:
+        why.append(f"{rate_name} {us10y:.2f}% (≥ {tight:g}%, 긴축)")
     days = cfg.get("ma_days", 200)
     s = idx.dropna() if idx is not None else None
     if s is not None and len(s) > days + 21:
@@ -208,7 +209,7 @@ def market_regime(idx, idx_name, us10y):
     fixed = cfg.get("mode", "auto")
     mode = fixed if fixed in ("tight", "easy") else ("tight" if why else "easy")
     if not why:
-        why.append(f"미국채 10년 {us10y:.2f}% · {idx_name} 오르는 {days}일 평균선 위" if us10y is not None else f"{idx_name} 오르는 {days}일 평균선 위")
+        why.append(f"{rate_name} {us10y:.2f}% · {idx_name} 오르는 {days}일 평균선 위" if us10y is not None else f"{idx_name} 오르는 {days}일 평균선 위")
     return {"mode": mode, "why": why, "manual": fixed in ("tight", "easy"),
             "label": "긴축·약세장" if mode == "tight" else "완화·강세장"}
 
@@ -256,13 +257,27 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
             m = {"bear": st["low"], "base": st["avg"], "bull": st["high"]}
             src = "10년 밴드" if st.get("from", "9999") <= f"{now_kst().year - 9}-12-31" else f"{st['from'][:4]}년~ 밴드"
             how = f"{src} {kind} 하단(하위 10%) · 평균 · 상단(상위 10%)"
+        # 🐂 강세장(금리가 내려가 돈이 풀릴 때) 범위: 성장률 방식은 성장률 × 1.5 ~ × 2, 업종·밴드 PER 은 보통 ~ 보통 × 2 (10·20·30 → 20~40),
+        #    PBR 은 보통 ~ 최고
+        grow = kind == "PER" and per_growth and not per_growth.get("part_src")
+        bm = ({"lo": per_growth["g"] * 1.5, "hi": per_growth["g"] * 2} if grow else
+              {"lo": m["base"], "hi": m["base"] * 2} if kind == "PER" else {"lo": m["base"], "hi": m["bull"]})
+        cap, over = None, {}
+        if kind == "PER":  # 12MF PER 35배 넘는 칸은 의미가 없다고 봐서 35배로 다시 계산 (⚠ 표시)
+            cap = SETTINGS.get("market_regime", {}).get("per_max", 35)
+            over = {k: rnd(x, 1) for k, x in {**m, **{"bm_" + kk: vv for kk, vv in bm.items()}}.items() if x and x > cap}
+            m = {k: min(x, cap) for k, x in m.items()}
+            bm = {k: min(x, cap) for k, x in bm.items()}
         parts.append({"kind": kind, "base_val": rnd(v, 2), "mult": {k: rnd(x, 2) for k, x in m.items()}, "src": src, "how": how,
-                      "price": {k: v * x for k, x in m.items()}})
+                      "price": {k: v * x for k, x in m.items()}, "bm": {k: rnd(x, 2) for k, x in bm.items()},
+                      "bm_price": {k: v * x for k, x in bm.items()}, **({"capped": {"max": cap, "from": over}} if over else {})})
     if not parts:
         return None
     out = {k: sum(p["price"][k] for p in parts) / len(parts) for k in ("bear", "base", "bull")}
+    out["bull_mkt"] = {k: rnd(sum(p["bm_price"][k] for p in parts) / len(parts), 2) for k in ("lo", "hi")}
     for p in parts:
         p["price"] = {k: round(x, 2) for k, x in p.pop("price").items()}
+        p.pop("bm_price")
     out["parts"] = parts
     out["note"] = sector.get("note") if sector else None
     # 같은 배수를 28E(2년 뒤) EPS·BPS 에 곱한 적정주가 (화면에서 접어 두고 눌러서 봄)
@@ -448,4 +463,11 @@ if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% �
     assert too_high(m, 1000, 20000, band, sec, "화장품 브랜드")[0] == {"bear": 10, "base": 20, "bull": 30}
     assert too_high(m, 1000, 20000, band)[0] == {"bear": 8, "base": 15, "bull": 25}
     assert too_high(m, 1000, 20000, {}) is None
+    # 🐂 강세장 칸 + 12MF PER 35배 상한: 업종 10·20·30 → 강세장 20~35(40 은 ⚠), 성장률 25% → 25·35(37.5)·35(50), 강세장 35~35
+    y = now_kst().year
+    h = {y: {"eps": 1000}, y + 1: {"eps": 1000}}
+    s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 20, "mult": {"bear": 10, "base": 20, "bull": 30}, "part_src": "화장품 브랜드 업종 PER"})
+    assert s["bull_mkt"] == {"lo": 20000, "hi": 35000} and s["parts"][0]["capped"]["from"] == {"bm_hi": 40}, s
+    s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 25, "mult": {"bear": 25, "base": 37.5, "bull": 50}})
+    assert (s["bear"], s["base"], s["bull"]) == (25000, 35000, 35000) and s["bull_mkt"] == {"lo": 35000, "hi": 35000}, s
     print("ok")

@@ -336,6 +336,56 @@ def dart_latest(stock_code):
     raise RuntimeError("DART 정기보고서 없음")
 
 
+QREP = {"11013": "03", "11012": "06", "11014": "09", "11011": "12"}
+QF = ("thstrm_amount", "thstrm_add_amount", "frmtrm_amount", "frmtrm_q_amount", "frmtrm_add_amount")
+
+
+def _acct_row(rows, k):
+    """정기보고서 행에서 매출(sales)·영업이익(op) 한 줄 — 손익계산서(IS) 먼저, 없으면 포괄손익계산서(CIS)."""
+    ids, names = ACCTS[k]
+    pl = sorted((r for r in rows if r.get("sj_div") in ("IS", "CIS")), key=lambda r: r.get("sj_div") != "IS")
+    return next((r for r in pl if r.get("account_id", "").split("_", 1)[-1] in ids or r.get("account_nm", "").replace(" ", "") in names), None)
+
+
+def q_from_reports(cache):
+    """{'2026_11012': {'op': {thstrm_amount: 이번 분기 3개월, frmtrm_q_amount: 1년 전 같은 분기 3개월, …}}} → {'202606': {op, op_ago, sales, sales_ago}}.
+    4분기 = 사업보고서 연간 − 같은 해 3분기보고서 누적 (1년 전도 같은 방식)."""
+    out = {}
+    for key, v in cache.items():
+        year, rc = key.split("_")
+        row = {}
+        for k in ("sales", "op"):
+            a = v.get(k) or {}
+            if rc == "11011":
+                q3 = (cache.get(f"{year}_11014") or {}).get(k) or {}
+                cur, ago, c9, a9 = a.get("thstrm_amount"), a.get("frmtrm_amount"), q3.get("thstrm_add_amount"), q3.get("frmtrm_add_amount")
+                row[k] = cur - c9 if None not in (cur, c9) else None
+                row[k + "_ago"] = ago - a9 if None not in (ago, a9) else None
+            else:
+                row[k] = a.get("thstrm_amount")
+                row[k + "_ago"] = a.get("frmtrm_q_amount") if a.get("frmtrm_q_amount") is not None else (
+                    a.get("frmtrm_add_amount") if rc == "11013" else None)  # 1분기는 누적 = 3개월
+        out[f"{year}{QREP[rc]}"] = row
+    return dict(sorted(out.items()))
+
+
+def dart_quarters(stock_code):
+    """최근 정기보고서(작년 3분기·사업보고서, 올해 1분기·반기·3분기)의 분기 3개월 매출·영업이익과 1년 전 같은 분기 (원).
+    한 번 낸 보고서는 바뀌지 않으니 캐시 (cache/dartq_{코드}.json). 영업이익 성장률(YoY) 그래프용."""
+    path = CACHE / f"dartq_{stock_code}.json"
+    cache = read_json(path, {})
+    cc = corp_code(stock_code)
+    y = now_kst().year
+    for year, rc in ((y - 1, "11014"), (y - 1, "11011"), (y, "11013"), (y, "11012"), (y, "11014")):
+        if f"{year}_{rc}" in cache:
+            continue
+        rows = _dart_fin(cc, year) if rc == "11011" else _dart_fin_q(cc, year, rc)
+        if rows:  # 아직 안 낸 보고서는 캐시하지 않음
+            cache[f"{year}_{rc}"] = {k: {f: _amt((_acct_row(rows, k) or {}).get(f)) for f in QF} for k in ("sales", "op")}
+    write_json(path, cache)
+    return q_from_reports(cache)
+
+
 def _dart_fin_q(cc, year, rc):
     for fs in ("CFS", "OFS"):
         j = HTTP.get("https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json",
@@ -488,3 +538,14 @@ def merged_history(code, splits=()):
         merged["ni"] = rec.get("ni")
         hist[y] = merged
     return hist, wise
+
+
+if __name__ == "__main__":  # 자체 점검: 분기 3개월 영업이익과 1년 전 같은 분기 (4분기 = 연간 − 3분기 누적)
+    rep = {"2025_11014": {"op": {"thstrm_amount": 30, "thstrm_add_amount": 80, "frmtrm_q_amount": 20, "frmtrm_add_amount": 60}},
+           "2025_11011": {"op": {"thstrm_amount": 120, "frmtrm_amount": 90}},
+           "2026_11013": {"op": {"thstrm_amount": 50, "frmtrm_q_amount": None, "frmtrm_add_amount": 25}}}
+    q = q_from_reports(rep)
+    assert q["202509"]["op"] == 30 and q["202509"]["op_ago"] == 20
+    assert q["202512"]["op"] == 40 and q["202512"]["op_ago"] == 30
+    assert q["202603"]["op"] == 50 and q["202603"]["op_ago"] == 25
+    print("ok")

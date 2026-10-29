@@ -180,6 +180,7 @@ function scenHTML(c) {
       <span class="dot" style="left:${at(c.price)}%"></span><span class="now" style="left:${at(c.price)}%">지금</span>
     </div>
     ${scenBoxes(s, s.parts)}
+    ${bullMktHTML(s, c, fmtP)}
     ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}${c.notes?.y2?.length ? ` · 🗒 메모 ${c.notes.y2.length}` : ""}</span></summary>${scenBoxes(s.y2, s.y2.parts)}${notesHTML(c.notes?.y2, c, s.y2)}</details>` : ""}
     ${multHTML(s)}
     ${c.notes?.memo?.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🗒 증권사 메모 <span class="src">${c.notes.memo.length}개</span></summary>${notesHTML(c.notes.memo, c)}</details>` : ""}
@@ -187,13 +188,26 @@ function scenHTML(c) {
     ${growthHTML(c)}
   </div>`;
 }
+// 🐂 강세장일 때 (금리가 내려가 돈이 풀릴 때) 적정주가 범위: 성장률 × 1.5 ~ × 2, 업종·밴드 PER 은 보통 ~ 보통 × 2 + 지금 시장 국면
+function bullMktHTML(s, c, fmtP) {
+  const b = s.bull_mkt, ps = s.parts || [];
+  if (!b) return "";
+  const why = (k) => ps.map((p) => `${p.kind} ${n(p.bm?.[k], p.kind === "PBR" ? 2 : 1)}배`).join(" · ") + (ps.length > 1 ? " 평균" : "");
+  const box = (k, l) => { const up = (b[k] / c.price - 1) * 100; return `<div class="bull"><span>강세장 <b>${l}</b></span><b>${fmtP(b[k])}</b><span class="src basis">${why(k)}</span><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></div>`; };
+  const reg = s.regime;
+  return `<div class="chart-title" style="margin-top:10px"><b>🐂 강세장일 때</b> <span class="src">금리가 내려가 돈이 풀릴 때 · 성장률 × 1.5 ~ × 2 (업종·밴드 PER 은 보통 ~ 보통 × 2)</span></div>
+    <div class="scen3" style="grid-template-columns:1fr 1fr;margin-top:6px">${box("lo", "하방")}${box("hi", "상방")}</div>
+    ${reg ? `<div class="note src">지금 시장: <b>${reg.mode === "tight" ? "🔴" : "🟢"} ${esc(reg.label)}</b> — ${reg.why.map(esc).join(" · ")}${reg.mode === "tight" ? " → 지금은 위 '적정주가(Base)'가 기준, 이 칸은 금리가 내려간 뒤" : " → 지금은 이 칸이 기준"}</div>` : ""}`;
+}
 // 배수를 어떻게 정했는지 한 줄 (성장률 × 1·1.5·2 / 업종 PER / 10년 밴드)
 function multHTML(s) {
   const r = s.sa_ref, ref = r && (r["5y"] != null || r.sector != null)  // 시킹알파 같은 줄의 참고값
     ? ` <span style="opacity:.8">(참고: 이 종목 5년 평균 ${r["5y"] == null ? "-" : n(r["5y"], 1) + "%"} · 업종 중앙값 ${r.sector == null ? "-" : n(r.sector, 1) + "%"})</span>` : "";
   return (s.parts || []).map((p) => {
     const m = p.mult, d = p.kind === "PBR" ? 2 : 1;
-    return `<div class="note src">📐 ${p.kind} ${n(m.bear, d)} · ${n(m.base, d)} · ${n(m.bull, d)}배 = ${esc(p.how || p.src)}${p.kind === "PER" && /성장률/.test(p.how || "") ? ref : ""}</div>`;
+    const NM = { bear: "하방", base: "적정주가", bull: "최대", bm_lo: "강세장 하방", bm_hi: "강세장 상방" };
+    const cap = p.capped ? `<div class="warnbox" style="margin-top:4px">⚠ 12MF PER ${p.capped.max}배가 넘는 칸은 의미가 없다고 봐서 ${p.capped.max}배로 다시 계산했어요 — 원래 ${Object.entries(p.capped.from).map(([k, v]) => `${NM[k] || k} ${n(v, 1)}배`).join(" · ")}</div>` : "";
+    return `<div class="note src">📐 ${p.kind} ${n(m.bear, d)} · ${n(m.base, d)} · ${n(m.bull, d)}배 = ${esc(p.how || p.src)}${p.kind === "PER" && /성장률/.test(p.how || "") ? ref : ""}</div>${cap}`;
   }).join("");
 }
 // 배당주 점검 (리얼티 인컴 등): somong.yaml my.sa_div 에 적은 시킹알파 숫자
@@ -1733,6 +1747,13 @@ function kpiChart(ch) {
   const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
   return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}</div>`;
 }
+// 📈 영업이익 성장률 (YoY): 매출 성장률 바로 아래 — 국내는 이 성장률로 PER 을 몇 배 줄지 정함 (kpi.yaml 에 같은 제목 그래프가 있으면 그걸 씀)
+function opYoyHTML(d, k) {
+  const v = d.op_yoy;
+  if (!v || k.charts.some((c) => /^영업이익 성장률/.test(c.t))) return "";
+  return kpiChart({ t: "영업이익 성장률 (YoY)", u: "%", s: [{ n: "영업이익", v }], why: "1년 전 같은 분기보다 영업이익이 얼마나 늘었나 · 국내 종목은 이 성장률로 PER 을 몇 배 줄지 정해요" })
+    || `<div class="qp"><div class="qt"><b>영업이익 성장률 (YoY)</b></div><div class="note">${Object.entries(v).map(([q, x]) => `${esc(q)} <b>${pct(x, 1, true)}</b>`).join(" · ")} <span class="src">분기 자료가 더 쌓이면 그래프로</span></div></div>`;
+}
 // 현금흐름(FCF = 영업현금흐름 − 설비투자): 야후 분기 재무제표 + 야후에 아직 없는 최신 분기는 kpi.yaml fcf_add (보도자료)
 function fcfSeries(d, k) {
   const usd = d.currency === "USD", qs = Object.entries(d.qtrs || {}).filter(([, q]) => q.fcf != null).map(([e, q]) => ({ q: qLabel(e), fcf: q.fcf, capex: q.capex }));
@@ -1757,7 +1778,7 @@ async function kpiBlock(code, d) {
   if (!k?.charts?.length) return "";
   const ch = k.charts.map(kpiChart);
   ch.unshift(comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률
-  ch.splice(2, 0, fcfBars(d, k), annualOpmHTML(d));  // 매출 성장률 다음에 현금흐름 · 연간 매출 & 영업이익률
+  ch.splice(2, 0, opYoyHTML(d, k), fcfBars(d, k), annualOpmHTML(d));  // 매출 성장률 다음에 영업이익 성장률 · 현금흐름 · 연간 매출 & 영업이익률
   return `<h3>🔑 핵심 지표 <span class="src">${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김</span></h3><div class="card kpi">
     <div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key || "")}</div>
     <div class="qgrid" style="margin-top:8px">${ch.join("")}</div>
