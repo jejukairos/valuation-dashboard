@@ -216,6 +216,9 @@ watchlist:
   - {name: 엔비디아, market: US, code: NVDA, industry: 반도체, methods: [PER]}
   - {name: 메타, market: US, code: META, industry: 인터넷, methods: [PER]}
   - {name: 테슬라, market: US, code: TSLA, industry: 자동차, methods: [PER]}
+  # ⚖️ 비교 탭 — 메모리 3사·클라우드 수주잔고
+  - {name: 마이크론, market: US, code: MU, industry: 반도체, methods: [PER]}
+  - {name: 오라클, market: US, code: ORCL, industry: 소프트웨어, methods: [PER]}
 
 # ---------- 공동자산 — 🤝 공동자산 탭 ----------
 # 형식은 holdings 와 같아요 (예: - {name: 삼성전자, market: KR, code: "005930", industry: 반도체, methods: [PBR, PER], fair_methods: [PBR]})

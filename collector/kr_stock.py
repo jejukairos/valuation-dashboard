@@ -303,7 +303,8 @@ def dart_history(stock_code, splits=()):
 REPORTS = [("11014", "3분기보고서", 9), ("11012", "반기보고서", 6), ("11013", "1분기보고서", 3), ("11011", "사업보고서", 12)]
 ACCTS = {"sales": (["Revenue"], ["매출액", "수익(매출액)", "영업수익"]),
          "op": (["OperatingIncomeLoss"], ["영업이익", "영업이익(손실)"]),
-         "ni": (["ProfitLossAttributableToOwnersOfParent"], ["지배기업의소유주에게귀속되는당기순이익", "지배기업소유주지분"])}
+         "gp": (["GrossProfit"], ["매출총이익", "매출총이익(손실)"]),
+         "ni":(["ProfitLossAttributableToOwnersOfParent"], ["지배기업의소유주에게귀속되는당기순이익", "지배기업소유주지분"])}
 
 
 def dart_latest(stock_code):
@@ -353,8 +354,10 @@ def q_from_reports(cache):
     out = {}
     for key, v in cache.items():
         year, rc = key.split("_")
+        if not v:  # 보고서가 없는 해(상장 전 등)
+            continue
         row = {}
-        for k in ("sales", "op"):
+        for k in ("sales", "op", "gp"):
             a = v.get(k) or {}
             if rc == "11011":
                 q3 = (cache.get(f"{year}_11014") or {}).get(k) or {}
@@ -369,21 +372,29 @@ def q_from_reports(cache):
     return dict(sorted(out.items()))
 
 
-def dart_quarters(stock_code):
-    """최근 정기보고서(작년 3분기·사업보고서, 올해 1분기·반기·3분기)의 분기 3개월 매출·영업이익과 1년 전 같은 분기 (원).
-    한 번 낸 보고서는 바뀌지 않으니 캐시 (cache/dartq_{코드}.json). 영업이익 성장률(YoY) 그래프용."""
+def dart_quarters(stock_code, limit=None):
+    """2015년~ 정기보고서(1분기·반기·3분기·사업보고서)의 분기 3개월 매출·영업이익·매출총이익과 1년 전 같은 분기 (원).
+    한 번 낸 보고서는 바뀌지 않으니 캐시 (cache/dartq_{코드}.json) — 영업이익 성장률·📈 10년 실적 그래프용.
+    예전 분기는 갱신마다 최근 것부터 limit 개씩만 새로 받아 몇 번의 갱신에 걸쳐 채움 (DART 하루 한도·갱신 시간 보호)."""
     path = CACHE / f"dartq_{stock_code}.json"
     cache = read_json(path, {})
     cc = corp_code(stock_code)
-    y = now_kst().year
-    for year, rc in ((y - 1, "11014"), (y - 1, "11011"), (y, "11013"), (y, "11012"), (y, "11014")):
-        if f"{year}_{rc}" in cache:
-            continue
+    now = now_kst()
+    y = now.year
+    limit = SETTINGS_LIMIT if limit is None else limit
+    todo = [(yy, rc) for yy in range(y, 2014, -1) for rc in ("11014", "11012", "11013", "11011")
+            if f"{yy}_{rc}" not in cache or (cache[f"{yy}_{rc}"] and "gp" not in cache[f"{yy}_{rc}"])]
+    for year, rc in todo[:limit]:
         rows = _dart_fin(cc, year) if rc == "11011" else _dart_fin_q(cc, year, rc)
-        if rows:  # 아직 안 낸 보고서는 캐시하지 않음
-            cache[f"{year}_{rc}"] = {k: {f: _amt((_acct_row(rows, k) or {}).get(f)) for f in QF} for k in ("sales", "op")}
+        if rows:
+            cache[f"{year}_{rc}"] = {k: {f: _amt((_acct_row(rows, k) or {}).get(f)) for f in QF} for k in ("sales", "op", "gp")}
+        elif year < y - 1:  # 2년 넘게 지난 보고서가 없으면 상장 전 → 빈 칸으로 기억 (다시 안 받음). 최근 것은 아직 안 냈을 수 있어 그냥 둠
+            cache[f"{year}_{rc}"] = {}
     write_json(path, cache)
     return q_from_reports(cache)
+
+
+SETTINGS_LIMIT = 16  # 갱신 한 번에 종목당 새로 받을 예전 보고서 수 (약 4년 치)
 
 
 def _dart_fin_q(cc, year, rc):

@@ -29,6 +29,9 @@ SEG_US = load_yaml("segments.yaml") or {}  # 미국 부문별 매출 (공식 실
 KPI_CFG = load_yaml("kpi.yaml") or {}  # 🔑 핵심 지표 (fcf_add = 야후에 아직 없는 최신 분기 FCF, 보도자료)
 NOTES = load_yaml("notes.yaml") or {}  # 적정주가 칸 메모 (증권사 의견, 28E 칸 등)
 SEGC = load_yaml("seg_cons.yaml") or {}  # 🎯 사업부문별 컨센서스 vs 실적
+SEC_LONG = read_json(CACHE / "sec_longq.json") or {}  # 미국 10년 분기 실적 (tools/sec_backfill.py 로 받아 둠, 백만 달러)
+CMP = load_yaml("compare.yaml") or {}  # ⚖️ 비교 탭 설정·손으로 적는 자료 (삼성 DS·낸드·클라우드)
+LONGQ, MCAP_W = {}, {}  # 비교 탭에 쓸 종목별 10년 실적·주봉 시가총액
 BIGTECH = [("MSFT", "마이크로소프트"), ("GOOG", "알파벳"), ("META", "메타"), ("AMZN", "아마존")]  # 🏗 빅테크 CapEx (메모리 수요)
 M7 = BIGTECH + [("AAPL", "애플"), ("NVDA", "엔비디아"), ("TSLA", "테슬라")]  # 💸 M7 현금흐름·CapEx 가이던스
 
@@ -449,7 +452,23 @@ def stock_detail(h, rates_now, fx):
         except Exception as e:  # noqa: BLE001
             REPORT.block("최신 분기 실적 (미국)", f"{name}: {str(e)[:60]}")
     oc = str(h.get("data_code") or code)  # 우선주는 보통주 실적으로
-    det["op_yoy"] = op_yoy(oc, mkt, det["kq"], QTRS.get(tkr), (KPI_CFG.get(oc) or {}).get("op_yoy"))
+    dq = None
+    if mkt == "KR":  # DART 분기보고서 (2015년~, 예전 분기는 갱신마다 조금씩 채움)
+        try:
+            dq = kr_stock.dart_quarters(oc)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("DART 분기 실적", f"{name}: {str(e)[:60]}")
+    det["op_yoy"] = op_yoy(oc, mkt, det["kq"], QTRS.get(tkr), (KPI_CFG.get(oc) or {}).get("op_yoy"), dq=dq)
+    det["longq"] = long_q(mkt, dq, det["kq"], QTRS.get(tkr), SEC_LONG.get(code))  # 📈 10년 실적 추이
+    LONGQ[code] = det["longq"]
+    sd = CMP.get("samsung_ds") or {}
+    if oc == "005930" and sd.get("rev"):  # 삼성전자는 순수 반도체 회사가 아니라 DS(반도체) 부문만 따로 (조원 → 억원)
+        det["longq_seg"] = {"name": "DS(반도체)", "q": {str(k): {"rev": v * 1e4, **({"op": sd["op"][k] * 1e4} if (sd.get("op") or {}).get(k) is not None else {})}
+                                                    for k, v in sd["rev"].items()}}
+    mc = (det.get("now") or {}).get("market_cap")  # 그 나라 돈 기준 시가총액
+    if code in (CMP.get("mcap") or []) and mc and price:  # ⚖️ 비교 탭 시가총액 (지금 주식 수 × 주봉 종가 — 자사주·증자는 못 반영)
+        MCAP_W[code] = {"cur": currency, "shares": mc / price,
+                        "w": {d.strftime("%Y-%m-%d"): rnd(float(v), 2) for d, v in C.weekly_close(px).items()}}
     det["flow"] = None
     if mkt == "KR" and not h.get("data_code"):  # 외국인·기관·개인이 1년 동안 어느 가격대에서 샀나 (KRX)
         try:
@@ -560,9 +579,33 @@ def _mlabel(lb):
     return _klabel(f"20{m.group(1)}-{int(m.group(2)):02d}-28") if m else lb
 
 
-def op_yoy(code, mkt, kqd, qtrs, manual=None, n=5):
+def long_q(mkt, dq, kqd, qtrs, sec=None):
+    """📈 10년 실적 {'16.1Q': {rev, op, gp, ocf, capex}} — 한국: DART 분기보고서(억원) + 아직 보고서 전인 최신 분기는 네이버(잠정),
+    미국: SEC 백필(cache/sec_longq.json, 백만 달러) + 쌓아 둔 야후 분기. 분기 이름은 달력 분기."""
+    out = {}
+    if mkt == "KR":
+        for k, r in (dq or {}).items():
+            if r.get("sales") is not None:
+                out[kq.label(k)] = {f: rnd(r[s] / 1e8) for f, s in (("rev", "sales"), ("op", "op"), ("gp", "gp")) if r.get(s) is not None}
+        for q in (kqd or {}).get("quarters") or []:
+            if q.get("sales") is not None and q["q"] not in out:
+                out[q["q"]] = {"rev": q["sales"], **({"op": q["op"]} if q.get("op") is not None else {})}
+    else:
+        for e, v in (sec or {}).items():
+            out[_klabel(e)] = dict(v)
+        for e, v in (qtrs or {}).items():
+            row = out.setdefault(_klabel(e), {})
+            row.update({f: rnd(v[f] / 1e6) for f in ("rev", "op", "gp") if v.get(f) is not None})
+            if v.get("capex") is not None:
+                row["capex"] = rnd(abs(v["capex"]) / 1e6)
+                if v.get("fcf") is not None:
+                    row["ocf"] = rnd((v["fcf"] + abs(v["capex"])) / 1e6)
+    return dict(sorted((k, v) for k, v in out.items() if v.get("rev"))) or None
+
+
+def op_yoy(code, mkt, kqd, qtrs, manual=None, n=5, dq=None):
     """📈 영업이익 성장률 (YoY) {'26.3Q': %} 최근 n 분기 — 국내는 이걸로 PER 을 정함.
-    쌓아 둔 야후 분기 → 네이버 분기(잠정 포함) → DART 분기보고서(1년 전 같은 분기 숫자가 같이 있음) → kpi.yaml op_yoy 순서로 덮어씀.
+    쌓아 둔 야후 분기 → 네이버 분기(잠정 포함) → DART 분기보고서(1년 전 같은 분기 숫자가 같이 있음, dq) → kpi.yaml op_yoy 순서로 덮어씀.
     1년 전 영업이익이 0 이하(적자)면 성장률을 안 씀."""
     out = {}
 
@@ -578,11 +621,8 @@ def op_yoy(code, mkt, kqd, qtrs, manual=None, n=5):
         ops = {q["q"]: q.get("op") for q in (kqd or {}).get("quarters") or []}
         for lb, v in ops.items():
             put(lb, v, ops.get(ago(lb)))
-        try:
-            for k, r in kr_stock.dart_quarters(code).items():
-                put(kq.label(k), r.get("op"), r.get("op_ago"))
-        except Exception as e:  # noqa: BLE001
-            REPORT.block("DART 분기 영업이익", f"{code}: {str(e)[:60]}")
+        for k, r in (dq or {}).items():
+            put(kq.label(k), r.get("op"), r.get("op_ago"))
     out.update({str(k): v for k, v in (manual or {}).items()})
     return dict(sorted(out.items())[-n:]) or None
 
@@ -785,6 +825,16 @@ def main():
                                      "peak": load_yaml("peak.yaml") or None,
                                      "src": "야후 파이낸스 분기 현금흐름표 (설비투자) · 최신 분기는 보도자료 · 예상 = config/seg_cons.yaml"})
     write_json(DATA / "ir_calendar.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "items": cal})
+    # ⚖️ 비교 탭 (config/compare.yaml): 종목 10년 실적 + 주봉 시가총액 + 원/달러 (분기 평균·주봉) — 달러로 바꿔 나란히 보기
+    fx_q, fx_w = {}, {}
+    try:
+        fxs = us_stock.price_history("KRW=X")
+        fx_q = {f"{p.year % 100:02d}.{p.quarter}Q": round(float(v), 1) for p, v in fxs.groupby(fxs.index.to_period("Q")).mean().items()}
+        fx_w = {d.strftime("%Y-%m-%d"): round(float(v), 1) for d, v in C.weekly_close(fxs).items()}
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("비교 탭 환율", str(e)[:60])
+    write_json(DATA / "compare.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "cfg": CMP,
+                                       "longq": {c: LONGQ.get(c) for c in CMP.get("codes") or []}, "mcap": MCAP_W, "fx_q": fx_q, "fx_w": fx_w})
 
     print("■ 수주 공시")
     import orders

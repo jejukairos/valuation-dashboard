@@ -163,6 +163,8 @@ table.flow tr.now td { background: var(--surface-2); }
   padding: 6px 12px; border-radius: 8px; cursor: pointer; min-height: 34px;
 }
 .seg span[data-m], .seg span[data-sm] { display: inline-flex; align-items: center; box-sizing: border-box; }
+.seg.pseg, .seg.lseg, .seg.cseg { display: flex; flex-wrap: wrap; }  /* 기간 탭이 많아도 휴대폰 폭 안에서 줄바꿈 */
+.seg.pseg [data-m], .seg.lseg button, .seg.cseg button { padding: 5px 9px; font-size: 12px; min-height: 30px; }
 .seg button.on, .seg span[data-m].on, .seg span[data-sm].on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
 .stock {
   display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;

@@ -981,7 +981,7 @@ function kqTable(k) {
   </tbody></table></div>`;
 }
 // 주가: 기간 탭 (1개월~1년 = 일봉 종가, 3년~10년 = 상세 데이터의 주봉 종가) — 부드러운 선 + 색 채움 + 오른쪽 눈금 + 마지막 가격
-const PX_TABS = [[1, "1개월"], [3, "3개월"], [6, "6개월"], [12, "1년"], [36, "3년"], [60, "5년"], [120, "10년"]];
+const PX_TABS = [[1, "1개월"], [3, "3개월"], [6, "6개월"], [12, "1년"], [36, "3년"], [60, "5년"], [120, "10년"], [999, "MAX"]];  // MAX = 받아 둔 주봉 전부
 const PX_LONG = {};  // 코드 → 주봉 종가 (밴드 계산에 쓰는 가격)
 function priceBox(c, m = 6, tag = "button") {  // 종목 카드는 카드 자체가 <button> 이라 탭을 span 으로 (button 안 button 은 HTML 이 깨짐)
   if (!c.chart?.dates?.length) return "";
@@ -1092,6 +1092,7 @@ function kqHTML(d) {
     ${nx ? `<div class="note">📌 다음 ${esc(nx.q)} 컨센서스: ${[["sales", "매출"], ["op", "영업이익"], ["ni", "순이익"], ["eps", "EPS"]].filter(([f]) => nx[f] != null).map(([f, l]) => `${l} ${kqF(f, k.cur)(nx[f])}`).join(" · ")} <span class="src">(${esc(nx.date)} ${k.cur === "USD" ? "발표 예정" : "기준"}, 발표되면 이 값과 비교해요)</span></div>` : ""}
     ${k.filing ? `<div class="note src">${k.cur === "USD" ? "발표" : "공시"}: <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${esc(k.filing.name)}</a></div>` : ""}
     ${(EARNINGS[d.card?.code] || []).length ? "" : earningsHTML(d.card?.code, true)}
+    ${longHTML(d)}
     ${qtrHTML(d, "q", true)}
   </div>`;
 }
@@ -1161,6 +1162,189 @@ function qtrHTML(d, mode = "q", inKq = false) {  // mode: q = 분기, y = 연간
     })()}
     <div class="note src">성장률은 1년 전 ${yr ? "" : "같은 분기 "}대비 (${yr ? "야후 연간 재무제표 최근 4년" : "분기 자료가 쌓이면 빈 칸이 채워져요"}) · 한국 종목은 야후 반영이 실적 발표보다 늦을 수 있어요</div>
   ${inKq ? "" : "</div>"}</div>`;
+}
+// 📈 긴 기간 선(·막대) 그래프 — 휴대폰 한 화면에 10년 치 (안아줘 투자이야기 블로그 그림처럼 왼쪽·오른쪽 두 눈금)
+// o = {t, why, tag, labels, s: [{n, v, col, right, bar}], fl, fr (눈금 글자), zero (0 을 눈금에 넣기), tick (i → x 아래 글자)}
+function lineChart(o) {
+  const Lb = o.labels, N = Lb.length, S = o.s.map((s) => ({ ...s, v: s.v.map((v) => (Number.isFinite(v) ? v : null)) })).filter((s) => s.v.some((v) => v != null));  // 빈 칸·NaN 은 끊어 그림
+  if (N < 3 || !S.length) return "";
+  const hasR = S.some((s) => s.right), W = 340, x0 = 40, x1 = W - (hasR ? 40 : 10), top = 14, bot = 128;
+  const X = (i) => x0 + ((x1 - x0) * (i + 0.5)) / N, bars = S.filter((s) => s.bar), bw = Math.max(1.2, Math.min(9, ((x1 - x0) / N) * 0.75 / (bars.length || 1)));
+  const rng = (side) => {
+    const ss = S.filter((s) => !!s.right === side), vs = ss.flatMap((s) => s.v).filter((v) => v != null);
+    if (!vs.length) return null;
+    let lo = Math.min(...vs), hi = Math.max(...vs);
+    if (o.zero || ss.some((s) => s.bar)) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+    const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.1 || 1;
+    return [lo < 0 || !(o.zero || ss.some((s) => s.bar)) ? lo - pad : lo, hi + pad];
+  };
+  const R = { false: rng(false), true: rng(true) }, Y = (side, v) => { const [lo, hi] = R[side] || R[!side]; return bot - ((v - lo) / (hi - lo)) * (bot - top); };
+  const fl = o.fl || ((v) => n(v, 0)), fr = o.fr || fl;
+  let g = "";
+  [0, 0.5, 1].forEach((t) => {  // 눈금 3줄 (아래·가운데·위)
+    const y = bot - t * (bot - top);
+    g += `<line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="var(--grid)"/>`;
+    if (R.false) g += `<text x="${x0 - 3}" y="${y + 3}" text-anchor="end" class="qx">${esc(fl(R.false[0] + t * (R.false[1] - R.false[0])))}</text>`;
+    if (hasR && R.true) g += `<text x="${x1 + 3}" y="${y + 3}" class="qx">${esc(fr(R.true[0] + t * (R.true[1] - R.true[0])))}</text>`;
+  });
+  [false, true].forEach((side) => { const r = R[side]; if (r && r[0] < 0 && r[1] > 0 && (!side || !R.false || R.false[0] >= 0)) g += `<line x1="${x0}" x2="${x1}" y1="${Y(side, 0)}" y2="${Y(side, 0)}" stroke="var(--axis)"/>`; });
+  const every = N > 48 ? 3 : N > 28 ? 2 : 1, tick = o.tick || ((i) => (/\.1Q$/.test(Lb[i]) && +Lb[i].slice(0, 2) % every === 0 ? `'${Lb[i].slice(0, 2)}` : ""));
+  Lb.forEach((_, i) => { const t = tick(i); if (t) g += `<text x="${X(i)}" y="${bot + 13}" text-anchor="middle" class="qx">${esc(t)}</text>`; });
+  bars.forEach((s, j) => s.v.forEach((v, i) => {
+    if (v == null) return;
+    const side = !!s.right, y0 = Y(side, 0), y = Y(side, v), x = X(i) - (bw * bars.length) / 2 + j * bw;
+    g += `<rect x="${x}" y="${Math.min(y, y0)}" width="${bw * 0.9}" height="${Math.max(0.8, Math.abs(y0 - y))}" fill="${s.col}" opacity="${v < 0 ? 0.55 : 0.85}"/>`;
+  }));
+  const ends = [];
+  S.filter((s) => !s.bar).forEach((s) => {
+    const side = !!s.right;
+    let d = "", pen = false;
+    s.v.forEach((v, i) => { if (v == null) { pen = false; return; } d += `${pen ? "L" : "M"}${X(i).toFixed(1)},${Y(side, v).toFixed(1)}`; pen = true; });
+    g += `<path d="${d}" fill="none" stroke="${s.col}" stroke-width="${N > 30 ? 1.8 : 2.4}" stroke-linejoin="round"/>`;
+    if (N <= 24) s.v.forEach((v, i) => { if (v != null) g += `<circle cx="${X(i)}" cy="${Y(side, v)}" r="2" fill="${s.col}"/>`; });
+    const li = s.v.map((v, i) => (v != null ? i : -1)).filter((i) => i >= 0).pop();
+    if (li != null) { g += `<circle cx="${X(li)}" cy="${Y(side, s.v[li])}" r="3.2" fill="var(--surface)" stroke="${s.col}" stroke-width="2"/>`; ends.push([X(li), Y(side, s.v[li]), (side ? fr : fl)(s.v[li]), s.col]); }
+  });
+  ends.sort((a, b) => a[1] - b[1]).forEach((e, i, a) => { if (i && e[1] - a[i - 1][1] < 12) e[1] = a[i - 1][1] + 12; });
+  ends.forEach(([x, y, t, col]) => { g += `<text x="${Math.min(x, x1 - 2)}" y="${Math.max(top, y - 6)}" text-anchor="end" class="qv b" style="fill:${col};paint-order:stroke;stroke:var(--surface);stroke-width:3px">${esc(t)}</text>`; });
+  const leg = S.length > 1 ? `<div class="src" style="padding:0 4px 4px">${S.map((s) => `<span style="color:${s.col}">${s.bar ? "■" : "●"}</span> ${esc(s.n)}${hasR ? (s.right ? " (오른쪽)" : " (왼쪽)") : ""}`).join(" · ")}</div>` : "";
+  return `<div class="qp"><div class="qt"><b>${esc(o.t)}</b>${o.tag || ""}</div>${o.why ? `<div class="src">${esc(o.why)}</div>` : ""}<svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(o.t)}">${g}</svg>${leg}</div>`;
+}
+const qAgo = (k) => `${String(+k.slice(0, 2) - 1).padStart(2, "0")}${k.slice(2)}`;  // '26.3Q' → '25.3Q'
+const usdB = (v) => (v == null ? "-" : `${v < 0 ? "-" : ""}$${n(Math.abs(v), Math.abs(v) >= 100 ? 0 : 1)}B`), fPct = (v) => `${n(v, 0)}%`;
+// {라벨: {rev, op, gp}} → 같은 길이 배열들 (usd = 백만 달러 → 십억 달러)
+function longSeries(q, ks, usd) {
+  const M = (v) => (v == null ? null : usd ? v / 1e3 : v), r = (k) => q[k] || {};
+  return { rev: ks.map((k) => M(r(k).rev)), op: ks.map((k) => M(r(k).op)),
+    yoy: ks.map((k) => (r(qAgo(k)).rev > 0 && r(k).rev != null ? (r(k).rev / r(qAgo(k)).rev - 1) * 100 : null)),
+    opm: ks.map((k) => (r(k).op != null && r(k).rev ? (r(k).op / r(k).rev) * 100 : null)),
+    gpm: ks.map((k) => (r(k).gp != null && r(k).rev && r(k).gp < r(k).rev * 0.995 ? (r(k).gp / r(k).rev) * 100 : null)) };
+}
+const LONG_TABS = [[12, "3년"], [20, "5년"], [40, "10년"], [999, "MAX"]], LONG_MAP = {};
+// 📈 10년 실적 추이 (종목 상세): 매출·영업이익 두 눈금 선 · 매출 성장률 · 영업이익률 · 매출총이익률 (+ 삼성전자는 DS 부문만 따로)
+function longHTML(d, span = 40) {
+  const c = d.card || d, q = d.longq;
+  const all = Object.keys(q || {}).sort();
+  if (all.length < 6) return "";
+  LONG_MAP[c.code] = d;
+  const usd = c.currency === "USD", ks = all.slice(-span), s = longSeries(q, ks, usd), fm = usd ? usdB : kqFmt;
+  const ch = [
+    lineChart({ t: "매출 · 영업이익", labels: ks, s: [{ n: "매출", v: s.rev, col: "var(--s1)" }, { n: "영업이익", v: s.op, col: "var(--warn)", right: true }], fl: fm, fr: fm, zero: true }),
+    lineChart({ t: "매출 성장률 (YoY)", labels: ks, s: [{ n: "YoY", v: s.yoy, col: "var(--s1)" }], fl: fPct }),
+    lineChart({ t: "영업이익률 (OPM)", labels: ks, s: [{ n: "OPM", v: s.opm, col: "var(--good)" }], fl: fPct }),
+    s.gpm.filter((v) => v != null).length >= 4 ? lineChart({ t: "매출총이익률 (GPM)", labels: ks, s: [{ n: "GPM", v: s.gpm, col: "var(--s3)" }], fl: fPct }) : "",
+  ];
+  const sg = d.longq_seg;  // 삼성전자 DS(반도체) 부문
+  if (sg?.q) {
+    const sk = Object.keys(sg.q).sort().slice(-span), ss = longSeries(sg.q, sk, false);
+    ch.push(lineChart({ t: `${sg.name} 매출 · 영업이익`, labels: sk, s: [{ n: "매출", v: ss.rev, col: "var(--s1)" }, { n: "영업이익", v: ss.op, col: "var(--warn)", right: true }], fl: kqFmt, fr: kqFmt, zero: true }),
+      lineChart({ t: `${sg.name} 영업이익률`, labels: sk, s: [{ n: "OPM", v: ss.opm, col: "var(--good)" }], fl: fPct }));
+  }
+  return `<div class="lnbox" data-code="${esc(c.code)}"><div class="chart-title" style="margin-top:14px"><b>📈 10년 실적 추이</b> <span class="src">${esc(all[0])}~${esc(all.at(-1))} · 분기 · ${usd ? "SEC·야후 (달러)" : "DART 분기보고서 · 최신 분기는 잠정실적 (원)"}</span></div>
+    <div class="seg lseg" style="margin-top:6px">${LONG_TABS.map(([m, l]) => `<button data-ln="${m}" class="${m === span ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="qgrid" style="margin-top:6px">${ch.join("")}</div>${all.length < 20 ? `<div class="note src">예전 분기는 갱신 때마다 조금씩 채워져요 (지금 ${all.length}개 분기)</div>` : ""}</div>`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".lnbox .lseg button"); if (!b) return;
+  const box = b.closest(".lnbox");
+  box.outerHTML = longHTML(LONG_MAP[box.dataset.code], +b.dataset.ln);
+});
+// ⚖️ 비교 탭 (data/compare.json = 종목 10년 실적 + config/compare.yaml): 메모리 3사 · 낸드 · 빅테크 CapEx · 클라우드
+let CMPD = null, CMP_SPAN = 40;
+async function renderCompare() {
+  if (!CMPD) { try { CMPD = (await (await fetch("data/compare.json?t=" + Date.now(), { cache: "no-store" })).json()) || {}; } catch (_) { CMPD = {}; } }
+  $("#compareBody").innerHTML = compareHTML(CMP_SPAN);
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("#compareBody .cseg button"); if (!b) return;
+  CMP_SPAN = +b.dataset.cs;
+  $("#compareBody").innerHTML = compareHTML(CMP_SPAN);
+});
+const CMP_COL = { "000660": "var(--warn)", SK하이닉스: "var(--warn)", "005930": "var(--s1)", 삼성전자: "var(--s1)", "삼성전자 DS": "var(--s1)", MU: "var(--good)", 마이크론: "var(--good)", 샌디스크: "var(--good)",
+  MSFT: "var(--s1)", GOOG: "var(--bad)", META: "var(--s3)", AMZN: "var(--warn)", ORCL: "var(--s4)" };
+const cmpName = (c) => DASH?.stocks?.find((s) => s.code === c)?.name || { MU: "마이크론", ORCL: "오라클", AMZN: "아마존" }[c] || c;
+const shortQ = (i, L) => (L.length <= 12 ? `${L[i].slice(3, 4)}Q${L[i].slice(0, 2)}` : /\.1Q$/.test(L[i]) && +L[i].slice(0, 2) % (L.length > 48 ? 3 : L.length > 28 ? 2 : 1) === 0 ? `'${L[i].slice(0, 2)}` : "");
+// 시가총액(달러, 주봉): 지금 주식 수 × 주봉 종가 (한국은 그 주 원/달러로 나눔)
+function mcapChart(D, span) {
+  const M = D.mcap || {}, codes = (D.cfg?.mcap || []).filter((c) => M[c]);
+  if (!codes.length) return "";
+  const fxd = Object.keys(D.fx_w || {}).sort();
+  const fxAt = (d) => { let lo = 0, hi = fxd.length - 1, r = null; while (lo <= hi) { const m = (lo + hi) >> 1; if (fxd[m] <= d) { r = fxd[m]; lo = m + 1; } else hi = m - 1; } return r ? D.fx_w[r] : null; };
+  let ds = [...new Set(codes.flatMap((c) => Object.keys(M[c].w)))].sort();
+  if (span < 999) ds = ds.slice(-span * 13);
+  const st = Math.max(1, Math.ceil(ds.length / 160)); ds = ds.filter((_, i) => i % st === 0 || i === ds.length - 1);
+  const s = codes.map((c) => ({ n: cmpName(c), col: CMP_COL[c] || "var(--ink-2)", v: ds.map((d) => {
+    const p = M[c].w[d]; if (p == null) return null;
+    const v = p * M[c].shares; return M[c].cur === "USD" ? v / 1e9 : fxAt(d) ? v / fxAt(d) / 1e9 : null; }) }));
+  const ev = ds.length > 400 ? 3 : ds.length > 200 ? 2 : 1;
+  return lineChart({ t: "시가총액 ($B, 주봉)", why: "지금 주식 수 × 그때 주가 — 자사주 소각·증자는 반영 못 함", labels: ds, s, fl: usdB,
+    tick: (i) => (i && ds[i].slice(0, 4) !== ds[i - 1].slice(0, 4) && +ds[i].slice(2, 4) % ev === 0 ? `'${ds[i].slice(2, 4)}` : "") });
+}
+function compareHTML(span) {
+  const D = CMPD || {}, cfg = D.cfg || {}, lq = (c) => D.longq?.[c] || {}, fx = (k) => D.fx_q?.[k];
+  const keysOf = (...os) => [...new Set(os.flatMap((o) => Object.keys(o || {})))].sort().slice(span < 999 ? -span : 0);
+  const box = (t, sub, body, note = "") => `<h3>${t} <span class="src">${sub}</span></h3><div class="card"><div class="qgrid">${body}</div>${note}</div>`;
+  const wait = (what) => `<div class="note src">⏳ ${what} 자료를 모으는 중이에요 — 채워지면 그림이 나와요.</div>`;
+  const opmOf = (rev, op) => rev.map((r, i) => (r && op[i] != null ? (op[i] / r) * 100 : null));
+  const out = [`<div class="seg cseg" style="margin-bottom:10px">${LONG_TABS.map(([m, l]) => `<button data-cs="${m}" class="${m === span ? "on" : ""}">${l}</button>`).join("")}</div>`];
+  // 1) 메모리 3사 — 분기, 달러 (억원 ÷ (그 분기 평균 환율 × 10) = 십억 달러)
+  const hy = lq("000660"), mu = lq("MU"), ds = cfg.samsung_ds || {}, kU = (v, k) => (v == null || !fx(k) ? null : v / (fx(k) * 10));
+  const mk = keysOf(hy, mu, ds.rev);
+  const mem = [
+    { n: "SK하이닉스", rev: mk.map((k) => kU(hy[k]?.rev, k)), op: mk.map((k) => kU(hy[k]?.op, k)) },
+    { n: "삼성전자 DS", rev: mk.map((k) => kU(ds.rev?.[k] != null ? ds.rev[k] * 1e4 : null, k)), op: mk.map((k) => kU(ds.op?.[k] != null ? ds.op[k] * 1e4 : null, k)) },
+    { n: "마이크론", rev: mk.map((k) => (mu[k]?.rev != null ? mu[k].rev / 1e3 : null)), op: mk.map((k) => (mu[k]?.op != null ? mu[k].op / 1e3 : null)) },
+  ].filter((x) => x.rev.some((v) => v != null));
+  const S = (key, f = (x) => x[key]) => mem.map((x) => ({ n: x.n, v: f(x), col: CMP_COL[x.n] }));
+  out.push(box("🧠 메모리 3사", "분기 · 달러(분기 평균 환율) · 삼성전자는 반도체(DS) 부문만",
+    (mem.length ? lineChart({ t: "매출 ($B)", labels: mk, s: S("rev"), fl: usdB, zero: true, tick: (i) => shortQ(i, mk) })
+      + lineChart({ t: "영업이익 ($B)", labels: mk, s: S("op"), fl: usdB, zero: true, tick: (i) => shortQ(i, mk) })
+      + lineChart({ t: "영업이익률 (OPM)", labels: mk, s: S("opm", (x) => opmOf(x.rev, x.op)), fl: fPct, tick: (i) => shortQ(i, mk) }) : "") + mcapChart(D, span),
+    (!ds.rev || !Object.keys(ds.rev).length ? wait("삼성전자 DS 부문") : "") + (Object.keys(mu).length < 12 ? wait("마이크론 10년 (SEC)") : "")));
+  // 2) 낸드 — 회사가 따로 안 내서 증권가 추정 (블로그 그림에서 읽은 대략값)
+  const NY = cfg.nand_y, NQ = cfg.nand_q;
+  if (NY?.rev) {
+    const ys = keysOf(...Object.values(NY.rev)), cs = Object.keys(NY.rev), yt = (i) => `'${String(ys[i]).slice(2)}`;
+    const qk = keysOf(...Object.values(NQ?.rev || {})), qc = Object.keys(NQ?.rev || {});
+    const ser = (src, ks, cs_, bar) => cs_.map((c) => ({ n: c, v: ks.map((k) => src[c]?.[k] ?? null), col: CMP_COL[c], bar }));
+    const opmS = (src, ks, cs_) => cs_.map((c) => ({ n: c, v: ks.map((k) => (src.rev[c]?.[k] && src.op[c]?.[k] != null ? (src.op[c][k] / src.rev[c][k]) * 100 : null)), col: CMP_COL[c] }));
+    out.push(box("💾 낸드 (NAND)", "조원 · 증권가 추정치",
+      lineChart({ t: "연간 낸드 매출 (조원)", labels: ys, s: ser(NY.rev, ys, cs, true), fl: (v) => n(v, 0), tick: yt })
+      + lineChart({ t: "연간 낸드 영업이익 (조원)", labels: ys, s: ser(NY.op, ys, cs, true), fl: (v) => n(v, 0), tick: yt })
+      + lineChart({ t: "연간 낸드 영업이익률", labels: ys, s: opmS(NY, ys, cs), fl: fPct, tick: yt })
+      + (qk.length ? lineChart({ t: "분기 낸드 매출 (조원)", labels: qk, s: ser(NQ.rev, qk, qc), fl: (v) => n(v, 0), zero: true, tick: (i) => shortQ(i, qk) })
+        + lineChart({ t: "분기 낸드 영업이익 (조원)", labels: qk, s: ser(NQ.op, qk, qc), fl: (v) => n(v, 1), zero: true, tick: (i) => shortQ(i, qk) })
+        + lineChart({ t: "분기 낸드 영업이익률", labels: qk, s: opmS(NQ, qk, qc), fl: fPct, tick: (i) => shortQ(i, qk) }) : ""),
+      `<div class="note src">출처: ${esc(cfg.nand_src || "")}</div>`));
+  }
+  // 3) 빅테크 CapEx — 매출 대비 몇 %, 영업이익과 나란히
+  const bt = (cfg.bigtech || []).map((c) => {
+    const q = lq(c), ks = keysOf(q), capex = ks.map((k) => (q[k]?.capex != null ? q[k].capex / 1e3 : null)), rev = ks.map((k) => q[k]?.rev);
+    if (capex.filter((v) => v != null).length < 3) return "";
+    return lineChart({ t: `${cmpName(c)} CapEx · 매출 대비`, labels: ks, s: [{ n: "CapEx ($B)", v: capex, col: "var(--s1)", bar: true }, { n: "CapEx ÷ 매출", v: ks.map((k, i) => (rev[i] && capex[i] != null ? (capex[i] * 1e3 / rev[i]) * 100 : null)), col: "var(--warn)", right: true }], fl: usdB, fr: fPct, tick: (i) => shortQ(i, ks) })
+      + lineChart({ t: `${cmpName(c)} CapEx vs 영업이익`, labels: ks, s: [{ n: "CapEx", v: capex, col: "var(--s1)" }, { n: "영업이익", v: ks.map((k) => (q[k]?.op != null ? q[k].op / 1e3 : null)), col: "var(--warn)" }], fl: usdB, zero: true, tick: (i) => shortQ(i, ks) });
+  }).join("");
+  out.push(box("🏗 빅테크 CapEx", "분기 · 달러 · 설비투자가 매출의 몇 %인지, 영업이익보다 빨리 느는지", bt, bt ? (Object.keys(lq("MSFT")).length < 12 ? wait("빅테크 10년 (SEC)") : "") : wait("빅테크 CapEx")));
+  // 4) 클라우드 — AWS vs 구글 클라우드, 수주잔고(RPO)
+  const aws = cfg.aws || {}, gc = cfg.gcloud || {}, rpo = cfg.rpo || {};
+  const ck = keysOf(aws.rev, gc.rev), B = (o, k) => (o?.[k] != null ? o[k] / 1e3 : null);
+  const ltm = (o, k) => { let s = 0, kk = k; for (let i = 0; i < 4; i++) { if (o?.[kk] == null) return null; s += o[kk]; kk = (+kk[3] === 1 ? `${String(+kk.slice(0, 2) - 1).padStart(2, "0")}.4Q` : `${kk.slice(0, 3)}${+kk[3] - 1}Q`); } return s; };
+  let cl = "";
+  if (ck.length >= 3) {
+    cl += lineChart({ t: "클라우드 매출 ($B)", labels: ck, s: [{ n: "AWS", v: ck.map((k) => B(aws.rev, k)), col: "var(--warn)" }, { n: "구글 클라우드", v: ck.map((k) => B(gc.rev, k)), col: "var(--s1)" }], fl: usdB, zero: true, tick: (i) => shortQ(i, ck) })
+      + lineChart({ t: "구글 클라우드 ÷ AWS 매출", labels: ck, s: [{ n: "비율", v: ck.map((k) => (aws.rev?.[k] && gc.rev?.[k] != null ? (gc.rev[k] / aws.rev[k]) * 100 : null)), col: "var(--s1)" }], fl: fPct, tick: (i) => shortQ(i, ck) })
+      + lineChart({ t: "매출 성장률 (YoY)", labels: ck, s: [{ n: "AWS", v: ck.map((k) => (aws.rev?.[qAgo(k)] ? (aws.rev[k] / aws.rev[qAgo(k)] - 1) * 100 : null)), col: "var(--warn)" }, { n: "구글 클라우드", v: ck.map((k) => (gc.rev?.[qAgo(k)] > 0 && gc.rev?.[k] != null ? (gc.rev[k] / gc.rev[qAgo(k)] - 1) * 100 : null)), col: "var(--s1)" }], fl: fPct, tick: (i) => shortQ(i, ck) })
+      + lineChart({ t: "영업이익률 (OPM)", labels: ck, s: [{ n: "AWS", v: ck.map((k) => (aws.rev?.[k] && aws.op?.[k] != null ? (aws.op[k] / aws.rev[k]) * 100 : null)), col: "var(--warn)" }, { n: "구글 클라우드", v: ck.map((k) => (gc.rev?.[k] && gc.op?.[k] != null ? (gc.op[k] / gc.rev[k]) * 100 : null)), col: "var(--s1)" }], fl: fPct, tick: (i) => shortQ(i, ck) });
+  }
+  const rc = Object.keys(rpo), rk = keysOf(...Object.values(rpo));
+  if (rk.length >= 3) {
+    const base = { AMZN: aws.rev, GOOG: gc.rev };  // 아마존은 AWS, 알파벳은 구글 클라우드 매출로 나눔 (잔고 대부분이 그 사업)
+    const rev = (c) => base[c] || Object.fromEntries(Object.entries(lq(c)).map(([k, v]) => [k, v.rev]));
+    cl += lineChart({ t: "수주잔고 RPO ($B)", why: "앞으로 매출이 될 계약 잔고", labels: rk, s: rc.map((c) => ({ n: cmpName(c), v: rk.map((k) => rpo[c]?.[k] ?? null), col: CMP_COL[c] })), fl: usdB, zero: true, tick: (i) => shortQ(i, rk) })
+      + lineChart({ t: "RPO ÷ 최근 4분기 매출 (몇 년 치 일감)", why: "아마존 = AWS, 알파벳 = 구글 클라우드 매출로 나눔", labels: rk, s: rc.map((c) => ({ n: cmpName(c), v: rk.map((k) => { const l = ltm(rev(c), k); return l && rpo[c]?.[k] != null ? (rpo[c][k] * 1e3) / l : null; }), col: CMP_COL[c] })), fl: (v) => `${n(v, 1)}년`, tick: (i) => shortQ(i, rk) });
+  }
+  out.push(box("☁️ 클라우드", "분기 · 달러 · 회사 실적 보도자료", cl, cl ? "" : wait("AWS·구글 클라우드·수주잔고")));
+  return out.join("") + `<div class="note src">${esc(D.updated_at || "")} 갱신 · 한국 = DART 분기보고서(최신 분기는 잠정실적), 미국 = SEC·야후 분기 재무제표 · 달러 환산 = 분기 평균 원/달러</div>`;
 }
 /* ---------- 실적발표(컨퍼런스콜) 요약: 분기 목록 → 누르면 자세한 요약, 맨 아래 '핵심만' (config/earnings.yaml) ---------- */
 let EARNINGS = {}, IRCAL = { items: [] };
@@ -2339,7 +2523,7 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + segcHTML(d) + kpiHtml + per12mfHTML(d) + (d.kq ? "" : qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + segcHTML(d) + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
@@ -2641,8 +2825,10 @@ function pbrCard(it, base, i) {
   </div>`;
 }
 function showView() {
-  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#industry": "industry" }[location.hash] || "main";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#industry": "industry", "#compare": "compare" }[location.hash] || "main";
   $("#pbrView").hidden = view !== "pbr";
+  $("#compareView").hidden = view !== "compare";
+  if (view === "compare") renderCompare();
   $("#newsView").hidden = view !== "news";
   if (view === "news") loadNews();
   $("#industryView").hidden = view !== "industry";

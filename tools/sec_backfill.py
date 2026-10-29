@@ -1,0 +1,119 @@
+"""미국 종목 10년 분기 실적을 받아 두기 (SEC EDGAR companyfacts) — 서버(GitHub)에서는 SEC 가 막혀서 이 컴퓨터에서 가끔 한 번씩 실행.
+SEC 는 요청하는 사람의 연락처를 요구해요. 본인 연락처를 SEC_CONTACT 환경변수로만 넣어요 (코드·저장소·결과 파일에는 남지 않음).
+  PowerShell:  $env:SEC_CONTACT="내 이메일"; .venv\\Scripts\\python.exe tools\\sec_backfill.py
+결과: cache/sec_longq.json {티커: {분기 끝 날짜: {rev, op, gp, ocf, capex, rpo}}} (백만 달러, 2014년~) — 수집기가 야후 분기와 합쳐 📈 10년 실적·⚖️ 비교 탭에 씀."""
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+import requests
+import yaml
+
+ROOT = Path(__file__).resolve().parent.parent
+TAGS = {  # 앞에 있는 이름을 먼저 쓰고, 없는 분기만 뒤 이름으로 채움 (회사·연도마다 쓰는 이름이 달라서)
+    "rev": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet",
+            "RevenueFromContractWithCustomerIncludingAssessedTax"],
+    "op": ["OperatingIncomeLoss"],
+    "gp": ["GrossProfit"],
+    "cogs": ["CostOfRevenue", "CostOfGoodsAndServicesSold"],
+    "ocf": ["NetCashProvidedByUsedInOperatingActivities"],
+    "capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
+    "rpo": ["RevenueRemainingPerformanceObligation"],
+}
+
+
+def quarters(rows):
+    """한 항목의 공시 행들 → {분기 끝 날짜: 3개월 값}. 같은 기간은 가장 늦게 낸 값(정정 반영).
+    10-Q 현금흐름처럼 누적(6·9개월)만 있으면 누적끼리 빼서 3개월을 만듦 (4분기 = 연간 − 9개월)."""
+    span = {}
+    for r in rows:
+        if not (r.get("start") and r.get("end")):
+            continue
+        key = (r["start"], r["end"])
+        if key not in span or r["filed"] > span[key]["filed"]:
+            span[key] = r
+    days = lambda s, e: (time.mktime(time.strptime(e, "%Y-%m-%d")) - time.mktime(time.strptime(s, "%Y-%m-%d"))) / 86400
+    out = {e: float(r["val"]) for (s, e), r in span.items() if 80 <= days(s, e) <= 100}
+    for (s, e), r in sorted(span.items(), key=lambda x: x[0][1]):
+        if e in out or days(s, e) <= 100:
+            continue
+        prev = [(e2, x) for (s2, e2), x in span.items() if s2 == s and 80 <= days(e2, e) <= 100]
+        if prev:
+            out[e] = float(r["val"]) - float(prev[0][1]["val"])
+    return out
+
+
+def instants(rows):
+    best = {}
+    for r in rows:
+        if not r.get("start") and r.get("end") and (r["end"] not in best or r["filed"] > best[r["end"]]["filed"]):
+            best[r["end"]] = r
+    return {e: float(r["val"]) for e, r in best.items()}
+
+
+def pull(facts):
+    g = (facts.get("facts") or {}).get("us-gaap") or {}
+    got = {}
+    for k, names in TAGS.items():
+        vals = {}
+        for nm in names:
+            rows = ((g.get(nm) or {}).get("units") or {}).get("USD") or []
+            for e, v in (instants(rows) if k == "rpo" else quarters(rows)).items():
+                vals.setdefault(e, v)
+        got[k] = vals
+    out = {}
+    for e in sorted(set(got["rev"]) | set(got["ocf"])):
+        if e < "2014-01-01":
+            continue
+        row = {k: round(got[k][e] / 1e6) for k in ("rev", "op", "gp", "ocf", "capex") if e in got[k]}
+        if "gp" not in row and e in got["cogs"] and "rev" in row:
+            row["gp"] = round(row["rev"] - got["cogs"][e] / 1e6)
+        rp = next((v for d, v in got["rpo"].items() if abs(time.mktime(time.strptime(d, "%Y-%m-%d")) - time.mktime(time.strptime(e, "%Y-%m-%d"))) < 20 * 86400), None)
+        if rp is not None:
+            row["rpo"] = round(rp / 1e6)
+        if row:
+            out[e] = row
+    return out
+
+
+def main():
+    contact = os.environ.get("SEC_CONTACT")
+    if not contact:
+        sys.exit("SEC_CONTACT 환경변수에 본인 연락처를 넣고 실행해 주세요 (SEC 규칙). 예: $env:SEC_CONTACT=\"내 이메일\"")
+    ua = {"User-Agent": f"personal-valuation-dashboard {contact}", "Accept-Encoding": "gzip, deflate"}
+    st = yaml.safe_load(open(ROOT / "config" / "stocks.yaml", encoding="utf-8"))
+    cmp_ = yaml.safe_load(open(ROOT / "config" / "compare.yaml", encoding="utf-8")) or {}
+    tickers = sorted({str(h["code"]) for g in st.values() if isinstance(g, list) for h in g if isinstance(h, dict) and h.get("market") == "US"}
+                     | {str(c) for c in cmp_.get("codes") or [] if not str(c).isdigit()})
+    m = requests.get("https://www.sec.gov/files/company_tickers.json", headers=ua, timeout=40).json()
+    cik = {v["ticker"].upper(): v["cik_str"] for v in m.values()}
+    cik["GOOG"] = cik.get("GOOG") or cik.get("GOOGL")
+    path = ROOT / "cache" / "sec_longq.json"
+    saved = json.loads(path.read_text(encoding="utf-8-sig")) if path.exists() else {}
+    for t in tickers:
+        if not cik.get(t):
+            print("  CIK 없음", t)
+            continue
+        time.sleep(0.3)  # SEC 는 초당 10번 이하
+        r = requests.get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{int(cik[t]):010d}.json", headers=ua, timeout=60)
+        if r.status_code != 200:
+            print("  실패", t, r.status_code)
+            continue
+        saved[t] = {**saved.get(t, {}), **pull(r.json())}
+        ks = sorted(saved[t])
+        print(f"  {t}: {len(ks)}개 분기 ({ks[0] if ks else '-'} ~ {ks[-1] if ks else '-'})")
+    path.write_text(json.dumps(saved, ensure_ascii=False, indent=0), encoding="utf-8")
+    print("저장:", path)
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["--test"]:  # 자체 점검: 누적 현금흐름 → 분기 3개월 (2분기 = 6개월 − 1분기, 4분기 = 연간 − 9개월)
+        R = lambda s, e, v, f="2025-01-01": {"start": s, "end": e, "val": v, "filed": f}
+        q = quarters([R("2024-01-01", "2024-03-31", 10), R("2024-01-01", "2024-06-30", 25), R("2024-01-01", "2024-09-30", 45),
+                      R("2024-01-01", "2024-12-31", 70), R("2024-01-01", "2024-03-31", 11, "2025-06-01")])
+        assert q == {"2024-03-31": 11, "2024-06-30": 14, "2024-09-30": 20, "2024-12-31": 25}, q
+        print("ok")
+    else:
+        main()

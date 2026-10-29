@@ -39,6 +39,8 @@ MSFT: {own: [마이크로소프트], rivals: [아마존 AWS, 오라클, 구글 �
 NVDA: {own: [엔비디아, 젠슨 황], rivals: [AMD, 브로드컴, 구글 TPU], en: [Nvidia]}
 TSLA: {own: [테슬라], rivals: [BYD, 웨이모, 리비안], en: [Tesla]}
 AAPL: {own: [애플, 아이폰], not: [애플망고], rivals: [삼성 갤럭시, 화웨이, 샤오미], en: [Apple, iPhone]}
+MU: {own: [마이크론], rivals: [SK하이닉스, 삼성전자 메모리], en: [Micron]}
+ORCL: {own: [오라클], rivals: [마이크로소프트 애저, 구글 클라우드, 아마존 AWS], en: [Oracle]}
 
 # ---------- 관심 ----------
 "012330": {own: [현대모비스], rivals: [보쉬, 콘티넨탈, HL만도], en: [Hyundai Mobis]}
