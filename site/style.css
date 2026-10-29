@@ -140,6 +140,9 @@ td.hot { font-weight: 700; }
 .tile .tl { font-size: 12px; color: var(--ink-2); }
 .tile .tv { font-size: 26px; font-weight: 700; line-height: 1.25; }
 .tiles.t3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+/* 🐣 주린이를 위한 핵심 간단 요약 */
+.kidbox { background: var(--good-bg); color: var(--ink); border-radius: 10px; padding: 8px 12px; margin-top: 8px; font-size: 14px; line-height: 1.6; }
+.kidbox ul { margin: 4px 0 0; }
 /* 👥 누가 어느 가격에 샀나 */
 table.flow { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; font-variant-numeric: tabular-nums; }
 table.flow th, table.flow td { padding: 5px 4px; border-bottom: 1px solid var(--grid); text-align: center; vertical-align: middle; }

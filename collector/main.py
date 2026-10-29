@@ -746,6 +746,7 @@ def main():
     write_json(DATA / "amazon_kbeauty.json", kbeauty.collect())  # 🏭 산업 탭: 아마존 K-뷰티 Top100 (텔레그램 3곳 크로스체크)
     write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})
     write_json(DATA / "earnings.json", load_yaml("earnings.yaml") or {})  # 실적발표(컨퍼런스콜) 요약
+    write_json(DATA / "events.json", load_yaml("events.yaml") or [])  # 🐣 주린이용 쉬운 이벤트 요약 (공시·촉매·전망 변화)
     write_json(CACHE / "ltg_gap.json", LTG_GAP)
     write_json(CACHE / "quarters.json", QTRS)
     write_json(CACHE / "segments.json", SEGS)

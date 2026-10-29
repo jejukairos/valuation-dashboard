@@ -1099,6 +1099,19 @@ function irCalHTML() {
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">보유·관심·공동 · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
     <ul class="irl">${items.map((e) => `<li>${irWhen(e)} <a href="#stock/${esc(e.code)}">${esc(e.name)}</a>${gl[e.group] || ""} · ${esc(e.title || "")}${e.live ? " · 🔴 라이브" : ""}${e.segc ? ` · <a href="#stock/${esc(e.code)}">🎯 ${esc(e.segc)} 부문 예상</a>` : ""}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${e.script_url ? ` · <a href="${esc(e.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</li>`).join("")}</ul></details>`;
 }
+// 🐣 오늘의 쉬운 요약 (첫 화면): 최근 3일 실적발표 요약의 easy + config/events.yaml (공시·촉매·전망 변화) — 바쁠 때 이것만 읽어도 되게
+let EVENTS = [];
+function easyNewsHTML() {
+  const cut = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10), nm = (c) => DASH.stocks.find((s) => s.code === c)?.name;
+  const items = [
+    ...Object.entries(EARNINGS).flatMap(([code, l]) => (l[0]?.easy?.length && l[0].date >= cut ? [{ date: l[0].date, code, title: `${l[0].quarter} 실적발표`, easy: l[0].easy, sum: true }] : [])),
+    ...(EVENTS || []).filter((e) => e.date >= cut && e.easy?.length),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+  if (!items.length) return "";
+  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>🐣 오늘의 쉬운 요약</b> <span class="src">최근 3일 · 실적발표·공시·증권사 전망 변화 · 핵심만 쉬운 말로</span></summary>
+    ${items.map((e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
+      <ul class="irl">${e.easy.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
+}
 function earningsHTML(code) {
   const list = EARNINGS[code] || [];
   const ev = (IRCAL.items || []).find((e) => e.code === code && e.dday >= -7);
@@ -1106,6 +1119,7 @@ function earningsHTML(code) {
   if (!list.length) return next ? `<h3>📞 실적발표</h3><div class="card">${next}<div class="note src">발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 여기에 넣어요.</div></div>` : "";
   return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">${next}
     ${list.map((e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
+      ${(e.easy || []).length ? `<div class="kidbox">🐣 <b>주린이를 위한 핵심 간단 요약</b><ul class="irl">${e.easy.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       ${e.transcript ? `<div class="note">📜 <a href="${esc(e.transcript)}" target="_blank" rel="noopener">발표 자막 원문 보기 (발표·질의응답 전체)</a></div>` : ""}
       ${(e.short || []).length ? `<div class="warnbox" style="margin-top:6px"><b>⚡ 핵심만</b><ul class="irl">${e.short.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
@@ -2640,6 +2654,7 @@ function renderAll() {
     marketCard(DASH.signals.us, DASH.rates.us10y, null, "us") +
     marketCard(DASH.signals.kr, DASH.rates.kr3y, DASH.rates.kr10y ? { label: "국고채 10년", latest: DASH.rates.kr10y.latest } : null, "kr");
   drawMarketCharts();
+  $("#easyNews").innerHTML = easyNewsHTML();
   $("#kqNews").innerHTML = kqNewsHTML();
   $("#irCal").innerHTML = irCalHTML();
   renderCmp();
@@ -2663,6 +2678,7 @@ async function load() {
     try { PROFILES = await (await fetch("data/profiles.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { PROFILES = {}; }
     try { EARNINGS = await (await fetch("data/earnings.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { EARNINGS = {}; }
     try { IRCAL = await (await fetch("data/ir_calendar.json?t=" + Date.now(), { cache: "no-store" })).json() || { items: [] }; } catch (_) { IRCAL = { items: [] }; }
+    try { EVENTS = await (await fetch("data/events.json?t=" + Date.now(), { cache: "no-store" })).json() || []; } catch (_) { EVENTS = []; }
     try { SOMONG = await (await fetch("data/somong.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { SOMONG = {}; }
   } catch (e) {
     $("#updated").textContent = "데이터를 불러오지 못했어요";
