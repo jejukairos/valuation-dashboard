@@ -39,7 +39,7 @@ def _filing(code, days=45):  # 삼성전자처럼 분기 끝 1주 뒤(10월 8일
             "rcept_no": hit["rcept_no"], "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={hit['rcept_no']}"} if hit else None
 
 
-UNIT = {"원": 1e-8, "천원": 1e-5, "백만원": 1e-2, "억원": 1}
+UNIT = {"원": 1e-8, "천원": 1e-5, "백만원": 1e-2, "억원": 1, "조원": 1e4}  # 삼성전자는 '조원' (195.3 처럼 소수)
 
 
 def parse_prelim(t, k):
@@ -50,11 +50,12 @@ def parse_prelim(t, k):
     q = re.search(r"(\d{2})년 (\d)분기", t)  # 기간 칸이 없으면 첫 '(26년 3분기)' = 당기실적 머리글
     if (m and "-".join(m.groups()) != _qend(k)) or (not m and not (q and q.groups() == (k[2:4], str(int(k[4:]) // 3)))):
         return None
-    u = re.search(r"단위\s*:\s*(천원|백만원|억원|원)", t)
+    u = re.search(r"단위\s*:\s*(조원|천원|백만원|억원|원)", t)
     out, prev = {}, {}
-    num_ = lambda s: (lambda x: round(-x if s[0] in "△-(" else x))(float(re.sub(r"[^\d]", "", s)) * UNIT[u.group(1) if u else "억원"])  # noqa: E731
+    num_ = lambda s: (lambda x: round(-x if s[0] in "△-(" else x))(float(re.sub(r"[^\d.]", "", s)) * UNIT[u.group(1) if u else "억원"])  # noqa: E731
+    N = r"([△-]?\(?[\d,]+(?:\.\d+)?\)?)"  # 숫자 칸 (조원은 소수점 있음)
     for f, lab in (("sales", r"매출액(?:\([^)]*\))?"), ("op", r"영업이익(?:\([^)]*\))?"), ("ni", r"당기순이익(?:\([^)]*\))?")):
-        v = re.search(lab + r"[\s|]*당해실적[\s|]*([△-]?\(?[\d,]+\)?)(?:[\s|]+([△-]?\(?[\d,]+\)?))?", t)
+        v = re.search(lab + r"[\s|]*당해실적[\s|]*" + N + r"(?:[\s|]+" + N + ")?", t)
         if v:
             out[f] = num_(v.group(1))
             if v.group(2):
@@ -132,6 +133,10 @@ def collect(code):
             pq = (hist.get(_prev_q(nxt[0])) or {}).get("sales")
             # 공시 표의 '전기실적'이 네이버 직전 분기와 5% 넘게 다르면 기준이 다른 공시(연결 회사의 별도 공시 등) → 안 씀
             if p and pq and p["prev"].get("sales") and abs(p["prev"]["sales"] / pq - 1) > 0.05:
+                p = None
+            # 단위를 잘못 읽은 경우 막기: 매출이 컨센서스의 절반 아래·2배 위거나 직전 분기의 1/3 아래면 안 씀 (삼성전자 '조원' 사고)
+            est = (cons.get(nxt[0]) or {}).get("sales")
+            if p and (not p.get("sales") or (est and not 0.5 < p["sales"] / est < 2) or (pq and p["sales"] < pq / 3)):
                 p = None
             if p:
                 p.pop("prev", None)
@@ -239,5 +244,7 @@ if __name__ == "__main__":  # 잠정실적 표 읽기 점검 (HD현대중공업 
                                          "prev": {"sales": 63136, "op": 10357, "ni": 8179}}, parse_prelim(t, "202609")
     assert _prev_q("202609") == "202606" and _prev_q("202603") == "202512"
     assert parse_prelim(t.replace("단위 : 억원", "단위 : 백만원"), "202609")["sales"] == 573
+    tj = t.replace("단위 : 억원", "단위 : 조원").replace("57,325 | 63,136", "195.3 | 171.5").replace("8,917 | 10,357", "107.4 | 89.5")
+    assert parse_prelim(tj, "202609")["sales"] == 1953000 and parse_prelim(tj, "202609")["op"] == 1074000  # 삼성전자 '조원'
     assert parse_prelim(t, "202606") is None and parse_prelim(t.replace("당기실적 | 2026-07-01 | ~ | 2026-09-30 | ", ""), "202609")
     print("ok")
