@@ -1606,6 +1606,34 @@ function kpiStack(ch) {
   return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b>${ch.tag || ""}</div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}</div>`;
 }
 const rnd1 = (v) => Math.round(v * 10) / 10;
+// 📊 분기 매출 · 영업이익 · 영업이익률 한 그림 (막대 두 개 + 위에 영업이익률 선, 최근 5분기 실적)
+function comboHTML(d) {
+  const k = d.kq, qs = (k?.quarters || []).filter((q) => q.sales != null && q.op != null && q.sales > 0).slice(-5);
+  if (qs.length < 2) return "";
+  const usd = k.cur === "USD", mx = Math.max(...qs.map((q) => q.sales));
+  // 단위: 한국 = 1조 넘으면 조원(소수 한 자리) 아니면 억원, 미국 = $B (10억 달러 미만이면 $M)
+  const [div, unit, dg] = usd ? (mx >= 1e9 ? [1e9, "$B", 1] : [1e6, "$M", 0]) : mx >= 1e4 ? [1e4, "조원", 1] : [1, "억원", 0];
+  const V = (v) => n(v / div, dg), W = 320, x0 = 8, x1 = W - 8, bw = (x1 - x0) / qs.length, top = 84, bot = 150;
+  const lo = Math.min(0, ...qs.map((q) => q.op)), hi = mx * 1.1, Y = (v) => bot - ((v - lo) / (hi - lo)) * (bot - top), zero = Y(0);
+  const opm = qs.map((q) => (q.op / q.sales) * 100), lmin = Math.min(...opm), lmax = Math.max(...opm), LY = (v) => 62 - ((v - lmin) / (lmax - lmin || 1)) * 34;
+  let g = `<line x1="${x0}" x2="${x1}" y1="${zero}" y2="${zero}" stroke="var(--axis)"/>`;
+  const bar = (x, v, fill) => { const y = v >= 0 ? Y(v) : zero; return `<rect x="${x}" y="${y}" width="${bw * 0.34}" height="${Math.max(1, Math.abs(Y(v) - zero))}" rx="2" fill="${v < 0 ? "var(--bad)" : fill}"/>`; };
+  qs.forEach((q, i) => {
+    const cx = x0 + bw * i + bw / 2, last = i === qs.length - 1, b = last ? " b" : "";
+    g += bar(cx - bw * 0.37, q.sales, "var(--s1)") + bar(cx + bw * 0.03, q.op, "var(--s4)")
+      + `<text x="${cx - bw * 0.2}" y="${Y(q.sales) - 4}" text-anchor="middle" class="qv${b}" style="font-size:9px">${V(q.sales)}</text>`
+      + `<text x="${cx + bw * 0.2}" y="${q.op >= 0 ? Y(q.op) - 4 : zero + Math.abs(Y(q.op) - zero) + 10}" text-anchor="middle" class="qv${b}" style="font-size:9px${q.op < 0 ? ";fill:var(--bad-ink)" : ""}">${V(q.op)}</text>`
+      + `<line x1="${cx}" x2="${cx}" y1="${LY(opm[i]) + 5}" y2="${top - 4}" stroke="var(--grid)" stroke-dasharray="2 3"/>`
+      + `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(q.q)}${q.prelim ? " 잠정" : ""}</text>`;
+  });
+  g += `<polyline points="${qs.map((q, i) => `${x0 + bw * i + bw / 2},${LY(opm[i])}`).join(" ")}" fill="none" stroke="var(--ink-2)" stroke-width="2"/>`;
+  qs.forEach((q, i) => {
+    const cx = x0 + bw * i + bw / 2;
+    g += `<circle cx="${cx}" cy="${LY(opm[i])}" r="3.5" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="2"/><text x="${cx}" y="${LY(opm[i]) - 8}" text-anchor="middle" class="qv${i === qs.length - 1 ? " b" : ""}"${opm[i] < 0 ? ' style="fill:var(--bad-ink)"' : ""}>${n(opm[i], 1)}%</text>`;
+  });
+  return `<div class="qp"><div class="qt"><b>📊 분기 매출 · 영업이익 · 영업이익률</b><span class="src">${unit}</span></div><svg viewBox="0 0 ${W} 172" role="img" aria-label="분기 매출 영업이익 영업이익률">${g}</svg>
+    <div class="src" style="padding:0 4px 4px"><span style="color:var(--s1)">■</span> 매출 · <span style="color:var(--s4)">■</span> 영업이익 · <span style="color:var(--ink-2)">●</span> 영업이익률</div></div>`;
+}
 // 연간 매출 & 영업이익률 (와이즈리포트 실적 + 추정 E): 막대 = 매출, 선 = 영업이익률(OPM)
 function annualOpmHTML(d) {
   const a = (d.kq?.annual || []).filter((r) => r.sales != null).slice(-8);
@@ -1664,7 +1692,8 @@ async function kpiBlock(code, d) {
   const k = KPI[code] || KPI[KPI_ALIAS[code]];
   if (!k?.charts?.length) return "";
   const ch = k.charts.map(kpiChart);
-  ch.splice(1, 0, fcfBars(d, k), annualOpmHTML(d));  // 매출 성장률 다음에 현금흐름 · 연간 매출 & 영업이익률
+  ch.unshift(comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률
+  ch.splice(2, 0, fcfBars(d, k), annualOpmHTML(d));  // 매출 성장률 다음에 현금흐름 · 연간 매출 & 영업이익률
   return `<h3>🔑 핵심 지표 <span class="src">${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김</span></h3><div class="card kpi">
     <div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key || "")}</div>
     <div class="qgrid" style="margin-top:8px">${ch.join("")}</div>

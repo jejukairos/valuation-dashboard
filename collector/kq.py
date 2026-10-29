@@ -20,7 +20,7 @@ def _naver(code):
     return out
 
 
-def _filing(code, days=14):
+def _filing(code, days=45):  # 삼성전자처럼 분기 끝 1주 뒤(10월 8일) 잠정실적을 내는 회사도 확정 실적 전까지 잡히게
     """최근 DART 잠정실적 공시 (공정공시). DART 키가 없으면(내 컴퓨터) 건너뜀."""
     import kr_stock
     try:
