@@ -816,8 +816,11 @@ function qSankey(q, usd, prev, segs) {
   if (opex - known > opex * 0.02) items.push(["기타 영업비용", opex - known, null]);
   items = items.filter(([, v]) => v > 0);
   const sg = segs && segs.length > 1 ? segs : null;
-  // 휴대폰에서 글자가 작아지지 않게 좁게 (부문이 있으면 넓은 그림을 옆으로 밀어 보기)
-  const W = sg ? 700 : 480, H = 240, T = sg ? 46 : 20, k = H / rev, x = sg ? [244, 374, 504] : [58, 178, 308], nw = 12;
+  // 영업이익 → 순이익·법인세·영업외 (App Economy Insights 그림처럼 한 칸 더). 영업외 이익이 커서 순이익 > 영업이익이면 그림 대신 한 줄
+  const ni = q.ni, tax = q.tax > 0 ? q.tax : 0, net4 = q.op > 0 && ni > 0 && ni <= q.op;
+  // 휴대폰에서 글자가 작아지지 않게 좁게 (부문이 있거나 순이익 칸까지 그리면 넓은 그림을 옆으로 밀어 보기)
+  const W = (sg ? 700 : 480) + (net4 ? 130 : 0), H = 240, T = (sg ? 46 : 20) + (net4 ? 34 : 0), k = H / rev, nw = 12;
+  const x = (sg ? [244, 374, 504] : [58, 178, 308]).concat(net4 ? [(sg ? 504 : 308) + 150] : []);
   const pct = (v) => `${n((v / rev) * 100, 1)}%`;
   const yo = (key, v) => (key && prev?.[key] > 0 && v != null ? (v / prev[key] - 1) * 100 : null);
   const yoT = (g, tail = " YoY") => (g == null ? "" : `${g >= 0 ? "+" : ""}${n(g, 0)}%${tail}`);
@@ -864,21 +867,46 @@ function qSankey(q, usd, prev, segs) {
   let sy = gY, ty = T;
   const gpv = noCogs ? rev : gp;
   const tot = outs.reduce((a, [, v]) => a + v, 0), f = tot > gpv ? gpv / tot : 1;  // 영업손실이면 비용을 매출총이익 폭에 맞춰 줄여 그림
+  // 영업이익 → 순이익(위) · 법인세 · 영업외·기타 (영업이익 막대 오른쪽 칸)
+  let bot4 = T;
+  if (net4) {
+    const oth = q.op - ni - tax, n4 = [["순이익", ni, "var(--good)", "var(--good-ink)", "ni"]];
+    if (tax) n4.push(["법인세", tax, "var(--bad)", "var(--bad-ink)", "tax"]);
+    if (oth > q.op * 0.01) n4.push([tax ? "영업외·기타" : "세금·영업외", oth, "var(--bad)", "var(--bad-ink)", null]);
+    const t4 = n4.reduce((a, [, v]) => a + v, 0), f4 = t4 > q.op ? q.op / t4 : 1;  // 작은 영업외 이익이 있으면 폭을 영업이익에 맞춤
+    let s4 = T;
+    n4.forEach(([l, v, col, ink, key]) => {
+      const h = v * k * f * f4, g = yo(key, v);
+      const t3 = key === "ni" ? [yoT(g), oth < 0 ? `영업외 이익 +${qMoney(-oth, usd)} 포함` : ""].filter(Boolean).join(" · ") : "";
+      band(x[2] + nw, s4, s4 + h, x[3], bot4, bot4 + h, col); node(x[3], bot4, h, col);
+      lab(x[3] + nw + 6, bot4 + 12, l, `${qMoney(v, usd)}${key === "ni" ? ` · 마진 ${pct(v)}` : key === "tax" ? "" : ` · 매출의 ${pct(v)}`}`, "start", ink, t3, tone(g));
+      low = Math.max(low, bot4 + h, bot4 + gapOf(t3));
+      s4 += h; bot4 += Math.max(h, gapOf(t3)) + 6;
+    });
+  }
   outs.forEach(([l, v, col, ink, key]) => {
     const h = v * k * f, d = pp(key, v);
     const t3 = key === "op" ? (d != null ? `${ppT(d)} YoY (1년 전 ${n((prev.op / prev.rev) * 100, 1)}%)` : "")
       : [yoT(yo(key, v)), d != null ? `(${ppT(d)})` : ""].filter(Boolean).join(" ");
     band(x[1] + nw, sy, sy + h, x[2], ty, ty + h, col); node(x[2], ty, h, col);
-    lab(x[2] + nw + 6, ty + 12, l, `${qMoney(v, usd)} · ${key === "op" ? "마진" : "매출의"} ${pct(v)}`, "start", ink, t3, key === "op" ? tone(d) : "var(--muted)");
+    const sub = `${qMoney(v, usd)} · ${key === "op" ? "마진" : "매출의"} ${pct(v)}`;
+    if (key === "op" && net4) {  // 오른쪽은 순이익으로 가는 띠 자리라 글자는 막대 위에
+      lab(x[2] + nw / 2, T - 40, l, sub, "middle", ink, t3, tone(d));
+      sy += h; ty = Math.max(ty + h + 6, bot4 + 6);  // 아래 비용 글자가 순이익 띠와 겹치지 않게
+      return;
+    }
+    lab(x[2] + nw + 6, ty + 12, l, sub, "start", ink, t3, key === "op" ? tone(d) : "var(--muted)");
     low = Math.max(low, ty + h, ty + gapOf(t3));
     sy += h; ty += Math.max(h, gapOf(t3)) + 6;  // 글자가 다음 칸과 겹치지 않게
   });
   const vh = low + 8;
   const loss = (q.op <= 0 ? `<div class="note" style="color:var(--bad-ink)">영업손실 ${qMoney(q.op, usd)} — 영업비용이 매출총이익보다 많아요</div>` : "")
     + (noCogs ? `<div class="note src">이 회사는 매출원가를 따로 나누지 않고 비용을 한꺼번에 영업비용으로 적어서, 매출 = 매출총이익으로 그렸어요.</div>` : "")
-    + (sg?.some((s) => s[5]) ? `<div class="note src">≈ 부문 금액 = 이 분기 매출 × 보고서의 부문 비중 (회사가 분기별 부문 금액을 따로 안 줘서 나눠 본 추정)</div>` : "");
-  const svg = `<svg viewBox="0 0 ${W} ${vh}" class="sankey${sg ? " wide" : ""}" role="img" aria-label="매출에서 영업이익까지 돈의 흐름">${flows}${nodes}${labels}</svg>`;
-  return (sg ? `<div class="sk-wrap">${svg}</div>` : svg) + loss;
+    + (sg?.some((s) => s[5]) ? `<div class="note src">≈ 부문 금액 = 이 분기 매출 × 보고서의 부문 비중 (회사가 분기별 부문 금액을 따로 안 줘서 나눠 본 추정)</div>` : "")
+    + (q.op > 0 && ni > q.op ? `<div class="note src">순이익 ${qMoney(ni, usd)} — 영업외 이익(투자 평가이익 등)이 커서 영업이익보다 많아요 (⚠ 한 번만 있는 일일 수 있음)</div>` : "");
+  const wide = sg || net4;
+  const svg = `<svg viewBox="0 0 ${W} ${vh}" class="sankey${wide ? " wide" : ""}"${wide ? ` style="min-width:${Math.round((W * 6) / 7)}px"` : ""} role="img" aria-label="매출에서 순이익까지 돈의 흐름">${flows}${nodes}${labels}</svg>`;
+  return (wide ? `<div class="sk-wrap">${svg}</div>` : svg) + loss;
 }
 // 최신 분기 실적(잠정) vs 컨센서스 — 8분기 막대, 마지막 분기는 회색(발표 전 예상) + 색(실적) 나란히
 const kqFmt = (v) => (Math.abs(v) >= 10000 ? n(v / 10000, 1) + "조" : n(v, 0) + "억");  // 억원 → 1조 넘으면 '104.6조'

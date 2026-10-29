@@ -53,11 +53,11 @@ def fin(tkr):
 
 
 def _by_period(inc, cf):
-    """손익·현금흐름표 → {기간 끝 날짜: {rev, cogs, gp, rnd, sm, ga, sga, opex, op, ni, fcf, capex}} (분기·연간 같은 모양)."""
+    """손익·현금흐름표 → {기간 끝 날짜: {rev, cogs, gp, rnd, sm, ga, sga, opex, op, tax, ni, fcf, capex}} (분기·연간 같은 모양)."""
     rows = {"rev": (inc, "Total Revenue"), "cogs": (inc, "Cost Of Revenue"), "gp": (inc, "Gross Profit"),
             "rnd": (inc, "Research And Development"), "sm": (inc, "Selling And Marketing Expense"),
             "ga": (inc, "General And Administrative Expense"), "sga": (inc, "Selling General And Administration"),
-            "opex": (inc, "Operating Expense"), "op": (inc, "Operating Income"), "ni": (inc, "Net Income"),
+            "opex": (inc, "Operating Expense"), "op": (inc, "Operating Income"), "tax": (inc, "Tax Provision"), "ni": (inc, "Net Income"),
             "fcf": (cf, "Free Cash Flow"), "capex": (cf, "Capital Expenditure")}
     out = {}
     for col in inc.columns:
