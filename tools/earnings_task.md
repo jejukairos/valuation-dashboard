@@ -1,6 +1,6 @@
 실적발표(컨퍼런스콜) 자동 요약 — 이 컴퓨터의 예약 작업이 매일 따라 하는 순서 (무료: Claude 구독으로 실행)
 
-작업 폴더: C:\Users\hyunm\valuation-dashboard (git, main 브랜치)
+작업 폴더: 이 저장소 폴더 (git, main 브랜치)
 
 1. `git pull --rebase` 후 site/data/ir_calendar.json (보유·관심·공동자산 종목의 실적발표·컨퍼런스콜 일정, 매 갱신마다 자동으로 새로 받음)과
    config/earnings.yaml 을 읽는다. 일정이 지났거나 오늘인데(dday ≤ 0, 발표 시각이 지난 것) earnings.yaml 에 그 분기가 아직 없는 종목이 요약 대상.
