@@ -1596,7 +1596,8 @@ const TOUR_K = [["out", "아웃바운드", "내국인 출국", "s1"], ["in", "�
 let KPI = null;
 const KPI_ALIAS = { "005935": "005930" };  // 삼성전자우 = 보통주 지표
 const KPI_COL = ["var(--s1)", "var(--bad)", "var(--s3)", "var(--s4)"];
-const kpiF = (v, u = "") => (u.startsWith("$") ? (v < 0 ? "-$" : "$") + n(Math.abs(v), Number.isInteger(v) ? 0 : 1) + u.slice(1) : n(v, Number.isInteger(v) ? 0 : 1) + u);
+const kpiF = (v, u = "") => (u.startsWith("$") ? (v < 0 ? "-$" : "$") + n(Math.abs(v), Number.isInteger(v) ? 0 : 1) + u.slice(1)
+  : u === "억원" && Math.abs(v) >= 1e4 ? n(v / 1e4, 1) + "조" : n(v, Number.isInteger(v) ? 0 : 1) + u);  // 1조 넘는 억원은 '30.3조'
 // 쌓은 막대 (연간 신규 수주 국내/중국, 빅테크 CapEx 회사별 등): 칸 위에 합계, ytd = 아직 진행 중인 해
 function kpiStack(ch) {
   const ks = [...new Set(ch.s.flatMap((s) => Object.keys(s.v || {})))].sort();
