@@ -1751,7 +1751,7 @@ function kpiChart(ch) {
 function opYoyHTML(d, k) {
   const v = d.op_yoy;
   if (!v || k.charts.some((c) => /^영업이익 성장률/.test(c.t))) return "";
-  return kpiChart({ t: "영업이익 성장률 (YoY)", u: "%", s: [{ n: "영업이익", v }], why: "1년 전 같은 분기보다 영업이익이 얼마나 늘었나 · 국내 종목은 이 성장률로 PER 을 몇 배 줄지 정해요" })
+  return kpiChart({ t: "영업이익 성장률 (YoY)", u: "%", s: [{ n: "영업이익", v }], why: "1년 전 같은 분기보다 영업이익이 얼마나 늘었나 · 국내 종목은 이 성장률로 PER 을 몇 배 줄지 정해요" + (k.op_note ? ` · ⚠ ${k.op_note}` : "") })
     || `<div class="qp"><div class="qt"><b>영업이익 성장률 (YoY)</b></div><div class="note">${Object.entries(v).map(([q, x]) => `${esc(q)} <b>${pct(x, 1, true)}</b>`).join(" · ")} <span class="src">분기 자료가 더 쌓이면 그래프로</span></div></div>`;
 }
 // 현금흐름(FCF = 영업현금흐름 − 설비투자): 야후 분기 재무제표 + 야후에 아직 없는 최신 분기는 kpi.yaml fcf_add (보도자료)
