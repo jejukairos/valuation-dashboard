@@ -1151,6 +1151,8 @@ function earningsHTML(code) {
   return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">${next}
     ${list.map((e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
       ${(e.easy || []).length ? `<div class="kidbox">🐣 <b>주린이를 위한 핵심 간단 요약</b><ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      ${vsHTML(e)}
+      ${(e.facts || []).length ? `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🆕 뉴팩트</b> <span class="src">이번 발표에서 새로 나온 사실</span><ul class="irl facts">${e.facts.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       ${(e.keys || []).length ? `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🎤 어닝콜 핵심</b>${e.keys.map((x, j) => `<div style="margin-top:6px"><b style="color:${x.tone === "bad" ? "var(--bad-ink)" : "var(--good-ink)"}">${"①②③④⑤⑥"[j] || "·"} ${esc(x.h)}</b> ${x.tone === "bad" ? "⚠" : "✔"}
         ${(x.q || []).map((t) => `<div class="src" style="margin-left:18px">${/^[(（]/.test(t) ? esc(t) : `“${esc(t)}”`}</div>`).join("")}</div>`).join("")}</div>` : ""}
       ${e.transcript ? `<div class="note">📜 <a href="${esc(e.transcript)}" target="_blank" rel="noopener">발표 자막 원문 보기 (발표·질의응답 전체)</a></div>` : ""}
@@ -1158,6 +1160,24 @@ function earningsHTML(code) {
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
     </details>`).join("")}
   </div>`;
+}
+// 📋 실적 vs 예상(컨센서스) · 가이던스 · 발표 뒤 주가 — earnings.yaml vs / guide / after (u 단위: "$B"·"$"·"%"·"조", n 많고 적음이 좋고 나쁨이 아닌 항목, b 판정 직접)
+function vsHTML(e) {
+  if (!(e.vs || []).length && !(e.guide || []).length && !e.after) return "";
+  const F = (v, u) => (v == null || v === "" ? "-" : typeof v === "string" ? esc(v)
+    : (u?.startsWith("$") ? "$" : "") + Number(v).toLocaleString("ko-KR", { maximumFractionDigits: 2 }) + (u?.startsWith("$") ? u.slice(1) : u || ""));
+  const TAG = { 상회: '<span class="qtag">상회</span>', 하회: '<span class="qtag bad">하회</span>' };
+  const row = (x) => {
+    const num = typeof x.a === "number" && typeof x.e === "number" && x.e !== 0;
+    const diff = !num ? "" : x.u === "%" ? `${x.a - x.e >= 0 ? "+" : ""}${(x.a - x.e).toFixed(1)}%p` : pct((x.a / x.e - 1) * 100, 1, true);
+    const tag = x.b ? TAG[x.b] || `<span class="src">${esc(x.b)}</span>` : !num ? ""
+      : x.n ? `<span class="src">${x.a > x.e ? "예상보다 많음" : "예상보다 적음"}</span>` : TAG[x.a >= x.e ? "상회" : "하회"];
+    return `<tr><td style="text-align:left">${esc(x.k)}</td><td><b>${F(x.a, x.u)}</b></td><td>${F(x.e, x.u)}</td><td>${diff}</td><td>${tag}</td></tr>`;
+  };
+  const tbl = (rows, ah) => (rows || []).length ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">항목</th><th>${ah}</th><th>예상</th><th>차이</th><th></th></tr></thead><tbody>${rows.map(row).join("")}</tbody></table></div>` : "";
+  const up = /^\+/.test(e.after || "");
+  return `<div class="card" style="margin-top:8px"><b>📋 실적 vs 예상</b>${e.after ? ` <span class="qtag ${up ? "" : "bad"}">발표 뒤 주가 ${esc(e.after)}</span>` : ""}
+    ${tbl(e.vs, "실적")}${(e.guide || []).length ? `<div style="margin-top:6px"><b>🧭 가이던스</b> <span class="src">회사가 내놓은 앞으로 전망</span></div>${tbl(e.guide, "회사 전망")}` : ""}</div>`;
 }
 function preLoad(code) { try { return JSON.parse(localStorage.getItem("pre:" + code) || "{}"); } catch (_) { return {}; } }
 function preSave(code, v) { try { localStorage.setItem("pre:" + code, JSON.stringify(v)); } catch (_) {} }
