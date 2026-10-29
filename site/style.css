@@ -357,3 +357,21 @@ ul.news li a { color: var(--ink); text-decoration: none; }
 ul.news li a:visited { color: var(--muted); }
 ul.news li .src, ul.news li .note { display: block; margin-top: 2px; }
 .kqbox .qgrid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+
+/* 🗺 시장 그룹판 · 🔭 차트 스캔 (산업 탭) */
+.bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 8px; }
+.bcard { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; }
+.bcard.idx { border-color: var(--ink-2); } .bcard.bchg { border: 1.5px solid var(--s2); }
+.bhd { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; } .bhd .bchd { margin-left: auto; font-weight: 700; }
+.bcard svg, svg.cndl { width: 100%; height: auto; display: block; }
+.bchips { display: flex; gap: 4px; margin-top: 2px; } .bft { margin-top: 4px; text-align: right; }
+.bchip { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: var(--na-bg); color: var(--ink-2); border: 1.5px solid transparent; }
+.bchip.up { background: var(--bad-bg); color: var(--bad-ink); } .bchip.down { background: #e3ecfb; color: #1f4f96; } .bchip.chg { border-color: var(--s2); }
+.kup { color: var(--bad-ink); } .kdn { color: #2a5fb0; }
+.sbadge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; margin: 0 3px 3px 0; background: var(--na-bg); color: var(--ink-2); }
+.sbadge.k { background: var(--ink); color: var(--surface); } .sbadge.y { background: var(--warn-bg); color: var(--warn-ink); }
+.sbadge.r { background: var(--bad-bg); color: var(--bad-ink); } .sbadge.p { background: #ece9fb; color: var(--s7); }
+.cbox { background: var(--surface-2); border-radius: 10px; padding: 6px; margin-top: 6px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bchip.down { background: #182a46; color: #8db6f5; } :root:not([data-theme="light"]) .kdn { color: #8db6f5; } :root:not([data-theme="light"]) .sbadge.p { background: #25213f; } }
+:root[data-theme="dark"] .bchip.down { background: #182a46; color: #8db6f5; } :root[data-theme="dark"] .kdn { color: #8db6f5; } :root[data-theme="dark"] .sbadge.p { background: #25213f; }
+.seg.sseg, .seg.scanmk { display: flex; flex-wrap: wrap; } .seg.sseg button { padding: 5px 9px; font-size: 12px; min-height: 30px; }

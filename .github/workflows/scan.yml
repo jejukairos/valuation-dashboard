@@ -1,0 +1,47 @@
+name: 시장 그룹판·차트 스캔
+
+on:
+  schedule:
+    - cron: "40 21 * * 0-4"   # 평일 06:40 KST (미국장 마감 뒤) = 전날 21:40 UTC
+    - cron: "10 7 * * 1-5"    # 평일 16:10 KST (한국장 마감 뒤)
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["collector/board.py", ".github/workflows/scan.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 그룹판·스캔
+        env:
+          KRX_ID: ${{ secrets.KRX_ID || secrets.KRX_JEJUKAIROS21 }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+          PYTHONIOENCODING: utf-8
+        run: cd collector && python -u board.py
+      - name: 저장
+        if: always()
+        run: |
+          git config user.name "valuation-bot"
+          git config user.email "valuation-bot@users.noreply.github.com"
+          git add site/data/board.json site/data/scan.json
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "시장 그룹판·차트 스캔 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done
+          exit 1

@@ -1348,6 +1348,7 @@ function compareHTML(span) {
 }
 /* ---------- 실적발표(컨퍼런스콜) 요약: 분기 목록 → 누르면 자세한 요약, 맨 아래 '핵심만' (config/earnings.yaml) ---------- */
 let EARNINGS = {}, IRCAL = { items: [] };
+const IR_NOTE = { t: "노다지IR 컨콜공개 (전체 무료)", u: "https://contents.premium.naver.com/ystreet/irnote/contents" };  // 종목별 글은 earnings.yaml links 에
 // 실적발표·컨퍼런스콜 일정 한 줄 (네이버 증권 IR 탭 / 미국은 야후)
 function irWhen(e) {
   const d = new Date(e.when), dd = e.dday === 0 ? "오늘" : e.dday > 0 ? `D-${e.dday}` : `${-e.dday}일 전`;
@@ -1389,6 +1390,7 @@ function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없�
       ${(e.keys || []).length ? `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🎤 어닝콜 핵심</b>${e.keys.map((x, j) => `<div style="margin-top:6px"><b style="color:${x.tone === "bad" ? "var(--bad-ink)" : "var(--good-ink)"}">${"①②③④⑤⑥"[j] || "·"} ${esc(x.h)}</b> ${x.tone === "bad" ? "⚠" : "✔"}
         ${(x.q || []).map((t) => `<div class="src" style="margin-left:18px">${/^[(（]/.test(t) ? esc(t) : `“${esc(t)}”`}</div>`).join("")}</div>`).join("")}</div>` : ""}
       ${e.transcript ? `<div class="note">📜 <a href="${esc(e.transcript)}" target="_blank" rel="noopener">발표 자막 원문 보기 (발표·질의응답 전체)</a></div>` : ""}
+      ${i === 0 ? `<div class="note">📎 다른 곳 컨콜 정리: ${[...(e.links || []), IR_NOTE].map((l) => `<a href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t)}</a>`).join(" · ")} <span class="src">(원문은 그곳에서 · 여기엔 우리 말로 짧게만)</span></div>` : ""}
       ${(e.short || []).length ? `<div class="warnbox" style="margin-top:6px"><b>⚡ 핵심만</b><ul class="irl">${e.short.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
     </details>`).join("")}
@@ -2860,13 +2862,121 @@ function renderGroup(g, el) {
 
 /* ---------- 🏭 산업 탭: 아마존 K-뷰티 Top100 품목 수 (config/amazon_kbeauty.yaml, 날마다 손으로 적음) ---------- */
 let AMZ = null, AMZ_B = "";
+/* ---------- 🗺 시장 그룹판 · 🔭 차트 스캔 (data/board.json · scan.json, collector/board.py — 밤·장 마감 뒤 따로 갱신) ---------- */
+let BOARD = null, SCAN = null, SCAN_MKT = "kr";
+const kcol = (v) => (v == null ? "" : v > 0 ? "kup" : v < 0 ? "kdn" : "");  // 오르면 빨강·내리면 파랑 (한국식)
+const sg = (v, d = 0, u = "%") => (v == null ? "-" : `${v > 0 ? "+" : ""}${n(v, d)}${u}`);
+function boardSpark(c) {
+  const w = c.w.filter((v) => v != null);
+  if (w.length < 10) return "";
+  const W = 220, H = 74, x0 = 2, x1 = 186, top = 12, bot = 58, all = [...w, ...c.ma.filter((v) => v != null)];
+  const lo = Math.min(...all), hi = Math.max(...all), X = (i) => x0 + ((x1 - x0) * i) / (c.w.length - 1), Y = (v) => bot - ((v - lo) / (hi - lo || 1)) * (bot - top);
+  const path = (a) => a.map((v, i) => (v == null ? "" : `${i && a[i - 1] != null ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`)).join("");
+  let g = `<path d="${path(c.ma)}" fill="none" stroke="var(--warn)" stroke-width="1.4" opacity=".85"/><path d="${path(c.w)}" fill="none" stroke="var(--ink)" stroke-width="1.3"/>`;
+  c.dates.forEach((d, i) => { if (/\.(01|07)$/.test(d) && (i === 0 || c.dates[i - 1] !== d)) g += `<text x="${X(i)}" y="${H - 4}" text-anchor="middle" class="qx">${d}</text>`; });
+  const li = c.w.length - 1;
+  g += `<text x="${x1 + 3}" y="${Y(c.w[li]) + 4}" class="qv b">${sg(c.chg_2y)}</text>`;
+  if (c.peak_2y != null && c.peak_2y > (c.chg_2y ?? 0) + 8) g += `<text x="${x1 + 3}" y="${top - 2}" class="qx">${sg(c.peak_2y)}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.name)} 2년 주봉">${g}</svg>`;
+}
+function chipHTML(k, ch) {
+  if (!ch) return "";
+  const ar = ch.s === "up" ? "▲" : ch.s === "down" ? "▼" : ch.a ? "▲" : "▼";
+  return `<span class="bchip ${ch.s}${ch.ch ? " chg" : ""}" title="${ch.s === "up" ? "이평 위·이평 상승" : ch.s === "down" ? "이평 아래·이평 하락" : "엇갈림"}${ch.ch ? " (오늘 바뀜)" : ""}">${k}${ar}</span>`;
+}
+function boardHTML() {
+  const B = BOARD;
+  if (!B?.kr && !B?.us) return "";
+  const card = (c, kr) => {
+    const chg = Object.values(c.chips || {}).some((x) => x?.ch);
+    return `<div class="bcard${c.idx ? " idx" : ""}${chg ? " bchg" : ""}"><div class="bhd"><b>${esc(c.name)}</b> <span class="src">${esc(c.idx ? "" : kr ? `${c.sym} ETF` : c.sym)}</span><span class="${kcol(c.chg_d)} bchd">${sg(c.chg_d, 1)}</span></div>
+      ${boardSpark(c)}
+      <div class="bchips">${chipHTML("일", c.chips?.d)}${chipHTML("주", c.chips?.w)}${chipHTML("월", c.chips?.m)}</div>
+      <div class="src bft">1개월 ${sg(c.r1m)} · ${c.idx ? `52주 고점 대비 ${sg(c.dd52)}` : `3개월 상대 ${sg(c.rel3m, 0, "%p")}`}</div></div>`;
+  };
+  const sec = (t, list, kr) => (list?.length ? `<h3>${t}</h3><div class="bgrid">${list.map((c) => card(c, kr)).join("")}</div>` : "");
+  return `<h2>🗺 시장 그룹판 <span class="src">일·주·월 추세 · 2년 주봉 종가와 30주선 · ${esc(B.updated_at || "")}</span></h2>
+    <div class="note src">칩: <span class="bchip up">일▲</span> 이평 위·이평 상승 · <span class="bchip down">주▼</span> 이평 아래·이평 하락 · <span class="bchip mix">월▲</span> 엇갈림 · <span class="bchip up chg">일▲</span> 오늘 바뀜 · 일 = 50일선, 주 = 30주선, 월 = 10개월선 · 업종은 3개월 상대수익률(지수 대비) 순 · 주황 테두리 = 오늘 칩이 바뀐 곳</div>
+    ${sec("🇰🇷 한국 — 업종은 KRX 업종지수(구성종목 시총 가중)를 따라가는 ETF", B.kr, true)}${sec("🇺🇸 미국 — 지수·섹터·산업 ETF", B.us, false)}`;
+}
+// 캔들 차트 (일봉 2년 · 주봉 5년 · 월봉 10년): 이평선 · RS 선(지수 대비) · 거래량 · 마지막 가격 · 기준선(전일 종가 / 12주 고점)
+function candleSVG(ch, kind, fmt, ref) {
+  if (!ch?.c?.length) return "";
+  const N = ch.c.length, W = 600, x0 = 4, x1 = 540, top = 14, bot = 168, rs0 = 178, rs1 = 206, v0 = 214, v1 = 250, H = 262, logS = kind !== "d";
+  const lows = ch.l.filter((v) => v > 0), his = ch.h.filter((v) => v > 0), lo = Math.min(...lows), hi = Math.max(...his);
+  const f = (v) => (logS ? Math.log(v) : v), Y = (v) => bot - ((f(v) - f(lo)) / (f(hi) - f(lo) || 1)) * (bot - top);
+  const X = (i) => x0 + ((x1 - x0) * (i + 0.5)) / N, bw = Math.max(0.6, ((x1 - x0) / N) * 0.7);
+  let g = "";
+  ch.t.forEach((t, i) => { const y = t.slice(0, 2), m = t.slice(3, 5); if (i && t.slice(0, 5) !== ch.t[i - 1].slice(0, 5) && (kind === "d" ? ["01", "07"].includes(m) : m === "01")) g += `<line x1="${X(i)}" x2="${X(i)}" y1="${top}" y2="${v1}" stroke="var(--grid)" stroke-dasharray="2 3"/><text x="${X(i)}" y="${H - 1}" text-anchor="middle" class="qx">${kind === "d" ? `${y}.${m}` : `20${y}`}</text>`; });
+  const vmax = Math.max(...ch.v) || 1;
+  ch.c.forEach((c, i) => {
+    const o = ch.o[i], h = ch.h[i], l = ch.l[i]; if (!(c > 0 && o > 0)) return;
+    const col = c >= o ? "var(--bad)" : "var(--s1)";
+    g += `<line x1="${X(i)}" x2="${X(i)}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}" stroke-width="${Math.min(1, bw)}"/>`;
+    if (bw >= 1.2) g += `<rect x="${X(i) - bw / 2}" y="${Math.min(Y(o), Y(c))}" width="${bw}" height="${Math.max(0.8, Math.abs(Y(o) - Y(c)))}" fill="${col}"/>`;
+    g += `<rect x="${X(i) - bw / 2}" y="${v1 - (ch.v[i] / vmax) * (v1 - v0)}" width="${bw}" height="${(ch.v[i] / vmax) * (v1 - v0)}" fill="${col}" opacity=".35"/>`;
+  });
+  const maCol = { 50: "var(--ink-2)", 200: "var(--warn)", 10: kind === "m" ? "var(--warn)" : "var(--ink-2)", 30: "var(--warn)" };
+  Object.entries(ch.ma || {}).forEach(([k, a]) => { let d = ""; a.forEach((v, i) => { if (v > 0) d += `${d && a[i - 1] > 0 ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; }); g += `<path d="${d}" fill="none" stroke="${maCol[k] || "var(--ink-2)"}" stroke-width="1.5"/>`; });
+  if (ch.rs?.length) {
+    const rv = ch.rs.filter((v) => v != null), rl = Math.min(...rv), rh = Math.max(...rv), RY = (v) => rs1 - ((v - rl) / (rh - rl || 1)) * (rs1 - rs0);
+    let d = ""; ch.rs.forEach((v, i) => { if (v != null) d += `${d ? "L" : "M"}${X(i).toFixed(1)},${RY(v).toFixed(1)}`; });
+    g += `<path d="${d}" fill="none" stroke="var(--s7)" stroke-width="1.3"/><text x="${x1 + 6}" y="${RY(rv.at(-1)) + 4}" class="qx" style="fill:var(--s7)">RS</text>`;
+  }
+  if (ref) g += `<line x1="${x0}" x2="${x1}" y1="${Y(ref.v)}" y2="${Y(ref.v)}" stroke="var(--ink-2)" stroke-dasharray="4 3"/><text x="${x1 - 4}" y="${Y(ref.v) - 4}" text-anchor="end" class="qx">${esc(ref.t)} ${fmt(ref.v)}</text>`;
+  const last = ch.c.at(-1);
+  g += `<text x="${x1 + 6}" y="${Y(hi) + 8}" class="qx">${fmt(hi)}</text><text x="${x1 + 6}" y="${Y(lo)}" class="qx">${fmt(lo)}</text>`
+    + `<path d="M${x1 + 2},${Y(last)} l6,-4 v8 z" fill="var(--ink)"/><text x="${x1 + 10}" y="${Y(last) + 4}" class="qv b">${fmt(last)}</text>`;
+  return `<svg viewBox="0 0 ${W + 50} ${H + 4}" class="cndl" role="img" aria-label="캔들 차트">${g}</svg>`;
+}
+const SCAN_KIND = { gap: ["일봉", "거래량 터진 갭 상승", "d", "8~20일을 내다보는 차트"], week: ["주봉", "바닥 탈출 · 30주선과 12주 고점 돌파", "w", "8~20주를 내다보는 차트"], month: ["월봉", "바닥 탈출 · 10개월선과 6개월 고점 돌파", "m", "8~20개월을 내다보는 차트"] };
+const SCAN_TF = [["d", "일봉 2년"], ["w", "주봉 5년"], ["m", "월봉 10년"]], SCAN_MAP = {};
+function scanCard(c, kind, mk, tf) {
+  const us = mk === "us", fmt = us ? (v) => `$${n(v, 2)}` : (v) => `${n(v, 0)}원`, h = c.hit || {}, b = c.badge || {};
+  SCAN_MAP[`${mk}:${c.code}`] = [c, kind, mk];
+  const ref = kind === "gap" && tf === "d" ? { v: h.prev, t: "전일 종가" } : kind === "week" && tf === "w" ? { v: h.hi12, t: "12주 고점" } : null;
+  const badges = [`<span class="sbadge k">${SCAN_KIND[kind][0]} · ${SCAN_KIND[kind][1]}</span>`, b.ma200_up ? `<span class="sbadge y">200일선 돌파</span>` : "",
+    b.hi52w ? `<span class="sbadge r">52주 신고가</span>` : b.hi26w ? `<span class="sbadge r">26주 신고가</span>` : "", `<span class="sbadge p">RS ${c.rs}</span>`,
+    c.earn ? `<span class="sbadge y">실적 ${esc(c.earn.slice(5).replace("-", "/"))}</span>` : ""].join("");
+  const foot = kind === "gap" ? `시가 갭 ${sg(h.gap, 1)} · 종가 ${sg(h.chg, 1)} · 거래량 ${n(h.vol, 1)}배 · 고가권 마감 · 전일 종가 ${fmt(h.prev)}`
+    : kind === "week" ? `26주 중 ${h.below}주 30주선 아래 → 30주선 ${fmt(h.ma30)}·12주 고점 ${fmt(h.hi12)} 돌파 · 이번 주 거래량 ${n(h.vol, 1)}배 · 2년 고점 대비 ${sg(h.dd2y)}`
+    : `12개월 중 ${h.below}개월 10개월선 아래 → 10개월선 ${fmt(h.ma10)} 돌파`;
+  return `<div class="card scard" data-sk="${esc(mk)}:${esc(c.code)}"><div class="bhd"><b style="font-size:17px">${esc(us ? c.code : c.name)}</b> <span class="src">${esc(us ? c.name : c.code)}</span><span class="bchd"><b>${fmt(c.price)}</b> <span class="${kcol(c.chg)}">${sg(c.chg, 1)}</span></span></div>
+    <div class="src">${esc([c.sec, c.sub].filter(Boolean).join(" · "))}${c.cap ? ` · 시총 ${bigWon(c.cap)}` : ""}</div>
+    <div style="margin:6px 0">${badges}</div>
+    <div class="src">최근 뉴스 · ${c.news?.t ? `<a href="${esc(c.news.u || "#")}" target="_blank" rel="noopener">${esc(c.news.t)}</a> ${esc(c.news.d || "")}`
+      : `<a href="${us ? `https://finance.yahoo.com/quote/${encodeURIComponent(c.code)}/news` : `https://finance.naver.com/item/news.naver?code=${encodeURIComponent(c.code)}`}" target="_blank" rel="noopener">${us ? "야후 파이낸스" : "네이버 증권"}에서 보기</a>`}</div>
+    <div class="seg sseg" style="margin-top:6px">${SCAN_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === tf ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="cbox">${candleSVG(c.chart?.[tf], tf, fmt, ref)}<div class="src">${tf === "d" ? "일봉 2년 · 회색 50일선 · 주황 200일선" : tf === "w" ? "주봉 5년 · 회색 10주선 · 주황 30주선 · 로그 눈금" : "월봉 10년 · 주황 10개월선 · 로그 눈금"} · 보라 = RS 선 (지수 대비)</div></div>
+    <div class="src" style="margin-top:4px">${foot} · 52주 고점 대비 ${sg(b.dd52)}</div></div>`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".scard .sseg button"); if (b) { const el = b.closest(".scard"), [c, kind, mk] = SCAN_MAP[el.dataset.sk]; el.outerHTML = scanCard(c, kind, mk, b.dataset.tf); return; }
+  const m = e.target.closest(".scanmk button"); if (m) { SCAN_MKT = m.dataset.mk; $("#scanBox").outerHTML = scanHTML(); }
+});
+function scanHTML() {
+  const S = SCAN?.[SCAN_MKT];
+  if (!SCAN?.kr && !SCAN?.us) return "";
+  const kinds = Object.keys(SCAN_KIND).map((k) => {
+    const x = S?.[k];
+    if (!x) return "";
+    return `<h3>${SCAN_KIND[k][0]} <span class="src">${SCAN_KIND[k][3]} · 오늘 ${x.n}개</span></h3><div class="chart-title"><b>${SCAN_KIND[k][1]}</b></div>
+      ${x.cards.length ? `<div class="grid g2">${x.cards.map((c) => scanCard(c, k, SCAN_MKT, SCAN_KIND[k][2])).join("")}</div>` : `<div class="note src">오늘은 조건에 걸린 종목이 없어요.</div>`}
+      ${x.more?.length ? `<details class="fvt"><summary class="chart-title">▶ 그 밖에 ${x.more.length}개</summary><div class="src">${x.more.map((m) => `${esc(m.name)} (RS ${m.rs})`).join(" · ")}</div></details>` : ""}`;
+  }).join("");
+  return `<div id="scanBox"><h2>🔭 차트 스캔 <span class="src">${SCAN_MKT === "kr" ? "한국 시가총액 상위" : "미국 S&P500"} ${S?.universe || 0}종목 · ${esc(SCAN.updated_at || "")}</span></h2>
+    <div class="seg scanmk" style="margin-bottom:8px"><button data-mk="kr" class="${SCAN_MKT === "kr" ? "on" : ""}">🇰🇷 한국</button><button data-mk="us" class="${SCAN_MKT === "us" ? "on" : ""}">🇺🇸 미국</button></div>
+    <div class="note src">펀더멘털로 고른 종목을 차트로 확인하는 용도예요 (아이디어 찾기 · 매수/매도 추천 아님). RS = 지수 대비 1년 강도 순위 1~99 (3개월 40% + 6·9·12개월 20%씩)</div>${kinds}</div>`;
+}
 async function loadIndustry() {
   if (!AMZ) {
     try { AMZ = await (await fetch("data/amazon_kbeauty.json?t=" + Date.now(), { cache: "no-store" })).json(); }
     catch (e) { $("#industryBody").innerHTML = `<div class="empty">산업 데이터를 불러오지 못했어요.</div>`; return; }
   }
   if (!CAPEX) { try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CAPEX = {}; } }
-  $("#industryBody").innerHTML = capexHTML() + amzHTML();
+  if (!BOARD) { try { BOARD = await (await fetch("data/board.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { BOARD = {}; } }
+  if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
+  $("#industryBody").innerHTML = boardHTML() + scanHTML() + capexHTML() + amzHTML();
   drawAmz();
 }
 const amzSum = (a) => (a || []).reduce((x, y) => x + y, 0);
