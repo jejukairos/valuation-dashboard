@@ -822,6 +822,7 @@ def main():
         for qk, v in ((KPI_CFG.get(t) or {}).get("capex_add") or {}).items():
             q.setdefault(qk, rnd(v / 1e3, 1))
         est = {qq: next((i for i in v.get("items", []) if str(i["n"]).startswith("CapEx")), None) for qq, v in (SEGC.get(t) or {}).items()}
+        est.update({qk: {"n": "CapEx", **v} for qk, v in ((KPI_CFG.get(t) or {}).get("capex_cons") or {}).items()})  # 컨센 표가 부문 예상보다 우선
         capex.append({"t": t, "name": nm, "q": dict(sorted(q.items())), "est": {k: v for k, v in est.items() if v}})
     fcf, guide = [], []
     for t, nm in M7:  # 💸 M7 현금흐름(FCF) 추이 + CapEx 가이던스 (🇺🇸 보유 탭) — 야후 분기 → 보도자료 fcf_add → 예전 분기 fcf_hist
@@ -836,7 +837,7 @@ def main():
             guide.append({"t": t, "name": nm, "pts": kc["capex_guide"]})
     write_json(DATA / "capex.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "cos": capex, "fcf": fcf, "guide": guide,
                                      "peak": load_yaml("peak.yaml") or None,
-                                     "src": "야후 파이낸스 분기 현금흐름표 (설비투자) · 최신 분기는 보도자료 · 예상 = config/seg_cons.yaml"})
+                                     "src": "야후 파이낸스 분기 현금흐름표 (설비투자) · 최신 분기는 보도자료 · 컨센 = config/kpi.yaml capex_cons (없으면 seg_cons.yaml)"})
     write_json(DATA / "ir_calendar.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "items": cal})
     # ⚖️ 비교 탭 (config/compare.yaml): 종목 10년 실적 + 주봉 시가총액 + 원/달러 (분기 평균·주봉) — 달러로 바꿔 나란히 보기
     fx_q, fx_w = {}, {}

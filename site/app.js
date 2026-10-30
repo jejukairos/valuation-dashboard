@@ -2261,14 +2261,52 @@ function capexHTML() {
     tag: yoy == null ? "" : `<span class="qtag${yoy < 0 ? " bad" : ""}">${esc(lq)} 합계 1년 전 대비 ${pct(yoy, 0, true)}</span>`,
     why: "데이터센터 투자가 늘어야 메모리(삼성전자·SK하이닉스)를 더 사요", note: gaps.length ? gaps.map(([q, m]) => `${q} ${m.join("·")} 빠짐`).join(" · ") + " (발표 전·야후 반영 전)" : "" });
   const rows = cs.map((c) => {
-    const k = Object.keys(c.q).sort().at(-1), v = c.q[k], p = c.q[ago(k)], e = c.est?.[k];
-    return `<tr><td style="text-align:left">${esc(c.name)}</td><td>${esc(k)}</td><td><b>$${n(v, 1)}B</b></td><td>${p ? pct((v / p - 1) * 100, 0, true) : "-"}</td><td>${e ? `$${n(e.est, 1)}B → $${n(e.act, 1)}B${e.n !== "CapEx" ? `<br><span class="src">${esc(e.n.replace("CapEx ", ""))}</span>` : ""}` : "-"}</td></tr>`;
+    const k = Object.keys(c.q).sort().at(-1), v = c.q[k], p = c.q[ago(k)];
+    return `<tr><td style="text-align:left">${esc(c.name)}</td><td>${esc(k)}</td><td><b>$${n(v, 1)}B</b></td><td>${p ? pct((v / p - 1) * 100, 0, true) : "-"}</td></tr>`;
   }).join("");
   return `<h3>🏗 빅테크 CapEx <span class="src">${esc(CAPEX.updated_at || "")}</span></h3><div class="card">
     ${peakHTML()}
     <div class="qgrid">${chart}${capexGuideSVG(CAPEX.guide)}${peakChart()}</div>
-    <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>최근 분기</th><th>CapEx</th><th>1년 전 대비</th><th>예상 → 발표</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${capexConsHTML()}
+    <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>최근 분기</th><th>CapEx (막대 기준)</th><th>1년 전 대비</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="note src">${esc(CAPEX.src || "")} · 막대는 현금으로 나간 설비투자(야후 기준). 마이크로소프트가 발표하는 CapEx 는 금융리스를 더한 숫자라 더 커요</div></div>`;
+}
+// 🎯 CapEx 컨센 대비 (kpi.yaml capex_cons · capex_guide cons): ① 분기 발표 vs 컨센 ② 올해 가이던스 vs 컨센 — hi = 종목 상세에서 굵게 볼 회사
+function capexConsHTML(hi) {
+  const cs = CAPEX?.cos || [], gs = (CAPEX?.guide || []).filter((g) => g.pts.at(-1)?.cons);
+  const q = [...new Set(cs.flatMap((c) => Object.keys(c.est || {})))].sort().reverse().find((k) => cs.every((c) => c.est?.[k]?.act != null));
+  if (!q && !gs.length) return "";
+  const B = (v, d = 2) => `${v < 0 ? "-" : ""}$${n(Math.abs(v), d)}B`, rng = (p) => (p.lo === p.hi ? B(p.lo, 0) : `$${n(p.lo, 0)}~${n(p.hi, 0)}B`), mid = (p) => (p.lo + p.hi) / 2;
+  const nm = (t, name) => (t === hi ? `👉 <b>${esc(name)}</b>` : esc(name));
+  const gap = (a, e) => `${pct((a / e - 1) * 100, 1, true)} <span class="src">${a >= e ? "▲ 더" : "▼ 덜"}</span>`;
+  const sum = (a) => a.reduce((x, y) => x + y, 0), who = (a, up) => a.filter(([, g]) => (up ? g >= 0 : g < 0)).map(([c, g]) => `${esc(c)} ${pct(g, 0, true)}`).join(", ");
+  let out = "";
+  if (q) {
+    const r = cs.map((c) => [c, c.est[q]]), sa = sum(r.map(([, e]) => e.act)), se = sum(r.map(([, e]) => e.est)), gq = r.map(([c, e]) => [c.name, (e.act / e.est - 1) * 100]);
+    out += `<div class="chart-title" style="margin-top:10px"><b>🎯 ${esc(q)} 분기 CapEx — 발표 vs 컨센</b> <span class="src">많고 적음이 좋고 나쁨은 아님 · 메모리·장비 회사엔 '더 쓴 곳'이 수요</span></div>
+      <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>발표</th><th>컨센</th><th>컨센 대비</th></tr></thead><tbody>
+      ${r.map(([c, e]) => `<tr><td style="text-align:left">${nm(c.t, c.name)}${(e.s || "").includes(" · ") ? `<br><span class="src">${esc(e.s.split(" · ").slice(1).join(" · "))}</span>` : ""}</td><td><b>${B(e.act)}</b></td><td>${B(e.est)}</td><td>${gap(e.act, e.est)}</td></tr>`).join("")}
+      <tr><td style="text-align:left"><b>4곳 합계</b></td><td><b>${B(sa)}</b></td><td>${B(se)}</td><td><b>${gap(sa, se)}</b></td></tr></tbody></table></div>
+      <div class="src">더 씀: ${who(gq, true) || "없음"} · 덜 씀: ${who(gq, false) || "없음"}</div>`;
+  }
+  if (gs.length) {
+    const r = gs.map((g) => [g, g.pts.at(-1), g.pts.at(-2)]), sa = sum(r.map(([, p]) => mid(p))), se = sum(r.map(([, p]) => p.cons));
+    const big = [...r].sort((a, b) => Math.abs(mid(b[1]) - b[1].cons) - Math.abs(mid(a[1]) - a[1].cons))[0];
+    out += `<div class="chart-title" style="margin-top:10px"><b>🎯 ${esc(r[0][1].y || "")}년 CapEx 가이던스 — 회사 계획 vs 컨센</b> <span class="src">${esc(r[0][1].q)} 발표 · 범위면 가운데 값으로 비교</span></div>
+      <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>직전 → 이번</th><th></th><th>컨센</th><th>컨센 대비</th></tr></thead><tbody>
+      ${r.map(([g, p, pp]) => `<tr><td style="text-align:left">${nm(g.t, g.name)}</td><td>${pp ? `${rng(pp)} → ` : ""}<b>${rng(p)}</b></td><td><span class="qtag${/하향|감소/.test(p.how) ? " bad" : /상향/.test(p.how) ? "" : " muted"}">${esc(p.how || "")}</span></td><td>${B(p.cons, 0)}</td><td>${gap(mid(p), p.cons)}</td></tr>`).join("")}
+      <tr><td style="text-align:left"><b>${r.length}곳 합계</b></td><td><b>${B(sa, 0)}</b></td><td></td><td>${B(se, 0)}</td><td><b>${gap(sa, se)}</b></td></tr></tbody></table></div>
+      <div class="src">합계 차이 ${B(sa - se, 0)} 중 가장 큰 곳: ${esc(big[0].name)} ${B(mid(big[1]) - big[1].cons, 0)}</div>`;
+  }
+  const s = [...new Set(cs.map((c) => (c.est?.[q]?.s || "").split(" · ")[0]).filter(Boolean))].join(", ");
+  return out + `<div class="note src">컨센 출처: ${esc(s || "-")} · 회사 발표 기준 숫자라 막대(야후 현금흐름표)와 조금 다를 수 있어요</div>`;
+}
+// 🏗 종목 상세: 빅테크 4곳이면 'CapEx 컨센 대비' (이 회사 줄을 👉 로)
+async function capexBlock(code) {
+  if (!["MSFT", "GOOG", "META", "AMZN"].includes(code)) return "";
+  if (!CAPEX) { try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CAPEX = {}; } }
+  const h = capexConsHTML(code);
+  return h ? `<h3>🏗 빅테크 CapEx — 컨센 대비 <span class="src">4곳을 같이 봐야 흐름이 보여요 · ${esc(CAPEX.updated_at || "")}</span></h3><div class="card">${h}</div>` : "";
 }
 // 💸 M7 현금흐름(FCF) 추이 + 🏗 CapEx 가이던스 (🇺🇸 보유 탭, 실적 일정 아래) — 지금은 현금을 버는지가 가장 중요 (capex.json fcf · guide)
 const M7_COL = ["var(--s1)", "var(--bad)", "var(--good)", "var(--warn)", "var(--s3)", "var(--s4)", "var(--ink-2)"];
@@ -2288,6 +2326,7 @@ function bigTechHTML() {
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>💸 빅테크 현금흐름 · CapEx 가이던스</b> <span class="src">M7 · 지금은 현금을 버는지가 가장 중요 · ${esc(CAPEX.updated_at || "")}</span></summary>
     ${peakHTML()}
     <div class="qgrid">${capexGuideSVG(CAPEX.guide)}${peakChart()}${chart}</div>
+    ${capexConsHTML()}
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>최근 분기</th><th>FCF</th><th>직전 분기</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="note src">FCF = 영업현금흐름 − 설비투자(Purchases of property and equipment) · 야후 분기 재무제표 + 보도자료 · 회사마다 분기 끝 날짜가 달라 분기 끝에서 45일 뺀 달력 분기로 맞춤</div></details>`;
 }
@@ -2316,7 +2355,7 @@ function capexGuideSVG(gs) {
   gs = (gs || []).filter((g) => (g.pts || []).length);
   if (!gs.length) return "";
   const key = (q) => q.slice(2) + q[0], qs = [...new Set(gs.flatMap((g) => g.pts.map((p) => p.q)))].sort((a, b) => key(a).localeCompare(key(b))).slice(-4);
-  const mid = (p) => (p.lo + p.hi) / 2, hi = Math.max(...gs.flatMap((g) => g.pts.map((p) => p.hi))) * 1.18;
+  const mid = (p) => (p.lo + p.hi) / 2, hi = Math.max(...gs.flatMap((g) => g.pts.map((p) => Math.max(p.hi, p.cons || 0)))) * 1.18;
   const W = 320, top = 26, bot = 132, gw = (W - 10) / gs.length, bw = Math.min(12, (gw * 0.8) / qs.length), Y = (v) => bot - (v / hi) * (bot - top);
   const C = (h) => (/감소|하향|이연/.test(h || "") ? "var(--bad)" : /상향|첫/.test(h || "") ? "var(--s1)" : "var(--ink-2)");
   let g = `<line x1="4" x2="${W - 4}" y1="${bot}" y2="${bot}" stroke="var(--axis)"/>`;
@@ -2326,15 +2365,16 @@ function capexGuideSVG(gs) {
       const p = c.pts.find((x) => x.q === q); if (!p) return;
       const isL = p === last, x = x0 + i * bw;
       g += `<rect x="${x + 1}" y="${Y(mid(p))}" width="${bw - 2}" height="${bot - Y(mid(p))}" fill="${isL ? C(p.how) : "var(--ink-2)"}" opacity="${isL ? 1 : 0.2 + 0.15 * i}"/>`;
-      if (isL) g += `<text x="${x + bw / 2}" y="${Y(mid(p)) - 5}" text-anchor="middle" class="qv b" style="fill:${C(p.how)}">$${n(mid(p), 0)}B</text>`;
+      if (isL) g += `<text x="${x + bw / 2}" y="${Y(Math.max(mid(p), p.cons || 0)) - 5}" text-anchor="middle" class="qv b" style="fill:${C(p.how)}">$${n(mid(p), 0)}B</text>`;
+      if (isL && p.cons) g += `<line x1="${x - 2}" x2="${x + bw + 2}" y1="${Y(p.cons)}" y2="${Y(p.cons)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="3 2"/>`;  // 점선 = 컨센
     });
     const lab = last.q !== qs.at(-1) ? "발표 전" : last.how || "";  // 이번 분기 아직 발표 안 함 (예: 아마존)
     g += `<text x="${5 + gi * gw + gw / 2}" y="${bot + 14}" text-anchor="middle" class="qx">${esc(c.name)}</text><text x="${5 + gi * gw + gw / 2}" y="${bot + 27}" text-anchor="middle" class="qx" style="fill:${lab === "발표 전" ? "var(--ink-2)" : C(last.how)}">${esc(lab)}</text>`;
   });
   const why = gs.filter((c) => c.pts.at(-1).why).map((c) => `${esc(c.name)}: ${esc(c.pts.at(-1).why)}`);
-  return `<div class="qp"><div class="qt"><b>🏗 빅테크 CapEx 가이던스</b></div><div class="src">회사가 말한 1년 설비투자 계획 · 막대 = ${qs.map(esc).join(" → ")} 발표 때 (범위면 가운데 값)</div>
+  return `<div class="qp"><div class="qt"><b>🏗 빅테크 CapEx 가이던스</b></div><div class="src">회사가 말한 1년 설비투자 계획 · 막대 = ${qs.map(esc).join(" → ")} 발표 때 (범위면 가운데 값)${gs.some((c) => c.pts.at(-1).cons) ? " · 점선 = 시장 예상(컨센)" : ""}</div>
     <svg viewBox="0 0 ${W} 166" role="img" aria-label="빅테크 CapEx 가이던스">${g}</svg>
-    <div class="src">${gs.map((c) => `${esc(c.name)} ${c.pts.map((p) => (p.lo === p.hi ? `$${n(p.lo, 0)}B` : `$${n(p.lo, 0)}~${n(p.hi, 0)}B`)).join(" → ")}${c.pts.at(-1).y ? ` (${esc(c.pts.at(-1).y)})` : ""}`).join(" · ")}${why.length ? `<br>${why.join(" · ")}` : ""}</div></div>`;
+    <div class="src">${gs.map((c) => `${esc(c.name)} ${c.pts.map((p) => (p.lo === p.hi ? `$${n(p.lo, 0)}B` : `$${n(p.lo, 0)}~${n(p.hi, 0)}B`)).join(" → ")}${c.pts.at(-1).y ? ` (${esc(c.pts.at(-1).y)})` : ""}${c.pts.at(-1).cons ? ` · 컨센 $${n(c.pts.at(-1).cons, 0)}B` : ""}`).join(" · ")}${why.length ? `<br>${why.join(" · ")}` : ""}</div></div>`;
 }
 // 📈 12MF PER 밴드 (증권사 그림처럼 10·15·20배 … 고정 배수 선): 각 주의 12개월 선행 EPS = 그해 EPS × 남은 기간 + 다음 해 EPS × 지난 기간
 // shortcut: 과거 시점의 선행 EPS 는 당시 컨센서스 대신 실제 연간 EPS(지난 해는 실적, 앞 해는 지금 추정)로 계산 — 무료로 과거 컨센서스를 받게 되면 바꾸기
@@ -2710,7 +2750,8 @@ async function openStock(code) {
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
     const issueHtml = (await issuesBlock(code)) + (await repBlock(code)) + (await keyBlock(code));
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    const capexHtml = await capexBlock(code);
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + capexHtml + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
