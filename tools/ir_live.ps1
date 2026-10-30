@@ -98,6 +98,6 @@ if ($now.Hour -ge 8 -and -not (Test-Path $stamp)) {
     $prompt = "tools/earnings_task.md 를 읽고 그 순서대로 오늘 실적발표 요약을 해줘. 한국 종목 자막은 transcripts 폴더에 있으면 그걸 써. 파일 수정만 하고 git 은 하지 마. 모든 답변은 쉬운 한국어로."
     & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write,WebFetch,WebSearch" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
     # earnings_task.md 가 고치는 파일 전부 (핵심 지표·빅테크 숨은 숫자·부문 예상·쉬운 이벤트도 같이 올림)
-    $daily = @("config/earnings.yaml", "config/segments.yaml", "config/kpi.yaml", "config/bigtech.yaml", "config/seg_cons.yaml", "config/events.yaml")
+    $daily = @("config/earnings.yaml", "config/segments.yaml", "config/kpi.yaml", "config/bigtech.yaml", "config/seg_cons.yaml", "config/events.yaml", "config/keychart.yaml")
     if (git status --porcelain $daily) { if (Publish "실적발표 요약 (매일 점검)" ($daily + "site/data/earnings.json")) { Log "매일 점검 요약 올림" } } else { Log "매일 점검: 새 요약 없음" }
 }

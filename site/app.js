@@ -1560,6 +1560,14 @@ function easyNewsHTML() {
     ${items.map((e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
       <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
 }
+// 🧾 일회성 점검 (earnings.yaml once): 발표 이익 → 한 번만 있는 이익(+)·비용(−) → 빼면 실질 — 예상 상회·하회가 일회성 때문인지
+function onceHTML(o) {
+  if (!o) return "";
+  return `<div class="kidbox" style="background:var(--warn-bg)">🧾 <b>일회성 점검</b> <span class="src">발표 숫자에 한 번만 있는 이익·비용이 얼마나 섞였나</span>
+    <div style="margin-top:4px">발표 <b>${esc(o.rep || "-")}</b>${o.cons ? ` <span class="src">(예상 ${esc(o.cons)})</span>` : ""}</div>
+    ${(o.items || []).length ? `<ul class="irl">${o.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    <div>→ 일회성 빼면 <b>${esc(o.core || "확인 못 함")}</b>${o.say ? ` — ${esc(o.say)}` : ""}</div></div>`;
+}
 function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없어 '🧾 최신 분기 실적' 카드 안에 일정 한 줄만
   const list = EARNINGS[code] || [];
   const ev = (IRCAL.items || []).find((e) => e.code === code && e.dday >= -7);
@@ -1568,6 +1576,7 @@ function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없�
   if (!list.length) return next ? `<h3>📞 실적발표</h3><div class="card">${next}<div class="note src">발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 여기에 넣어요.</div></div>` : "";
   // 맨 위(최신) 분기만 펼침 → 🧭 바뀐 것 → 그 전 분기들은 접어 둠 (past: true 는 핵심만 짧게)
   const full = (e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
+      ${onceHTML(e.once)}
       ${i === 0 ? previewHTML(e.next) : ""}
       ${(e.easy || []).length ? `<div class="kidbox">🐣 <b>주린이를 위한 핵심 간단 요약</b><ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       ${vsHTML(e)}
@@ -3392,8 +3401,12 @@ function keyChart(ch) {
   }
   const leg = [...bars.map((s, si) => `<span style="color:${BC[si % 4]}">■</span> ${esc(s.n)}`), ...lines.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`),
     ...(ch.pct ? [`● ${esc(ch.pct.n)}`] : [])].join(" · ");
-  return `<div class="qp"><div class="qt"><b>${esc(ch.t)} <span class="src">${esc(un)}</span></b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}
-    <svg viewBox="0 0 ${W} 166" role="img" aria-label="${esc(ch.t)}">${g}</svg><div class="src" style="padding:0 4px 4px">${leg}${ch.note ? `<br>${esc(ch.note)}` : ""}</div></div>`;
+  // tbl: true → 그림 위에 모든 칸 숫자 표 (수치 먼저 → 그림 → 🐣 kid)
+  const tb = ch.tbl ? `<div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:11px"><tr><th></th>${L.map((q) => `<th>${esc(q)}</th>`).join("")}</tr>
+    ${[...bars, ...lines].map((s) => `<tr><td style="text-align:left">${esc(s.n)}</td>${L.map((_, i) => `<td>${s.v[i] == null ? "-" : i === N - 1 ? `<b>${V(s.v[i])}</b>` : V(s.v[i])}</td>`).join("")}</tr>`).join("")}</table></div>` : "";
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)} <span class="src">${esc(un)}</span></b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}${tb}
+    <svg viewBox="0 0 ${W} 166" role="img" aria-label="${esc(ch.t)}">${g}</svg><div class="src" style="padding:0 4px 4px">${leg}${ch.note ? `<br>${esc(ch.note)}` : ""}</div>
+    ${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
 // 이익 변동 요인 (from → 요인들 → to): 막대 길이 = 크기, 빨강 = 줄인 요인
 function keyWf(w) {
@@ -3422,7 +3435,7 @@ function keyCard(c, open) {
 function keyGroup(name, g, code) {
   return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}
     ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
-    ${(g.cards || []).map((c) => keyCard(c, !code || c.code === code)).join("")}</div>`;
+    ${(g.cards || []).map((c) => keyCard(c, !code || [].concat(c.code).includes(code))).join("")}</div>`;
 }
 function keyIndHTML() {
   const I = Object.entries(KEYC?.industry || {});
