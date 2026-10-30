@@ -1518,6 +1518,7 @@ function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없�
       ${(e.easy || []).length ? `<div class="kidbox">🐣 <b>주린이를 위한 핵심 간단 요약</b><ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       ${vsHTML(e)}
       ${(e.facts || []).length ? `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🆕 뉴팩트</b> <span class="src">이번 발표에서 새로 나온 사실</span><ul class="irl facts">${e.facts.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      ${callDiffHTML(e, e.diff_from || list[i + 1]?.quarter)}
       ${(e.keys || []).length ? `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🎤 어닝콜 핵심</b>${e.keys.map((x, j) => `<div style="margin-top:6px"><b style="color:${x.tone === "bad" ? "var(--bad-ink)" : "var(--good-ink)"}">${"①②③④⑤⑥"[j] || "·"} ${esc(x.h)}</b> ${x.tone === "bad" ? "⚠" : "✔"}
         ${(x.q || []).map((t) => `<div class="src" style="margin-left:18px">${/^[(（]/.test(t) ? esc(t) : `“${esc(t)}”`}</div>`).join("")}</div>`).join("")}</div>` : ""}
       ${e.transcript ? `<div class="note">📜 <a href="${esc(e.transcript)}" target="_blank" rel="noopener">발표 자막 원문 보기 (발표·질의응답 전체)</a></div>` : ""}
@@ -1526,6 +1527,23 @@ function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없�
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
     </details>`).join("")}
   </div>`;
+}
+// 🔄 바로 이전 컨콜과 달라진 점 (diff) · 🎙 말투·뉘앙스 (voice) · 🙊 안 나온 것 (miss) · 📞 비공개 행사 (ndr) — earnings.yaml
+const DIFF_T = { good: ["▲ 좋아짐", ""], bad: ["▼ 나빠짐", "bad"], same: ["= 그대로", "muted"], new: ["🆕 새로", "warn"], gone: ["🙊 말 안 함", "bad"], num: ["🔢 계산", "warn"] };
+const VOICE_T = { 확신: ["💪 확신", ""], 조건부: ["🤔 조건부", "warn"], 애매: ["🌫 애매", "warn"], 회피: ["🙈 피함", "bad"], 미룸: ["⏳ 나중에", "warn"] };
+function callDiffHTML(e, prevQ) {
+  const tag = (m, k) => { const [t, c] = m[k] || [k || "", "warn"]; return `<span class="qtag ${c}" style="white-space:nowrap">${esc(t)}</span>`; };
+  const out = [];
+  if ((e.diff || []).length) out.push(`<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🔄 바로 이전 컨콜과 달라진 점</b> <span class="src">${esc(prevQ || "지난 콜")} → ${esc(e.quarter)} · 같은 질문에 숫자·말이 어떻게 바뀌었나</span>
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">항목</th><th style="text-align:left">${esc(prevQ || "지난 콜")}</th><th style="text-align:left">${esc(e.quarter)}</th><th></th></tr></thead><tbody>
+    ${e.diff.map((x) => `<tr><td style="text-align:left"><b>${esc(x.k)}</b></td><td style="text-align:left;white-space:normal;min-width:9em" class="src">${esc(x.b || "-")}</td>
+      <td style="text-align:left;white-space:normal;min-width:11em">${esc(x.a || "-")}${x.note ? `<div class="src">${esc(x.note)}</div>` : ""}</td><td>${tag(DIFF_T, x.t)}</td></tr>`).join("")}</tbody></table></div></div>`);
+  if ((e.voice || []).length) out.push(`<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🎙 말투·뉘앙스</b> <span class="src">확신 있게 말했나, 조건을 달았나, 흐렸나, 피했나 (자막 원문 기준)</span>
+    ${e.voice.map((x) => `<div style="margin-top:6px">${tag(VOICE_T, x.v)} <b>${esc(x.k)}</b>${x.q ? ` <span class="src">“${esc(x.q)}”</span>` : ""}${x.note ? `<div class="src" style="margin-left:18px">→ ${esc(x.note)}</div>` : ""}</div>`).join("")}</div>`);
+  if ((e.miss || []).length) out.push(`<div class="warnbox" style="margin-top:8px"><b>🙊 이번 콜에서 안 나온 것</b> <span class="src">질문도 회사 설명도 없었던 것 — 빠진 말도 신호예요</span><ul class="irl">${e.miss.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`);
+  if ((e.ndr || []).length) out.push(`<div class="card" style="margin-top:8px;border:1px dashed var(--axis)"><b>📞 비공개 행사 (NDR·그룹콜)</b> <span class="src">원문이 공개되지 않아 기사·리포트로 알려진 것만</span>
+    ${e.ndr.map((x) => `<div style="margin-top:6px"><span class="qtag">${esc(x.d || "")}</span> <b>${esc(x.t)}</b>${(x.lines || []).map((l) => `<div class="src" style="margin-left:18px">· ${esc(l)}</div>`).join("")}${x.after ? `<div style="margin-left:18px">📉 그 뒤 주가: ${esc(x.after)}</div>` : ""}${(x.u || []).length ? `<div class="src" style="margin-left:18px">출처: ${x.u.map((s) => `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>`).join(" · ")}</div>` : ""}</div>`).join("")}</div>`);
+  return out.join("");
 }
 // 🌡 시장 기대감 (자동 · 참고용): 기대가 높으면 좋은 실적에도 '기대 미달'로 빠질 수 있어요 (예: 아마존 3Q26)
 // 3가지 신호를 +1(기대 높임) / 0 / -1(기대 낮춤)로 더함: 최근 3개월 주가 · PER 10년 밴드 위치 · 내년 EPS 예상치 90일 변화
