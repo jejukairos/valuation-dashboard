@@ -1081,7 +1081,7 @@ function renderTop() {
   $("#estAlert").innerHTML = estAlertHTML();
   $("#patAlert").innerHTML = patAlertHTML();
   $("#irCal").innerHTML = irCalHTML();
-  $("#bigTech").innerHTML = bigTechHTML();
+  $("#bigTech").innerHTML = bigTechHTML() + moneyHTML();
 }
 function kqNewsHTML() {
   // 최근 발표일 먼저 (같은 날이면 보유 → 관심 순서 그대로)
@@ -2216,7 +2216,7 @@ function kpiChart(ch) {
   if (over > 0) ends.forEach((e) => { e[1] -= over; });
   ends.forEach(([x, y, v, col]) => { g += `<text x="${many ? x + 8 : x - 2}" y="${many ? y + 4 : y - 9}" text-anchor="${many ? "start" : "end"}" class="qv b" style="fill:${col};font-size:13px;paint-order:stroke;stroke:var(--surface);stroke-width:3px">${kpiF(v, ch.u)}</text>`; });
   const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${(ch.col || KPI_COL)[si % (ch.col || KPI_COL).length]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
-  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}</div>`;
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
 // 📈 영업이익 성장률 (YoY): 매출 성장률 바로 아래 — 국내는 이 성장률로 PER 을 몇 배 줄지 정함 (kpi.yaml 에 같은 제목 그래프가 있으면 그걸 씀)
 function opYoyHTML(d, k) {
@@ -2370,6 +2370,33 @@ function bigTechHTML() {
     ${capexConsHTML()}
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>최근 분기</th><th>FCF</th><th>직전 분기</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="note src">FCF = 영업현금흐름 − 설비투자(Purchases of property and equipment) · 야후 분기 재무제표 + 보도자료 · 회사마다 분기 끝 날짜가 달라 분기 끝에서 45일 뺀 달력 분기로 맞춤</div></details>`;
+}
+// 🔍 빅테크 숨은 숫자 (config/bigtech.yaml → capex.json money): 쉬운 요약 → 숫자 표 → 그래프(밑에 🐣 설명) → 장부에 없는 약속 → 돈은 어디서
+const BT_COL = { MSFT: "var(--s1)", GOOG: "var(--bad)", META: "var(--good)", AMZN: "var(--warn)" };  // M7 현금흐름 그림과 같은 색
+function moneyHTML() {
+  const m = CAPEX?.money;
+  if (MKT !== "US" || !m?.charts) return "";
+  const C = Object.fromEntries(m.charts.map((c) => [c.k, c.s])), q = m.asof, ago = `${+q.slice(0, 2) - 1}${q.slice(2)}`;
+  const g = (k, t, qq = q) => C[k]?.[t]?.[qq], B = (v) => (v == null ? "-" : kpiF(v, "$B")), li = (x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`;
+  const rows = Object.entries(m.names).map(([t, nm]) => {
+    const cap = (CAPEX.cos || []).find((c) => c.t === t)?.q?.[q], ls = m.lease?.v?.[t]?.at(-1), da0 = g("da", t, ago);
+    return `<tr><td style="text-align:left">${esc(nm)}</td><td><b>${kpiF(g("capex_rev", t), "%")}</b><br><span class="src">1년 전 ${kpiF(g("capex_rev", t, ago), "%")}</span></td>
+      <td><b>${B(g("da", t))}</b><br><span class="src">${da0 ? `1년 새 ${pct((g("da", t) / da0 - 1) * 100, 0, true)}` : "-"}</span></td>
+      <td>${B(g("ltd", t, ago))} →<br><b>${B(g("ltd", t))}</b></td><td><b>${g("buyback", t) == null ? "안 함" : B(g("buyback", t))}</b></td>
+      <td>${ls ? `<b>${B(ls)}</b>${cap ? `<br><span class="src">이번 분기 CapEx 의 ${n(ls / cap, 1)}배</span>` : ""}` : "-"}</td></tr>`;
+  }).join("");
+  const charts = m.charts.map((c) => kpiChart({ ...c, col: Object.keys(c.s).map((t) => BT_COL[t]), s: Object.entries(c.s).map(([t, v]) => ({ n: m.names[t], v })) })).join("");
+  const promise = [m.lease, m.commit].filter(Boolean).map((p) => `<div class="chart-title" style="margin-top:10px"><b>📦 ${esc(p.t)}</b> <span class="src">${esc(p.q.join(" → "))}</span></div>
+    <div class="tbl-wrap"><table class="compact"><tbody>${Object.entries(p.v).map(([t, [a, b]]) => `<tr><td style="text-align:left">${esc(m.names[t])}</td><td>${B(a)} → <b>${B(b)}</b> <span class="src">${pct((b / a - 1) * 100, 0, true)}</span></td></tr>`).join("")}</tbody></table></div>
+    ${p.kid ? `<div class="kidbox" style="font-size:13px">🐣 ${esc(p.kid)}</div>` : ""}`).join("");
+  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>🔍 빅테크 숨은 숫자</b> <span class="src">투자 → 감가상각 → 빚 · ${esc(q)} · SEC 10-Q 원문으로 계산</span></summary>
+    <div class="kidbox" style="margin-top:0">🐣 <b>한눈에</b><ul class="irl">${(m.easy || []).map(li).join("")}</ul></div>
+    <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">${esc(q)}</th><th>매출 대비 CapEx</th><th>감가상각비</th><th>장기 빚 (1년 전 → 지금)</th><th>자사주 매입</th><th>아직 시작 안 된 리스</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="qgrid" style="margin-top:8px">${charts}</div>
+    ${promise}
+    <div class="kidbox">💰 <b>모자란 돈은 어디서 구했나</b><ul class="irl">${(m.funding || []).map(li).join("")}</ul></div>
+    <div class="note"><b>📌 숫자 읽을 때 주의</b><ul class="irl">${(m.notes || []).map(li).join("")}</ul></div>
+    <div class="note src">출처: ${(m.src || []).map((s) => `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>`).join(" · ")} · 매수·매도 추천이 아니에요</div></details>`;
 }
 // ⚠️ 증시 고점 신호 점검 3가지 (config/peak.yaml) — 빅테크 CapEx 가 정체되면 관련주 고점 가능성 ↑ (참고용, 추천 아님)
 function peakHTML() {

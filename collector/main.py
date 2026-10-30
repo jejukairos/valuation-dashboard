@@ -855,7 +855,7 @@ def main():
         if kc.get("capex_guide"):
             guide.append({"t": t, "name": nm, "pts": kc["capex_guide"]})
     write_json(DATA / "capex.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "cos": capex, "fcf": fcf, "guide": guide,
-                                     "peak": load_yaml("peak.yaml") or None,
+                                     "peak": load_yaml("peak.yaml") or None, "money": load_yaml("bigtech.yaml") or None,  # 🔍 빅테크 숨은 숫자
                                      "src": "야후 파이낸스 분기 현금흐름표 (설비투자) · 최신 분기는 보도자료 · 컨센 = config/kpi.yaml capex_cons (없으면 seg_cons.yaml)"})
     write_json(DATA / "ir_calendar.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "items": cal})
     # ⚖️ 비교 탭 (config/compare.yaml): 종목 10년 실적 + 주봉 시가총액 + 원/달러 (분기 평균·주봉) — 달러로 바꿔 나란히 보기

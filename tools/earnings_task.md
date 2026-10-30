@@ -92,6 +92,10 @@
    - site/data/stocks/{코드}.json 의 kq 에 잠정실적이 새로 반영됐는데 earnings.yaml 요약이 아직 없을 때 (예상 대비 크게 웃돌거나 밑돈 경우)
    - config/notes.yaml 에 새로 적힌 증권사 메모 중 전망이 크게 바뀐 것 · site/data/news.json 에서 여러 언론사가 같이 쓴 큰 소식
    같은 일을 두 번 넣지 않는다 (같은 date·code·title 이 있으면 건너뜀). 3일 지난 것은 지우지 말고 그대로 둔다 (화면이 알아서 숨김).
+3-5. 🔍 빅테크 숨은 숫자 (config/bigtech.yaml): 마이크로소프트·알파벳·메타·아마존 4곳의 새 분기 10-Q 가 모두 나오면 (보통 실적 다음 날)
+   charts 의 선마다 새 분기 한 칸 (매출 대비 CapEx = 현금흐름표 설비투자 ÷ 매출 %, 감가상각비·장기차입금·자사주 매입 $B 소수 1자리),
+   asof 를 새 분기로, lease(아직 시작 안 된 리스)·commit(구매 약정)을 [직전, 이번] 으로, funding·easy·notes 를 새 숫자로 고친다.
+   숫자는 10-Q 재무제표·본문 문장 그대로 (못 찾으면 그 칸을 비움). 4곳 중 하나라도 10-Q 전이면 건드리지 않는다.
 4. (tools/ir_live.ps1 이 부른 경우엔 파일 수정까지만 — 확인·올리기는 스크립트가 함)
    YAML 이 읽히는지 확인(python 으로 load) → 커밋 메시지 "<종목> <분기> 실적발표 요약" + 끝에 빈 줄과
    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" → `git pull --rebase; git push`.
