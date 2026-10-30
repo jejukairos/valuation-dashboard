@@ -840,8 +840,9 @@ def main():
         fx_w = {d.strftime("%Y-%m-%d"): round(float(v), 1) for d, v in C.weekly_close(fxs).items()}
     except Exception as e:  # noqa: BLE001
         REPORT.block("비교 탭 환율", str(e)[:60])
+    # longq = 모든 종목 (📊 종목 골라 비교)
     write_json(DATA / "compare.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "cfg": CMP,
-                                       "longq": {c: v for c, v in LONGQ.items() if v}, "mcap": MCAP_W,  # 모든 종목 (📊 골라 비교) "fx_q": fx_q, "fx_w": fx_w})
+                                       "longq": {c: v for c, v in LONGQ.items() if v}, "mcap": MCAP_W, "fx_q": fx_q, "fx_w": fx_w})
 
     print("■ 수주 공시")
     import orders
