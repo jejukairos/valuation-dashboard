@@ -876,6 +876,10 @@ def main():
     import news
     write_json(DATA / "news.json", news.collect(todo))
 
+    print("■ 증권사 리포트")
+    import reports
+    write_json(DATA / "reports.json", reports.collect(todo))
+
     write_json(DATA / "broker_targets.json", load_yaml("broker_targets.yaml") or {})  # 손으로 적는 증권사 목표주가
     write_json(DATA / "defense.json", {**(load_yaml("defense.yaml") or {}), "sector": SECTORS.get("방산")})  # 🛡 산업 탭 방산 칸
     write_json(DATA / "tourism.json", load_yaml("tourism.yaml") or {})  # 출입국 관광통계 (롯데쇼핑 상세)

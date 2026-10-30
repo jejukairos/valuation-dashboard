@@ -2675,7 +2675,7 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
-    const issueHtml = await issuesBlock(code);
+    const issueHtml = (await issuesBlock(code)) + (await repBlock(code));
     $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
@@ -2978,9 +2978,12 @@ function pbrCard(it, base, i) {
   </div>`;
 }
 function showView() {
-  const nc = location.hash.match(/^#news\/(\w+)/);  // 종목 상세 '📰 핵심 이슈'에서 들어오면 그 종목 뉴스만
+  const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
   NEWS_CODE = nc ? nc[1] : "";
-  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#industry": "industry", "#compare": "compare" }[nc ? "#news" : location.hash] || "main";
+  REP_CODE = rc ? rc[1] : "";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  $("#reportsView").hidden = view !== "reports";
+  if (view === "reports") loadReports();
   $("#pbrView").hidden = view !== "pbr";
   $("#compareView").hidden = view !== "compare";
   if (view === "compare") renderCompare();
@@ -3235,6 +3238,68 @@ function drawAmz() {
   makeChart(document.getElementById("amz-chart"), ds.map((d) => d.slice(5).replace("-", "/")), sets, { zero: true, fmt: (v) => v + "개", yfmt: (v) => v.toFixed(0) });
 }
 $("#industryBody").addEventListener("click", (e) => { const b = e.target.closest("#amz-chips button"); if (!b) return; AMZ_B = b.dataset.b; loadIndustry(); });
+
+/* ---------- 📑 리포트 탭 (data/reports.json): 한국 = 한경 컨센서스 공개 목록, 미국 = 야후 증권사 의견 변경, 요약 = config/reports.yaml ---------- */
+let REPS = null, REP_MKT = "KR", REP_GRP = "전체", REP_CODE = "";  // REP_CODE = '#reports/코드' 로 들어오면 그 종목만
+const repGet = async () => { if (!REPS) REPS = await (await fetch("data/reports.json?t=" + Date.now(), { cache: "no-store" })).json(); return REPS; };
+const tpTxt = (v, mkt) => (v == null ? "-" : mkt === "US" ? `$${n(v, 0)}` : `${n(v, 0)}원`);
+function tpChg(x, mkt) {  // 목표주가: 이전 → 지금 (▲▼ 몇 %) · 같으면 '유지'
+  if (!x.tp) return "-";
+  if (x.tp_dir) return `<b>${tpTxt(x.tp, mkt)}</b> <span style="color:var(${x.tp_dir === "하향" ? "--bad-ink" : "--good-ink"})">${x.tp_dir === "하향" ? "▼" : "▲"} ${esc(x.tp_dir)}</span>`;
+  if (!x.tp_prev || x.tp_prev === x.tp) return `<b>${tpTxt(x.tp, mkt)}</b>${x.tp_prev ? ' <span class="src">유지</span>' : ""}`;
+  const g = (x.tp / x.tp_prev - 1) * 100;
+  return `<span class="src">${tpTxt(x.tp_prev, mkt)} →</span> <b>${tpTxt(x.tp, mkt)}</b> <span style="color:var(${g < 0 ? "--bad-ink" : "--good-ink"})">${g < 0 ? "▼" : "▲"}${n(Math.abs(g), 0)}%</span>`;
+}
+// 요약 카드 (reports.yaml): 증권사·목표가 변화·근거·EPS/PER 변화 — 원문은 링크로
+function repNote(x, mkt) {
+  return `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>${esc(x.firm || "")}</b> <span class="src">${esc(x.d || "")}${x.t ? ` · ${esc(x.t)}` : ""}</span>
+    <div style="margin-top:4px">🎯 ${tpChg(x, mkt)}${x.rating ? ` · ${esc(x.rating)}` : ""}</div>
+    ${(x.why || []).length ? `<ul class="irl">${x.why.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+    ${x.eps ? `<div class="src">📊 ${esc(x.eps)}</div>` : ""}${x.val ? `<div class="src">🧮 ${esc(x.val)}</div>` : ""}
+    ${x.u ? `<div class="src"><a href="${esc(x.u)}" target="_blank" rel="noopener">원문 보기</a> (Claude 요약 · 숫자는 원문으로 확인)</div>` : ""}</div>`;
+}
+function repTable(r, max) {
+  const us = r.market === "US", L = (r.list || []).slice(0, max);
+  if (!L.length) return `<div class="src">최근 6개월 리포트 없음</div>`;
+  return `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">날짜 · 증권사</th>${us ? "" : '<th style="text-align:left">제목</th>'}<th>목표주가</th><th>의견</th></tr></thead><tbody>
+    ${L.map((x) => `<tr><td style="text-align:left;white-space:nowrap"><span class="src">${esc(x.d.slice(5).replace("-", "/"))}</span> ${esc(x.firm)}</td>
+      ${us ? "" : `<td style="text-align:left;white-space:normal;min-width:12em"><a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t.replace(/^[^)]*\)\s*/, ""))}</a></td>`}
+      <td style="white-space:nowrap">${tpChg(x, r.market)}</td><td>${esc(x.act ? `${x.act} · ${x.rating}` : x.rating || "")}</td></tr>`).join("")}</tbody></table></div>`;
+}
+// 최근 30일 목표가 올린 곳·내린 곳 + 증권사별 최신 목표가 평균
+function repSum(r) {
+  const cut = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), L = (r.list || []).filter((x) => x.d >= cut && x.tp);
+  const up = L.filter((x) => (x.tp_prev && x.tp > x.tp_prev) || x.tp_dir === "상향").length, dn = L.filter((x) => (x.tp_prev && x.tp < x.tp_prev) || x.tp_dir === "하향").length;
+  const last = Object.values(Object.fromEntries([...(r.list || [])].reverse().filter((x) => x.tp).map((x) => [x.firm, x.tp])));
+  const avg = last.length ? last.reduce((a, b) => a + b, 0) / last.length : null, c = DASH.stocks.find((s) => s.code === r.code);
+  return L.length || avg ? `<div class="note">최근 30일 리포트 ${L.length}개 · 목표가 <b style="color:var(--good-ink)">올림 ${up}</b> · <b style="color:var(--bad-ink)">내림 ${dn}</b>${avg ? ` · 증권사 ${last.length}곳 최신 목표가 평균 <b>${tpTxt(avg, r.market)}</b>${c?.price ? ` (지금 주가 대비 ${pct((avg / c.price - 1) * 100, 0, true)})` : ""}` : ""}</div>` : "";
+}
+async function loadReports() {
+  try { await repGet(); } catch (_) { $("#reportsBody").innerHTML = `<div class="empty">리포트를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
+  const all = REPS.stocks || [], grps = ["전체", ...new Set(all.map((r) => r.group))];
+  $("#reportsIntro").innerHTML = `${esc(REPS.updated_at || "")} 갱신 · ${esc(REPS.src || "")}<br><span class="src">원문은 증권사 PDF 링크로만 — 여기엔 숫자와 짧은 요약 · 참고용 (매수·매도 추천 아님)</span>`;
+  const latest = (r) => r.notes?.[0]?.d || r.list?.[0]?.d || "";
+  const list = REP_CODE ? all.filter((r) => r.code === REP_CODE)
+    : all.filter((r) => r.market === REP_MKT && (REP_GRP === "전체" || r.group === REP_GRP)).sort((a, b) => latest(b).localeCompare(latest(a)));
+  $("#reportsBody").innerHTML = (REP_CODE ? `<div class="note"><a href="#reports">← 전체 종목 리포트</a></div>` : `<div class="seg repmk" style="margin-bottom:8px"><button data-mk="KR" class="${REP_MKT === "KR" ? "on" : ""}">🇰🇷 한국 리포트</button><button data-mk="US" class="${REP_MKT === "US" ? "on" : ""}">🇺🇸 미국 리포트</button></div>
+    <div class="chips repgrp" style="margin-bottom:10px">${grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === REP_GRP ? "on" : ""}">${esc(g)}</button>`).join("")}</div>`)
+    + `<div class="grid g2">${list.map((r) => `<div class="card" id="rep-${esc(r.code)}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:17px">${esc(r.name)}</b>
+      <span class="src">${esc(r.group)} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>${repSum(r)}${(r.notes || []).map((x) => repNote(x, r.market)).join("")}${repTable(r, 15)}</div>`).join("") || `<div class="empty">리포트가 없어요.</div>`}</div>`;
+}
+document.addEventListener("click", (e) => {
+  const m = e.target.closest("#reportsBody .repmk button"), g = e.target.closest("#reportsBody .repgrp button");
+  if (m) { REP_MKT = m.dataset.mk; loadReports(); }
+  if (g) { REP_GRP = g.dataset.g; loadReports(); }
+});
+// 🎯 증권사 시각 (종목 상세, 핵심 이슈 아래): 요약 1개 + 최근 리포트 4개 → 리포트 탭으로
+async function repBlock(code) {
+  let r;
+  try { r = (await repGet()).stocks.find((x) => x.code === code); } catch (_) { return ""; }
+  if (!r || (!(r.notes || []).length && !(r.list || []).length)) return "";
+  return `<h3>🎯 증권사 시각 <span class="src"><a href="#reports/${esc(code)}">리포트 탭에서 전체 보기 →</a></span></h3><div class="card">${repSum(r)}
+    ${(r.notes || []).slice(0, 1).map((x) => repNote(x, r.market)).join("")}${repTable(r, 4)}
+    <div class="note"><a href="#reports/${esc(code)}">📑 ${esc(r.name)} 리포트 전체 (요약·목표가 변화) 보기 →</a></div></div>`;
+}
 
 /* ---------- 📰 뉴스 탭: 내 종목 · 경쟁사 · 외신 (config/news.yaml, Google 뉴스 30일치 쌓임) ---------- */
 let NEWS = null, NEWS_GRP = "전체", NEWS_CODE = "";  // NEWS_CODE = '#news/코드' 로 들어오면 그 종목만
