@@ -2675,7 +2675,8 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + segcHTML(d) + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    const issueHtml = await issuesBlock(code);
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
@@ -2977,7 +2978,9 @@ function pbrCard(it, base, i) {
   </div>`;
 }
 function showView() {
-  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#industry": "industry", "#compare": "compare" }[location.hash] || "main";
+  const nc = location.hash.match(/^#news\/(\w+)/);  // 종목 상세 '📰 핵심 이슈'에서 들어오면 그 종목 뉴스만
+  NEWS_CODE = nc ? nc[1] : "";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#industry": "industry", "#compare": "compare" }[nc ? "#news" : location.hash] || "main";
   $("#pbrView").hidden = view !== "pbr";
   $("#compareView").hidden = view !== "compare";
   if (view === "compare") renderCompare();
@@ -3211,18 +3214,31 @@ function drawAmz() {
 $("#industryBody").addEventListener("click", (e) => { const b = e.target.closest("#amz-chips button"); if (!b) return; AMZ_B = b.dataset.b; loadIndustry(); });
 
 /* ---------- 📰 뉴스 탭: 내 종목 · 경쟁사 · 외신 (config/news.yaml, Google 뉴스 30일치 쌓임) ---------- */
-let NEWS = null, NEWS_GRP = "전체";
+let NEWS = null, NEWS_GRP = "전체", NEWS_CODE = "";  // NEWS_CODE = '#news/코드' 로 들어오면 그 종목만
+const newsGet = async () => { if (!NEWS) NEWS = await (await fetch("data/news.json?t=" + Date.now(), { cache: "no-store" })).json(); return NEWS; };
+// 📰 핵심 이슈 (종목 상세, 실적발표 아래): news.yaml issues 짧은 이슈 + 📌 고정 기사 + 최근 기사 3개 → 뉴스 탭으로
+async function issuesBlock(code) {
+  let r;
+  try { r = (await newsGet()).stocks.find((x) => x.code === code); } catch (_) { return ""; }
+  if (!r) return "";
+  const own = (r.own || []).slice(0, 3), iss = r.issues || [];
+  if (!iss.length && !r.pins.length && !own.length) return "";
+  return `<h3>📰 핵심 이슈 <span class="src"><a href="#news/${esc(code)}">뉴스 탭에서 전체 보기 →</a></span></h3><div class="card">
+    ${iss.length ? `<ul class="irl">${iss.map((x) => `<li>${x.d ? `<span class="src">${esc(x.d)}</span> ` : ""}${esc(x.t || x)}${x.u ? ` <a href="${esc(x.u)}" target="_blank" rel="noopener">기사</a>` : ""}</li>`).join("")}</ul>` : ""}
+    ${r.pins.length ? `<ul class="news">${r.pins.slice(0, 3).map((p) => `<li>📌 <a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t)}</a>${p.memo ? ` <span class="src">${esc(p.memo)}</span>` : ""}</li>`).join("")}</ul>` : ""}
+    ${own.length ? `<div class="news-h">최근 기사</div>${newsList(own)}` : ""}
+    <div class="note"><a href="#news/${esc(code)}">📰 뉴스 탭에서 ${esc(r.name)} 기사·경쟁사·외신 전체 보기 →</a></div></div>`;
+}
 async function loadNews() {
-  if (!NEWS) {
-    try { NEWS = await (await fetch("data/news.json?t=" + Date.now(), { cache: "no-store" })).json(); }
-    catch (e) { $("#newsCards").innerHTML = `<div class="empty">뉴스를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
-  }
+  try { await newsGet(); }
+  catch (e) { $("#newsCards").innerHTML = `<div class="empty">뉴스를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
   const nNew = (r) => ["own", "rivals", "en"].reduce((a, k) => a + (r[k] || []).filter((x) => x.new).length, 0);
   const grps = ["전체", ...new Set(NEWS.stocks.flatMap((r) => [r.group, ...(r.also || [])])), "🆕 새 기사"];
   $("#newsIntro").innerHTML = `${NEWS.stocks.length}개 종목 · 갱신 ${esc(NEWS.updated_at)} · 🆕 = 지난 갱신 뒤 새 기사 · 같은 기사를 여러 언론사가 쓰면 하나로 묶어 '외 N곳'<br><span class="src">${esc(NEWS.source)}</span>`;
   $("#newsGrp").innerHTML = grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === NEWS_GRP ? "on" : ""}">${esc(g)}</button>`).join("");
-  const list = NEWS.stocks.filter((r) => NEWS_GRP === "전체" || r.group === NEWS_GRP || (r.also || []).includes(NEWS_GRP) || (NEWS_GRP === "🆕 새 기사" && nNew(r)));
-  $("#newsCards").innerHTML = list.map((r) => newsCard(r, nNew(r))).join("") || `<div class="empty">새 기사가 없어요.</div>`;
+  const list = NEWS_CODE ? NEWS.stocks.filter((r) => r.code === NEWS_CODE)
+    : NEWS.stocks.filter((r) => NEWS_GRP === "전체" || r.group === NEWS_GRP || (r.also || []).includes(NEWS_GRP) || (NEWS_GRP === "🆕 새 기사" && nNew(r)));
+  $("#newsCards").innerHTML = (NEWS_CODE ? `<div class="note" style="grid-column:1/-1"><a href="#news">← 전체 종목 뉴스</a></div>` : "") + (list.map((r) => newsCard(r, nNew(r))).join("") || `<div class="empty">새 기사가 없어요.</div>`);
 }
 function newsList(xs, showK) {
   const li = (x) => `<li><a href="${esc(x.u)}" target="_blank" rel="noopener">${x.new ? '<span class="pill green">🆕</span> ' : ""}${esc(x.t)}</a>
@@ -3235,6 +3251,7 @@ function newsCard(r, nNew) {
   return `<div class="card">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:17px">${esc(r.name)}</b>
       <span class="src">${esc(r.group)}${nNew ? ` · 🆕 ${nNew}건` : ""} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>
+    ${(r.issues || []).length ? `<ul class="irl">${r.issues.map((x) => `<li>${x.d ? `<span class="src">${esc(x.d)}</span> ` : ""}<b>${esc(x.t || x)}</b></li>`).join("")}</ul>` : ""}
     ${r.pins.length ? `<ul class="news">${r.pins.map(pin).join("")}</ul>` : ""}
     <div class="news-h">📰 내 종목</div>${newsList(r.own)}
     ${r.rival_terms.length ? `<div class="news-h">⚔️ 경쟁사 <span class="src">${esc(r.rival_terms.join(" · "))}</span></div>${newsList(r.rivals, true)}` : ""}
