@@ -2691,7 +2691,7 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
-    const issueHtml = (await issuesBlock(code)) + (await repBlock(code));
+    const issueHtml = (await issuesBlock(code)) + (await repBlock(code)) + (await keyBlock(code));
     $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
@@ -3152,8 +3152,90 @@ async function loadIndustry() {
   if (!BOARD) { try { BOARD = await (await fetch("data/board.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { BOARD = {}; } }
   if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
   if (!DEF) { try { DEF = await (await fetch("data/defense.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { DEF = {}; } }
-  $("#industryBody").innerHTML = boardHTML() + scanHTML() + capexHTML() + defenseHTML() + amzHTML();
+  await keyLoad();
+  $("#industryBody").innerHTML = boardHTML() + scanHTML() + capexHTML() + keyIndHTML() + defenseHTML() + amzHTML();
   drawAmz();
+}
+// 🔑 키팩터 · 키차트 (config/keychart.yaml): 업종 묶음 = 산업 탭 + 그 업종 종목 상세, 종목 묶음 = 그 종목 상세
+let KEYC = null;
+async function keyLoad() {
+  if (!KEYC) { try { KEYC = await (await fetch("data/keychart.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { KEYC = {}; } }
+  return KEYC;
+}
+// 그림: 쌓은 막대(bars) · 같은 단위 선(lines) · 위쪽 띠의 % 선(pct). 억원이 1조를 넘으면 조원, 칸이 많으면 연도는 1Q 에만
+function keyChart(ch) {
+  const L = ch.q || [], N = L.length, W = 320, x0 = 12, bw = (W - 2 * x0) / N, X = (i) => x0 + bw * i + bw / 2;
+  const bars = ch.bars || [], lines = ch.lines || [], tot = L.map((_, i) => bars.reduce((a, s) => a + (s.v[i] || 0), 0));
+  const all = [...(bars.length ? tot : []), ...lines.flatMap((s) => s.v)].filter((v) => v != null);
+  if (N < 2 || !all.length) return "";
+  const jo = ch.u === "억원" && Math.max(...all) >= 1e4, dv = jo ? 1e4 : 1, un = jo ? "조원" : ch.u || "", V = (v) => n(v / dv, jo ? 1 : 0);
+  const top = ch.pct ? 72 : 24, bot = 146, hi = Math.max(...all) * 1.08, Y = (v) => bot - (v / hi) * (bot - top);
+  const BC = ["var(--muted)", "var(--s1)", "var(--s3)", "var(--s4)"];
+  let g = `<line x1="${x0}" x2="${W - x0}" y1="${bot}" y2="${bot}" stroke="var(--axis)"/>`;
+  L.forEach((q, i) => {
+    g += `<text x="${X(i)}" y="${bot + 15}" text-anchor="middle" class="qx">${esc(N <= 8 || i === 0 || q.startsWith("1Q") ? q : q.slice(0, 2))}</text>`;
+    if (!bars.length) return;
+    let acc = 0;
+    bars.forEach((s, si) => { const v = s.v[i]; if (!v) return; g += `<rect x="${X(i) - bw * 0.32}" y="${Y(acc + v)}" width="${bw * 0.64}" height="${Math.max(1, Y(acc) - Y(acc + v))}" fill="${BC[si % 4]}" opacity=".8"/>`; acc += v; });
+    g += `<text x="${X(i)}" y="${Y(tot[i]) - 4}" text-anchor="middle" class="qv${i === N - 1 ? " b" : ""}">${V(tot[i])}</text>`;
+  });
+  const ends = [];  // 선은 끝 숫자만 (겹치면 아래로 밀기)
+  lines.forEach((s, si) => {
+    const col = KPI_COL[si % 4], pts = s.v.map((v, i) => [i, v]).filter(([, v]) => v != null);
+    g += `<path d="${pts.map(([i, v], j) => `${j ? "L" : "M"}${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round"/>`
+      + pts.map(([i, v]) => `<circle cx="${X(i)}" cy="${Y(v)}" r="3" fill="var(--surface)" stroke="${col}" stroke-width="2"/>`).join("");
+    const [i, v] = pts.at(-1);
+    ends.push([X(i), Y(v) - 9, v, col]);
+  });
+  ends.sort((a, b) => a[1] - b[1]).forEach((e, i, a) => { if (i && e[1] - a[i - 1][1] < 14) e[1] = a[i - 1][1] + 14; });
+  ends.forEach(([x, y, v, col]) => { g += `<text x="${x - 4}" y="${y}" text-anchor="end" class="qv b" style="fill:${col};paint-order:stroke;stroke:var(--surface);stroke-width:3px">${V(v)}</text>`; });
+  if (ch.pct) {  // % 선은 막대 위쪽 띠에 따로 (숫자는 칸마다)
+    const pv = ch.pct.v, lv = pv.filter((v) => v != null), lh = Math.max(...lv), ll = Math.min(...lv), PY = (v) => 56 - ((v - ll) / ((lh - ll) || 1)) * 34;
+    g += `<polyline points="${pv.map((v, i) => (v == null ? "" : `${X(i)},${PY(v)}`)).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`
+      + pv.map((v, i) => (v == null ? "" : `<circle cx="${X(i)}" cy="${PY(v)}" r="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${X(i)}" y="${PY(v) - 7}" text-anchor="middle" class="qv${i === pv.length - 1 ? " b" : ""}"${v < 0 || v < lh / 4 ? ' style="fill:var(--bad-ink)"' : ""}>${n(v, 0)}%</text>`)).join("");
+  }
+  const leg = [...bars.map((s, si) => `<span style="color:${BC[si % 4]}">■</span> ${esc(s.n)}`), ...lines.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`),
+    ...(ch.pct ? [`● ${esc(ch.pct.n)}`] : [])].join(" · ");
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)} <span class="src">${esc(un)}</span></b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}
+    <svg viewBox="0 0 ${W} 166" role="img" aria-label="${esc(ch.t)}">${g}</svg><div class="src" style="padding:0 4px 4px">${leg}${ch.note ? `<br>${esc(ch.note)}` : ""}</div></div>`;
+}
+// 이익 변동 요인 (from → 요인들 → to): 막대 길이 = 크기, 빨강 = 줄인 요인
+function keyWf(w) {
+  const mx = Math.max(w.from[1], w.to[1], ...w.steps.map((s) => Math.abs(s[1]))) || 1;
+  const row = (name, v, col, sign) => `<tr><td style="text-align:left">${esc(name)}</td><td style="text-align:left"><span class="cbar"><i style="width:${Math.max(2, (Math.abs(v) / mx) * 120)}px;background:${col}"></i>${sign && v > 0 ? "+" : ""}${n(v, 0)}</span></td></tr>`;
+  return `<div class="qp"><div class="qt"><b>${esc(w.t)} <span class="src">억원 · 대략</span></b></div><table class="compact" style="width:100%">
+    ${row(w.from[0], w.from[1], "var(--muted)")}${w.steps.map(([k, v]) => row(k, v, v < 0 ? "var(--bad)" : "var(--good)", true)).join("")}${row(w.to[0], w.to[1], "var(--s1)")}</table></div>`;
+}
+// 📍 기준일(발표 전일 등) 대비 지금 주가와 그 뒤 가장 낮았던 종가 — 예전 같은 일(then)과 나란히
+function keyTrack(t) {
+  const c = t && DASH.stocks.find((x) => x.code === t.code);
+  if (!c) return "";
+  const ch = c.chart || {}, i = (ch.dates || []).findIndex((d) => d > t.d), after = i < 0 ? [] : ch.close.slice(i).filter((v) => v != null);
+  const r = (v) => pct((v / t.p - 1) * 100, 1, true);
+  return `<div class="note">📍 <b>${esc(c.name)} 주가</b>: ${esc(t.n)}(${esc(t.d.slice(5).replace("-", "/"))}) ${n(t.p, 0)}원 대비 지금 <b>${r(c.price)}</b>${after.length ? ` · 그 뒤 가장 낮은 종가 ${r(Math.min(...after))}` : ""}${t.then ? ` <span class="src">(예전 ${esc(t.then)})</span>` : ""}</div>`;
+}
+function keyCard(c, open) {
+  const li = (x) => `<li>${esc(x)}</li>`;
+  return `<details class="card" style="margin-top:8px;background:var(--surface-2)"${open ? " open" : ""}><summary><b>📌 ${esc(c.t)}</b> <span class="src">${esc(c.d || "")}</span></summary>
+    <div class="qgrid" style="margin-top:6px">${(c.charts || []).map(keyChart).join("")}${(c.wf || []).map(keyWf).join("")}</div>
+    ${(c.lines || []).length ? `<ul class="irl">${c.lines.map(li).join("")}</ul>` : ""}${keyTrack(c.track)}
+    ${(c.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>변곡점 체크</b><ul class="irl">${c.turn.map(li).join("")}</ul></div>` : ""}
+    <div class="note src">출처: ${esc(c.src || "")}${(c.u || []).map((x) => ` · <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>`).join("")}</div></details>`;
+}
+// 묶음 하나: 키팩터 한 줄 + 변곡점 체크 + 카드들 (code = 지금 보는 종목 → 그 종목이 주인공인 카드만 펼침, 산업 탭은 모두 펼침)
+function keyGroup(name, g, code) {
+  return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}
+    ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    ${(g.cards || []).map((c) => keyCard(c, !code || c.code === code)).join("")}</div>`;
+}
+function keyIndHTML() {
+  const I = Object.entries(KEYC?.industry || {});
+  return I.length ? `<h2>🔑 키팩터 · 키차트 <span class="src">업종마다 주가를 움직이는 숫자와 변곡점에서 볼 것 · 증권사 그림은 숫자로 다시 그림 · 매수·매도 추천 아님</span></h2>${I.map(([k, g]) => keyGroup(k, g)).join("")}` : "";
+}
+async function keyBlock(code) {
+  const K = await keyLoad(), c = DASH.stocks.find((x) => x.code === code), ind = c?.industry || "";
+  const gs = [...Object.entries(K.industry || {}).filter(([k]) => ind.includes(k)), ...(K.stock?.[code] ? [[c?.name || code, K.stock[code]]] : [])];
+  return gs.length ? `<h3>🔑 키팩터 · 키차트 <span class="src">주가를 움직이는 숫자 · 변곡점 체크 (산업 탭에도 있어요)</span></h3>${gs.map(([k, g]) => keyGroup(k, g, code)).join("")}` : "";
 }
 // 🛡 방산 (config/defense.yaml): 지정학 연표(사실) + 글쓴이 가설 + 우리 방산 종목 숫자 (stocks.yaml industry 에 '방산')
 let DEF = null;
