@@ -1212,12 +1212,12 @@ function lineChart(o) {
     if (N <= 24) s.v.forEach((v, i) => { if (v != null) g += `<circle cx="${X(i)}" cy="${Y(side, v)}" r="2" fill="${s.col}"/>`; });
     const li = s.v.map((v, i) => (v != null ? i : -1)).filter((i) => i >= 0).pop();
     if (li != null) { g += `<circle cx="${X(li)}" cy="${Y(side, s.v[li])}" r="3.2" fill="var(--surface)" stroke="${s.col}" stroke-width="2"/>`; ends.push([X(li), Y(side, s.v[li]), (side ? fr : fl)(s.v[li]), s.col]); }
+    s.last = li == null ? null : [(side ? fr : fl)(s.v[li]), li];
   });
-  // 끝 숫자: 점 왼쪽 위에, 선끼리 가까우면 13 씩 벌림 (동그라미·다른 숫자와 안 겹치게)
-  ends.forEach((e) => { e[1] = Math.max(top + 4, e[1] - 7); });
-  ends.sort((a, b) => a[1] - b[1]).forEach((e, i, a) => { if (i && e[1] - a[i - 1][1] < 13) e[1] = a[i - 1][1] + 13; });
-  ends.forEach(([x, y, t, col]) => { g += `<text x="${Math.min(x, x1) - 6}" y="${y}" text-anchor="end" class="qv b" style="fill:${col};paint-order:stroke;stroke:var(--surface);stroke-width:3px">${esc(t)}</text>`; });
-  const leg = S.length > 1 ? `<div class="src" style="padding:0 4px 4px">${S.map((s) => `<span style="color:${s.col}">${s.bar ? "■" : "●"}</span> ${esc(s.n)}${hasR ? (s.right ? " (오른쪽)" : " (왼쪽)") : ""}`).join(" · ")}</div>` : "";
+  // 끝 숫자: 선이 하나면 점 왼쪽 위에, 여러 개면 그림 대신 아래 범례에 (선끼리 숫자가 겹치지 않게)
+  if (ends.length === 1) { const [x, y, t, col] = ends[0]; g += `<text x="${Math.min(x, x1) - 6}" y="${Math.max(top + 4, y - 7)}" text-anchor="end" class="qv b" style="fill:${col};paint-order:stroke;stroke:var(--surface);stroke-width:3px">${esc(t)}</text>`; }
+  const lastQ = (i) => (i === N - 1 ? "" : ` <span style="opacity:.7">(${esc(/^\d\d\.\dQ$/.test(Lb[i]) ? `${Lb[i][3]}Q${Lb[i].slice(0, 2)}` : Lb[i])})</span>`);  // 다른 선보다 일찍 끝나면 그 분기
+  const leg = S.length > 1 ? `<div class="src" style="padding:0 4px 4px">${S.map((s) => `<span style="color:${s.col}">${s.bar ? "■" : "●"}</span> ${esc(s.n)}${hasR ? (s.right ? " (오른쪽)" : " (왼쪽)") : ""}${ends.length > 1 && s.last ? ` <b style="color:${s.col}">${esc(s.last[0])}</b>${lastQ(s.last[1])}` : ""}`).join(" · ")}</div>` : "";
   return `<div class="qp"><div class="qt"><b>${esc(o.t)}</b>${o.tag || ""}</div>${o.why ? `<div class="src">${esc(o.why)}</div>` : ""}<svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(o.t)}">${g}</svg>${leg}</div>`;
 }
 const qAgo = (k) => `${String(+k.slice(0, 2) - 1).padStart(2, "0")}${k.slice(2)}`;  // '26.3Q' → '25.3Q'
