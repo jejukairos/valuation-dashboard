@@ -928,31 +928,35 @@ function kqBars(title, qs, f, est, color, cur, opt = {}) {  // opt.tag = 제목 
   const step = p * (raw / p <= 1 ? 1 : raw / p <= 2 ? 2 : raw / p <= 5 ? 5 : 10);  // 눈금 간격 (1·2·5 단위)
   const hi = Math.ceil((hi0 * 1.08) / step) * step || step, lo = lo0 < 0 ? Math.floor((lo0 * 1.3) / step) * step : 0;  // 음수 막대 아래 숫자 자리
   const top = 30, bot = 150, sc = (bot - top) / (hi - lo), Y = (v) => bot - (v - lo) * sc, zero = Y(0);
+  // 막대 위 숫자는 단위 없이 짧게 (단위는 제목 옆) — 휴대폰에서 옆 칸 숫자와 안 겹치게
+  const big = Math.max(1, ...vals.map(Math.abs));
+  const [div, unit, dg] = f === "eps" ? [1, cur === "USD" ? "$" : "원", cur === "USD" ? 2 : 0] : cur === "USD" ? [1e9, "$B", 1] : big >= 1e4 ? [1e4, "조원", 1] : [1, "억원", 0];
+  const SV = (v) => n(v / div, dg);
   let g = "";
   for (let t = lo; t <= hi + step / 2; t += step) g += `<line x1="${x0}" x2="${x1}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)"/><text x="${x0 - 4}" y="${Y(t) + 3}" text-anchor="end" class="qx">${F(t)}</text>`;
   g += `<line x1="${x0}" x2="${x1}" y1="${zero}" y2="${zero}" stroke="var(--axis)"/>`;
   const bar = (cx, w, v, fill) => { const y = v >= 0 ? Y(v) : zero; return `<rect x="${cx - w / 2}" y="${y}" width="${w}" height="${Math.max(1, Math.abs(Y(v) - zero))}" rx="2" fill="${v < 0 ? "var(--bad)" : fill}"/>`; };
-  const lab = (cx, y, v, cls, fill) => `<text x="${cx}" y="${y}" text-anchor="middle" class="${cls}"${fill ? ` style="fill:${fill}"` : ""}>${F(v)}</text>`;
+  const lab = (cx, y, v, cls, fill) => `<text x="${cx}" y="${y}" text-anchor="middle" class="${cls}"${fill ? ` style="fill:${fill}"` : ""}>${SV(v)}</text>`;
   const ly = (v) => (v >= 0 ? Y(v) - 4 : zero + Math.abs(Y(v) - zero) + 11);
   const li = qs.map((q) => !q.est).lastIndexOf(true);  // 연간 보기: 추정 연도(E)는 회색, 마지막 실적 연도를 색으로
   qs.forEach((q, i) => {
     const cx = x0 + bw * i + bw / 2, last = i === li;
     g += `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(q.q)}</text>`;
     if (q[f] == null) {  // 실적이 아직 없는 칸 (잠정실적엔 EPS 가 없음): 예상만 회색으로, 실적 자리는 비워 둠
-      if (last && ev != null) g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--axis)") + lab(cx - bw * 0.21, ly(ev), ev, "qv", "var(--muted)");
+      if (last && ev != null) g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--axis)") + lab(cx, ly(ev), ev, "qv", "var(--muted)");
       return;
     }
     if (q.est) { g += bar(cx, bw * 0.5, q[f], "var(--axis)") + lab(cx, ly(q[f]), q[f], "qv", "var(--muted)"); return; }
-    if (last && ev != null) {  // 예상(회색) vs 실적(색) 나란히 — 숫자가 겹치면 높은 쪽 글자를 한 줄 위로
+    if (last && ev != null) {  // 예상(회색) vs 실적(색) 막대 나란히 — 숫자는 칸 가운데에 위아래로 (옆 칸과 안 겹치게)
       let ye = ly(ev), ya = ly(q[f]);
-      if (Math.abs(ye - ya) < 11) { if (ya <= ye) ya = ye - 11; else ye = ya - 11; }
+      if (Math.abs(ye - ya) < 12) { if (ya <= ye) ya = ye - 12; else ye = ya - 12; }
       g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--axis)") + bar(cx + bw * 0.21, bw * 0.38, q[f], color)
-        + lab(cx - bw * 0.21, ye, ev, "qv", "var(--muted)") + lab(cx + bw * 0.21, ya, q[f], "qv b", color);
+        + lab(cx, ye, ev, "qv", "var(--muted)") + lab(cx, ya, q[f], "qv b", color);
     } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? (q[f] < 0 ? "var(--bad)" : color) : null);
   });
   const s = ev != null && ev > 0 && qs[li]?.[f] != null ? (qs[li][f] / ev - 1) * 100 : null;  // 마지막 실적 분기 (뒤에 예상 E 가 붙어도)
   const tag = s == null ? "" : `<span class="qtag${s < 0 ? " bad" : ""}">예상대비 ${s >= 0 ? "+" : ""}${n(s, 1)}%</span>`;
-  return `<div class="qp"><div class="qt"><b>${title}</b>${tag || opt.tag || ""}</div>${opt.sub ? `<div class="src">${opt.sub}</div>` : ""}<svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg>
+  return `<div class="qp"><div class="qt"><b>${title} <span class="src">${unit}</span></b>${tag || opt.tag || ""}</div>${opt.sub ? `<div class="src">${opt.sub}</div>` : ""}<svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg>
     ${ev != null || qs.some((q) => q.est) ? `<div class="src" style="text-align:right;padding:0 4px 4px"><span style="color:var(--axis)">■</span> ${ev != null ? "예상(컨센서스)" : "추정(E)"} · <span style="color:${color}">■</span> 실적</div>` : ""}</div>`;
 }
 // 분기 / 연간 실적 막대 — 한국은 영업이익을 맨 앞에 (연간 = 와이즈리포트 연간 실적 + 추정 E)
@@ -1192,7 +1196,7 @@ function lineChart(o) {
     if (hasR && R.true) g += `<text x="${x1 + 3}" y="${y + 3}" class="qx">${esc(fr(R.true[0] + t * (R.true[1] - R.true[0])))}</text>`;
   });
   [false, true].forEach((side) => { const r = R[side]; if (r && r[0] < 0 && r[1] > 0 && (!side || !R.false || R.false[0] >= 0)) g += `<line x1="${x0}" x2="${x1}" y1="${Y(side, 0)}" y2="${Y(side, 0)}" stroke="var(--axis)"/>`; });
-  const every = N > 48 ? 3 : N > 28 ? 2 : 1, tick = o.tick || ((i) => (/\.1Q$/.test(Lb[i]) && +Lb[i].slice(0, 2) % every === 0 ? `'${Lb[i].slice(0, 2)}` : ""));
+  const tick = o.tick || ((i) => shortQ(i, Lb));
   Lb.forEach((_, i) => { const t = tick(i); if (t) g += `<text x="${X(i)}" y="${bot + 13}" text-anchor="middle" class="qx">${esc(t)}</text>`; });
   bars.forEach((s, j) => s.v.forEach((v, i) => {
     if (v == null) return;
@@ -1209,8 +1213,10 @@ function lineChart(o) {
     const li = s.v.map((v, i) => (v != null ? i : -1)).filter((i) => i >= 0).pop();
     if (li != null) { g += `<circle cx="${X(li)}" cy="${Y(side, s.v[li])}" r="3.2" fill="var(--surface)" stroke="${s.col}" stroke-width="2"/>`; ends.push([X(li), Y(side, s.v[li]), (side ? fr : fl)(s.v[li]), s.col]); }
   });
-  ends.sort((a, b) => a[1] - b[1]).forEach((e, i, a) => { if (i && e[1] - a[i - 1][1] < 12) e[1] = a[i - 1][1] + 12; });
-  ends.forEach(([x, y, t, col]) => { g += `<text x="${Math.min(x, x1 - 2)}" y="${Math.max(top, y - 6)}" text-anchor="end" class="qv b" style="fill:${col};paint-order:stroke;stroke:var(--surface);stroke-width:3px">${esc(t)}</text>`; });
+  // 끝 숫자: 점 왼쪽 위에, 선끼리 가까우면 13 씩 벌림 (동그라미·다른 숫자와 안 겹치게)
+  ends.forEach((e) => { e[1] = Math.max(top + 4, e[1] - 7); });
+  ends.sort((a, b) => a[1] - b[1]).forEach((e, i, a) => { if (i && e[1] - a[i - 1][1] < 13) e[1] = a[i - 1][1] + 13; });
+  ends.forEach(([x, y, t, col]) => { g += `<text x="${Math.min(x, x1) - 6}" y="${y}" text-anchor="end" class="qv b" style="fill:${col};paint-order:stroke;stroke:var(--surface);stroke-width:3px">${esc(t)}</text>`; });
   const leg = S.length > 1 ? `<div class="src" style="padding:0 4px 4px">${S.map((s) => `<span style="color:${s.col}">${s.bar ? "■" : "●"}</span> ${esc(s.n)}${hasR ? (s.right ? " (오른쪽)" : " (왼쪽)") : ""}`).join(" · ")}</div>` : "";
   return `<div class="qp"><div class="qt"><b>${esc(o.t)}</b>${o.tag || ""}</div>${o.why ? `<div class="src">${esc(o.why)}</div>` : ""}<svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(o.t)}">${g}</svg>${leg}</div>`;
 }
@@ -1268,7 +1274,13 @@ document.addEventListener("click", (e) => {
 const CMP_COL = { "000660": "var(--warn)", SK하이닉스: "var(--warn)", "005930": "var(--s1)", 삼성전자: "var(--s1)", "삼성전자 DS": "var(--s1)", MU: "var(--good)", 마이크론: "var(--good)", 샌디스크: "var(--good)",
   MSFT: "var(--s1)", GOOG: "var(--bad)", META: "var(--s3)", AMZN: "var(--warn)", ORCL: "var(--s4)" };
 const cmpName = (c) => DASH?.stocks?.find((s) => s.code === c)?.name || { MU: "마이크론", ORCL: "오라클", AMZN: "아마존" }[c] || c;
-const shortQ = (i, L) => (L.length <= 12 ? `${L[i].slice(3, 4)}Q${L[i].slice(0, 2)}` : /\.1Q$/.test(L[i]) && +L[i].slice(0, 2) % (L.length > 48 ? 3 : L.length > 28 ? 2 : 1) === 0 ? `'${L[i].slice(0, 2)}` : "");
+// 분기 눈금 ('26.3Q' 라벨): 8칸 이하 = 분기마다 '3Q26', 16칸 이하 = 1·3분기, 그보다 길면 해마다 '25 (12년 넘으면 2년마다)
+const shortQ = (i, L) => {
+  const q = L[i], N = L.length;
+  if (!/^\d\d\.\dQ$/.test(q || "")) return "";
+  const y = q.slice(0, 2), k = +q[3];
+  return N <= 8 ? `${k}Q${y}` : N <= 16 ? (k % 2 ? `${k}Q${y}` : "") : k === 1 && +y % (N > 48 ? 2 : 1) === 0 ? `'${y}` : "";
+};
 // 시가총액(달러, 주봉): 지금 주식 수 × 주봉 종가 (한국은 그 주 원/달러로 나눔)
 function mcapChart(D, span) {
   const M = D.mcap || {}, codes = (D.cfg?.mcap || []).filter((c) => M[c]);

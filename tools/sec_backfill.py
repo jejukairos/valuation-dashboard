@@ -93,6 +93,9 @@ def av_pull(inc, cf):
                 v = num(r, src)
                 if v is not None:
                     out.setdefault(e, {})[k] = round(abs(v) if k == "capex" else v)
+    for row in out.values():  # 매출총이익이 영업이익보다 작으면 잘못 들어온 값 (예: 아마존 2016년 4분기 -189억$) → 버림
+        if row.get("gp") is not None and row.get("op") is not None and row["gp"] < row["op"]:
+            del row["gp"]
     return out
 
 
@@ -165,6 +168,8 @@ if __name__ == "__main__":
                                           {"fiscalDateEnding": "2013-12-31", "totalRevenue": "1"}]},
                     {"quarterlyReports": [{"fiscalDateEnding": "2026-09-30", "operatingCashflow": "4025000000", "capitalExpenditures": "-486000000"}]})
         assert a == {"2026-09-30": {"rev": 17103, "op": 2880, "ocf": 4025, "capex": 486}}, a
+        b = av_pull({"quarterlyReports": [{"fiscalDateEnding": "2016-12-31", "totalRevenue": "43741000000", "operatingIncome": "1255000000", "grossProfit": "-18922000000"}]}, {})
+        assert b == {"2016-12-31": {"rev": 43741, "op": 1255}}, b
         print("ok")
     else:
         main()
