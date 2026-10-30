@@ -818,7 +818,8 @@ function qSankey(q, usd, prev, segs) {
   const rev = q.rev, cogs = q.cogs ?? (q.gp != null ? rev - q.gp : null), gp = q.gp ?? (cogs != null ? rev - cogs : rev);
   const opex = q.opex ?? gp - q.op;
   const pos = (v) => (v != null && v > 0 ? v : 0);
-  let items = [["연구개발", pos(q.rnd), "rnd"], ["판매·마케팅", pos(q.sm), "sm"], ["관리", pos(q.ga), "ga"]];
+  // 아마존처럼 물류(풀필먼트)·기술·인프라를 따로 내는 회사는 kpi.yaml qtr_add 의 ful·tni 로
+  let items = [["물류(풀필먼트)", pos(q.ful), "ful"], ["기술·인프라", pos(q.tni), "tni"], ["연구개발", q.tni ? 0 : pos(q.rnd), "rnd"], ["판매·마케팅", pos(q.sm), "sm"], ["관리", pos(q.ga), "ga"]];
   if (!items.some(([, v]) => v) && q.sga) items = [["판매·관리", pos(q.sga), "sga"]];
   const known = items.reduce((a, [, v]) => a + v, 0);
   if (opex - known > opex * 0.02) items.push(["기타 영업비용", opex - known, null]);

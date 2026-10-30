@@ -328,9 +328,11 @@ def stock_detail(h, rates_now, fx):
             QTRS[tkr] = score.quarters(tkr, QTRS.get(tkr))
         except Exception as e:  # noqa: BLE001
             REPORT.block("야후 분기 실적", f"{name}: {str(e)[:60]}")
-        # 야후에 아직 없는 최신 분기 손익은 kpi.yaml qtr_add (보도자료, 미국 백만 달러 · 한국 억원). 야후가 그 분기를 주면 야후 값이 덮어씀
+        # 야후에 아직 없는 최신 분기 손익은 kpi.yaml qtr_add (보도자료, 미국 백만 달러 · 한국 억원). 야후가 주는 칸은 야후 값, 빈 칸만 채움
         for e, v in ((KPI_CFG.get(fcode) or {}).get("qtr_add") or {}).items():
-            QTRS.setdefault(tkr, {}).setdefault(str(e), {k: x * (1e6 if mkt == "US" else 1e8) for k, x in v.items()})
+            row = QTRS.setdefault(tkr, {}).setdefault(str(e), {})
+            for k, x in v.items():
+                row.setdefault(k, x * (1e6 if mkt == "US" else 1e8))
     if tbl is not None and tkr and not h.get("data_code"):  # 순현금 (우선주는 회사 전체 값이라 뺌)
         try:
             nc = table.net_cash(tkr, now.get("market_cap"))
