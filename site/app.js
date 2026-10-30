@@ -797,7 +797,7 @@ function segDonut(ps, col, seg) {
 }
 // 부문별 매출 비중 추이 (100% 막대)
 function segStack(ps, col) {
-  const P = ps.slice(-5), W = 300, x0 = 14, bw = (W - 2 * x0) / P.length, top = 14, bot = 150;
+  const P = ps.slice(-6), W = 300, x0 = 14, bw = (W - 2 * x0) / P.length, top = 14, bot = 150;
   let g = "";
   P.forEach(([k, sh], i) => {
     const cx = x0 + bw * i + bw / 2, w = Math.min(bw * 0.62, 60);
@@ -813,6 +813,19 @@ function segStack(ps, col) {
   const a = P[0][1], b = P.at(-1)[1], up = Object.keys(b).map((s) => [s, b[s] - (a[s] || 0)]).sort((x, y) => y[1] - x[1])[0];
   const tag = up && up[1] >= 1 ? `${cut(up[0], 8)} 비중 +${n(up[1], 0)}%p` : "";
   return `<div class="qp"><div class="qt"><b>부문별 매출 비중 추이</b>${qTag(tag)}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="부문별 매출 비중 추이">${g}</svg></div>`;
+}
+// 🧩 제품·부문별 매출: 이번 분기 비중(도넛) · 분기별 비중(100% 막대) · 제품별 성장률(YoY 선) — 금액은 config/segments.yaml, 없으면 와이즈리포트 비중
+const segQ = (e) => { const [y, m] = e.split("-"); return +m % 3 ? `${y.slice(2)}.${m}월` : qLabel(e); };  // 비중 추이와 같은 이름, 7월·10월 결산도 순서대로 (25.07월)
+function segBlock(d) {
+  const ps = segPeriods(d.seg);
+  if (!ps.length) return "";
+  const col = segColors(ps), last = ps.at(-1)[1];
+  const yo = ps.map(([k, , a]) => [k, a, segAgo(ps, k)?.[2]]).filter(([, a, p]) => a && p);  // 1년 전 같은 분기 금액이 있는 분기
+  const top = Object.keys(col).filter((s) => last[s] >= 3).slice(0, 4);  // 비중 3% 넘는 큰 제품 4개까지 (작은 건 성장률이 널뛰어서)
+  const grow = yo.length >= 2 ? kpiChart({ t: "제품·부문별 성장률 (YoY)", u: "%", col: top.map((s) => col[s]),
+    s: top.map((s) => ({ n: s, v: Object.fromEntries(yo.filter(([, a, p]) => p[s] > 0 && a[s] != null).map(([k, a, p]) => [segQ(k), (a[s] / p[s] - 1) * 100])) })) }) : "";
+  return `<h3>🧩 제품·부문별 매출 <span class="src">${esc(d.seg.src || "")}</span></h3><div class="card"><div class="qgrid">${segDonut(ps, col, d.seg)}${ps.length > 1 ? segStack(ps, col) : ""}${grow}</div>
+    ${ps.length < 2 ? `<div class="note src">보고서가 나올 때마다 한 칸씩 쌓여 비중 변화가 그려져요</div>` : ""}</div>`;
 }
 // [부문별 매출 →] 매출 → 매출원가 / 매출총이익 → 영업비용(연구개발·판매·관리·기타) / 영업이익
 // prev = 1년 전 같은 분기 (YoY·마진 %p), segs = [[부문, 금액, YoY, 색, 비중%, 추정?], …]
@@ -1066,6 +1079,7 @@ function renderTop() {
   $("#easyNews").innerHTML = easyNewsHTML();
   $("#kqNews").innerHTML = kqNewsHTML();
   $("#estAlert").innerHTML = estAlertHTML();
+  $("#patAlert").innerHTML = patAlertHTML();
   $("#irCal").innerHTML = irCalHTML();
   $("#bigTech").innerHTML = bigTechHTML();
 }
@@ -1154,10 +1168,8 @@ function qtrHTML(d, mode = "q", inKq = false) {  // mode: q = 분기, y = 연간
       ${inKq ? "" : qPanel("매출 & 성장률 (1년 전 대비)", tRev, labels, rev, yoy.some((v) => v != null) ? yoy : null, usd, "var(--ink-2)")}
       ${inKq ? "" : qPanel("영업이익 & 영업이익률", tOp, labels, op, opm, usd, "var(--good)")}
       ${gpv.filter((v) => v != null).length >= 2 ? qPanel("매출총이익 & 매출총이익률", tG, labels, gpv, gpm, usd, "var(--s3)") : ""}
-      ${!yr && ps.length ? segDonut(ps, col, d.seg) : ""}
       ${inKq ? "" : qPanel("잉여현금흐름 (FCF)", tF, labels, fcf, null, usd, "var(--good)")}
       ${qPanel("설비투자 (CapEx)", tC, labels, capex, null, usd, "var(--warn)")}
-      ${!yr && ps.length > 1 ? segStack(ps, col) : ""}
     </div>
     <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 얼마 벌어서 어디에 썼나</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 → 순이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
     ${qSankey(last[1], usd, getQ(last[0]), segs)}
@@ -2778,9 +2790,9 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
-    const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + (await keyBlock(code));
+    const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + capexHtml + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
@@ -3455,6 +3467,42 @@ function estAlertHTML() {  // 첫 화면: 방향 개수 + 변곡점 종목만
   return `<div class="card" style="margin-bottom:12px"><b>📈 이익 추정치 방향</b> <span class="src">증권사 예상 이익이 올라가면 기대감·수급이 따라올 수 있어요 · 매일 갱신 · 참고용</span>
     <div style="margin-top:4px">${Object.keys(EST_ORD).map((s) => `${s} <b>${cnt(s)}</b>`).join(" · ")} · <a href="#reports">리포트 탭 방향판 →</a></div>
     ${turn.length ? `<ul class="irl">${turn.map((c) => `<li><a href="#stock/${esc(c.code)}">${esc(c.name)}</a> <b>${esc(c.est.sig)}</b> — ${esc(c.est.y)}년 ${esc(c.est.what)} 예상 1주 ${estP(c.est["1주"])} · 1개월 ${estP(c.est["1개월"])}</li>`).join("")}</ul>` : ""}</div>`;
+}
+/* ---------- 📐 주봉 차트 모양 (collector/patterns.py → stocks/{코드}.json pattern · 카드 pat) — 조건에 맞는 모양만 알려 줌, 매수·매도 판단 아님 ---------- */
+const PAT = { cup: ["☕", "컵위드핸들"], hi: ["📐", "하락 추세선 돌파"], lo: ["📉", "추세 아래선 이탈"], brk: ["🚀", "전고점 돌파"], test: ["🧪", "전고점 지지 시험"], lost: ["⚠", "전고점 아래로"] };
+const patLi = (s) => `${PAT[s.k]?.[0] || ""} <b>${esc(s.t)}</b> <span class="src">${esc(s.d)}</span>`;
+function patAlertHTML() {  // 첫 화면: 모양이 맞는 종목 (종류별 개수 + 목록)
+  const ord = Object.keys(PAT), L = (DASH?.stocks || []).filter((c) => c.pat?.length && mktOf(c.code) === MKT)
+    .sort((a, b) => Math.min(...a.pat.map((s) => ord.indexOf(s.k))) - Math.min(...b.pat.map((s) => ord.indexOf(s.k))));  // 컵·추세선 돌파가 위로
+  if (!L.length) return "";
+  const cnt = Object.entries(PAT).map(([k, [i, t]]) => [i, t, L.filter((c) => c.pat.some((s) => s.k === k)).length]).filter(([, , x]) => x);
+  return `<details class="card" style="margin-bottom:12px" open><summary><b>📐 주봉 차트 모양</b> <span class="src">${cnt.map(([i, t, x]) => `${i} ${t} <b>${x}</b>`).join(" · ")} · 주봉 종가 기준 · 참고용</span></summary>
+    <ul class="irl">${L.map((c) => `<li><a href="#stock/${esc(c.code)}">${esc(c.name)}</a> ${c.pat.map(patLi).join(" · ")}</li>`).join("")}</ul></details>`;
+}
+function patHTML(d) {  // 종목 상세: 최근 3년 주봉 종가 + 추세선·전고점·손잡이 고점 선 + 조건 설명
+  const p = d.pattern;
+  if (!p?.w?.length) return "";
+  const ws = p.w, W = 340, x0 = 6, x1 = W - 52, top = 10, bot = 146, t0 = +new Date(ws[0][0]), t1 = +new Date(ws.at(-1)[0]);
+  const vs = [...ws.map((x) => x[1]), ...p.levels.map((l) => l.v)], lo = Math.min(...vs) * 0.97, hi = Math.max(...vs) * 1.03;
+  const X = (dt) => x0 + ((x1 - x0) * (+new Date(dt) - t0)) / (t1 - t0 || 1), Y = (v) => bot - ((v - lo) / (hi - lo)) * (bot - top);
+  const F = (v) => (d.currency === "USD" ? `$${n(v, 2)}` : n(v, 0));
+  let g = "";
+  ws.forEach(([dt], i) => { if (i && dt.slice(0, 4) !== ws[i - 1][0].slice(0, 4)) g += `<line x1="${X(dt)}" x2="${X(dt)}" y1="${top}" y2="${bot}" stroke="var(--grid)"/><text x="${X(dt) + 2}" y="${bot + 14}" class="qx">'${dt.slice(2, 4)}</text>`; });
+  g += `<polyline points="${ws.map(([dt, v]) => `${X(dt)},${Y(v)}`).join(" ")}" fill="none" stroke="var(--ink-2)" stroke-width="1.6"/>`;
+  p.levels.forEach((l) => { g += `<line x1="${x0}" x2="${x1}" y1="${Y(l.v)}" y2="${Y(l.v)}" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="5 3"/><text x="${x1 + 3}" y="${Y(l.v) + 4}" class="qv b" style="font-size:10px">${esc(F(l.v))}</text>`; });
+  p.lines.forEach((l) => { g += `<polyline points="${l.p.map(([dt, v]) => `${X(dt)},${Y(v)}`).join(" ")}" fill="none" stroke="${l.k === "cup" ? "var(--good)" : "var(--s2)"}" stroke-width="2.2"${l.k === "lo" ? ' stroke-dasharray="6 3"' : ""}/>`; });
+  const last = ws.at(-1);
+  g += `<circle cx="${X(last[0])}" cy="${Y(last[1])}" r="3.5" fill="var(--ink)"/><text x="${x1 + 3}" y="${Math.min(bot, Math.max(top + 8, Y(last[1]) + 16))}" class="qv" style="font-size:10px">${esc(F(last[1]))}</text>`;
+  const sig = p.sig.length ? `<ul class="irl">${p.sig.map((s) => `<li>${patLi(s)}</li>`).join("")}</ul>` : `<div class="note src" style="margin-top:0">지금은 조건에 맞는 모양이 없어요</div>`;
+  return `<details${p.sig.length ? " open" : ""}><summary><h3 style="display:inline">📐 주봉 차트 모양 <span class="src">${esc(p.asof)} 주 종가까지 · ${p.sig.length ? p.sig.map((s) => esc(s.t)).join(" · ") : "해당 없음"}</span></h3></summary><div class="card">${sig}
+    <svg viewBox="0 0 ${W} 166" role="img" aria-label="최근 3년 주봉 종가와 추세선">${g}</svg>
+    <div class="src" style="padding:0 4px 4px">── 주봉 종가 · <span style="color:var(--s2)">━</span> 고점끼리 이은 하락 추세선 · <span style="color:var(--s2)">┅</span> 저점끼리 이은 선 · <span style="color:var(--warn)">┅</span> 전고점·손잡이 고점 · <span style="color:var(--good)">━</span> 컵 모양</div>
+    <div class="kidbox" style="margin-top:6px">👀 <b>모양 읽는 법</b><ul class="irl">
+      <li>☕ <b>컵위드핸들</b> (윌리엄 오닐): 크게 오른 뒤 12~40% 쉬며 U자 컵을 만들고, 손잡이처럼 3~15% 살짝 눌렸다가 손잡이 고점을 넘는 모양</li>
+      <li>📐 <b>하락 추세선</b>: 점점 낮아지는 고점끼리 이은 선 — 위로 뚫으면 내림세가 끝나 가는지 보는 자리 · 저점끼리 이은 선 아래로 깨지면 내림이 빨라질 수 있는 자리</li>
+      <li>🚀 <b>전고점 돌파</b>: 13주 넘게 못 넘던 큰 고점을 주봉 종가로 넘음 · 🧪 <b>지지 시험</b>: 넘었던 전고점까지 다시 내려옴 — 예전에 막던 가격이 이제 받쳐 주는지 보는 자리</li>
+    </ul></div>
+    <div class="note src">주봉 종가로만 계산해요 (장중 꼬리는 안 봄) · 모양이 맞아도 실패가 많아요 · 매수·매도 추천이 아니에요</div></div></details>`;
 }
 function estBoardHTML(mkt) {  // 리포트 탭: 종목마다 추정치 1주·1개월·3개월 + 목표가 30일 올림·내림
   const L = (DASH?.stocks || []).filter((c) => c.est && mktOf(c.code) === mkt)

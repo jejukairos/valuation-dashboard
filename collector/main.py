@@ -14,6 +14,7 @@ import kq
 import kr_stock
 import manheim
 import market
+import patterns
 import rates
 import score
 import street
@@ -26,7 +27,7 @@ SOMONG = load_yaml("somong.yaml") or {}
 LTG_GAP = read_json(CACHE / "ltg_gap.json") or {}
 QTRS = read_json(CACHE / "quarters.json") or {}  # 분기 실적 (야후는 최근 5~6분기만 줘서 쌓아 둠)  # 종목 → 시킹알파 확인일 → Zacks·나스닥과의 차이(%p)
 SEGS = read_json(CACHE / "segments.json") or {}  # 한국 '주요제품 매출구성'(%)을 보고서 시점별로 쌓음 → 부문 비중 추이
-SEG_US = load_yaml("segments.yaml") or {}  # 미국 부문별 매출 (공식 실적 자료를 보고 직접 적음)
+SEG_US = load_yaml("segments.yaml") or {}  # 분기 제품·부문별 매출 (공식 실적 자료를 보고 직접 적음, 미국 + 한국 보유종목)
 KPI_CFG = load_yaml("kpi.yaml") or {}  # 🔑 핵심 지표 (fcf_add = 야후에 아직 없는 최신 분기 FCF, 보도자료)
 NOTES = load_yaml("notes.yaml") or {}  # 적정주가 칸 메모 (증권사 의견, 28E 칸 등)
 SEGC = load_yaml("seg_cons.yaml") or {}  # 🎯 사업부문별 컨센서스 vs 실적
@@ -497,11 +498,8 @@ def stock_detail(h, rates_now, fx):
                                     for qk, r in sorted(wq.items()) if r.get("estimate") and kq.label(qk) > det["kq"]["latest"]]
             except Exception as e:  # noqa: BLE001
                 REPORT.block("와이즈리포트 분기 추정", f"{name}: {str(e)[:60]}")
-    det["seg"] = None  # 부문별 매출 (실적 요약의 매출 비중·돈의 흐름 왼쪽)
-    if mkt == "US" and SEG_US.get(code):
-        s = SEG_US[code]
-        det["seg"] = {"unit": "amt", "src": s.get("src"), "hist": {q: {k: v * 1e6 for k, v in m.items()} for q, m in s["quarters"].items()}}
-    elif mkt == "KR":
+    det["seg"] = None  # 부문별 매출 (🧩 제품·부문별 매출 칸 · 돈의 흐름 왼쪽)
+    if mkt == "KR":
         try:
             pm = kr_stock.product_mix(fcode)
             if pm and pm["asof"]:
@@ -510,6 +508,9 @@ def stock_detail(h, rates_now, fx):
             REPORT.block("주요제품 매출구성", f"{name}: {str(e)[:60]}")
         if SEGS.get(fcode):
             det["seg"] = {"unit": "pct", "src": "와이즈리포트 주요제품 매출구성 (분기·반기·사업보고서)", "hist": SEGS[fcode]}
+    s = SEG_US.get(code) or SEG_US.get(fcode)  # 회사 실적 자료를 보고 직접 적은 분기 금액이 있으면 그걸 씀 (미국 백만 달러, 한국 억원)
+    if s:
+        det["seg"] = {"unit": "amt", "src": s.get("src"), "hist": {q: {k: v * (1e6 if mkt == "US" else 1e8) for k, v in m.items()} for q, m in s["quarters"].items()}}
     det["card"] = {
         "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl, "dart_check": dart_check,
         "score": checks_score, "us_tpl": us_tpl, "div_check": div_check, "mdd": mdd, "pre": pre,
@@ -541,6 +542,12 @@ def stock_detail(h, rates_now, fx):
         "fv": _fair_table(bands, hist, price, currency,
                           [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
     }
+    try:  # 📐 주봉 차트 모양 (컵위드핸들·추세선·전고점) — 미국은 배당으로 깎지 않은 주가 (차트 프로그램과 같은 기준)
+        ppx = us_stock.price_history(code, div=True) if mkt == "US" and "DIV" not in methods else px
+        det["pattern"] = patterns.weekly(ppx, 2 if currency == "USD" else 0)
+        det["card"]["pat"] = (det["pattern"] or {}).get("sig") or None
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("주봉 차트 모양", f"{name}: {str(e)[:60]}")
     try:  # 📈 이익 추정치 변화 (매일 쌓음) — 한국 = 와이즈리포트 연간 영업이익 추정(억원), 미국 = 야후 연간 EPS 추정
         if mkt == "KR" and wise and not h.get("data_code"):
             est_track.record(code, {str(y)[2:]: r["op"] for y, r in wise.items() if r.get("estimate") and r.get("op") is not None})
