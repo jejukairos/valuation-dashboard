@@ -22,6 +22,9 @@ function Publish($msg, $files = @("config/earnings.yaml", "config/segments.yaml"
         & $py tools\earnings_check.py export
         if ($LASTEXITCODE -ne 0) { Log "earnings.yaml 읽기 실패 - 올리지 않음"; return $false }
     }
+    $ym = @($files | Where-Object { $_ -like "*.yaml" })  # 깨진 YAML 은 사이트 수집기를 멈추게 하니 올리기 전에 읽어 봄
+    & $py -c "import sys, yaml; [yaml.safe_load(open(f, encoding='utf-8')) for f in sys.argv[1:]]" @ym
+    if ($LASTEXITCODE -ne 0) { Log "YAML 읽기 실패 - 올리지 않음"; return $false }
     git add $files
     git commit -q -m "$msg`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- $files
     for ($i = 0; $i -lt 3; $i++) {
@@ -94,5 +97,7 @@ if ($now.Hour -ge 8 -and -not (Test-Path $stamp)) {
     New-Item $stamp -ItemType File -Force | Out-Null
     $prompt = "tools/earnings_task.md 를 읽고 그 순서대로 오늘 실적발표 요약을 해줘. 한국 종목 자막은 transcripts 폴더에 있으면 그걸 써. 파일 수정만 하고 git 은 하지 마. 모든 답변은 쉬운 한국어로."
     & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write,WebFetch,WebSearch" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
-    if (git status --porcelain config/earnings.yaml config/segments.yaml) { if (Publish "실적발표 요약 (매일 점검)") { Log "매일 점검 요약 올림" } } else { Log "매일 점검: 새 요약 없음" }
+    # earnings_task.md 가 고치는 파일 전부 (핵심 지표·빅테크 숨은 숫자·부문 예상·쉬운 이벤트도 같이 올림)
+    $daily = @("config/earnings.yaml", "config/segments.yaml", "config/kpi.yaml", "config/bigtech.yaml", "config/seg_cons.yaml", "config/events.yaml")
+    if (git status --porcelain $daily) { if (Publish "실적발표 요약 (매일 점검)" ($daily + "site/data/earnings.json")) { Log "매일 점검 요약 올림" } } else { Log "매일 점검: 새 요약 없음" }
 }
