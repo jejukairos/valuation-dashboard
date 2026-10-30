@@ -3129,8 +3129,31 @@ async function loadIndustry() {
   if (!CAPEX) { try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CAPEX = {}; } }
   if (!BOARD) { try { BOARD = await (await fetch("data/board.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { BOARD = {}; } }
   if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
-  $("#industryBody").innerHTML = boardHTML() + scanHTML() + capexHTML() + amzHTML();
+  if (!DEF) { try { DEF = await (await fetch("data/defense.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { DEF = {}; } }
+  $("#industryBody").innerHTML = boardHTML() + scanHTML() + capexHTML() + defenseHTML() + amzHTML();
   drawAmz();
+}
+// 🛡 방산 (config/defense.yaml): 지정학 연표(사실) + 글쓴이 가설 + 우리 방산 종목 숫자 (stocks.yaml industry 에 '방산')
+let DEF = null;
+function defenseHTML() {
+  const D = DEF || {}, sec = D.sector || {};
+  const cs = (DASH?.stocks || []).filter((c) => /방산/.test(c.industry || ""));
+  if (!D.timeline && !cs.length) return "";
+  const r3 = (c) => { const cl = (c.chart?.close || []).filter((v) => v != null); return cl.length > 64 ? (cl.at(-1) / cl.at(-64) - 1) * 100 : null; };
+  const tl = (D.timeline || []).map((x, i) => `<div style="display:flex;gap:8px;align-items:flex-start;margin-top:6px${x.q ? ";opacity:.75" : ""}">
+      <span class="qtag${x.q ? "" : " bad"}" style="min-width:4.6em;text-align:center">${esc(x.d)}</span>
+      <div><b>${x.q ? "❓" : "⚔️"} ${esc(x.n)}</b> <span class="src">${esc(x.w || "")}</span>${x.note ? `<div class="src">${esc(x.note)}</div>` : ""}</div></div>${i < D.timeline.length - 1 ? `<div class="src" style="margin-left:2.2em">↓</div>` : ""}`).join("");
+  const rows = cs.map((c) => `<tr><td style="text-align:left"><a href="#stock/${esc(c.code)}">${esc(c.name)}</a> <span class="src">${esc(c.group || "")}</span></td>
+      <td>${r3(c) == null ? "-" : pct(r3(c), 0, true)}</td><td>${c.tbl?.dd52 == null ? "-" : n(c.tbl.dd52, 0) + "%"}</td><td>${c.tbl?.per12 == null ? "-" : n(c.tbl.per12, 1) + "배"}</td><td>${c.band_pos == null ? "-" : n(c.band_pos, 0) + "%"}</td></tr>`).join("");
+  return `<h2>🛡 방산 <span class="src">${esc(D.src || "")}</span></h2><div class="card">
+    ${D.title ? `<b>🌏 ${esc(D.title)}</b> <span class="src">(일어난 순서)</span>${tl}` : ""}
+    ${D.view ? `<div class="warnbox" style="margin-top:10px">💬 ${esc(D.view)}</div>` : ""}
+    ${(D.facts || []).length ? `<ul class="irl">${D.facts.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+    ${(D.memo || []).length ? `<div class="src" style="margin-top:4px">📝 전달받은 글의 메모 (사실 확인 전): ${D.memo.map(esc).join(" · ")}</div>` : ""}
+    ${D.link ? `<div class="note">🔗 ${esc(D.link)}</div>` : ""}
+    ${rows ? `<div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">우리 방산 종목</th><th>3개월 주가</th><th>52주 고점 대비</th><th>PER 12MF</th><th>PER 10년 밴드</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+    ${sec.history ? `<div class="note src">📚 업종 PER: ${esc(sec.history)}<br>🔁 ${esc(sec.rerating || "")}</div>` : ""}
+    <div class="note src">지정학 메모는 생각할 거리예요 (매수·매도 추천 아님) · 지도 그림 원본은 다올 퀀트 글에서</div></div>`;
 }
 const amzSum = (a) => (a || []).reduce((x, y) => x + y, 0);
 function amzHTML() {
