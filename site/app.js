@@ -2185,7 +2185,8 @@ function kpiChart(ch) {
   const many = ch.s.length > 1, W = 320, x0 = 26, x1 = W - (many ? 62 : 26), top = 28, bot = 138;  // 선이 여러 개면 끝 숫자를 오른쪽에
   const lo0 = Math.min(...vals), hi0 = Math.max(...vals), pad = (hi0 - lo0) * 0.18 || Math.abs(hi0) * 0.2 || 1;
   const lo = lo0 - pad, hi = hi0 + pad, Y = (v) => bot - ((v - lo) / (hi - lo)) * (bot - top), X = (i) => x0 + ((x1 - x0) * i) / (qs.length - 1);
-  let g = qs.map((q, i) => `<line x1="${X(i)}" x2="${X(i)}" y1="${top - 6}" y2="${bot}" stroke="var(--grid)"/><text x="${X(i)}" y="${bot + 16}" text-anchor="middle" class="qx">${esc(q)}</text>`).join("");
+  const lab = (i) => qs.length <= 7 || (qs.length - 1 - i) % 2 === 0;  // 칸이 많으면 하나 걸러 이름 (마지막은 항상)
+  let g = qs.map((q, i) => `<line x1="${X(i)}" x2="${X(i)}" y1="${top - 6}" y2="${bot}" stroke="var(--grid)"/>${lab(i) ? `<text x="${X(i)}" y="${bot + 16}" text-anchor="middle" class="qx">${esc(q)}</text>` : ""}`).join("");
   if (lo0 < 0 && hi0 > 0) g += `<line x1="${x0 - 10}" x2="${x1 + 10}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)" stroke-dasharray="3 3"/>`;
   const ends = [];  // 선이 여러 개면 마지막 값만 글자로 (겹치지 않게 아래로 밀기)
   ch.s.forEach((s, si) => {
