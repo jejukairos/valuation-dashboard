@@ -1255,6 +1255,7 @@ document.addEventListener("click", (e) => {
 let CMPD = null, CMP_SPAN = 40;
 async function renderCompare() {
   if (!CMPD) { try { CMPD = (await (await fetch("data/compare.json?t=" + Date.now(), { cache: "no-store" })).json()) || {}; } catch (_) { CMPD = {}; } }
+  if (!CAPEX) { try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CAPEX = {}; } }
   $("#compareBody").innerHTML = compareHTML(CMP_SPAN);
 }
 document.addEventListener("click", (e) => {
@@ -1328,13 +1329,73 @@ function debtHTML(list, f) {
     <div class="cmp-wrap"><table class="cmp cash"><thead><tr><th>종목 <span class="src">· 기간</span></th><th>빚 잔액 (분기말)</th><th>1년 새 늘어난 빚</th><th>회사채·장기 대출 발행<br><span class="src">최근 4분기 합계</span></th></tr></thead><tbody>${tr}</tbody></table></div>
     <div class="note src">빚 잔액 = 회사채 + 은행 대출 + 리스 부채 (막대 = 분기말, 빨강 = 최근). 발행 = 현금흐름표에서 회사채·장기 대출로 새로 받은 돈 (갚은 돈은 안 뺌). 야후 재무제표는 발표 뒤 며칠~몇 주 늦게 들어와서, 최근 큰 발행은 📰 뉴스 메모로 먼저 적어 둬요.</div></div>`;
 }
+// 📊 종목 골라 비교 — FCF · CapEx · 영업이익률 · 매출 성장률 따로 (기본 M7). 티커나 이름을 넣으면 그 종목 선이 생겨요 (자료 = 종목별 분기 실적)
+const PEER_SETS = { M7: ["MSFT", "GOOG", "META", "AMZN", "AAPL", "NVDA", "TSLA"], "빅테크 4": ["MSFT", "GOOG", "META", "AMZN"], 메모리: ["005930", "000660", "MU"] };
+let PICKS = PEER_SETS.M7, PICK_MISS = "";
+try { const s = JSON.parse(localStorage.getItem("PICKS") || "null"); if (Array.isArray(s) && s.length) PICKS = s; } catch (_) {}
+const peerRedraw = () => { try { localStorage.setItem("PICKS", JSON.stringify(PICKS)); } catch (_) {} $("#peerBox").outerHTML = peerHTML(CMP_SPAN); };
+document.addEventListener("click", (e) => {
+  const s = e.target.closest("#peerBox [data-set]"), r = e.target.closest("#peerBox [data-rm]");
+  if (s) { PICKS = [...PEER_SETS[s.dataset.set]]; PICK_MISS = ""; peerRedraw(); }
+  if (r) { PICKS = PICKS.filter((c) => c !== r.dataset.rm); peerRedraw(); }
+});
+document.addEventListener("change", (e) => {
+  if (e.target.id !== "peerAdd") return;
+  const q = e.target.value.trim(), L = CMPD?.longq || {}, up = q.toUpperCase();
+  const code = q.match(/\(([^)]+)\)\s*$/)?.[1] || (L[up] ? up : (DASH?.stocks || []).find((s) => L[s.code] && (s.name === q || s.name.toUpperCase().includes(up)))?.code);
+  PICK_MISS = code ? "" : q;
+  if (code && !PICKS.includes(code)) PICKS = [...PICKS, code];
+  peerRedraw();
+});
+function peerHTML(span) {
+  const D = CMPD || {}, L = D.longq || {}, fx = (k) => D.fx_q?.[k];
+  const cs = PICKS.filter((c) => L[c]), usd = cs.some((c) => mktOf(c) === "US");
+  // 금액: 미국 백만 달러 · 한국 억원 → 미국이 하나라도 있으면 모두 $B (한국은 그 분기 평균 환율), 아니면 조원
+  const amt = (c, k, v) => (v == null ? null : mktOf(c) === "US" ? v / 1e3 : !usd ? v / 1e4 : fx(k) ? v / (fx(k) * 10) : null);
+  const ks = [...new Set(cs.flatMap((c) => Object.keys(L[c])))].sort().slice(span < 999 ? -span : 0);
+  const fm = usd ? usdB : (v) => `${n(v, 1)}조`, U = usd ? "$B" : "조원";
+  const fcf = (c, k) => { const r = L[c][k] || {}; return r.ocf != null && r.capex != null ? amt(c, k, r.ocf - r.capex) : null; };
+  const defs = [
+    [`현금흐름 FCF (${U})`, fcf, fm, "영업으로 번 현금 − 설비투자 · 0 아래 = 번 돈보다 투자에 더 씀"],
+    [`CapEx 설비투자 (${U})`, (c, k) => amt(c, k, L[c][k]?.capex), fm, ""],
+    ["영업이익률 (OPM)", (c, k) => { const r = L[c][k] || {}; return r.rev && r.op != null ? (r.op / r.rev) * 100 : null; }, fPct, ""],
+    ["매출 성장률 (YoY)", (c, k) => { const r = L[c][k] || {}, p = L[c][qAgo(k)]?.rev; return r.rev && p > 0 ? (r.rev / p - 1) * 100 : null; }, fPct, "1년 전 같은 분기 대비"],
+  ];
+  // 색: 회사 고유색(CMP_COL)을 먼저, 이미 쓴 색이면 안 쓴 색으로 (선끼리 같은 색 안 되게)
+  const PAL = ["var(--s1)", "var(--bad)", "var(--s3)", "var(--warn)", "var(--s7)", "var(--s2)", "var(--ink-2)", "var(--s4)", "var(--good)"], used = new Set();
+  const col = Object.fromEntries(cs.map((c) => { const k = CMP_COL[c] && !used.has(CMP_COL[c]) ? CMP_COL[c] : PAL.find((p) => !used.has(p)) || "var(--muted)"; used.add(k); return [c, k]; }));
+  const charts = defs.map(([t, f, fl, why]) => {
+    const s = cs.map((c) => ({ n: cmpName(c), col: col[c], v: ks.map((k) => f(c, k)) })).filter((x) => x.v.some((v) => v != null));
+    return s.length ? lineChart({ t, why, labels: ks, s, fl, zero: true, tick: (i) => shortQ(i, ks) }) : "";
+  }).join("");
+  // FCF 꼬리표: 몇 분기 연속 적자 · 적자 전환 · 몇 분기 연속 악화 (확정 분기 기준)
+  const tags = cs.map((c) => {
+    const v = Object.keys(L[c]).sort().map((k) => fcf(c, k)).filter((x) => x != null);
+    if (v.length < 2) return "";
+    let neg = 0, down = 0;
+    for (let i = v.length - 1; i >= 0 && v[i] < 0; i--) neg++;
+    for (let i = v.length - 1; i > 0 && v[i] < v[i - 1]; i--) down++;
+    const t = neg >= 2 ? `${neg}분기 연속 적자` : neg === 1 ? "적자 전환" : down >= 2 ? `${down}분기 연속 악화` : "";
+    return t ? `<span class="qtag bad">${esc(cmpName(c))} ${t}</span>` : "";
+  }).join(" ");
+  const opts = (DASH?.stocks || []).filter((s) => L[s.code] && !PICKS.includes(s.code)).map((s) => `<option value="${esc(s.name)} (${esc(s.code)})">`).join("");
+  return `<div id="peerBox"><h3>📊 종목 골라 비교 <span class="src">분기 확정 실적 · 티커나 종목명을 넣으면 선이 생겨요</span></h3><div class="card">
+    <div class="seg" style="margin-bottom:6px">${Object.keys(PEER_SETS).map((k) => `<button data-set="${esc(k)}">${esc(k)}</button>`).join("")}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${cs.map((c) => `<span class="chip on" data-rm="${esc(c)}" role="button" title="빼기" style="background:${col[c]};border-color:${col[c]}">${esc(cmpName(c))} ✕</span>`).join("")}
+      <input id="peerAdd" list="peerList" placeholder="+ 티커·종목명 (예: ORCL, 삼성전자)" style="min-width:12em;padding:4px 8px"><datalist id="peerList">${opts}</datalist></div>
+    ${PICK_MISS ? `<div class="note src">‘${esc(PICK_MISS)}’ 는 자료가 없어요 — 보유·관심·공동 종목만 그릴 수 있어요.</div>` : ""}
+    ${tags ? `<div style="margin-top:8px">${tags}</div>` : ""}
+    <div class="qgrid" style="margin-top:6px">${charts || `<div class="note src">⏳ 종목별 분기 자료를 모으는 중이에요.</div>`}</div>
+    <div class="note src">FCF = 영업현금흐름 − 설비투자(총액) · 아마존이 발표하는 FCF 는 설비 매각·보조금을 빼 줘서 조금 덜 나빠요 (26.3Q -$34.8B vs 회사 기준 -$33.5B) · 분기 이름 = 달력 분기 · 3년/5년/10년 탭으로 기간 바꾸기</div></div></div>`;
+}
 function compareHTML(span) {
   const D = CMPD || {}, cfg = D.cfg || {}, lq = (c) => D.longq?.[c] || {}, fx = (k) => D.fx_q?.[k];
   const keysOf = (...os) => [...new Set(os.flatMap((o) => Object.keys(o || {})))].sort().slice(span < 999 ? -span : 0);
   const box = (t, sub, body, note = "") => `<h3>${t} <span class="src">${sub}</span></h3><div class="card"><div class="qgrid">${body}</div>${note}</div>`;
   const wait = (what) => `<div class="note src">⏳ ${what} 자료를 모으는 중이에요 — 채워지면 그림이 나와요.</div>`;
   const opmOf = (rev, op) => rev.map((r, i) => (r && op[i] != null ? (op[i] / r) * 100 : null));
-  const out = [cashHTML(), `<div class="seg cseg" style="margin:14px 0 10px">${LONG_TABS.map(([m, l]) => `<button data-cs="${m}" class="${m === span ? "on" : ""}">${l}</button>`).join("")}</div>`];
+  const out = [cashHTML(), `<div class="seg cseg" style="margin:14px 0 10px">${LONG_TABS.map(([m, l]) => `<button data-cs="${m}" class="${m === span ? "on" : ""}">${l}</button>`).join("")}</div>`,
+    peerHTML(span), capexHTML()];
   // 1) 메모리 3사 — 분기, 달러 (억원 ÷ (그 분기 평균 환율 × 10) = 십억 달러)
   const hy = lq("000660"), mu = lq("MU"), ds = cfg.samsung_ds || {}, kU = (v, k) => (v == null || !fx(k) ? null : v / (fx(k) * 10));
   const mk = keysOf(hy, mu, ds.rev);
@@ -1372,7 +1433,7 @@ function compareHTML(span) {
     return lineChart({ t: `${cmpName(c)} CapEx · 매출 대비`, labels: ks, s: [{ n: "CapEx ($B)", v: capex, col: "var(--s1)", bar: true }, { n: "CapEx ÷ 매출", v: ks.map((k, i) => (rev[i] && capex[i] != null ? (capex[i] * 1e3 / rev[i]) * 100 : null)), col: "var(--warn)", right: true }], fl: usdB, fr: fPct, tick: (i) => shortQ(i, ks) })
       + lineChart({ t: `${cmpName(c)} CapEx vs 영업이익`, labels: ks, s: [{ n: "CapEx", v: capex, col: "var(--s1)" }, { n: "영업이익", v: ks.map((k) => (q[k]?.op != null ? q[k].op / 1e3 : null)), col: "var(--warn)" }], fl: usdB, zero: true, tick: (i) => shortQ(i, ks) });
   }).join("");
-  out.push(box("🏗 빅테크 CapEx", "분기 · 달러 · 설비투자가 매출의 몇 %인지, 영업이익보다 빨리 느는지", bt, bt ? (Object.keys(lq("MSFT")).length < 12 ? wait("빅테크 10년 (SEC)") : "") : wait("빅테크 CapEx")));
+  out.push(box("🏗 회사별 CapEx 10년", "분기 · 달러 · 설비투자가 매출의 몇 %인지, 영업이익보다 빨리 느는지", bt, bt ? (Object.keys(lq("MSFT")).length < 12 ? wait("빅테크 10년 (SEC)") : "") : wait("빅테크 CapEx")));
   // 4) 클라우드 — AWS vs 구글 클라우드, 수주잔고(RPO)
   const aws = cfg.aws || {}, gc = cfg.gcloud || {}, rpo = cfg.rpo || {};
   const ck = keysOf(aws.rev, gc.rev), B = (o, k) => (o?.[k] != null ? o[k] / 1e3 : null);

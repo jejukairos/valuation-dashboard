@@ -594,6 +594,9 @@ def long_q(mkt, dq, kqd, qtrs, sec=None):
         for q in (kqd or {}).get("quarters") or []:
             if q.get("sales") is not None and q["q"] not in out:
                 out[q["q"]] = {"rev": q["sales"], **({"op": q["op"]} if q.get("op") is not None else {})}
+        for e, v in (qtrs or {}).items():  # FCF·CapEx 는 쌓아 둔 야후 분기에서 (원 → 억원)
+            if v.get("capex") is not None and v.get("fcf") is not None and _klabel(e) in out:
+                out[_klabel(e)].update(capex=rnd(abs(v["capex"]) / 1e8), ocf=rnd((v["fcf"] + abs(v["capex"])) / 1e8))
     else:
         for e, v in (sec or {}).items():
             out[_klabel(e)] = dict(v)
@@ -838,7 +841,7 @@ def main():
     except Exception as e:  # noqa: BLE001
         REPORT.block("비교 탭 환율", str(e)[:60])
     write_json(DATA / "compare.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "cfg": CMP,
-                                       "longq": {c: LONGQ.get(c) for c in CMP.get("codes") or []}, "mcap": MCAP_W, "fx_q": fx_q, "fx_w": fx_w})
+                                       "longq": {c: v for c, v in LONGQ.items() if v}, "mcap": MCAP_W,  # 모든 종목 (📊 골라 비교) "fx_q": fx_q, "fx_w": fx_w})
 
     print("■ 수주 공시")
     import orders
