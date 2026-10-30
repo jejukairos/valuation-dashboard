@@ -206,7 +206,8 @@ watchlist:
   - {name: 현대백화점, market: KR, code: "069960", industry: 유통, methods: [PBR, PER], fair_methods: [PBR], sector: 백화점}
   - {name: HD현대중공업, market: KR, code: "329180", industry: 조선, methods: [PER]}
   - {name: 삼성중공업, market: KR, code: "010140", industry: 조선, methods: [PER]}
-  - {name: 삼성전기, market: KR, code: "009150", industry: 전자부품, methods: [PER]}
+  - {name: 삼성전기, market: KR, code: "009150", industry: 기판·전자부품, methods: [PER]}
+  - {name: 대덕전자, market: KR, code: "353200", industry: 기판, methods: [PER]}
   - {name: HD현대마린엔진, market: KR, code: "071970", industry: 조선기자재, methods: [PER]}
   # M7 빅테크 — 보유·공동자산에 있는 종목은 한 번만 계산하고 ⭐ 관심 탭에도 같이 보여요
   - {name: 애플, market: US, code: AAPL, industry: 하드웨어, methods: [PER]}

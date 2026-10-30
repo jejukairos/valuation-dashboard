@@ -8,6 +8,7 @@ import traceback
 import pandas as pd
 
 import compute as C
+import est_track
 import flows
 import kq
 import kr_stock
@@ -540,6 +541,17 @@ def stock_detail(h, rates_now, fx):
         "fv": _fair_table(bands, hist, price, currency,
                           [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
     }
+    try:  # 📈 이익 추정치 변화 (매일 쌓음) — 한국 = 와이즈리포트 연간 영업이익 추정(억원), 미국 = 야후 연간 EPS 추정
+        if mkt == "KR" and wise and not h.get("data_code"):
+            est_track.record(code, {str(y)[2:]: r["op"] for y, r in wise.items() if r.get("estimate") and r.get("op") is not None})
+            det["est"] = est_track.view(code, "억원", "영업이익")
+        elif mkt == "US":
+            vals, trend = est_track.us(tkr, det.get("qtrs_y"))
+            est_track.record(code, vals)
+            det["est"] = est_track.view(code, "$", "EPS", trend)
+        det["card"]["est"] = est_track.brief(det.get("est"))
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("이익 추정치 변화", f"{name}: {str(e)[:60]}")
     # 카드 꼬리표 '💸 현금흐름': 최근 두 분기 FCF (야후 분기 재무제표 + 아직 야후에 없는 최신 분기는 kpi.yaml fcf_add)
     qf = [(kq._qlabel(e), q["fcf"]) for e, q in sorted((det["qtrs"] or {}).items()) if q.get("fcf") is not None]
     for qk, v in ((KPI_CFG.get(str(h.get("data_code") or code)) or {}).get("fcf_add") or {}).items():

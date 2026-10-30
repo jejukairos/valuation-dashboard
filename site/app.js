@@ -1065,6 +1065,7 @@ const mktOf = (code) => (/^\d/.test(String(code || "")) ? "KR" : "US");
 function renderTop() {
   $("#easyNews").innerHTML = easyNewsHTML();
   $("#kqNews").innerHTML = kqNewsHTML();
+  $("#estAlert").innerHTML = estAlertHTML();
   $("#irCal").innerHTML = irCalHTML();
   $("#bigTech").innerHTML = bigTechHTML();
 }
@@ -1459,12 +1460,11 @@ function compareHTML(span) {
   const aws = cfg.aws || {}, gc = cfg.gcloud || {}, rpo = cfg.rpo || {};
   const ck = keysOf(aws.rev, gc.rev), B = (o, k) => (o?.[k] != null ? o[k] / 1e3 : null);
   const ltm = (o, k) => { let s = 0, kk = k; for (let i = 0; i < 4; i++) { if (o?.[kk] == null) return null; s += o[kk]; kk = (+kk[3] === 1 ? `${String(+kk.slice(0, 2) - 1).padStart(2, "0")}.4Q` : `${kk.slice(0, 3)}${+kk[3] - 1}Q`); } return s; };
-  let cl = "";
+  let cl = cloudHTML(cfg);
   if (ck.length >= 3) {
-    cl += lineChart({ t: "클라우드 매출 ($B)", labels: ck, s: [{ n: "AWS", v: ck.map((k) => B(aws.rev, k)), col: "var(--warn)" }, { n: "구글 클라우드", v: ck.map((k) => B(gc.rev, k)), col: "var(--s1)" }], fl: usdB, zero: true, tick: (i) => shortQ(i, ck) })
+    cl += lineChart({ t: "클라우드 매출 ($B) — 긴 흐름", labels: ck, s: CLOUDS.map(([k, nm], i) => ({ n: nm, v: ck.map((q) => B(cfg[k]?.rev, q)), col: KPI_COL[i] })), fl: usdB, zero: true, tick: (i) => shortQ(i, ck) })
       + lineChart({ t: "구글 클라우드 ÷ AWS 매출", labels: ck, s: [{ n: "비율", v: ck.map((k) => (aws.rev?.[k] && gc.rev?.[k] != null ? (gc.rev[k] / aws.rev[k]) * 100 : null)), col: "var(--s1)" }], fl: fPct, tick: (i) => shortQ(i, ck) })
-      + lineChart({ t: "매출 성장률 (YoY)", labels: ck, s: [{ n: "AWS", v: ck.map((k) => (aws.rev?.[qAgo(k)] ? (aws.rev[k] / aws.rev[qAgo(k)] - 1) * 100 : null)), col: "var(--warn)" }, { n: "구글 클라우드", v: ck.map((k) => (gc.rev?.[qAgo(k)] > 0 && gc.rev?.[k] != null ? (gc.rev[k] / gc.rev[qAgo(k)] - 1) * 100 : null)), col: "var(--s1)" }], fl: fPct, tick: (i) => shortQ(i, ck) })
-      + lineChart({ t: "영업이익률 (OPM)", labels: ck, s: [{ n: "AWS", v: ck.map((k) => (aws.rev?.[k] && aws.op?.[k] != null ? (aws.op[k] / aws.rev[k]) * 100 : null)), col: "var(--warn)" }, { n: "구글 클라우드", v: ck.map((k) => (gc.rev?.[k] && gc.op?.[k] != null ? (gc.op[k] / gc.rev[k]) * 100 : null)), col: "var(--s1)" }], fl: fPct, tick: (i) => shortQ(i, ck) });
+      + lineChart({ t: "영업이익률 (OPM)", why: "애저·OCI 는 회사가 영업이익을 따로 안 줘요", labels: ck, s: [{ n: "AWS", v: ck.map((k) => (aws.rev?.[k] && aws.op?.[k] != null ? (aws.op[k] / aws.rev[k]) * 100 : null)), col: KPI_COL[0] }, { n: "구글 클라우드", v: ck.map((k) => (gc.rev?.[k] && gc.op?.[k] != null ? (gc.op[k] / gc.rev[k]) * 100 : null)), col: KPI_COL[2] }], fl: fPct, tick: (i) => shortQ(i, ck) });
   }
   const rc = Object.keys(rpo), rk = keysOf(...Object.values(rpo));
   if (rk.length >= 3) {
@@ -1475,6 +1475,34 @@ function compareHTML(span) {
   }
   out.push(box("☁️ 클라우드", "분기 · 달러 · 회사 실적 보도자료", cl, cl ? "" : wait("AWS·구글 클라우드·수주잔고")));
   return out.join("") + `<div class="note src">${esc(D.updated_at || "")} 갱신 · 한국 = DART 분기보고서(최신 분기는 잠정실적), 미국 = SEC·야후 분기 재무제표 · 달러 환산 = 분기 평균 원/달러</div>`;
+}
+// ☁️ 4대 클라우드 (compare.yaml aws·azure·gcloud·oci, 백만 달러): 쌓은 막대(4곳 합) + 성장률 선(4곳 + 합계) — 비교 탭과 종목 상세(hi = 그 회사)
+const CLOUDS = [["aws", "AWS", "AMZN"], ["azure", "애저", "MSFT"], ["gcloud", "구글 클라우드", "GOOG"], ["oci", "OCI", "ORCL"]];
+function cloudHTML(cfg, hi) {
+  const cs = CLOUDS.map(([k, nm, code], i) => ({ nm, code, col: KPI_COL[i], rev: cfg?.[k]?.rev || {}, est: cfg?.[k]?.est || [], yoy: cfg?.[k]?.yoy || {} }));
+  const all = [...new Set(cs.flatMap((c) => Object.keys(c.rev)))].sort().filter((q) => cs.every((c) => c.rev[q] != null));
+  const ks = all.slice(-9);
+  if (ks.length < 2) return "";
+  const yo = (o, q) => (o[qAgo(q)] ? (o[q] / o[qAgo(q)] - 1) * 100 : null), tot = Object.fromEntries(all.map((q) => [q, cs.reduce((a, c) => a + c.rev[q], 0)]));
+  const last = ks.at(-1), ty = yo(tot, last), me = cs.find((c) => c.code === hi);
+  const est = cs.filter((c) => c.est.some((q) => ks.includes(q))).map((c) => `${c.nm} ${c.est.filter((q) => ks.includes(q)).join("·")}`).join(" · ");
+  let h = kpiStack({ t: "4대 클라우드 분기 매출 ($B)", u: "$B", s: cs.map((c) => ({ n: c.nm, v: Object.fromEntries(ks.map((q) => [q, c.rev[q] / 1e3])) })),
+    tag: ty == null ? "" : ` <span class="qtag">${esc(last)} 합계 1년 전 대비 ${pct(ty, 0, true)}</span>`, why: "AWS·애저·구글 클라우드·OCI 를 쌓은 막대 — 위 숫자가 4곳 합계" })
+    + lineChart({ t: "클라우드 매출 성장률 (YoY)", why: "4곳 모두 다시 빨라지는 중인지 · 검은 선 = 4곳 합계", labels: ks,
+      s: [...cs.map((c) => ({ n: c.nm, v: ks.map((q) => c.yoy[q] ?? yo(c.rev, q)), col: c.col })), { n: "4곳 합계", v: ks.map((q) => yo(tot, q)), col: "var(--ink)" }], fl: fPct, tick: (i) => shortQ(i, ks) });
+  if (me) {  // 종목 상세: 그 회사 클라우드 매출 막대 + 성장률 선 + 4곳 중 비중
+    const mk = Object.keys(me.rev).sort().slice(-9);
+    h = lineChart({ t: `${me.nm} 분기 매출 & 성장률`, labels: mk, s: [{ n: "매출 ($B)", v: mk.map((q) => me.rev[q] / 1e3), col: me.col, bar: true }, { n: "성장률 (YoY)", v: mk.map((q) => me.yoy[q] ?? yo(me.rev, q)), col: "var(--warn)", right: true }], fl: usdB, fr: fPct, tick: (i) => shortQ(i, mk) })
+      + lineChart({ t: `4곳 합계 중 ${me.nm} 비중`, why: "점유율이 오르면 남보다 빨리 크는 중", labels: ks, s: [{ n: "비중", v: ks.map((q) => (me.rev[q] / tot[q]) * 100), col: me.col }], fl: fPct, tick: (i) => shortQ(i, ks) }) + h;
+  }
+  return h + `<div class="note src" style="grid-column:1/-1">추정 포함: ${esc(est || "없음")} · 애저는 25.3Q·26.3Q 만 회사 공시 금액(나머지는 회사 성장률로 거꾸로 계산) · OCI 는 오라클 6~8월 분기 = 3Q (증권사 그림은 9~11월을 3Q 로 써서 OCI 가 더 크게 보일 수 있어요)</div>`;
+}
+let CLOUD_CFG = null;
+async function cloudBlock(code) {
+  if (!CLOUDS.some((c) => c[2] === code)) return "";
+  if (!CLOUD_CFG) { try { CLOUD_CFG = (await (await fetch("data/compare.json?t=" + encodeURIComponent(DASH.updated_at))).json())?.cfg || {}; } catch (_) { CLOUD_CFG = {}; } }
+  const h = cloudHTML(CLOUD_CFG, code);
+  return h ? `<h3>☁️ 클라우드 <span class="src">회사 실적 보도자료 · 분기 · 달러 · <a href="#compare">비교 탭에서 4곳 같이 보기 →</a></span></h3><div class="card"><div class="qgrid">${h}</div></div>` : "";
 }
 /* ---------- 실적발표(컨퍼런스콜) 요약: 분기 목록 → 누르면 자세한 요약, 맨 아래 '핵심만' (config/earnings.yaml) ---------- */
 let EARNINGS = {}, IRCAL = { items: [] };
@@ -2749,8 +2777,8 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
-    const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + (await keyBlock(code));
-    const capexHtml = await capexBlock(code);
+    const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + (await keyBlock(code));
+    const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + capexHtml + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
@@ -3410,6 +3438,54 @@ function tpChg(x, mkt) {  // 목표주가: 이전 → 지금 (▲▼ 몇 %) · �
   const g = (x.tp / x.tp_prev - 1) * 100;
   return `<span class="src">${tpTxt(x.tp_prev, mkt)} →</span> <b>${tpTxt(x.tp, mkt)}</b> <span style="color:var(${g < 0 ? "--bad-ink" : "--good-ink"})">${g < 0 ? "▼" : "▲"}${n(Math.abs(g), 0)}%</span>`;
 }
+/* ---------- 📈 이익 추정치 · 목표주가 방향 (stocks/{코드}.json est · dashboard 카드 est · reports.json) ----------
+   증권사 컨센서스(한국 = 영업이익, 미국 = EPS)가 올라가는지 매일 쌓아 보고, 목표가를 올리는 곳·내리는 곳과 같이 본다.
+   이익 추정이 올라가면 기대감·수급이 따라올 수 있어서 — 꺾이거나 돌아서는 '변곡점'을 놓치지 않으려고 (참고용, 추천 아님) */
+const EST_ORD = { "🔄 상향 전환?": 0, "⚠ 꺾임?": 1, "📈 상향 중": 2, "📉 하향 중": 3, "➖ 그대로": 4 };
+const estP = (p) => (p == null ? '<span class="src">-</span>' : `<b style="color:var(${p > 0 ? "--good-ink" : p < 0 ? "--bad-ink" : "--ink-2"})">${p > 0 ? "▲" : p < 0 ? "▼" : ""}${n(Math.abs(p), 1)}%</b>`);
+function tpCnt(code) {  // 최근 30일 목표가 올린 곳·내린 곳
+  const cut = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), X = ((REPS?.stocks || []).find((x) => x.code === code)?.list || []).filter((x) => x.d >= cut && x.tp);
+  return [X.filter((x) => (x.tp_prev && x.tp > x.tp_prev) || x.tp_dir === "상향").length, X.filter((x) => (x.tp_prev && x.tp < x.tp_prev) || x.tp_dir === "하향").length];
+}
+function estAlertHTML() {  // 첫 화면: 방향 개수 + 변곡점 종목만
+  const L = (DASH?.stocks || []).filter((c) => c.est?.sig && mktOf(c.code) === MKT);
+  if (!L.length) return "";
+  const cnt = (s) => L.filter((c) => c.est.sig === s).length, turn = L.filter((c) => /전환|꺾임/.test(c.est.sig));
+  return `<div class="card" style="margin-bottom:12px"><b>📈 이익 추정치 방향</b> <span class="src">증권사 예상 이익이 올라가면 기대감·수급이 따라올 수 있어요 · 매일 갱신 · 참고용</span>
+    <div style="margin-top:4px">${Object.keys(EST_ORD).map((s) => `${s} <b>${cnt(s)}</b>`).join(" · ")} · <a href="#reports">리포트 탭 방향판 →</a></div>
+    ${turn.length ? `<ul class="irl">${turn.map((c) => `<li><a href="#stock/${esc(c.code)}">${esc(c.name)}</a> <b>${esc(c.est.sig)}</b> — ${esc(c.est.y)}년 ${esc(c.est.what)} 예상 1주 ${estP(c.est["1주"])} · 1개월 ${estP(c.est["1개월"])}</li>`).join("")}</ul>` : ""}</div>`;
+}
+function estBoardHTML(mkt) {  // 리포트 탭: 종목마다 추정치 1주·1개월·3개월 + 목표가 30일 올림·내림
+  const L = (DASH?.stocks || []).filter((c) => c.est && mktOf(c.code) === mkt)
+    .sort((a, b) => (EST_ORD[a.est.sig] ?? 5) - (EST_ORD[b.est.sig] ?? 5) || (b.est["1개월"] ?? -999) - (a.est["1개월"] ?? -999));
+  if (!L.length) return `<div class="note src">📈 이익 추정치는 매일 쌓는 중이에요 — 다음 갱신부터 표가 생겨요.</div>`;
+  return `<h3>📈 이익 추정치 · 목표주가 방향판 <span class="src">${mkt === "KR" ? "내년 영업이익 예상 (와이즈리포트 컨센서스)" : "내년 EPS 예상 (야후 컨센서스)"} · 목표가는 최근 30일 · 변곡점(🔄·⚠)이 위로</span></h3>
+    <div class="card"><div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">종목</th><th>신호</th><th>1주</th><th>1개월</th><th>3개월</th><th>목표가 30일</th></tr></thead><tbody>
+    ${L.map((c) => { const [u, d] = tpCnt(c.code); return `<tr><td style="text-align:left"><a href="#stock/${esc(c.code)}">${esc(c.name)}</a> <span class="src">${esc(c.est.y)}E</span></td><td>${esc(c.est.sig || "")}</td><td>${estP(c.est["1주"])}</td><td>${estP(c.est["1개월"])}</td><td>${estP(c.est["3개월"])}</td>
+      <td>${u || d ? `<b style="color:var(--good-ink)">▲${u}</b> <b style="color:var(--bad-ink)">▼${d}</b>` : '<span class="src">-</span>'}</td></tr>`; }).join("")}</tbody></table></div>
+    <div class="note src">🔄 상향 전환? = 한 달 동안 내려가다 최근 1주 올라감 · ⚠ 꺾임? = 한 달 동안 오르다 최근 1주 내려감 · 한국은 매일 쌓기 시작한 날부터 비교돼요 (1주·1개월 칸은 그만큼 지나야 채워짐)</div></div>`;
+}
+function estHTML(d) {  // 종목 상세: 연도별 추정치 지금 vs 1일·1주·1개월·3개월·6개월·1년 전 + 흐름 그림 + 다른 출처(블룸버그 등)
+  const e = d.est, sd = e?.seed;
+  if (!e && !sd) return "";
+  const us = e?.unit === "$", F = (v) => (v == null ? "-" : us ? `$${n(v, 2)}` : kpiF(v, "억원")), SP = ["1일", "1주", "1개월", "3개월", "6개월", "1년"];
+  const ys = Object.keys(e?.chg || {}).sort(), b = DASH.stocks.find((x) => x.code === d.code)?.est, [tu, td] = tpCnt(d.code);
+  let h = b?.sig ? `<div class="note" style="margin-top:0"><b>${esc(b.sig)}</b> — ${esc(b.y)}년 ${esc(b.what)} 예상 1주 ${estP(b["1주"])} · 1개월 ${estP(b["1개월"])} · 3개월 ${estP(b["3개월"])}${tu || td ? ` · 목표가 최근 30일 <b style="color:var(--good-ink)">올림 ${tu}</b> · <b style="color:var(--bad-ink)">내림 ${td}</b>` : ""}</div>` : "";
+  if (ys.length) h += `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(e.what)} 예상</th><th>지금</th>${SP.map((s) => `<th>${s} 전</th>`).join("")}</tr></thead><tbody>
+    ${ys.map((y) => `<tr><td style="text-align:left">${esc(y)}E</td><td><b>${F(e.chg[y].now)}</b></td>${SP.map((s) => { const a = e.chg[y].ago[s]; return `<td title="${a ? esc(F(a[0])) : ""}">${a ? estP(a[1]) : '<span class="src">-</span>'}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>`;
+  const ds = [...new Set(ys.flatMap((y) => (e.pts[y] || []).map((p) => p[0])))].sort();
+  if (ds.length >= 3) {
+    const at = Object.fromEntries(ys.map((y) => [y, Object.fromEntries(e.pts[y])]));
+    h += `<div class="qgrid" style="margin-top:8px">${lineChart({ t: `${e.what} 예상 흐름 (${e.since}부터 매일)`, labels: ds, s: ys.map((y, i) => ({ n: `${y}E`, v: ds.map((x) => at[y][x] ?? null), col: KPI_COL[i % 4] })), fl: (v) => (us ? `$${n(v, 2)}` : kpiF(Math.round(v), "억원")), tick: (i) => (i === 0 || i === ds.length - 1 ? ds[i].slice(5) : "") })}</div>`;
+  }
+  if (sd) {  // 사용자가 보낸 다른 출처 (config/est_seed.yaml)
+    const cols = Object.keys(Object.values(sd.rows)[0] || {}).filter((k) => k !== "지금");
+    h += `<div class="chart-title" style="margin-top:10px"><b>📎 ${esc(sd.src || "")}</b> <span class="src">${esc(sd.what)} 예상 · ${esc(sd.unit)}${sd.vs ? ` · ${esc(sd.vs.d)} 대비 ${Object.keys(sd.rows).map((y) => (sd.vs[y] ? `${y}E ${n(sd.vs[y], 1)} → ${n(sd.rows[y]["지금"], 1)} (${pct((sd.rows[y]["지금"] / sd.vs[y] - 1) * 100, 1, true)})` : "")).filter(Boolean).join(" · ")}` : ""}</span></div>
+      <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">연도</th><th>지금</th>${cols.map((c) => `<th>${esc(c)} 전</th>`).join("")}</tr></thead><tbody>
+      ${Object.entries(sd.rows).map(([y, r]) => `<tr><td style="text-align:left">${esc(y)}E</td><td><b>${n(r["지금"], 1)}</b></td>${cols.map((c) => `<td title="${n(r[c], 1)}">${estP(r[c] ? (r["지금"] / r[c] - 1) * 100 : null)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  }
+  return `<h3>📈 이익 추정치 변화 <span class="src">${us ? "야후 EPS 컨센서스" : "와이즈리포트 영업이익 컨센서스"} · 매일 갱신 · 칸에 마우스를 올리면 그때 값</span></h3><div class="card">${h}</div>`;
+}
 // 요약 카드 (reports.yaml): 증권사·목표가 변화·근거·EPS/PER 변화 — 원문은 링크로
 function repNote(x, mkt) {
   return `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>${IB_FIRM.test(x.firm || "") && mkt !== "US" ? "🌍 " : ""}${esc(x.firm || "")}</b> <span class="src">${esc(x.d || "")}${x.t ? ` · ${esc(x.t)}` : ""}</span>
@@ -3443,7 +3519,7 @@ async function loadReports() {
   const list = REP_CODE ? all.filter((r) => r.code === REP_CODE)
     : all.filter((r) => r.market === REP_MKT && (REP_GRP === "전체" || r.group === REP_GRP)).sort((a, b) => latest(b).localeCompare(latest(a)));
   $("#reportsBody").innerHTML = (REP_CODE ? `<div class="note"><a href="#reports">← 전체 종목 리포트</a></div>` : `<div class="seg repmk" style="margin-bottom:8px"><button data-mk="KR" class="${REP_MKT === "KR" ? "on" : ""}">🇰🇷 한국 리포트</button><button data-mk="US" class="${REP_MKT === "US" ? "on" : ""}">🇺🇸 미국 리포트</button></div>
-    <div class="chips repgrp" style="margin-bottom:10px">${grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === REP_GRP ? "on" : ""}">${esc(g)}</button>`).join("")}</div>`)
+    <div class="chips repgrp" style="margin-bottom:10px">${grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === REP_GRP ? "on" : ""}">${esc(g)}</button>`).join("")}</div>${estBoardHTML(REP_MKT)}`)
     + `<div class="grid g2">${list.map((r) => `<div class="card" id="rep-${esc(r.code)}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:17px">${esc(r.name)}</b>
       <span class="src">${esc(r.group)} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>${repSum(r)}${(r.notes || []).map((x) => repNote(x, r.market)).join("")}${repTable(r, 15)}${ibHTML(r.code)}</div>`).join("") || `<div class="empty">리포트가 없어요.</div>`}</div>`;
 }
