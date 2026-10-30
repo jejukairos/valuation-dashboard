@@ -727,6 +727,8 @@ function qPanel(title, tag, labels, bars, line, usd, color, est = null) {  // es
   const W = 300, x0 = 14, bw = (W - 2 * x0) / labels.length, li = est ? est.lastIndexOf(false) : bars.length - 1;
   const vals = bars.filter((v) => v != null), hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
   const top = line ? 78 : 40, bot = lo < 0 ? 138 : 150, sc = (bot - top) / ((hi - lo) || 1), zero = top + hi * sc;  // 음수 막대 글자 자리
+  // 막대 위 숫자는 단위 없이 짧게 (단위는 제목 옆) — 칸이 좁아도 옆 숫자와 안 겹치게
+  const big = Math.max(1, ...vals.map(Math.abs)), [dv, un, dg] = usd ? [1e9, "$B", 1] : big >= 1e12 ? [1e12, "조원", 1] : [1e8, "억원", 0];
   let g = `<line x1="${x0}" x2="${W - x0}" y1="${zero}" y2="${zero}" stroke="var(--axis)"/>`;
   bars.forEach((v, i) => {
     const cx = x0 + bw * i + bw / 2, last = i === li;
@@ -734,7 +736,7 @@ function qPanel(title, tag, labels, bars, line, usd, color, est = null) {  // es
     if (v == null) return;
     const y = v >= 0 ? zero - v * sc : zero, h = Math.max(1, Math.abs(v) * sc);
     g += `<rect x="${cx - bw * 0.32}" y="${y}" width="${bw * 0.64}" height="${h}" rx="2" fill="${v < 0 ? "var(--bad)" : est?.[i] ? "var(--axis)" : color}" opacity="${last || est?.[i] ? 1 : 0.55}"/>`;
-    g += `<text x="${cx}" y="${v >= 0 ? y - 4 : y + h + 11}" text-anchor="middle" class="qv${last ? " b" : ""}">${qMoney(v, usd)}</text>`;
+    g += `<text x="${cx}" y="${v >= 0 ? y - 4 : y + h + 11}" text-anchor="middle" class="qv${last ? " b" : ""}">${n(v / dv, dg)}</text>`;
   });
   if (line) {
     const lv = line.filter((v) => v != null), lh = Math.max(...lv), ll = Math.min(...lv), ls = 34 / ((lh - ll) || 1);
@@ -743,7 +745,7 @@ function qPanel(title, tag, labels, bars, line, usd, color, est = null) {  // es
     if (seg.length > 1) g += `<polyline points="${seg.map((p) => p.join(",")).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
     pts.forEach((p, i) => { if (p) g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${p[0]}" y="${p[1] - 8}" text-anchor="middle" class="qv${i === li ? " b hi" : ""}"${line[i] < 0 ? ' style="fill:var(--bad-ink)"' : ""}>${n(line[i], 0)}%</text>`; });
   }
-  return `<div class="qp"><div class="qt"><b>${title}</b>${qTag(tag)}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg></div>`;
+  return `<div class="qp"><div class="qt"><b>${title} <span class="src">${un}</span></b>${qTag(tag)}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg></div>`;
 }
 function qTag(tag) { return tag ? `<span class="qtag${/-|적자|둔화|역성장|하락/.test(tag) ? " bad" : /늘어|줄어|CapEx/.test(tag) ? " warn" : ""}">${esc(tag)}</span>` : ""; }
 // 부문별 매출 → [[기간 끝, {부문: 비중%}, {부문: 금액}|null], …] 오래된 순. 한국은 비중(%)만 있어 음수(부문 간 내부거래 제거분)는 빼고 100%로 맞춤
@@ -966,7 +968,8 @@ function kqCharts(k, mode) {
   const a = mode === "y" && k.annual?.length, qs = a ? k.annual.slice(-8) : k.fwd?.length ? k.quarters.slice(-5).concat(k.fwd) : k.quarters;
   const u = a ? "연간" : "분기", est = a ? null : k.est_bar;
   // 한국·미국 모두 매출액 → 영업이익 → EPS (연간은 EPS 대신 순이익) — 자료가 있는 항목만
-  const order = [["sales", "매출액", "var(--s1)"], ["op", "영업이익", "var(--good)"], a ? ["ni", "순이익", "var(--s3)"] : ["eps", "EPS", "var(--s3)"]];
+  // 분기도 순이익을 영업이익과 EPS 사이에 (잠정실적·컨퍼런스콜엔 순이익은 있는데 EPS 는 정기보고서 때 나옴)
+  const order = [["sales", "매출액", "var(--s1)"], ["op", "영업이익", "var(--good)"], ["ni", "당기순이익", "var(--s4)"], ...(a ? [] : [["eps", "EPS", "var(--s3)"]])];
   return order.filter(([f]) => qs.some((q) => q[f] != null)).map(([f, t, c]) => kqBars(`${t} (${u})`, qs, f, est, c, k.cur)).join("");
 }
 function kqBox(k, code) {
@@ -1214,10 +1217,14 @@ function lineChart(o) {
     if (li != null) { g += `<circle cx="${X(li)}" cy="${Y(side, s.v[li])}" r="3.2" fill="var(--surface)" stroke="${s.col}" stroke-width="2"/>`; ends.push([X(li), Y(side, s.v[li]), (side ? fr : fl)(s.v[li]), s.col]); }
     s.last = li == null ? null : [(side ? fr : fl)(s.v[li]), li];
   });
-  // 끝 숫자: 선이 하나면 점 왼쪽 위에, 여러 개면 그림 대신 아래 범례에 (선끼리 숫자가 겹치지 않게)
-  if (ends.length === 1) { const [x, y, t, col] = ends[0]; g += `<text x="${Math.min(x, x1) - 6}" y="${Math.max(top + 4, y - 7)}" text-anchor="end" class="qv b" style="fill:${col};paint-order:stroke;stroke:var(--surface);stroke-width:3px">${esc(t)}</text>`; }
+  // 끝 숫자: 선이 1~2개면 그림 위 점 왼쪽에 (가까우면 14 씩 벌림), 3개 이상이면 그림 대신 아래 범례에 (선끼리 숫자가 겹치지 않게)
+  if (ends.length <= 2) {
+    ends.forEach((e) => { e[1] = Math.max(top + 4, e[1] - 7); });
+    ends.sort((a, b) => a[1] - b[1]).forEach((e, i, a) => { if (i && e[1] - a[i - 1][1] < 14) e[1] = a[i - 1][1] + 14; });
+    ends.forEach(([x, y, t, col]) => { g += `<text x="${Math.min(x, x1) - 7}" y="${y}" text-anchor="end" class="qv b" style="fill:${col};paint-order:stroke;stroke:var(--surface);stroke-width:3px">${esc(t)}</text>`; });
+  }
   const lastQ = (i) => (i === N - 1 ? "" : ` <span style="opacity:.7">(${esc(/^\d\d\.\dQ$/.test(Lb[i]) ? `${Lb[i][3]}Q${Lb[i].slice(0, 2)}` : Lb[i])})</span>`);  // 다른 선보다 일찍 끝나면 그 분기
-  const leg = S.length > 1 ? `<div class="src" style="padding:0 4px 4px">${S.map((s) => `<span style="color:${s.col}">${s.bar ? "■" : "●"}</span> ${esc(s.n)}${hasR ? (s.right ? " (오른쪽)" : " (왼쪽)") : ""}${ends.length > 1 && s.last ? ` <b style="color:${s.col}">${esc(s.last[0])}</b>${lastQ(s.last[1])}` : ""}`).join(" · ")}</div>` : "";
+  const leg = S.length > 1 ? `<div class="src" style="padding:0 4px 4px">${S.map((s) => `<span style="color:${s.col}">${s.bar ? "■" : "●"}</span> ${esc(s.n)}${hasR ? (s.right ? " (오른쪽)" : " (왼쪽)") : ""}${ends.length > 2 && s.last ? ` <b style="color:${s.col}">${esc(s.last[0])}</b>${lastQ(s.last[1])}` : ""}`).join(" · ")}</div>` : "";
   return `<div class="qp"><div class="qt"><b>${esc(o.t)}</b>${o.tag || ""}</div>${o.why ? `<div class="src">${esc(o.why)}</div>` : ""}<svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(o.t)}">${g}</svg>${leg}</div>`;
 }
 const qAgo = (k) => `${String(+k.slice(0, 2) - 1).padStart(2, "0")}${k.slice(2)}`;  // '26.3Q' → '25.3Q'
@@ -2316,25 +2323,34 @@ function capexGuideSVG(gs) {
 function per12mfSeries(d) {
   const b = d.bands?.PER, eps = Object.fromEntries((d.history || []).map((r) => [r.year, r.eps]));
   if (!b?.dates?.length) return null;
-  const pts = b.dates.map((ds, i) => {
+  const f12 = (ds) => {
     const dt = new Date(ds), y = dt.getFullYear(), w0 = Math.max(0, (12 - dt.getMonth() - dt.getDate() / 31) / 12);
     const a = eps[y], c = eps[y + 1], e = a != null && c != null ? w0 * a + (1 - w0) * c : null;
-    return [ds, b.price[i], e != null && e > 0 ? e : null];
-  }).filter((p) => p[2] != null).slice(-156);  // 최근 3년 (주간)
+    return e != null && e > 0 ? e : null;
+  };
+  const pts = b.dates.map((ds, i) => [ds, b.price[i], f12(ds)]).filter((p) => p[2] != null).slice(-156);  // 최근 3년 (주간)
   if (pts.length < 20) return null;
-  const r = pts.map((p) => p[1] / p[2]).sort((x, y) => x - y), lo = r[Math.floor(r.length * 0.05)], hi = r[Math.floor(r.length * 0.95)];
+  const today = pts.length;  // 이 뒤로는 앞으로 (주가 없이 추정치 EPS 로 그린 선)
+  for (let t = new Date(pts.at(-1)[0]); ;) {  // 다음 해 EPS 추정치가 있는 동안 4주마다 앞으로
+    t = new Date(t.getTime() + 28 * 864e5);
+    const ds = t.toISOString().slice(0, 10), e = f12(ds);
+    if (e == null) break;
+    pts.push([ds, null, e]);
+  }
+  const r = pts.slice(0, today).map((p) => p[1] / p[2]).sort((x, y) => x - y), lo = r[Math.floor(r.length * 0.05)], hi = r[Math.floor(r.length * 0.95)];
   const step = [2, 2.5, 5, 10, 20, 50].find((s) => (hi - lo) / s <= 5) || 100;
   const ms = [];
   for (let m = Math.max(step, Math.floor(lo / step) * step); m <= Math.ceil(hi / step) * step + 1e-9 && ms.length < 6; m += step) ms.push(m);
-  return { pts, ms, now: pts.at(-1)[1] / pts.at(-1)[2] };
+  return { pts, ms, now: pts[today - 1][1] / pts[today - 1][2], end: pts.at(-1)[0] };
 }
 function per12mfHTML(d) {
   if (!(d.methods || []).includes("PER")) return "";
   const s = per12mfSeries(d);
   if (!s) return "";
-  return `<h3>📈 12MF PER 밴드 <span class="src">최근 3년 · 지금 ${n(s.now, 1)}배 · ${s.ms.map((m) => n(m, 1) + "배").join(" · ")} 선</span></h3><div class="card">
+  return `<h3>📈 12MF PER 밴드 <span class="src">최근 3년 + 앞으로 ${esc(s.end.slice(0, 7))}까지 · 지금 ${n(s.now, 1)}배 · ${s.ms.map((m) => n(m, 1) + "배").join(" · ")} 선</span></h3><div class="card">
     <div id="p12-legend"></div><div class="chart-box tall"><canvas id="p12"></canvas></div>
-    <div class="note src">선 = 배수 × 그 시점의 12개월 선행 EPS. 과거 선행 EPS 는 당시 컨센서스 대신 실제 연간 EPS(앞 해는 지금 추정치)로 계산해서 증권사 그림과 조금 다를 수 있어요</div></div>`;
+    <div class="note src">선 = 배수 × 그 시점의 12개월 선행 EPS (올해·내년 EPS 를 남은 달 수만큼 섞음) · 주가가 끝난 오른쪽은 추정치 EPS 로 그린 앞으로의 선.
+    적정가 계산과 같은 기준이에요. 아래 '밴드차트'는 네이버 방식(그해 EPS 를 12월 말에 두고 이음)이라 PER 숫자가 달라요 (그쪽은 10년 밴드 위치 판정용)</div></div>`;
 }
 function drawPer12mf(d) {
   const cv = document.getElementById("p12"), s = cv && per12mfSeries(d);
@@ -3050,7 +3066,10 @@ function boardHTML() {
       <div class="bchips">${chipHTML("일", c.chips?.d)}${chipHTML("주", c.chips?.w)}${chipHTML("월", c.chips?.m)}</div>
       <div class="src bft">1개월 ${sg(c.r1m)} · ${c.idx ? `52주 고점 대비 ${sg(c.dd52)}` : `3개월 상대 ${sg(c.rel3m, 0, "%p")}`}</div></div>`;
   };
-  const sec = (t, list, kr) => (list?.length ? `<h3>${t}</h3><div class="bgrid">${list.map((c) => card(c, kr)).join("")}</div>` : "");
+  // 지수는 정해진 순서로 맨 앞 (코스피·코스닥 / S&P500·나스닥100·러셀2000·동일가중), 업종은 3개월 상대 강도 센 순서
+  const IO = ["KOSPI", "KOSDAQ", "SPY", "QQQ", "IWM", "RSP"], r3 = (c) => c.rel3m ?? -999;
+  const order = (list) => [...list.filter((c) => c.idx).sort((a, b) => IO.indexOf(a.sym) - IO.indexOf(b.sym)), ...list.filter((c) => !c.idx).sort((a, b) => r3(b) - r3(a))];
+  const sec = (t, list, kr) => (list?.length ? `<h3>${t}</h3><div class="bgrid">${order(list).map((c) => card(c, kr)).join("")}</div>` : "");
   return `<h2>🗺 시장 그룹판 <span class="src">일·주·월 추세 · 2년 주봉 종가와 30주선 · ${esc(B.updated_at || "")}</span></h2>
     <div class="note src">칩: <span class="bchip up">일▲</span> 이평 위·이평 상승 · <span class="bchip down">주▼</span> 이평 아래·이평 하락 · <span class="bchip mix">월▲</span> 엇갈림 · <span class="bchip up chg">일▲</span> 오늘 바뀜 · 일 = 50일선, 주 = 30주선, 월 = 10개월선 · 업종은 3개월 상대수익률(지수 대비) 순 · 주황 테두리 = 오늘 칩이 바뀐 곳</div>
     ${sec("🇰🇷 한국 — 업종은 KRX 업종지수(구성종목 시총 가중)를 따라가는 ETF", B.kr, true)}${sec("🇺🇸 미국 — 지수·섹터·산업 ETF", B.us, false)}`;
