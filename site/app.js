@@ -2749,7 +2749,7 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
-    const issueHtml = (await issuesBlock(code)) + (await repBlock(code)) + (await keyBlock(code));
+    const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + (await keyBlock(code));
     const capexHtml = await capexBlock(code);
     $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + capexHtml + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
@@ -3412,7 +3412,7 @@ function tpChg(x, mkt) {  // 목표주가: 이전 → 지금 (▲▼ 몇 %) · �
 }
 // 요약 카드 (reports.yaml): 증권사·목표가 변화·근거·EPS/PER 변화 — 원문은 링크로
 function repNote(x, mkt) {
-  return `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>${esc(x.firm || "")}</b> <span class="src">${esc(x.d || "")}${x.t ? ` · ${esc(x.t)}` : ""}</span>
+  return `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>${IB_FIRM.test(x.firm || "") && mkt !== "US" ? "🌍 " : ""}${esc(x.firm || "")}</b> <span class="src">${esc(x.d || "")}${x.t ? ` · ${esc(x.t)}` : ""}</span>
     <div style="margin-top:4px">🎯 ${tpChg(x, mkt)}${x.rating ? ` · ${esc(x.rating)}` : ""}</div>
     ${(x.why || []).length ? `<ul class="irl">${x.why.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
     ${x.eps ? `<div class="src">📊 ${esc(x.eps)}</div>` : ""}${x.val ? `<div class="src">🧮 ${esc(x.val)}</div>` : ""}
@@ -3436,6 +3436,7 @@ function repSum(r) {
 }
 async function loadReports() {
   try { await repGet(); } catch (_) { $("#reportsBody").innerHTML = `<div class="empty">리포트를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
+  try { await newsGet(); } catch (_) { /* 해외 증권사 기사만 빠짐 */ }
   const all = REPS.stocks || [], grps = ["전체", ...new Set(all.map((r) => r.group))];
   $("#reportsIntro").innerHTML = `${esc(REPS.updated_at || "")} 갱신 · ${esc(REPS.src || "")}<br><span class="src">원문은 증권사 PDF 링크로만 — 여기엔 숫자와 짧은 요약 · 참고용 (매수·매도 추천 아님)</span>`;
   const latest = (r) => r.notes?.[0]?.d || r.list?.[0]?.d || "";
@@ -3444,7 +3445,7 @@ async function loadReports() {
   $("#reportsBody").innerHTML = (REP_CODE ? `<div class="note"><a href="#reports">← 전체 종목 리포트</a></div>` : `<div class="seg repmk" style="margin-bottom:8px"><button data-mk="KR" class="${REP_MKT === "KR" ? "on" : ""}">🇰🇷 한국 리포트</button><button data-mk="US" class="${REP_MKT === "US" ? "on" : ""}">🇺🇸 미국 리포트</button></div>
     <div class="chips repgrp" style="margin-bottom:10px">${grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === REP_GRP ? "on" : ""}">${esc(g)}</button>`).join("")}</div>`)
     + `<div class="grid g2">${list.map((r) => `<div class="card" id="rep-${esc(r.code)}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:17px">${esc(r.name)}</b>
-      <span class="src">${esc(r.group)} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>${repSum(r)}${(r.notes || []).map((x) => repNote(x, r.market)).join("")}${repTable(r, 15)}</div>`).join("") || `<div class="empty">리포트가 없어요.</div>`}</div>`;
+      <span class="src">${esc(r.group)} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>${repSum(r)}${(r.notes || []).map((x) => repNote(x, r.market)).join("")}${repTable(r, 15)}${ibHTML(r.code)}</div>`).join("") || `<div class="empty">리포트가 없어요.</div>`}</div>`;
 }
 document.addEventListener("click", (e) => {
   const m = e.target.closest("#reportsBody .repmk button"), g = e.target.closest("#reportsBody .repgrp button");
@@ -3454,16 +3455,34 @@ document.addEventListener("click", (e) => {
 // 🎯 증권사 시각 (종목 상세, 핵심 이슈 아래): 요약 1개 + 최근 리포트 4개 → 리포트 탭으로
 async function repBlock(code) {
   let r;
-  try { r = (await repGet()).stocks.find((x) => x.code === code); } catch (_) { return ""; }
-  if (!r || (!(r.notes || []).length && !(r.list || []).length)) return "";
-  return `<h3>🎯 증권사 시각 <span class="src"><a href="#reports/${esc(code)}">리포트 탭에서 전체 보기 →</a></span></h3><div class="card">${repSum(r)}
-    ${(r.notes || []).slice(0, 1).map((x) => repNote(x, r.market)).join("")}${repTable(r, 4)}
-    <div class="note"><a href="#reports/${esc(code)}">📑 ${esc(r.name)} 리포트 전체 (요약·목표가 변화) 보기 →</a></div></div>`;
+  try { r = (await repGet()).stocks.find((x) => x.code === code); } catch (_) { r = null; }
+  try { await newsGet(); } catch (_) { /* 뉴스 없으면 해외 증권사 기사만 빠짐 */ }
+  const ib = ibHTML(code), has = r && ((r.notes || []).length || (r.list || []).length);
+  if (!has && !ib) return "";
+  return `<h3>🎯 증권사 시각 <span class="src"><a href="#reports/${esc(code)}">리포트 탭에서 전체 보기 →</a></span></h3><div class="card">${has ? `${repSum(r)}
+    ${(r.notes || []).slice(0, 2).map((x) => repNote(x, r.market)).join("")}${repTable(r, 4)}` : ""}${ib}
+    <div class="note"><a href="#reports/${esc(code)}">📑 ${esc(r?.name || "")} 리포트 전체 (요약·목표가 변화) 보기 →</a></div></div>`;
+}
+// 🌍 해외 증권사(골드만·JP모건·모건스탠리 등)가 한국 종목에 낸 리포트 — 원문이 비공개라 그걸 다룬 기사 (news.json ib)
+const IB_FIRM = /골드만|JP모건|제이피모건|모건\s?스탠리|맥쿼리|씨티|노무라|UBS|CLSA|HSBC|번스타인|BofA|뱅크오브아메리카|메릴린치|도이치|바클레이즈|제프리스/i;
+function ibHTML(code) {
+  const L = (NEWS?.stocks?.find((x) => x.code === code)?.ib || []).slice(0, 5);
+  return L.length ? `<div class="news-h" style="margin-top:10px">🌍 해외 증권사 리포트 (기사로 알려진 것 · 원문은 비공개)</div>${newsList(L)}` : "";
 }
 
 /* ---------- 📰 뉴스 탭: 내 종목 · 경쟁사 · 외신 (config/news.yaml, Google 뉴스 30일치 쌓임) ---------- */
 let NEWS = null, NEWS_GRP = "전체", NEWS_CODE = "";  // NEWS_CODE = '#news/코드' 로 들어오면 그 종목만
 const newsGet = async () => { if (!NEWS) NEWS = await (await fetch("data/news.json?t=" + Date.now(), { cache: "no-store" })).json(); return NEWS; };
+// 📢 중요 공시 (data/filings.json): 공급계약(매출 10%+·글로벌/대기업) · 자사주 · 배당 · 시설투자 · 장래계획 · 임원·대주주 1억+ 장내 매매
+let FILINGS = null;
+async function filingsBlock(code) {
+  if (FILINGS === null) { try { FILINGS = await (await fetch("data/filings.json?t=" + encodeURIComponent(DASH.updated_at))).json(); } catch (_) { FILINGS = {}; } }
+  const rows = FILINGS.companies?.[code] || [];
+  if (!rows.length) return "";
+  const cap = DASH.stocks.find((x) => x.code === code)?.market_cap;
+  return `<h3>📢 중요 공시 <span class="src">${esc(FILINGS.rule || "")} · ${esc(FILINGS.updated_at || "")}</span></h3><div class="card">
+    <ul class="irl">${rows.map((r) => `<li><span class="src">${esc(r.d)}</span> <span class="qtag${r.lv === "bad" ? " bad" : r.lv === "good" ? "" : " muted"}">${esc(r.k)}</span> ${esc(r.t)}${r.x ? ` — <b>${esc(r.x)}</b>` : ""}${cap && r.amt && /공급계약|시설/.test(r.k) ? ` <span class="src">시총 대비 ${n((r.amt / cap) * 100, 1)}%</span>` : ""}${r.why ? ` <span class="src">· ${esc(r.why)}</span>` : ""}${r.u ? ` <a href="${esc(r.u)}" target="_blank" rel="noopener">공시</a>` : ""}</li>`).join("")}</ul></div>`;
+}
 // 📰 핵심 이슈 (종목 상세, 실적발표 아래): news.yaml issues 짧은 이슈 + 📌 고정 기사 + 최근 기사 3개 → 뉴스 탭으로
 async function issuesBlock(code) {
   let r;

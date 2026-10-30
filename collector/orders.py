@@ -45,11 +45,8 @@ def _num(s):
         return None
 
 
-def parse_doc(rcept_no):
-    path = ODIR / f"{rcept_no}.json"
-    cached = read_json(path)
-    if cached:
-        return cached
+def doc_text(rcept_no):
+    """공시 본문(첫 문서)을 '라벨 | 값' 모양의 한 줄 글자로."""
     r = HTTP.get("https://opendart.fss.or.kr/api/document.xml", params={"crtfc_key": dart_key(), "rcept_no": rcept_no})
     z = zipfile.ZipFile(io.BytesIO(r.content))
     data = z.read(z.namelist()[0])
@@ -60,7 +57,15 @@ def parse_doc(rcept_no):
             break
         except UnicodeDecodeError:
             continue
-    t = _clean(raw or data.decode("utf-8", "ignore"))
+    return _clean(raw or data.decode("utf-8", "ignore"))
+
+
+def parse_doc(rcept_no):
+    path = ODIR / f"{rcept_no}.json"
+    cached = read_json(path)
+    if cached:
+        return cached
+    t = doc_text(rcept_no)
     # 정정 공시는 '정정후' 값이 본문 아래 원래 양식에 다시 나오므로 본문(양식) 부분부터 읽는다
     body = t
     k = t.rfind("1. 판매ㆍ공급계약 구분")

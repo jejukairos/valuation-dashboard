@@ -873,6 +873,10 @@ def main():
         if ins.get("major_sell") or ins.get("exec_buyers"):  # 최근 3개월 대주주 장내매도 / 임원 장내매수 (깡토 백테스트에서 의미 있던 두 신호)
             c["insider"] = {k: ins.get(k) for k in ("major_sell", "exec_buyers", "buy", "sell")}
 
+    print("■ 중요 공시")
+    import filings
+    write_json(DATA / "filings.json", filings.collect(hd))  # 📢 종목 상세 '중요 공시' (공급계약·자사주·배당·시설투자·장래계획·임원 매매)
+
     print("■ 뉴스")
     import news
     write_json(DATA / "news.json", news.collect(todo))

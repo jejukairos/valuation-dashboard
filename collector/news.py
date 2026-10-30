@@ -9,8 +9,12 @@ from email.utils import parsedate_to_datetime
 from common import CACHE, HTTP, KST, REPORT, load_yaml, now_kst, read_json, write_json
 
 KEEP_DAYS = 30
-CAP = {"own": 15, "rivals": 10, "en": 10}  # 기사 주소가 길어서 종목당 이 정도만 (뉴스 파일 크기)
+CAP = {"own": 15, "rivals": 10, "en": 10, "ib": 10}  # 기사 주소가 길어서 종목당 이 정도만 (뉴스 파일 크기)
 EDITION = {"ko": {"hl": "ko", "gl": "KR", "ceid": "KR:ko"}, "en": {"hl": "en-US", "gl": "US", "ceid": "US:en"}}
+# 🌍 해외 증권사가 한국 종목에 낸 리포트는 원문이 공개되지 않아서, 그 리포트를 다룬 기사만 모은다 (제목에 종목 + 증권사)
+IB = ["골드만", "JP모건", "제이피모건", "모건스탠리", "모건 스탠리", "맥쿼리", "씨티", "노무라", "UBS", "CLSA", "HSBC", "번스타인", "BofA",
+      "뱅크오브아메리카", "메릴린치", "도이치", "바클레이즈", "제프리스"]
+IB_RE = re.compile("|".join(map(re.escape, IB)), re.I)
 
 
 def norm(t):
@@ -28,8 +32,11 @@ def same(a, b):
     return bool(x and y) and len(x & y) / len(x | y) >= 0.4
 
 
-def search(terms, nots=(), lang="ko"):
-    q = " OR ".join(f'"{t}"' for t in terms) + "".join(f" -{w}" for w in nots) + " when:7d"
+def search(terms, nots=(), lang="ko", ib=False):
+    q = " OR ".join(f'"{t}"' for t in terms)
+    if ib:  # (종목) (증권사 중 하나) 둘 다 든 기사
+        q = f"({q}) ({' OR '.join(chr(34) + w + chr(34) for w in dict.fromkeys(IB))})"
+    q += "".join(f" -{w}" for w in nots) + " when:7d"
     r = HTTP.get("https://news.google.com/rss/search", params={"q": q, **EDITION[lang]})
     keys, bad = [norm(t) for t in terms], [norm(w) for w in nots]
     out = []
@@ -39,7 +46,7 @@ def search(terms, nots=(), lang="ko"):
             title = title[: -len(src) - 3]
         t = norm(title)
         hit = next((terms[i] for i, k in enumerate(keys) if k in t), None)
-        if not hit or any(w in t for w in bad):  # 본문에만 검색어가 있는 관계없는 기사는 뺀다
+        if not hit or any(w in t for w in bad) or (ib and not IB_RE.search(title)):  # 본문에만 검색어가 있는 관계없는 기사는 뺀다
             continue
         out.append({"t": title.strip(), "s": src, "u": it.findtext("link"), "k": hit,
                     "d": parsedate_to_datetime(it.findtext("pubDate")).astimezone(KST).strftime("%Y-%m-%d %H:%M")})
@@ -73,14 +80,15 @@ def collect(todo):
         mine = cache.setdefault(code, {})
         row = {"code": code, "name": h["name"], "group": g, "also": h.get("_also") or [], "market": h.get("market", "KR").upper(),
                "rival_terms": c.get("rivals") or [], "pins": c.get("pins") or [], "issues": c.get("issues") or []}  # issues = 종목 상세 '📰 핵심 이슈'
+        kr = row["market"] == "KR"
         for kind, terms, lang in (("own", c.get("own") or [h["name"]], "ko"), ("rivals", c.get("rivals"), "ko"),
-                                  ("en", c.get("en"), "en")):
+                                  ("en", c.get("en"), "en"), ("ib", (c.get("own") or [h["name"]])[:1] if kr else None, "ko")):
             if terms:
                 keys, bad = [norm(t) for t in terms], [norm(w) for w in c.get("not") or ()]
                 if mine.get(kind):  # 검색어를 바꾸면 쌓아 둔 기사도 새 검색어로 다시 거른다
                     mine[kind] = [x for x in mine[kind] if any(k in norm(x["t"]) for k in keys) and not any(w in norm(x["t"]) for w in bad)]
                 try:
-                    mine[kind] = merge(mine.get(kind), search(terms, c.get("not") or (), lang), now, CAP[kind])
+                    mine[kind] = merge(mine.get(kind), search(terms, c.get("not") or (), lang, ib=kind == "ib"), now, CAP[kind])
                 except Exception as e:  # noqa: BLE001 - 못 받으면 쌓아 둔 뉴스를 그대로 보여준다
                     fails.append(f"{h['name']} {kind}: {str(e)[:60]}")
             row[kind] = [{"t": x["t"], "s": x["s"], "u": x["u"], "d": x["d"], "k": x.get("k"), "n": len(x["ss"]),

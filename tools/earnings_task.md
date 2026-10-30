@@ -49,6 +49,10 @@
      · ndr: 비공개 NDR·그룹콜·프리뷰 콜이 기사·리포트로 알려졌으면 {d, t, lines, after 그 뒤 주가, u} — 원문이 없으니 '보도'·'추측'을 밝히고,
        확인 안 된 제재·위반은 단정하지 않는다. 주가는 site/data/dashboard.json 의 chart 종가로 계산.
      관심·공동 종목은 diff 3~6줄만 (시간 되면).
+     · 네이버 자막이 없으면('다시듣기를 제공하지 않는 기업') 노다지 IR노트(https://contents.premium.naver.com/ystreet/irnote/contents)의
+       '[컨콜노트-전체공개] {회사}' 글을 node tools/page_dump.mjs <글 주소> transcripts\{코드}_{연도}Q{분기}_irnote.txt <Edge 디버깅 포트> 6 으로
+       바로 저장 (나중에 비공개로 바뀔 수 있음 · Edge 를 --remote-debugging-port 로 먼저 띄움, ec_read.mjs 와 같은 방식).
+       사이트에는 원문을 옮기지 않고 우리 말 요약 + links 에 링크만. 유료 노트는 제목만 보이니 ndr 에 '제목만 확인'으로.
    - next: 🔮 다음 분기 부문별 추정 — {q, mood 발표 전 기대감(낮음·보통·높음), mood_why, segs: [{n 부문, rev, op, why 근거}], check: [발표 때 확인할 것]}.
      근거는 회사 가이던스·지난 분기 흐름·1년 전 같은 분기 숫자로 계산이 보이게 (예: "가이던스 2,400억$ − AWS 500억$"). 사용자가 직접 검증하고 다시 묻는 용도라
      계산 과정을 숨기지 말고, 모르는 칸은 "-". 매수·매도 추천 문구 금지. 기대감은 화면 🌡(3개월 주가·PER 밴드 위치·EPS 예상치 90일 변화)도 참고.
