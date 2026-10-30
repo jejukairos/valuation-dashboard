@@ -37,10 +37,12 @@ def net_cash(ticker, cap):
     xl = nc + lease  # 리스 부채는 빼고 (회사가 어닝콜에서 말하는 '부채' 기준)
     ce = get("Cash And Cash Equivalents")
     ce = ce if ce is not None and ce <= cash else cash
+    # 🏦 빚 조달 추적: 분기말 총차입금(회사채·대출·리스) 잔액, 야후가 주는 5~6분기
+    dq = {str(k.date()): float(v) for k, v in bs.loc["Total Debt"].items() if v == v} if "Total Debt" in bs.index else {}
     # 💵 현금 창고 그림용 (그 나라 돈 그대로): 현금·현금성 / 단기투자 / 총차입금(리스 포함) / 리스
     return {"net_cash": nc, "net_cash_pct": rnd(nc / cap * 100, 1) if cap else None, "net_cash_asof": c.strftime("%Y-%m"),
             "net_cash_xl": xl, "net_cash_xl_pct": rnd(xl / cap * 100, 1) if cap else None,
-            "cash_raw": {"cash": ce, "sti": cash - ce, "debt": debt, "lease": lease}}
+            "cash_raw": {"cash": ce, "sti": cash - ce, "debt": debt, "lease": lease, "debt_q": dq}}
 
 
 def _peg(per12, eps_cagr):

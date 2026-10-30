@@ -58,7 +58,8 @@ def _by_period(inc, cf):
             "rnd": (inc, "Research And Development"), "sm": (inc, "Selling And Marketing Expense"),
             "ga": (inc, "General And Administrative Expense"), "sga": (inc, "Selling General And Administration"),
             "opex": (inc, "Operating Expense"), "op": (inc, "Operating Income"), "tax": (inc, "Tax Provision"), "ni": (inc, "Net Income"),
-            "fcf": (cf, "Free Cash Flow"), "capex": (cf, "Capital Expenditure")}
+            "fcf": (cf, "Free Cash Flow"), "capex": (cf, "Capital Expenditure"),
+            "ltdi": (cf, "Long Term Debt Issuance")}  # 🏦 회사채·장기 대출로 새로 빌린 돈
     out = {}
     for col in inc.columns:
         d = {}

@@ -31,6 +31,7 @@ NOTES = load_yaml("notes.yaml") or {}  # 적정주가 칸 메모 (증권사 의�
 SEGC = load_yaml("seg_cons.yaml") or {}  # 🎯 사업부문별 컨센서스 vs 실적
 SEC_LONG = read_json(CACHE / "sec_longq.json") or {}  # 미국 10년 분기 실적 (tools/sec_backfill.py 로 받아 둠, 백만 달러)
 CMP = load_yaml("compare.yaml") or {}  # ⚖️ 비교 탭 설정·손으로 적는 자료 (삼성 DS·낸드·클라우드)
+DEBT_NEWS = load_yaml("debt.yaml") or {}  # 🏦 회사채 발행 뉴스 메모 (종목 코드 → [{date, text, url}])
 LONGQ, MCAP_W = {}, {}  # 비교 탭에 쓸 종목별 10년 실적·주봉 시가총액
 BIGTECH = [("MSFT", "마이크로소프트"), ("GOOG", "알파벳"), ("META", "메타"), ("AMZN", "아마존")]  # 🏗 빅테크 CapEx (메모리 수요)
 M7 = BIGTECH + [("AAPL", "애플"), ("NVDA", "엔비디아"), ("TSLA", "테슬라")]  # 💸 M7 현금흐름·CapEx 가이던스
@@ -342,6 +343,9 @@ def stock_detail(h, rates_now, fx):
             tbl.update(nc)
         # 최근 4분기 FCF 합계와 시총 대비 (연간 FCF 는 투자가 급증하는 구간을 늦게 보여줘서)
         q4 = [q.get("fcf") for _, q in sorted((QTRS.get(tkr) or {}).items())[-4:]]
+        # 🏦 분기별 회사채·장기 차입 발행 (야후 현금흐름표) + 뉴스 메모 (config/debt.yaml)
+        tbl["debt_iss"] = {e: q["ltdi"] for e, q in sorted((QTRS.get(tkr) or {}).items())[-6:] if q.get("ltdi") is not None}
+        tbl["debt_news"] = DEBT_NEWS.get(code) or []
         if len(q4) == 4 and all(v is not None for v in q4):
             tbl["fcf_ttm"] = sum(q4)
             tbl["fcf_ttm_yield"] = rnd(sum(q4) / now["market_cap"] * 100, 1) if now.get("market_cap") else None
@@ -542,7 +546,7 @@ def stock_detail(h, rates_now, fx):
     k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적을 발표한 지 3일 안이거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
     if k.get("date") and (now_kst().date() - pd.Timestamp(k["date"]).date()).days <= 3:
         det["card"]["kq_new"] = k["latest"]
-        det["card"]["kq_brief"] = {f: k.get(f) for f in ("latest", "prelim", "date", "rows", "quarters", "est_bar", "filing", "annual", "fwd")}  # 첫 화면 '🧾 실적 발표'
+        det["card"]["kq_brief"] = {f: k.get(f) for f in ("cur", "latest", "prelim", "date", "rows", "quarters", "est_bar", "filing", "annual", "fwd")}  # 첫 화면 '🧾 실적 발표'
     if k.get("waiting"):
         det["card"]["kq_wait"] = (k.get("next") or {}).get("q")
     return det

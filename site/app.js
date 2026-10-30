@@ -21,19 +21,14 @@ function n(v, d = 0) {
   return Number(v).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 function won(v) { return v == null ? "N/A" : n(v) + "원"; }
-// 달러 옆 괄호 원화 (최근 환율): 30.2만원 · 1.3억원 · 135조원 처럼 짧게
-function krwShort(w) {
-  const a = Math.abs(w);
-  return a >= 1e12 ? n(w / 1e12, 1) + "조원" : a >= 1e8 ? n(w / 1e8, 1) + "억원" : a >= 1e4 ? n(w / 1e4, a >= 1e6 ? 0 : 1) + "만원" : n(w) + "원";
-}
-function krw(usd) { const fx = DASH?.fx; return usd == null || !fx ? "" : ` <span class="krw">(약 ${krwShort(usd * fx)})</span>`; }
-function money(v, cur) { return v == null ? "N/A" : cur === "USD" ? "$" + n(v, 2) + krw(v) : n(v) + "원"; }
+function money(v, cur) { return v == null ? "N/A" : cur === "USD" ? "$" + n(v, 2) : n(v) + "원"; }
 function bigWon(v) {
   if (v == null) return "N/A";
   if (v >= 1e12) return n(v / 1e12, 1) + "조원";
   if (v >= 1e8) return n(v / 1e8) + "억원";
   return n(v) + "원";
 }
+const capTxt = (o) => (o.market_cap_usd ? `$${n(o.market_cap_usd / 1e9, o.market_cap_usd >= 1e11 ? 0 : 1)}B` : bigWon(o.market_cap));  // 미국 = $B, 한국 = 조원
 function pct(v, d = 1, sign = false) {
   if (v == null) return "N/A";
   const r = Number(v.toFixed(d)) || 0; // -0 방지
@@ -138,7 +133,7 @@ function bondAlert(c) {
 function fairTableHTML(c) {
   const fv = c.fv || {};
   const usd = c.currency === "USD";
-  const fmtP = (v) => (v == null ? "N/A" : usd ? "$" + n(v, 0) + krw(v) : n(v));
+  const fmtP = (v) => (v == null ? "N/A" : usd ? "$" + n(v, 0) : n(v));
   return Object.entries(fv).map(([kind, t], i) => {
     if (!t.rows || !t.rows.length) return "";
     const base = kind === "PER" ? "EPS" : "BPS";
@@ -156,7 +151,7 @@ function scenHTML(c) {
   const s = c.scen;
   if (!s || !s.base) return "";
   const usd = c.currency === "USD";
-  const fmtP = (v) => (usd ? "$" + n(v, 0) + krw(v) : n(v));
+  const fmtP = (v) => (usd ? "$" + n(v, 0) : n(v));
   // Bear = 하방(이 정도면 바닥, 더 빠지면 안전마진) · Base = 적정주가(평균) · Bull = 최대(금리가 다시 내려갈 때)
   const pts = [["bear", "Bear", "하방"], ["base", "Base", "적정주가"], ["bull", "Bull", "최대"]];
   const bar = (v) => {  // 하방·적정·최대·지금 위치 막대 (보는 칸마다 눈금을 다시 잡음)
@@ -248,7 +243,7 @@ function growthHTML(c) {
   if (!g) return "";
   const usd = c.currency === "USD";
   const fmtE = (v) => (v == null ? "-" : usd ? n(v, 2) : n(v));
-  const fmtP = (v) => (v == null ? "-" : usd ? "$" + n(v, 0) + krw(v) : n(v));
+  const fmtP = (v) => (v == null ? "-" : usd ? "$" + n(v, 0) : n(v));
   const e27 = c.scen.e27, alt = c.scen.alt;
   const warn = alt ? `<div class="warnbox" style="margin-top:6px">⚠ 과거 성장률과 앞으로 예상 성장률이 2배 넘게 달라요. 다른 쪽(${n(alt.g, 1)}%)으로 계산하면
     Bear ${fmtP(alt.bear)} · <b>Base ${fmtP(alt.base)}</b> (${pct((alt.base / c.price - 1) * 100, 0, true)}) · Bull ${fmtP(alt.bull)}</div>` : "";
@@ -298,7 +293,7 @@ function saAge(c) {
 function somongHTML(c) {
   const s = c.us_tpl?.somong;
   if (!s) return "";
-  const $f = (v) => (v == null ? "-" : "$" + n(v, 0) + krw(v));
+  const $f = (v) => (v == null ? "-" : "$" + n(v, 0));
   const up = (v) => (v == null ? "-" : `<b class="${v >= 0 ? "up" : "dn"}">${pct(v, 0, true)}</b>`);
   const box = (title, k, note) => {
     const x = s[k];
@@ -390,7 +385,7 @@ function streetHTML(c) {
 function tipranksHTML(c) {
   const t = c.us_tpl?.tipranks;
   if (!t || !t.avg) return "";
-  const cell = (lab, v) => `<div><span>${lab}</span><b>$${n(v, 0)}${krw(v)}</b><em class="${v >= c.price ? "up" : "dn"}">${pct((v / c.price - 1) * 100, 0, true)}</em></div>`;
+  const cell = (lab, v) => `<div><span>${lab}</span><b>$${n(v, 0)}</b><em class="${v >= c.price ? "up" : "dn"}">${pct((v / c.price - 1) * 100, 0, true)}</em></div>`;
   return `<div class="tpl" onclick="event.stopPropagation()"><div class="tpl-t">🎯 애널리스트 목표주가 <span class="src">TipRanks · 최근 3개월 · ${t.n ?? "-"}명</span></div>
     <div class="scen3" style="margin-top:6px">${cell("최저", t.low)}${cell("평균", t.avg)}${cell("최고", t.high)}</div>
     <div class="note">의견 수: 매수 ${t.buy ?? "-"} · 보유 ${t.hold ?? "-"} · 매도 ${t.sell ?? "-"} <span class="src">(애널리스트 의견을 옮긴 것, 이 사이트의 추천 아님)</span></div></div>`;
@@ -437,7 +432,7 @@ function stockCard(c) {
   return `<button class="card stock" data-code="${esc(c.code)}">
     <div class="row1"><span class="name">${esc(c.name)}</span><span class="price">${money(c.price, c.currency)}</span></div>
     ${pe.map((x) => `<div class="pe">${x}</div>`).join("")}
-    <div class="sub">시가총액 ${bigWon(c.market_cap)}${c.market_cap_usd ? ` ($${n(c.market_cap_usd / 1e9, 0)}B)` : ""} ${c.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""}</div>
+    <div class="sub">시가총액 ${capTxt(c)} ${c.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""}</div>
     <div class="row2">${lamp(c.verdict)}<div>
       <div class="verdict ${c.verdict}">${L.stock}</div>
       <div class="why">${esc(c.why)}</div></div></div>
@@ -482,17 +477,24 @@ function cmpCols() {
   const P = (d) => (v) => (v == null ? "-" : n(v, d));
   const R = (d) => (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, d)}%</span>`);
   const arrow = (i) => `${ys[i]}→${ys[i + 1]}`;
+  // 🇺🇸 탭은 모두 $B: 순현금은 달러 원본(cash_raw), 없으면 원화 값을 수집 때 환율로 되돌림
+  const usd = MKT === "US", Bn = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, 1)}</span>`);
+  const ncUsd = (s, xl) => { const r = s.tbl?.cash_raw, v = s.tbl?.[xl ? "net_cash_xl" : "net_cash"];
+    return r ? (r.cash + r.sti - r.debt + (xl ? r.lease : 0)) / 1e9 : v != null && DASH.fx ? v / DASH.fx / 1e9 : null; };
   const c = {
-    cap: { h: "시총<br>(조원)", v: (s) => (s.market_cap ? s.market_cap / 1e12 : null), f: P(1) },
+    cap: usd ? { h: "시총<br>($B)", v: (s) => (s.market_cap_usd ? s.market_cap_usd / 1e9 : null), f: P(0) }
+      : { h: "시총<br>(조원)", v: (s) => (s.market_cap ? s.market_cap / 1e12 : null), f: P(1) },
     salesC: { h: `매출<br>3년 연평균`, v: t("sales_cagr"), f: G },
     opC: { h: `영업이익<br>3년 연평균`, v: t("op_cagr"), f: G },
     epsC: { h: `EPS<br>3년 연평균`, v: t("eps_cagr"), f: G },
     peg: { h: "PEG", v: t("peg"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 2)}${s.cyclical ? "*" : ""}</span>`) },
     per12: { h: "PER<br>12MF", v: t("per12"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 1)}${s.cyclical ? "*" : ""}</span>`) },
     dd: { h: "52주 고점<br>대비", v: t("dd52"), f: (v) => (v == null ? "-" : n(v, 0) + "%") },
-    nc: { h: "순현금 (조원)<br>리스 포함", v: (s) => (s.tbl?.net_cash != null ? s.tbl.net_cash / 1e12 : null), f: (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, 1)}</span>`) },
+    nc: usd ? { h: "순현금 ($B)<br>리스 포함", v: (s) => ncUsd(s, false), f: Bn }
+      : { h: "순현금 (조원)<br>리스 포함", v: (s) => (s.tbl?.net_cash != null ? s.tbl.net_cash / 1e12 : null), f: Bn },
     ncp: { h: "순현금<br>÷ 시총", v: t("net_cash_pct"), f: R(0) },
-    ncx: { h: "순현금 (조원)<br>리스 제외", v: (s) => (s.tbl?.net_cash_xl != null ? s.tbl.net_cash_xl / 1e12 : null), f: (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, 1)}</span>`) },
+    ncx: usd ? { h: "순현금 ($B)<br>리스 제외", v: (s) => ncUsd(s, true), f: Bn }
+      : { h: "순현금 (조원)<br>리스 제외", v: (s) => (s.tbl?.net_cash_xl != null ? s.tbl.net_cash_xl / 1e12 : null), f: Bn },
     ncxp: { h: "순현금 리스 제외<br>÷ 시총", v: t("net_cash_xl_pct"), f: R(0) },
     fcfY: { h: "FCF ÷ 시총<br>최근 4분기", v: t("fcf_ttm_yield"), f: R(1) },
   };
@@ -511,7 +513,7 @@ function cmpCols() {
   for (let i = 0; i < 2; i++) c["dy" + i] = { h: `배당<br>${ys[i + 1]}`, v: t("dy", i), f: (v) => (v == null ? "-" : n(v, 1) + "%") };
   // 엑셀 '간단 벨류' 지표 (야후 연간 실적: 최근 / 1년 전 / 2년 전)
   const ago = ["최근 연간", "1년 전", "2년 전"];
-  const money3 = (v, s) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${s.currency === "USD" ? "$" + n(v / 1e9, 1) + "B" + krw(v) : Math.abs(v) >= 1e12 ? n(v / 1e12, 1) + "조" : n(v / 1e8, 0) + "억"}</span>`);
+  const money3 = (v, s) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${s.currency === "USD" ? "$" + n(v / 1e9, 1) + "B" : Math.abs(v) >= 1e12 ? n(v / 1e12, 1) + "조" : n(v / 1e8, 0) + "억"}</span>`);
   for (let i = 0; i < 3; i++) {
     c["gpm" + i] = { h: `GPM<br>${ago[i]}`, v: t("gpm", i), f: R(1) };
     c["fcf" + i] = { h: `FCF<br>${ago[i]}`, v: t("fcf3", i), f: money3 };
@@ -717,7 +719,7 @@ function qLabel(end) { const [y, m] = end.split("-").map(Number); return m % 3 ?
 function qMoney(v, usd) {
   if (v == null) return "-";
   const a = Math.abs(v), s = v < 0 ? "-" : "";
-  if (usd) return a >= 1e9 ? `${s}$${n(a / 1e9, 1)}B` : `${s}$${n(a / 1e6, 0)}M`;
+  if (usd) return `${s}$${n(a / 1e9, a >= 1e10 || a === 0 ? 1 : 2)}B`;  // 미국은 모두 $B (작으면 소수 둘째 자리)
   return a >= 1e12 ? `${s}${n(a / 1e12, 1)}조` : `${s}${n(a / 1e8, 0)}억`;
 }
 // 막대(값) + 선(%) 미니 차트. 음수 막대는 빨강, 마지막 분기는 진하게
@@ -1067,7 +1069,7 @@ function kqNewsHTML() {
   return `<h2>🧾 실적 발표 <span class="src">최근 3일 · 회색 = 발표 전 예상(컨센서스), 색 = 실적</span></h2>${waitHtml}<div class="grid">${list.map((c) => {
     const k = c.kq_brief;
     const head = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:18px;color:var(--s1)">${esc(c.name)} (${esc(c.code)})</b>
-      <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${bigWon(c.market_cap)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
+      <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${capTxt(c)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
     return `<div class="card">${head}
       <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${k.cur === "USD" ? "발표" : "공시"}</a>` : ""}</div>
       ${priceBox(c)}
@@ -1288,8 +1290,7 @@ document.addEventListener("click", (e) => {
 });
 function cashHTML() {
   const us = CASH_MKT === "US";
-  const f = (v) => (us ? (Math.abs(v) >= 1e9 ? usdB(v / 1e9) : `${v < 0 ? "-" : ""}$${n(Math.abs(v) / 1e6, 0)}M`)
-    : Math.abs(v) >= 1e12 ? `${n(v / 1e12, 1)}조` : `${n(v / 1e8, 0)}억`);
+  const f = (v) => (us ? qMoney(v, true) : Math.abs(v) >= 1e12 ? `${n(v / 1e12, 1)}조` : `${n(v / 1e8, 0)}억`);
   const rows = (DASH?.stocks || []).filter((s) => s.tbl?.cash_raw && (s.market === "US") === us)
     .map((s) => ({ s, ...s.tbl.cash_raw, t: s.tbl.cash_raw.cash + s.tbl.cash_raw.sti })).sort((a, b) => b.t - a.t);
   const seg = `<div class="seg cashmk" style="margin-bottom:8px"><button data-mk="US" class="${us ? "on" : ""}">🇺🇸 미국</button><button data-mk="KR" class="${us ? "" : "on"}">🇰🇷 한국</button></div>`;
@@ -1305,7 +1306,27 @@ function cashHTML() {
   return `<div id="cashBox"><h3>💵 현금 창고 <span class="src">보유·관심 종목 · 최근 분기 재무상태표 (야후) · ${us ? "달러" : "원"}</span></h3><div class="card">${seg}
     <div class="cmp-wrap"><table class="cmp cash"><thead><tr><th>종목 <span class="src">· 기준 분기</span></th><th>현금·현금성</th><th>단기투자</th><th>합계</th><th>빚 (리스 포함)</th><th>순현금</th></tr></thead><tbody>${tr}</tbody></table></div>
     <div class="note src">합계 = 현금·현금성 + 단기투자(단기 국채·정기예금처럼 곧 현금이 되는 것) — CNBC 표의 Total 이에요. 순현금 = 합계 − 빚(차입금·사채·리스 부채). 마이너스면 가진 현금보다 빚이 많아요.
-    증권사·리츠·건설·유통처럼 빚이 사업 구조인 회사는 그대로 비교하기 어려워요. 야후에 새 분기가 올라오면 기준 분기가 바뀌어요.</div></div></div>`;
+    증권사·리츠·건설·유통처럼 빚이 사업 구조인 회사는 그대로 비교하기 어려워요. 야후에 새 분기가 올라오면 기준 분기가 바뀌어요.</div></div>${debtHTML(rows.map((r) => r.s), f)}</div>`;
+}
+// 🏦 빚 조달 추적: 분기말 빚 잔액 추이 + 1년 새 늘어난 빚 + 최근 4분기 회사채·장기 대출 발행 + 뉴스 메모 (config/debt.yaml)
+function debtHTML(list, f) {
+  const day = (d) => new Date(d).getTime() / 864e5;
+  const rows = list.map((s) => {
+    const dq = s.tbl.cash_raw.debt_q || {}, ks = Object.keys(dq).sort(), last = ks.at(-1);
+    const ago = ks.find((k) => Math.abs(day(last) - day(k) - 365) < 40);
+    const iss = Object.entries(s.tbl.debt_iss || {}).sort().slice(-4);
+    return { s, dq, ks, up: ago ? dq[last] - dq[ago] : null, iss: iss.length ? iss.reduce((a, [, v]) => a + v, 0) : null, n: iss.length };
+  }).filter((r) => r.ks.length).sort((a, b) => (b.up ?? -Infinity) - (a.up ?? -Infinity));
+  if (!rows.length) return "";
+  const spark = (dq, ks) => { const mx = Math.max(...ks.map((k) => dq[k]), 1);
+    return `<svg width="${ks.length * 9}" height="22" style="vertical-align:middle">${ks.map((k, i) => `<rect x="${i * 9}" y="${22 - (dq[k] / mx) * 20}" width="6" height="${Math.max(1, (dq[k] / mx) * 20)}" rx="1" fill="${i === ks.length - 1 ? "var(--bad)" : "var(--axis)"}"><title>${esc(k)} ${f(dq[k])}</title></rect>`).join("")}</svg>`; };
+  const tr = rows.map(({ s, dq, ks, up, iss, n: cnt }) => `<tr><td><a href="#stock/${esc(s.code)}">${esc(s.name)}</a><br><span class="src">${esc(ks[0].slice(2, 7).replace("-", "."))}~${esc(ks.at(-1).slice(2, 7).replace("-", "."))}</span></td>
+      <td>${spark(dq, ks)} ${f(dq[ks.at(-1)])}</td><td><b class="${up > 0 ? "neg" : ""}">${up == null ? "-" : (up > 0 ? "+" : "") + f(up)}</b></td>
+      <td>${iss == null ? "-" : f(iss)}${iss != null && cnt < 4 ? ` <span class="src">${cnt}개 분기</span>` : ""}</td></tr>
+      ${(s.tbl.debt_news || []).map((x) => `<tr><td colspan="4" style="white-space:normal;text-align:left;position:static"><span class="src">📰 ${esc(x.date)}</span> ${esc(x.text)}${x.url ? ` <a href="${esc(x.url)}" target="_blank" rel="noopener">기사</a>` : ""}</td></tr>`).join("")}`).join("");
+  return `<h3>🏦 빚 조달 추적 <span class="src">회사채·대출로 얼마나 빌리나 · 분기 재무제표 (야후)</span></h3><div class="card">
+    <div class="cmp-wrap"><table class="cmp cash"><thead><tr><th>종목 <span class="src">· 기간</span></th><th>빚 잔액 (분기말)</th><th>1년 새 늘어난 빚</th><th>회사채·장기 대출 발행<br><span class="src">최근 4분기 합계</span></th></tr></thead><tbody>${tr}</tbody></table></div>
+    <div class="note src">빚 잔액 = 회사채 + 은행 대출 + 리스 부채 (막대 = 분기말, 빨강 = 최근). 발행 = 현금흐름표에서 회사채·장기 대출로 새로 받은 돈 (갚은 돈은 안 뺌). 야후 재무제표는 발표 뒤 며칠~몇 주 늦게 들어와서, 최근 큰 발행은 📰 뉴스 메모로 먼저 적어 둬요.</div></div>`;
 }
 function compareHTML(span) {
   const D = CMPD || {}, cfg = D.cfg || {}, lq = (c) => D.longq?.[c] || {}, fx = (k) => D.fx_q?.[k];
@@ -1769,7 +1790,7 @@ function detailHTML(d) {
   const L = LIGHT[c.verdict] || LIGHT.na;
   let h = `<div class="card" style="margin-top:12px"><div class="light">${lamp(c.verdict)}<div>
       <div class="verdict ${c.verdict}">${L.stock} <span class="sub">${esc(c.why)}</span></div>
-      <div class="big">${money(d.price, d.currency)}</div><div class="sub">${esc(d.price_date)} 종가 · 시가총액 ${bigWon(d.market_cap)} <span class="src">${esc(d.sources.price)}</span></div></div></div>
+      <div class="big">${money(d.price, d.currency)}</div><div class="sub">${esc(d.price_date)} 종가 · 시가총액 ${capTxt(d)} <span class="src">${esc(d.sources.price)}</span></div></div></div>
     <div class="kv"><div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)} (${c.gap == null ? "N/A" : pct(c.gap * 100, 0, true)})</div>
     <div class="k">12개월 선행 PER</div><div class="v">${times(c.fwd_per, 2)}</div>
     </div>${scenHTML(c)}`;
@@ -1941,8 +1962,8 @@ function comboHTML(d) {
   const k = d.kq, qs = (k?.quarters || []).filter((q) => q.sales != null && q.op != null && q.sales > 0).slice(-5);
   if (qs.length < 2) return "";
   const usd = k.cur === "USD", mx = Math.max(...qs.map((q) => q.sales));
-  // 단위: 한국 = 1조 넘으면 조원(소수 한 자리) 아니면 억원, 미국 = $B (10억 달러 미만이면 $M)
-  const [div, unit, dg] = usd ? (mx >= 1e9 ? [1e9, "$B", 1] : [1e6, "$M", 0]) : mx >= 1e4 ? [1e4, "조원", 1] : [1, "억원", 0];
+  // 단위: 한국 = 1조 넘으면 조원(소수 한 자리) 아니면 억원, 미국 = 모두 $B (10억 달러 미만이면 소수 둘째 자리)
+  const [div, unit, dg] = usd ? [1e9, "$B", mx >= 1e10 ? 1 : 2] : mx >= 1e4 ? [1e4, "조원", 1] : [1, "억원", 0];
   const V = (v) => n(v / div, dg), W = 320, x0 = 8, x1 = W - 8, bw = (x1 - x0) / qs.length, top = 84, bot = 150;
   const lo = Math.min(0, ...qs.map((q) => q.op)), hi = mx * 1.1, Y = (v) => bot - ((v - lo) / (hi - lo)) * (bot - top), zero = Y(0);
   const opm = qs.map((q) => (q.op / q.sales) * 100), lmin = Math.min(...opm), lmax = Math.max(...opm), LY = (v) => 62 - ((v - lmin) / (lmax - lmin || 1)) * 34;
