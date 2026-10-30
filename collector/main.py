@@ -542,12 +542,19 @@ def stock_detail(h, rates_now, fx):
         "fv": _fair_table(bands, hist, price, currency,
                           [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
     }
+    ppx = px
     try:  # 📐 주봉 차트 모양 (컵위드핸들·추세선·전고점) — 미국은 배당으로 깎지 않은 주가 (차트 프로그램과 같은 기준)
         ppx = us_stock.price_history(code, div=True) if mkt == "US" and "DIV" not in methods else px
         det["pattern"] = patterns.weekly(ppx, 2 if currency == "USD" else 0)
         det["card"]["pat"] = (det["pattern"] or {}).get("sig") or None
     except Exception as e:  # noqa: BLE001
         REPORT.block("주봉 차트 모양", f"{name}: {str(e)[:60]}")
+    try:  # 📏 이익 vs 주가 (지난 최대 10년, 주가는 배당 뺀 값) — 종목 상세 + 비교표 '성장' 칸
+        det["long"] = C.long_cagr(det["longq"], ppx)
+        if tbl is not None and det["long"]:
+            tbl.update(op10=det["long"]["op_cagr"], px10=det["long"]["px_cagr"], rr10=det["long"]["rerate"])
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("이익 vs 주가 10년", f"{name}: {str(e)[:60]}")
     try:  # 📈 이익 추정치 변화 (매일 쌓음) — 한국 = 와이즈리포트 연간 영업이익 추정(억원), 미국 = 야후 연간 EPS 추정
         if mkt == "KR" and wise and not h.get("data_code"):
             est_track.record(code, {str(y)[2:]: r["op"] for y, r in wise.items() if r.get("estimate") and r.get("op") is not None})

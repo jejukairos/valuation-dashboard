@@ -459,7 +459,41 @@ def judge(price, fair, band_pos):
     return verdict, " · ".join(why), gap
 
 
+def long_cagr(lq, px, max_y=10):
+    """📏 이익 vs 주가 (지난 최대 10년): 영업이익(4분기 합) 연평균 vs 주가 연평균.
+    rerate = (지금 주가 ÷ 최근 4분기 영업이익) ÷ (그때 주가 ÷ 그때 4분기 영업이익) — 1보다 크면 이익보다 주가가 더 올라 '비싸짐'.
+    lq = {'16.1Q': {'op': ..}} (📈 10년 실적), px = 날짜별 종가. 5년이 안 되면 None, 시작·끝 영업이익이 0 이하면 연평균·rerate 는 None."""
+    op = {int(k[:2]) * 4 + int(k[3]) - 1: v["op"] for k, v in (lq or {}).items() if v.get("op") is not None}
+    ttm = lambda i: sum(op[j] for j in range(i - 3, i + 1)) if all(j in op for j in range(i - 3, i + 1)) else None  # noqa: E731
+    end = max((i for i in op if ttm(i) is not None), default=None)
+    start = min((i for i in op if ttm(i) is not None and end - i <= 4 * max_y), default=None) if end is not None else None
+    if start is None or end - start < 20:
+        return None
+    qe = lambda i: pd.Timestamp(2000 + i // 4, i % 4 * 3 + 3, 1) + pd.offsets.MonthEnd(0)  # noqa: E731
+    p0, p1 = px[px.index <= qe(start)], px.iloc[-1]
+    if p0.empty:
+        return None
+    p0, y_op = float(p0.iloc[-1]), (end - start) / 4
+    y_px = (px.index[-1] - qe(start)).days / 365.25
+    o0, o1 = ttm(start), ttm(end)
+    ok = o0 > 0 and o1 > 0
+    lab = lambda i: f"{i // 4:02d}.{i % 4 + 1}Q"  # noqa: E731
+    return {"from": lab(start), "to": lab(end), "y": round(y_op, 1), "op0": round(o0), "op1": round(o1),
+            "op_cagr": round(((o1 / o0) ** (1 / y_op) - 1) * 100, 1) if ok else None, "px0": p0, "px1": float(p1),
+            "px_cagr": round(((float(p1) / p0) ** (1 / y_px) - 1) * 100, 1),
+            "rerate": round((float(p1) / o1) / (p0 / o0), 2) if ok else None}
+
+
 if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% 넘게 높을 때만 업종 PER → 없으면 PER 밴드
+    # 📏 이익 vs 주가: 10년 동안 영업이익 4배(4분기 합 4→16), 주가 2배(100→200) → 이익 연 14.9%, 주가 연 ~7.2%, 배수 0.5배(싸짐)
+    lq = {f"{y:02d}.{q}Q": {"op": 1 if y == 16 else 4 if y == 26 else 2} for y in range(16, 27) for q in range(1, 5)}
+    px_ = pd.Series([100.0, 200.0], index=pd.to_datetime(["2016-12-30", "2026-12-31"]))
+    lc = long_cagr(lq, px_)
+    assert (lc["from"], lc["to"], lc["y"], lc["op0"], lc["op1"], lc["op_cagr"], lc["rerate"]) == ("16.4Q", "26.4Q", 10.0, 4, 16, 14.9, 0.5), lc
+    assert 7.0 < lc["px_cagr"] < 7.3, lc
+    assert long_cagr({k: v for k, v in lq.items() if k >= "23"}, px_) is None  # 5년 안 됨
+    lq["16.1Q"]["op"] = -9  # 적자에서 시작 → 연평균 못 구함
+    assert long_cagr(lq, px_)["op_cagr"] is None
     m = {"bear": 30, "base": 45, "bull": 60}
     sec = {"kind": "PER", "bear": 10, "base": 20, "bull": 30}
     band = {"periods": {"10y": {"low": 8, "avg": 15, "high": 25}}}

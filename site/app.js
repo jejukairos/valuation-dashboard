@@ -487,6 +487,9 @@ function cmpCols() {
     salesC: { h: `매출<br>3년 연평균`, v: t("sales_cagr"), f: G },
     opC: { h: `영업이익<br>3년 연평균`, v: t("op_cagr"), f: G },
     epsC: { h: `EPS<br>3년 연평균`, v: t("eps_cagr"), f: G },
+    op10: { h: "영업이익<br>10년 연평균", v: t("op10"), f: G },  // 📏 지난 최대 10년 (종목 상세 '이익 vs 주가')
+    px10: { h: "주가<br>10년 연평균", v: t("px10"), f: G },
+    rr10: { h: "이익 대비 주가<br>10년 새 몇 배", v: t("rr10"), f: (v) => (v == null ? "-" : `${n(v, 1)}배`) },
     peg: { h: "PEG", v: t("peg"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 2)}${s.cyclical ? "*" : ""}</span>`) },
     per12: { h: "PER<br>12MF", v: t("per12"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 1)}${s.cyclical ? "*" : ""}</span>`) },
     dd: { h: "52주 고점<br>대비", v: t("dd52"), f: (v) => (v == null ? "-" : n(v, 0) + "%") },
@@ -539,7 +542,7 @@ const CMP_GROUPS = [
   // 앞쪽은 올해(26E) 한눈에, "|" 뒤로는 같은 지표를 연도순으로 이어서 (기울기·연속성 보기)
   ["sum", "요약", ["cap", "salesC", "opC", "per12", "peg", "opm1", "roe1", "debt1", "pf1", "dy0", "dd",
     "|", "opm0", "opm1", "opm2", "opm3", "|", "roe0", "roe1", "roe2", "|", "debt0", "debt1", "debt2", "debt3", "|", "pf0", "pf1", "pf2", "pf3"]],
-  ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC"]],
+  ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC", "op10", "px10", "rr10"]],
   ["qual", "수익성", ["gpm0", "opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2", "roic", "roicT", "roicE0", "roicE1"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "psr", "pf0", "pf1", "pf2", "pf3"]],
   ["fin", "재무·배당", ["nc", "ncp", "ncx", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
@@ -549,7 +552,7 @@ const CMP_GROUPS = [
 // 미국은 무료로 받을 수 있는 숫자가 달라서 (추정은 EPS·매출 위주, 나머지는 최근 실적) 칸 구성을 따로
 const CMP_GROUPS_US = [
   ["sum", "요약", ["cap", "sg0", "sg1", "epsC", "per12", "peg", "gpm0", "opm0", "roic", "roicE1", "ncx", "fcfT", "fcfY", "dy0", "dd"]],
-  ["grow", "성장", ["sg0", "sg1", "epsC"]],
+  ["grow", "성장", ["sg0", "sg1", "epsC", "op10", "px10", "rr10"]],
   ["qual", "수익성", ["gpm0", "gpm1", "gpm2", "opm0", "roe0", "roic", "roicT", "roicE0", "roicE1"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "psr"]],
   ["fin", "재무·배당", ["nc", "ncp", "ncx", "ncxp", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "dy0", "dd"]],
@@ -2218,6 +2221,35 @@ function kpiChart(ch) {
   const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${(ch.col || KPI_COL)[si % (ch.col || KPI_COL).length]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
   return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
+// 📏 이익 vs 주가 (지난 최대 10년, collector compute.long_cagr): 숫자 표 → 🐣 무슨 뜻 → 🔭 앞으로 3년 단순 계산 → 📌 읽는 법
+// 오래 보면 주가 상승률 ≈ 이익 성장률 × 값(PER) 변화 — 같은 회사도 비싸게 사면(씨젠 PER 35배) 이익 12배에 주가 4배, 싸게 사면(한미 5~7배) 120배
+function longCagrHTML(d) {
+  const L = d.long;
+  if (!L) return "";
+  const usd = d.currency === "USD", t = d.card?.tbl || {};
+  const M = (v) => (usd ? `$${n(v / 1e3, 1)}B` : kpiF(v, "억원")), W = (v) => (usd ? `$${n(v, 2)}` : `${n(v, 0)}원`);
+  const G = (v) => (v == null ? "-" : `<b class="${v < 0 ? "neg" : ""}">${pct(v, 1, true)}</b>`), X = (a, b) => `${n(b / a, 1)}배`;
+  const r = L.rerate, ry = r ? (r ** (1 / L.y) - 1) * 100 : null;
+  const what = L.op_cagr == null ? `시작이나 지금 영업이익이 적자(0 이하)라 이익 연평균은 못 구해요. 주가만 연 ${pct(L.px_cagr, 1, true)} 움직였어요.`
+    : r > 1.15 ? `이익은 ${X(L.op0, L.op1)}, 주가는 ${X(L.px0, L.px1)} — 주가가 이익보다 더 많이 올랐어요. 같은 이익에 매기는 값(PER)이 ${n(r, 1)}배로 비싸졌다는 뜻이에요. 앞으로 이 값이 제자리로 내려오면 이익이 늘어도 주가는 덜 오를 수 있어요.`
+    : r < 0.87 ? `이익은 ${X(L.op0, L.op1)} 늘었는데 주가는 ${X(L.px0, L.px1)} — 같은 이익에 매기는 값(PER)이 ${n(r, 1)}배로 싸졌어요. 비싸게 시작했거나(씨젠처럼) 시장이 이익이 계속될지 의심한다는 뜻이에요.`
+    : `이익이 ${X(L.op0, L.op1)}, 주가도 ${X(L.px0, L.px1)} — 주가가 이익을 거의 그대로 따라왔어요.`;
+  const fg = usd ? t.eps_cagr : t.op_cagr, avg = (d.per?.matrix || []).find((m) => m.label === "10년 평균")?.mult, p12 = t.per12;
+  const back = fg != null && avg && p12 > 0 && !d.card?.cyclical ? ((1 + fg / 100) * (avg / p12) ** (1 / 3) - 1) * 100 : null;
+  const fwd = fg == null ? "" : `<div class="note">🔭 <b>앞으로 3년 단순 계산</b> — 예상 ${usd ? "EPS" : "영업이익"} 연평균 ${G(fg)} (컨센서스)${p12 ? ` · 지금 12개월 선행 PER ${n(p12, 1)}배${avg ? ` (10년 평균 ${n(avg, 1)}배)` : ""}` : ""}
+    <ul class="irl">${d.card?.cyclical ? `<li class="kid-warn">⚠ 이익이 크게 오르내리는 업종이라 'PER 그대로' 계산은 빼요 — 이익 꼭대기에서 PER 이 가장 낮아 보이고, 이익이 꺾이면 주가가 먼저 내려요</li>`
+      : `<li>PER 이 지금 그대로면 → 주가도 대략 연 ${G(fg)}</li>${back != null ? `<li>3년 뒤 PER 이 10년 평균으로 돌아가면 → 대략 연 ${G(back)}</li>` : ""}`}</ul>
+    <span class="src">이익 성장 × PER 변화만 본 산수예요 · 배당·주식 수 변화는 뺐어요 · 매수·매도 추천이 아니에요</span></div>`;
+  return `<h3>📏 이익 vs 주가 <span class="src">${esc(L.from)} → ${esc(L.to)} · ${n(L.y, 1)}년 · 영업이익 = 4분기 합 · 주가 = 배당 뺀 값</span></h3><div class="card">
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left"></th><th>${L.y % 1 ? n(L.y, 1) : L.y}년 전</th><th>지금</th><th>몇 배</th><th>연평균</th></tr></thead><tbody>
+      <tr><td style="text-align:left">영업이익</td><td>${M(L.op0)}</td><td>${M(L.op1)}</td><td>${L.op0 > 0 && L.op1 > 0 ? X(L.op0, L.op1) : "-"}</td><td>${G(L.op_cagr)}</td></tr>
+      <tr><td style="text-align:left">주가</td><td>${W(L.px0)}</td><td>${W(L.px1)}</td><td>${X(L.px0, L.px1)}</td><td>${G(L.px_cagr)}</td></tr>
+      ${r ? `<tr><td style="text-align:left">이익 대비 주가<br><span class="src">≈PER, 1배 위 = 비싸짐</span></td><td></td><td></td><td><b>${n(r, 1)}배</b></td><td>${G(ry)}</td></tr>` : ""}
+    </tbody></table></div>
+    <div class="kidbox">🐣 ${what}</div>
+    ${fwd}
+    <div class="note src">📌 읽는 법: 오래 보면 주가 상승률 ≈ 이익 성장률 + 값(PER)이 변한 몫. 같은 이익 성장이라도 싸게 산 한미반도체(PER 5~7배)는 이익 14배에 주가 120배, 비싸게 산 씨젠(PER 35배)은 이익 12배에 주가 4배 — 그래서 '이익이 얼마나 늘까'와 '지금 값이 과거보다 비싼가'를 같이 봐요. 반도체처럼 오르내림이 큰 회사는 시작·끝이 호황이냐 불황이냐에 따라 숫자가 크게 달라져요. 영업이익은 회사 전체 숫자라, 자사주를 많이 사서 주식 수가 줄면(애플) 주가가 이익보다 빨리 오른 것처럼 보이고 새 주식을 많이 찍으면 반대예요.</div></div>`;
+}
 // 📈 영업이익 성장률 (YoY): 매출 성장률 바로 아래 — 국내는 이 성장률로 PER 을 몇 배 줄지 정함 (kpi.yaml 에 같은 제목 그래프가 있으면 그걸 씀)
 function opYoyHTML(d, k) {
   const v = d.op_yoy;
@@ -2819,7 +2851,7 @@ async function openStock(code) {
     const kpiHtml = await kpiBlock(code, d);
     const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + per12mfHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + per12mfHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
