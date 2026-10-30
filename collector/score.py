@@ -71,6 +71,12 @@ def _by_period(inc, cf):
     return out
 
 
+def eps_rev90(tkr):
+    """🌡 기대감 신호: 내년 EPS 예상치(야후 eps_trend '+1y')가 90일 새 몇 % 바뀌었나."""
+    r = yf.Ticker(tkr).eps_trend.loc["+1y"]
+    return round((float(r["current"]) / float(r["90daysAgo"]) - 1) * 100, 1) if r["90daysAgo"] and r["90daysAgo"] == r["90daysAgo"] else None
+
+
 def quarters(tkr, saved=None):
     """분기 실적 {분기 끝 날짜: {…}} (원 또는 달러).
     야후는 최근 5~6분기만 주므로 예전에 받아 둔 분기(saved)와 합쳐 1년 전 같은 분기 대비 성장률을 계산할 수 있게 쌓는다."""

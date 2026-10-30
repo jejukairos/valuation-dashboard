@@ -1075,6 +1075,7 @@ function kqNewsHTML() {
       <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${k.cur === "USD" ? "발표" : "공시"}</a>` : ""}</div>
       ${priceBox(c)}
       ${kqTable(k)}
+      ${moodHTML(c)}
       ${kqBox(k, c.code)}
     </div>`;
   }).join("")}</div>`;
@@ -1492,8 +1493,9 @@ function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없�
   const next = ev ? `<div class="note">📅 ${irWhen(ev)} ${esc(ev.title || "")}${ev.live ? " · 🔴 라이브 컨퍼런스콜" : ""}${ev.url ? ` · <a href="${esc(ev.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${ev.script_url ? ` · <a href="${esc(ev.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</div>` : "";
   if (!list.length && inline) return next ? `${next}<div class="note src">📞 발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 바로 아래에 넣어요.</div>` : "";
   if (!list.length) return next ? `<h3>📞 실적발표</h3><div class="card">${next}<div class="note src">발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 여기에 넣어요.</div></div>` : "";
-  return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">${next}
+  return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 누르면 펼쳐져요</span></h3><div class="card">${next}${moodHTML(DASH.stocks.find((s) => s.code === code))}
     ${list.map((e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
+      ${i === 0 ? previewHTML(e.next) : ""}
       ${(e.easy || []).length ? `<div class="kidbox">🐣 <b>주린이를 위한 핵심 간단 요약</b><ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       ${vsHTML(e)}
       ${(e.facts || []).length ? `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🆕 뉴팩트</b> <span class="src">이번 발표에서 새로 나온 사실</span><ul class="irl facts">${e.facts.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>` : ""}
@@ -1505,6 +1507,32 @@ function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없�
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
     </details>`).join("")}
   </div>`;
+}
+// 🌡 시장 기대감 (자동 · 참고용): 기대가 높으면 좋은 실적에도 '기대 미달'로 빠질 수 있어요 (예: 아마존 3Q26)
+// 3가지 신호를 +1(기대 높임) / 0 / -1(기대 낮춤)로 더함: 최근 3개월 주가 · PER 10년 밴드 위치 · 내년 EPS 예상치 90일 변화
+function moodHTML(c) {
+  if (!c) return "";
+  const cl = (c.chart?.close || []).filter((v) => v != null), r3 = cl.length > 64 ? (cl.at(-1) / cl.at(-64) - 1) * 100 : null;
+  const bp = c.band_pos, rv = c.tbl?.eps_rev90;
+  const sig = [
+    r3 == null ? null : [r3 >= 15 ? 1 : r3 <= -10 ? -1 : 0, `최근 3개월 주가 ${pct(r3, 0, true)}`],
+    bp == null ? null : [bp >= 80 ? 1 : bp <= 20 ? -1 : 0, `PER 10년 밴드 ${n(bp, 0)}% 위치${bp >= 80 ? " (비싼 편)" : bp <= 20 ? " (싼 편)" : ""}`],
+    rv == null ? null : [rv >= 5 ? 1 : rv <= -5 ? -1 : 0, `내년 EPS 예상치 90일 새 ${pct(rv, 1, true)}`],
+  ].filter(Boolean);
+  if (!sig.length) return "";
+  const s = sig.reduce((a, [v]) => a + v, 0), t = s >= 2 ? "🔥 높음" : s <= -2 ? "🧊 낮음" : "🙂 보통";
+  return `<div class="note">🌡 <b>시장 기대감 ${t}</b> <span class="src">(자동 추정 · 참고용)</span> ${sig.map(([v, x]) => `<span class="qtag">${v > 0 ? "▲" : v < 0 ? "▼" : "·"} ${esc(x)}</span>`).join(" ")}
+    <div class="src">기대가 높으면(주가가 이미 많이 오름 · 비싼 편 · 예상치가 빠르게 오름) 좋은 실적에도 ‘기대 미달’로 빠질 수 있고, 낮으면 무난한 실적에도 오를 수 있어요.</div></div>`;
+}
+// 🔮 다음 분기 부문별 추정 (earnings.yaml 최신 분기의 next) — 내가 세운 추정과 근거, 발표 뒤 맞았는지 확인용 (추천 아님)
+function previewHTML(x) {
+  if (!x) return "";
+  return `<div class="card" style="margin-top:8px;border:1px dashed var(--axis)"><b>🔮 ${esc(x.q || "다음 분기")} 부문별 추정</b> <span class="src">Claude 추정 · 근거를 보고 직접 검증해 보세요 (회사 가이던스·지난 흐름 기준, 추천 아님)</span>
+    ${x.mood ? `<div style="margin-top:4px">🌡 발표 전 기대감: <b>${esc(x.mood)}</b>${x.mood_why ? ` <span class="src">— ${esc(x.mood_why)}</span>` : ""}</div>` : ""}
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">부문</th><th>매출</th><th>영업이익</th><th style="text-align:left">근거</th></tr></thead><tbody>
+      ${(x.segs || []).map((r) => `<tr><td style="text-align:left"><b>${esc(r.n)}</b></td><td>${esc(r.rev || "-")}</td><td>${esc(r.op || "-")}</td><td style="text-align:left;white-space:normal;min-width:14em" class="src">${esc(r.why || "")}</td></tr>`).join("")}
+    </tbody></table></div>
+    ${(x.check || []).length ? `<div style="margin-top:6px"><b>✅ 발표 때 확인할 것</b><ul class="irl">${x.check.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}</div>`;
 }
 // 📋 실적 vs 예상(컨센서스) · 가이던스 · 발표 뒤 주가 — earnings.yaml vs / guide / after (u 단위: "$B"·"$"·"%"·"조", n 많고 적음이 좋고 나쁨이 아닌 항목, b 판정 직접)
 function vsHTML(e) {

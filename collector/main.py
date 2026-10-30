@@ -348,6 +348,10 @@ def stock_detail(h, rates_now, fx):
         # 🏦 분기별 회사채·장기 차입 발행 (야후 현금흐름표) + 뉴스 메모 (config/debt.yaml)
         tbl["debt_iss"] = {e: q["ltdi"] for e, q in sorted((QTRS.get(tkr) or {}).items())[-6:] if q.get("ltdi") is not None}
         tbl["debt_news"] = DEBT_NEWS.get(code) or []
+        try:  # 🌡 기대감 신호 하나 (나머지 = 3개월 주가·PER 밴드 위치, 화면에서 계산)
+            tbl["eps_rev90"] = score.eps_rev90(tkr)
+        except Exception:  # noqa: BLE001
+            pass
         if len(q4) == 4 and all(v is not None for v in q4):
             tbl["fcf_ttm"] = sum(q4)
             tbl["fcf_ttm_yield"] = rnd(sum(q4) / now["market_cap"] * 100, 1) if now.get("market_cap") else None
