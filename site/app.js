@@ -3636,12 +3636,13 @@ function scanHTML() {
 // 📈 차트 탭: 주봉 정배열 (site/data/align.json ← collector/board.py align) — 텔레그램 '[주봉 정배열]' 글과 같은 순서·모양
 const AL_COL = { 4: "var(--bad)", 13: "var(--s4)", 26: "var(--s3)", 52: "var(--s7)" };
 let ALIGN = null;
+// 📈 차트 탭 = 🗺 시장 그룹판(한국·미국·AI 인프라 200일선) → 🔭 차트 스캔 → 주봉 정배열 (그룹판·스캔은 2026-11-01 산업 탭에서 옮김)
 async function loadAlign() {
-  if (!ALIGN) {
-    try { ALIGN = await (await fetch("data/align.json?t=" + Date.now(), { cache: "no-store" })).json(); }
-    catch (_) { $("#chartBody").innerHTML = `<div class="empty">⏳ 다음 차트 스캔(평일 아침·장 마감 뒤) 때 채워져요.</div>`; return; }
-  }
-  $("#chartBody").innerHTML = alignHTML(ALIGN);
+  if (!BOARD) { try { BOARD = await (await fetch("data/board.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { BOARD = {}; } }
+  if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
+  if (!ALIGN) { try { ALIGN = await (await fetch("data/align.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { ALIGN = null; } }
+  $("#chartBody").innerHTML = boardHTML() + scanHTML() + `<h2>📈 주봉 정배열</h2><p class="sub">코스피·코스닥 시가총액 3,000억 이상에서 주봉 이동평균이 4주 &gt; 13주 &gt; 26주 &gt; 52주로 줄 선(정배열) 종목 — 매주 금요일 종가 기준, 평일 아침·장 마감 뒤 갱신. 종목을 누르면 주봉 차트가 열려요. 매수·매도 추천 아님.</p>`
+    + (ALIGN ? alignHTML(ALIGN) : `<div class="empty">⏳ 다음 차트 스캔(평일 아침·장 마감 뒤) 때 채워져요.</div>`);
 }
 function alignHTML(A) {
   const eok = (v) => `${n(v / 1e8, 0)}억`, WHY = { cap: "시총 3,000억 넘음", align: "정배열 새로" }, WHYO = { cap: "시총 3,000억 아래로", align: "정배열 깨짐" };
@@ -3672,12 +3673,10 @@ async function loadIndustry() {
     catch (e) { $("#industryBody").innerHTML = `<div class="empty">산업 데이터를 불러오지 못했어요.</div>`; return; }
   }
   if (!CAPEX) { try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CAPEX = {}; } }
-  if (!BOARD) { try { BOARD = await (await fetch("data/board.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { BOARD = {}; } }
-  if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
   if (!DEF) { try { DEF = await (await fetch("data/defense.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { DEF = {}; } }
   await keyLoad();
   try { await gpeGet(); } catch (_) { /* 🌍 업종별 글로벌 PER 만 빠짐 */ }
-  $("#industryBody").innerHTML = boardHTML() + gpeIndHTML() + scanHTML() + capexHTML() + keyIndHTML() + costIndHTML() + defenseHTML() + amzHTML();
+  $("#industryBody").innerHTML = gpeIndHTML() + capexHTML() + keyIndHTML() + costIndHTML() + defenseHTML() + amzHTML();  // 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭으로
   drawAmz();
 }
 // 🔑 키팩터 · 키차트 (config/keychart.yaml): 업종 묶음 = 산업 탭 + 그 업종 종목 상세, 종목 묶음 = 그 종목 상세
