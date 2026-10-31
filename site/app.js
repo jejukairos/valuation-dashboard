@@ -467,7 +467,7 @@ function stockCard(c) {
   const pbr = (c.fwd_mult?.PBR || {})["12MF"];
   if (pbr > 0 && (c.methods || []).includes("PBR")) pe.push(`12MF BPS ${money(c.price / pbr, c.currency)} × PBR <b>${n(pbr, 2)}배</b>`);
   if (c.naver_per > 0) pe.push(`<span class="src">참고: 네이버 추정 PER (올해 ${String(new Date().getFullYear()).slice(2)}E 기준) ${n(c.naver_per, 2)}배</span>`);
-  return `<button class="card stock" data-code="${esc(c.code)}">
+  return `<button class="card stock" data-code="${esc(c.code)}" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">
     <div class="row1"><span class="name">${esc(c.name)}</span><span class="price">${money(c.price, c.currency)}</span></div>
     ${pe.map((x) => `<div class="pe">${x}</div>`).join("")}
     <div class="sub">시가총액 ${capTxt(c)} ${c.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""}</div>
@@ -503,6 +503,31 @@ function renderCards() {
   else list.sort((a, b) => mk(a) - mk(b) || a.order - b.order);
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
   drawGauges(list);
+  jumpBar("#stockCards", "#cardJump");
+}
+// 🔎 종목 찾기 줄: 아래에 그려진 [data-jump] 칸들로 이름 목록을 만들고, 이름을 누르거나 검색하면 그 칸으로 스크롤 (실적 탭·보유 탭)
+function jumpBar(rootSel, barSel) {
+  const root = $(rootSel), bar = $(barSel);
+  if (!root || !bar) return;
+  const seen = new Map();  // 종목마다 첫 칸으로
+  root.querySelectorAll("[data-jump]").forEach((el) => { if (!seen.has(el.dataset.jump)) seen.set(el.dataset.jump, [el.dataset.jname || el.dataset.jump, el]); });
+  if (seen.size < 2) { bar.innerHTML = ""; return; }
+  bar.innerHTML = `<div class="jumpbar"><input type="search" placeholder="🔎 종목 이름 검색 (예: 에이피알) → Enter" aria-label="종목 검색" autocomplete="off">
+    <div class="chips">${[...seen].map(([c, [nm]]) => `<button class="chip" data-to="${esc(c)}">${esc(nm)}</button>`).join("")}</div></div>`;
+  const go = (c) => {
+    const el = seen.get(c)?.[1];
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 1600);
+  };
+  bar.querySelectorAll("[data-to]").forEach((b) => b.addEventListener("click", () => go(b.dataset.to)));
+  const inp = bar.querySelector("input");
+  inp.addEventListener("input", () => {  // 쓰는 대로 이름 목록을 줄여 보여 줌
+    const q = inp.value.trim().toLowerCase();
+    bar.querySelectorAll("[data-to]").forEach((b) => { b.hidden = !!q && !b.textContent.toLowerCase().includes(q) && !b.dataset.to.toLowerCase().includes(q); });
+  });
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { const b = [...bar.querySelectorAll("[data-to]")].find((x) => !x.hidden); if (b) { go(b.dataset.to); inp.blur(); } } });
 }
 
 /* ---------- 보유종목 비교표 (구글 시트처럼: 머리글 눌러 정렬, 산업별 보기, 묶음별 칸) ---------- */
@@ -1163,7 +1188,8 @@ function renderEarn() {
   const h = easyNewsHTML() + kqNewsHTML() + irCalHTML();
   MKT = keep;
   $("#earnBody").innerHTML = `<div class="seg earnmk" style="margin-bottom:8px">${[["KR", "🇰🇷 한국"], ["US", "🇺🇸 미국"]].map(([k, l]) => `<button data-mk="${k}" class="${k === EARN_MKT ? "on" : ""}">${l}</button>`).join("")}</div>`
-    + (h || `<div class="empty">최근 3일 안에 나온 ${EARN_MKT === "US" ? "미국" : "한국"} 종목 실적이 없어요.</div>`);
+    + `<div id="earnJump"></div><div id="earnList">${h || `<div class="empty">최근 3일 안에 나온 ${EARN_MKT === "US" ? "미국" : "한국"} 종목 실적이 없어요.</div>`}</div>`;
+  jumpBar("#earnList", "#earnJump");
 }
 document.addEventListener("click", (e) => { const b = e.target.closest(".earnmk button"); if (b) { EARN_MKT = b.dataset.mk; renderEarn(); } });
 function kqNewsHTML() {
@@ -1176,7 +1202,7 @@ function kqNewsHTML() {
     const k = c.kq_brief;
     const head = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:18px;color:var(--s1)">${esc(c.name)} (${esc(c.code)})</b>
       <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${capTxt(c)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
-    return `<div class="card">${head}
+    return `<div class="card" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">${head}
       <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${k.cur === "USD" ? "발표" : "공시"}</a>` : ""}</div>
       ${priceBox(c)}
       ${kqTable(k)}
@@ -1649,7 +1675,7 @@ function easyNewsHTML() {
     .sort((a, b) => b.date.localeCompare(a.date));
   if (!items.length) return "";
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>🐣 오늘의 쉬운 요약</b> <span class="src">최근 3일 · 실적발표·공시·증권사 전망 변화 · 핵심만 쉬운 말로</span></summary>
-    ${items.map((e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
+    ${items.map((e) => `<div class="kidbox"${e.code ? ` data-jump="${esc(e.code)}" data-jname="${esc(nm(e.code) || e.code)}"` : ""}><b>${e.code ?`<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
       <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
 }
 // 🧾 일회성 점검 (earnings.yaml once): 발표 이익 → 한 번만 있는 이익(+)·비용(−) → 빼면 실질 — 예상 상회·하회가 일회성 때문인지
