@@ -1182,6 +1182,7 @@ function qtrHTML(d, mode = "q", inKq = false) {  // mode: q = 분기, y = 연간
     </div>
     <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 얼마 벌어서 어디에 썼나</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 → 순이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
     ${qSankey(last[1], usd, getQ(last[0]), segs)}
+    ${costHTML(DASH.stocks.find((x) => x.code === (d.card || d).code), d)}
     ${yr ? "" : (() => {  // 최근 4분기 합계(TTM) · 최근 연간 — 분기는 계절성이 있어 1년치로도 보기
       const q4 = all.slice(-4).map(([, q]) => q), out = [];
       if (q4.length === 4 && q4.every((q) => q.rev && q.op != null)) {
@@ -3357,7 +3358,7 @@ async function loadIndustry() {
   if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
   if (!DEF) { try { DEF = await (await fetch("data/defense.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { DEF = {}; } }
   await keyLoad();
-  $("#industryBody").innerHTML = boardHTML() + scanHTML() + capexHTML() + keyIndHTML() + defenseHTML() + amzHTML();
+  $("#industryBody").innerHTML = boardHTML() + scanHTML() + capexHTML() + keyIndHTML() + costIndHTML() + defenseHTML() + amzHTML();
   drawAmz();
 }
 // 🔑 키팩터 · 키차트 (config/keychart.yaml): 업종 묶음 = 산업 탭 + 그 업종 종목 상세, 종목 묶음 = 그 종목 상세
@@ -3440,6 +3441,32 @@ function keyGroup(name, g, code) {
 function keyIndHTML() {
   const I = Object.entries(KEYC?.industry || {});
   return I.length ? `<h2>🔑 키팩터 · 키차트 <span class="src">업종마다 주가를 움직이는 숫자와 변곡점에서 볼 것 · 증권사 그림은 숫자로 다시 그림 · 매수·매도 추천 아님</span></h2>${I.map(([k, g]) => keyGroup(k, g)).join("")}` : "";
+}
+// ⚖️ 고정비 vs 변동비 (keychart.yaml cost): 산업 탭 업종 줄 + 종목 상세 한 칸 (재무제표 비율은 최근 4분기로 자동)
+function costRow(code, ind) {
+  const R = KEYC?.cost?.ind || [];
+  return R.find((r) => (r.codes || []).includes(code)) || R.find((r) => (r.k || []).some((k) => (ind || "").includes(k)));
+}
+const costDots = (lv) => `고정비 ${"●".repeat(lv)}${"○".repeat(5 - lv)}`;
+function costIndHTML() {
+  const C = KEYC?.cost;
+  if (!C?.ind?.length) return "";
+  const who = (r) => [...new Set(DASH.stocks.filter((c) => costRow(c.code, c.industry) === r).map((c) => c.name))].join("·");
+  return `<h2>⚖️ 고정비 vs 변동비 <span class="src">업종마다 '덜 팔아도 나가는 돈'이 얼마나 큰가 · 눌러서 보기 · 매수·매도 추천 아님</span></h2><div class="card">
+    <ul class="irl" style="margin-top:0">${(C.why || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    ${C.kid ? `<div class="kidbox">🐣 ${esc(C.kid)}</div>` : ""}
+    ${C.ind.map((r) => `<details style="border-top:1px solid var(--border);padding:6px 0;margin-top:6px"><summary><b>${esc(r.n)}</b> · ${esc(r.t)} <span class="src">${costDots(r.lv)}${who(r) ? ` · ${esc(who(r))}` : ""}</span></summary>
+      <div style="font-size:13px;line-height:1.7;margin-top:4px">💸 큰 비용: ${esc(r.big)}<br>👉 ${esc(r.so)}</div></details>`).join("")}</div>`;
+}
+function costHTML(c, d) {
+  const r = c && costRow(c.code, c.industry), s = c && KEYC?.cost?.stock?.[c.code];
+  if (!r && !s) return "";
+  const e4 = Object.entries(d.qtrs || {}).filter(([, q]) => q.rev).slice(-4), q4 = e4.map(([, q]) => q);
+  const sum = (k) => (q4.length === 4 && q4.every((q) => q[k] != null) ? q4.reduce((a, q) => a + Math.abs(q[k]), 0) : 0);
+  const P = [["매출원가", "cogs"], ["영업비용", "opex"], ["연구개발", "rnd"], ["설비투자", "capex"]].map(([t, k]) => (sum(k) && sum("rev") ? `${t} ${n((sum(k) / sum("rev")) * 100, 0)}%` : "")).filter(Boolean);
+  const so = r ? (s ? r.so.match(/볼 것:.*$/)?.[0] || "" : r.so) : "";  // 종목 줄이 있으면 업종 설명은 겹쳐서 '볼 것'만
+  return `<div class="kidbox">⚖️ <b>비용 구조${r ? `: ${esc(r.t)}` : ""}</b>${r ? ` <span class="src">${esc(r.n)} · ${costDots(r.lv)}</span>` : ""}
+    <div>${esc(s || r.big)}</div>${P.length ? `<div class="src">재무제표로 보면 (${qLabel(e4[0][0])}~${qLabel(e4[3][0])} 4분기 합계, 매출 대비): ${P.join(" · ")}</div>` : ""}${so ? `<div>👉 ${esc(so)}</div>` : ""}</div>`;
 }
 async function keyBlock(code) {
   const K = await keyLoad(), c = DASH.stocks.find((x) => x.code === code), ind = c?.industry || "";
