@@ -35,8 +35,12 @@ class Http:
         self.s = requests.Session()
         self.s.headers.update({"User-Agent": UA, "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8"})
         self.last = 0.0
+        self.down = {}  # 호스트 → 연속 접속 실패 수 (2026-10-31 DART 가 느려져 종목당 11분 → 70분 초과로 갱신이 통째로 멈춤)
 
     def get(self, url, tries=3, timeout=40, **kw):
+        host = url.split("/")[2] if "//" in url else url
+        if self.down.get(host, 0) >= 3:  # 이번 갱신에서 3번 연속 접속이 안 된 곳은 바로 건너뜀 (직전 값·캐시를 씀, 다음 갱신 때 다시 시도)
+            raise RuntimeError(f"{host} 이번 갱신에서 건너뜀 (연속 접속 실패)")
         err = None
         for i in range(tries):
             wait = DELAY - (time.time() - self.last)
@@ -45,6 +49,7 @@ class Http:
             try:
                 r = self._get_deadline(url, timeout, **kw)
                 self.last = time.time()
+                self.down[host] = 0  # 응답이 오면 (오류 코드여도) 살아 있는 곳
                 if r.status_code == 200:
                     return r
                 err = f"HTTP {r.status_code}"
@@ -54,6 +59,8 @@ class Http:
                 self.last = time.time()
                 err = type(e).__name__
             time.sleep(2 * (i + 1))
+        if err and not err.startswith("HTTP"):  # 시간 초과·연결 끊김으로 끝까지 실패
+            self.down[host] = self.down.get(host, 0) + 1
         raise RuntimeError(f"{url.split('?')[0]} 접속 실패 ({err})")
 
     def _get_deadline(self, url, timeout, **kw):
