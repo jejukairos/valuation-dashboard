@@ -1,0 +1,45 @@
+name: 글로벌 동종 12MF PER
+
+on:
+  schedule:
+    - cron: "50 21 * * 0-4"   # 평일 06:50 KST (미국장 마감 뒤)
+    - cron: "20 8 * * 1-5"    # 평일 17:20 KST (일본·한국장 마감 뒤)
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["collector/global_pe.py", "config/global_peers.yaml", ".github/workflows/gpe.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gpe
+  cancel-in-progress: false
+
+jobs:
+  gpe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 글로벌 동종 12MF PER (config/global_peers.yaml)
+        env:
+          PYTHONIOENCODING: utf-8
+        run: cd collector && python -u global_pe.py
+      - name: 저장
+        if: always()
+        run: |
+          git config user.name "valuation-bot"
+          git config user.email "valuation-bot@users.noreply.github.com"
+          git add site/data/global_pe.json 2>/dev/null || true
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "글로벌 동종 12MF PER $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done
+          exit 1

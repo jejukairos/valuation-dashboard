@@ -2682,6 +2682,113 @@ function per12mfSeries(d) {
   for (let m = Math.max(step, Math.floor(lo / step) * step); m <= Math.ceil(hi / step) * step + 1e-9 && ms.length < 6; m += step) ms.push(m);
   return { pts, ms, now: pts[today - 1][1] / pts[today - 1][2], end: pts.at(-1)[0] };
 }
+/* ---------- 🌍 글로벌 동종 대비 12MF PER (data/global_pe.json ← collector/global_pe.py · config/global_peers.yaml) ---------- */
+let GPE = null;
+const gpeGet = async () => { if (!GPE) GPE = await (await fetch("data/global_pe.json?t=" + Date.now(), { cache: "no-store" })).json(); return GPE; };
+const GPE_COL = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s7)", "var(--bad)"];
+const monOf = (ds) => { const t = new Date(ds + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
+const ym = (ds) => `${ds.slice(2, 4)}.${+ds.slice(5, 7)}`;
+// 주간 선 그림: lines [{n, v:[…], col, w, dash}] (왼쪽 = 배) + prem [… %] (오른쪽 축, 면) + marks [{i, t, up}] 작은 글씨 + 프리미엄 구간 빨간 상자
+function gpeChart(dates, lines, o = {}) {
+  const N = dates.length, W = 380, H = 236, x0 = 30, x1 = W - (o.prem ? 36 : 10), top = 16, bot = H - 22;
+  const X = (i) => x0 + ((x1 - x0) * i) / Math.max(1, N - 1), all = lines.flatMap((l) => l.v).filter((v) => v != null);
+  const hi = Math.ceil((Math.max(...all) * 1.12) / 5) * 5, Y = (v) => bot - (v / hi) * (bot - top);
+  const pv = (o.prem || []).filter((v) => v != null), plo = pv.length ? Math.floor((Math.min(...pv, 0) - 12) / 10) * 10 : 0, phi = pv.length ? Math.ceil((Math.max(...pv, 0) + 12) / 10) * 10 : 1;
+  const YR = (v) => bot - ((v - plo) / (phi - plo)) * (bot - top);
+  const path = (a, Yf) => a.map((v, i) => (v == null ? "" : `${i && a[i - 1] != null ? "L" : "M"}${X(i).toFixed(1)},${Yf(v).toFixed(1)}`)).join("");
+  let g = [0, hi / 2, hi].map((v) => `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${Y(v) + 3}" text-anchor="end" class="qx">${n(v, 0)}</text>`).join("");
+  if (pv.length) {
+    g += [plo, 0, phi].map((v) => `<text x="${x1 + 3}" y="${YR(v) + 3}" class="qx">${v > 0 ? "+" : ""}${v}%</text>`).join("");
+    g += `<path d="M${X(0)},${YR(plo)} ${o.prem.map((v, i) => (v == null ? "" : `L${X(i).toFixed(1)},${YR(v).toFixed(1)}`)).join("")} L${X(N - 1)},${YR(plo)} Z" fill="var(--s1)" fill-opacity=".14"/>`;
+    g += `<line x1="${x0}" x2="${x1}" y1="${YR(0)}" y2="${YR(0)}" stroke="var(--s1)" stroke-opacity=".35" stroke-dasharray="2 3"/>`;
+    let s = null, e = null, gap = 0;  // 프리미엄(+) 구간 = 빨간 상자 (4주 넘게 이어진 곳만, 3주 안 끊김은 이어 봄)
+    const box = () => { if (s != null && e - s >= 3) g += `<rect x="${X(s)}" y="${top}" width="${X(e) - X(s)}" height="${bot - top}" fill="none" stroke="var(--bad)" stroke-width="1.6"/><text x="${(X(s) + X(e)) / 2}" y="${top - 4}" text-anchor="middle" class="qx" style="fill:var(--bad-ink)">프리미엄</text>`; s = null; };
+    o.prem.forEach((v, i) => {
+      if (v != null && v > 0) { if (s == null) s = i; e = i; gap = 0; } else if (s != null && ++gap >= 3) box();
+    });
+    box();
+  }
+  dates.forEach((d, i) => { if (i && d.slice(5, 7) !== dates[i - 1].slice(5, 7) && ["01", "07"].includes(d.slice(5, 7))) g += `<text x="${X(i)}" y="${bot + 14}" text-anchor="middle" class="qx">${ym(d)}</text>`; });
+  if (o.hline) g += `<line x1="${x0}" x2="${x1}" y1="${Y(o.hline.v)}" y2="${Y(o.hline.v)}" stroke="var(--ink-2)" stroke-dasharray="5 3"/><text x="${x0 + 3}" y="${Y(o.hline.v) - 3}" class="qx">${esc(o.hline.t)}</text>`;
+  lines.forEach((l) => { g += `<path d="${path(l.v, Y)}" fill="none" stroke="${l.col}" stroke-width="${l.w || 2}"${l.dash ? ` stroke-dasharray="${l.dash}"` : ""} stroke-linejoin="round"/>`; });
+  (o.marks || []).forEach((m) => {  // 바닥·꼭대기 옆 작은 글씨 (이유)
+    const v = lines[0].v[m.i];
+    if (v == null) return;
+    const y = Y(v), ty = m.up ? Math.max(top + 8, y - 14) : Math.min(bot - 4, y + 18), anc = X(m.i) > (x0 + x1) / 2 ? "end" : "start";
+    g += `<circle cx="${X(m.i)}" cy="${y}" r="3" fill="var(--ink)"/><line x1="${X(m.i)}" x2="${X(m.i)}" y1="${y}" y2="${ty - (m.up ? -3 : 9)}" stroke="var(--ink-2)" stroke-width=".8"/>`
+      + m.t.split("\n").map((t, k) => `<text x="${X(m.i)}" y="${ty + k * 10}" text-anchor="${anc}" class="qx" style="font-size:9px;fill:var(--ink)">${esc(t)}</text>`).join("");
+  });
+  g += tipCols(X, (x1 - x0) / Math.max(1, N - 1), top, bot, dates.map((d, i) => [d, ...lines.map((l) => (l.v[i] == null ? null : `${l.n}: ${n(l.v[i], 1)}배`)), o.prem && o.prem[i] != null ? `${o.prem[i] >= 0 ? "프리미엄" : "할인"} ${pct(o.prem[i], 0, true)}` : null].filter(Boolean).join("\n")));
+  const leg = `<div class="src" style="padding:0 4px">${lines.map((l) => `<span style="color:${l.col}">━</span> ${esc(l.n)}`).join(" · ")}${pv.length ? ` · <span style="color:var(--s1);opacity:.5">■</span> 프리미엄(+)·할인(−) % (오른쪽)` : ""}</div>`;
+  return `${leg}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="12MF PER 비교">${g}</svg>`;
+}
+// 종목 상세 맨 위(12MF PER 밴드 위): 우리 종목 12MF PER vs 글로벌 동종 가운데 값 + 프리미엄·할인 + 타임라인 메모
+function globalPeHTML(d) {
+  const G = Object.values(GPE?.groups || {}).find((g) => g.codes.includes(d.code));
+  const b = d.bands?.PER, eps = Object.fromEntries((d.history || []).map((r) => [r.year, r.eps]));
+  if (!G || !b?.dates?.length || !Object.keys(G.avg || {}).length) return "";
+  const f12 = (ds) => { const t = new Date(ds), y = t.getFullYear(), w0 = Math.max(0, (12 - t.getMonth() - t.getDate() / 31) / 12), a = eps[y], c = eps[y + 1]; return a != null && c != null ? w0 * a + (1 - w0) * c : null; };
+  // 과거 칸을 '나중에 나온 실제 이익'으로 섞으면 이익이 크게 는 회사(에이피알)는 PER 이 너무 낮게, 무너진 회사는 너무 높게 나와요 →
+  // 그때까지 발표된 최근 4분기 영업이익으로 어림한 주당이익(마지막 연간 EPS × 최근 4분기 영업이익 ÷ 그해 영업이익)의 0.6~1.6배 안으로 묶음
+  const act = Object.fromEntries((d.history || []).filter((r) => !r.estimate && r.eps != null).map((r) => [r.year, r.eps]));
+  const QO = {}, AO = {};  // 분기 영업이익 (10년 실적·분기 실적) · 연간 영업이익 (와이즈리포트 연간)
+  Object.entries(d.longq || {}).forEach(([k, v]) => { if (v.op != null) QO[k] = v.op; });
+  (d.kq?.quarters || []).forEach((x) => { if (/^\d\d\.[1-4]Q$/.test(x.q || "") && x.op != null) QO[x.q] = x.op; });
+  (d.kq?.annual || []).forEach((x) => { if (!x.est && x.op != null) AO[2000 + +x.q] = x.op; });
+  const qs = Object.keys(QO).sort(), qEnd = (k) => Date.UTC(2000 + +k.slice(0, 2), +k[3] * 3, 0);
+  const known = (t) => {
+    const yA = Object.keys(act).map(Number).filter((y) => Date.UTC(y + 1, 2, 31) <= t).pop();
+    if (yA == null || !(act[yA] > 0)) return null;
+    const rep = qs.filter((k) => qEnd(k) + 45 * 864e5 <= t).slice(-4), ttm = (rep.reduce((a, k) => a + QO[k], 0) * 4) / (rep.length || 1);
+    // 주당이익 ÷ 영업이익 비율: 그때까지 알던 해들의 가운데 값 (한 해 일회성 이익·손실에 덜 흔들리게)
+    const rs = Object.keys(AO).map(Number).filter((y) => y <= yA && act[y] > 0 && AO[y] > 0).map((y) => act[y] / AO[y]).sort((a, b) => a - b);
+    return rep.length && ttm > 0 && rs.length ? ttm * rs[Math.floor(rs.length / 2)] : act[yA];  // 1~4분기를 1년치로 늘려 씀
+  };
+  const mine = {}, free = new Date(b.dates.at(-1)).getTime() - 91 * 864e5;  // 최근 3개월은 지금 컨센서스 그대로
+  b.dates.forEach((ds, i) => {
+    let e = f12(ds);
+    const k = e > 0 && new Date(ds).getTime() < free ? known(new Date(ds).getTime()) : null;
+    if (k) e = Math.min(Math.max(e, 0.6 * k), 1.6 * k);
+    if (e > 0 && b.price[i]) mine[monOf(ds)] = b.price[i] / e;
+  });
+  const ds = Object.keys(G.avg).filter((x) => mine[x] != null && mine[x] <= 100).sort();
+  if (ds.length < 12) return "";
+  const sv = ds.map((x) => mine[x]), av = ds.map((x) => G.avg[x]), pr = ds.map((x, i) => (sv[i] / av[i] - 1) * 100);
+  const L = ds.length - 1, imin = pr.indexOf(Math.min(...pr)), imax = pr.indexOf(Math.max(...pr));
+  const notes = (G.notes?.[d.code] || []).map((x) => ({ i: ds.findIndex((y) => y.slice(0, 7) >= x.d), t: x.t })).filter((m) => m.i >= 0);
+  const near = (i) => notes.some((m) => Math.abs(m.i - i) <= 8);
+  const wrap = (t) => t.replace(/(.{1,16})(\s|$)/g, "$1\n").trim();  // 작은 글씨 줄바꿈
+  const marks = [...notes.map((m) => ({ i: m.i, t: wrap(`${ym(ds[m.i])} ${m.t}`), up: pr[m.i] > (pr[imin] + pr[imax]) / 2 })),
+    ...(near(imin) ? [] : [{ i: imin, t: `${ym(ds[imin])} 할인 최대\n${pct(pr[imin], 0, true)}`, up: false }]),
+    ...(near(imax) || pr[imax] <= 0 ? [] : [{ i: imax, t: `${ym(ds[imax])} 프리미엄 최대\n${pct(pr[imax], 0, true)}`, up: true }]),
+    ...(near(L) ? [] : [{ i: L, t: `지금 ${pct(pr[L], 0, true)}`, up: pr[L] > 0 }])];
+  const rank = pr.filter((v) => v < pr[L]).length / pr.length, where = rank <= 0.1 ? "비교 기간 중 가장 싼 쪽" : rank >= 0.9 ? "비교 기간 중 가장 비싼 쪽" : `비교 기간 중 아래에서 ${Math.round(rank * 100)}% 자리`;
+  const peers = G.peers.map((p) => `${esc(p.n)} ${p.now == null ? "-" : n(p.now, 1) + "배"}`).join(" · ");
+  const pbrOnly = (d.card?.scen?.parts || []).length && d.card.scen.parts.every((p) => p.kind === "PBR");  // 롯데쇼핑처럼 이익이 들쭉날쭉해 PBR 로 매기는 종목
+  return `<h3>🌍 글로벌 동종 대비 12MF PER <span class="src">${esc(G.title)} · ${esc(ym(ds[0]))}~${esc(ym(ds[L]))} 주간 · ${esc(GPE.updated_at || "")}</span></h3><div class="card">
+    <div class="note" style="margin-top:0">지금 ${esc(d.name)} <b>${n(sv[L], 1)}배</b> · 글로벌 동종 가운데 값 <b>${n(av[L], 1)}배</b> → <b style="color:${pr[L] < 0 ? "var(--s1)" : "var(--bad-ink)"}">${pr[L] < 0 ? "할인" : "프리미엄"} ${pct(pr[L], 0, true)}</b> (${where})
+      <br><span class="src">할인이 가장 컸던 때 ${ym(ds[imin])} ${pct(pr[imin], 0, true)}${pr[imax] > 0 ? ` · 프리미엄이 가장 컸던 때 ${ym(ds[imax])} ${pct(pr[imax], 0, true)}` : ` · 비교 기간 내내 할인 (가장 작을 때 ${ym(ds[imax])} ${pct(pr[imax], 0, true)})`} · 동종 지금: ${peers}</span></div>
+    ${gpeChart(ds, [{ n: d.name, v: sv, col: "var(--ink)", w: 2.4 }, { n: "글로벌 동종 가운데 값", v: av, col: "var(--s1)", w: 2.4 }], { prem: pr, marks, hline: { v: sv[L], t: `지금 ${n(sv[L], 1)}배` } })}
+    ${pbrOnly ? `<div class="warnbox" style="margin-top:6px">⚠ 이 종목은 순이익이 해마다 들쭉날쭉해서(일회성 이익·손실) 적정주가를 PBR 로 매겨요 — 이 PER 비교, 특히 과거 칸은 참고로만 보세요</div>` : ""}
+    <div class="kidbox" style="margin-top:6px">🐣 회사가 1년에 버는 돈 1원에 주식시장이 얼마를 쳐주는지(PER)를 세계 대표 회사들과 나란히 본 그림이에요. 검은 선이 파란 선보다 아래면 '할인', 위면 '프리미엄'(빨간 상자)이에요. 파란 면이 내려갈수록 할인이 커진 거예요 — 지금은 ${pct(pr[L], 0, true)}로 ${where}예요. 할인이 크다고 꼭 싼 건 아니고, 왜 할인받는지(환율·성장 둔화·신뢰) 이유를 같이 봐야 해요.</div>
+    <div class="note src">${esc(GPE.how || "")} · 우리 종목: 이번·다음 해 EPS 를 섞되, 3개월 넘은 과거 칸은 그때까지 발표된 분기 영업이익으로 어림한 이익의 0.6~1.6배 안으로 묶음 · ⚠ 과거 칸은 '그때 증권사 예상'이 아니라 어림이라 리포트 그림과 다를 수 있어요 (지금 칸은 컨센서스 그대로) · 작은 글씨 = config/global_peers.yaml notes (+ 할인·프리미엄이 가장 컸던 때·지금은 자동)</div></div>`;
+}
+// 🏭 산업 탭: 업종마다 글로벌 대표 3~6곳 12MF PER + 가운데 값
+function gpeIndHTML() {
+  const gs = Object.entries(GPE?.groups || {});
+  if (!gs.length) return "";
+  const nm = (c) => DASH.stocks.find((x) => x.code === c)?.name || c;
+  return `<h2>🌍 업종별 글로벌 대표 기업 12MF PER <span class="src">${esc(GPE.updated_at || "")} · 주간 · 야후</span></h2>
+    <div class="note src">업종마다 세계 대표 회사 3~6곳의 12개월 선행 PER · 검은 점선 = 가운데 값(중앙값) · 우리 종목과의 할인·프리미엄은 종목 상세 맨 위 '🌍 글로벌 동종 대비' 그림 · ${esc(GPE.how || "")}</div>
+    <div class="grid g2">${gs.map(([k, g]) => {
+      const ds = Object.keys(g.avg).sort();
+      if (ds.length < 12) return "";
+      const lines = g.peers.map((p, i) => ({ n: p.n, v: ds.map((x) => p.pe[x] ?? null), col: GPE_COL[i % GPE_COL.length], w: 1.6 })).concat([{ n: "가운데 값", v: ds.map((x) => g.avg[x]), col: "var(--ink)", w: 2.6, dash: "5 3" }]);
+      return `<div class="card"><b>${esc(k)}</b> <span class="src">${esc(g.title)}</span>
+        <div class="note" style="margin-top:2px">지금 가운데 값 <b>${n(g.avg[ds.at(-1)], 1)}배</b> · ${g.peers.map((p) => `${esc(p.n)} ${p.now == null ? "-" : n(p.now, 1) + "배"}`).join(" · ")}</div>
+        ${gpeChart(ds, lines)}${g.codes.length ? `<div class="src">우리 종목: ${g.codes.map((c) => `<a href="#stock/${esc(c)}">${esc(nm(c))}</a>`).join(" · ")}</div>` : ""}</div>`;
+    }).join("")}</div>`;
+}
 function per12mfHTML(d) {
   if (!(d.methods || []).includes("PER")) return "";
   const s = per12mfSeries(d);
@@ -3037,7 +3144,8 @@ async function openStock(code) {
     const kpiHtml = await kpiBlock(code, d);
     const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    try { await gpeGet(); } catch (_) { /* 🌍 글로벌 비교 그림만 빠짐 */ }
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
@@ -3563,7 +3671,8 @@ async function loadIndustry() {
   if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
   if (!DEF) { try { DEF = await (await fetch("data/defense.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { DEF = {}; } }
   await keyLoad();
-  $("#industryBody").innerHTML = boardHTML() + scanHTML() + capexHTML() + keyIndHTML() + costIndHTML() + defenseHTML() + amzHTML();
+  try { await gpeGet(); } catch (_) { /* 🌍 업종별 글로벌 PER 만 빠짐 */ }
+  $("#industryBody").innerHTML = boardHTML() + gpeIndHTML() + scanHTML() + capexHTML() + keyIndHTML() + costIndHTML() + defenseHTML() + amzHTML();
   drawAmz();
 }
 // 🔑 키팩터 · 키차트 (config/keychart.yaml): 업종 묶음 = 산업 탭 + 그 업종 종목 상세, 종목 묶음 = 그 종목 상세
