@@ -50,7 +50,8 @@ def insider(code, days=90, max_docs=25):
     if j.get("status") not in ("000", "013"):
         raise RuntimeError(j.get("message"))
     since = (now_kst() - pd.Timedelta(days=days)).strftime("%Y%m%d")
-    reps = sorted((r for r in j.get("list", []) if r.get("rcept_dt", "") >= since and num(r.get("sp_stock_lmp_irds_cnt"))),
+    # rcept_dt 는 '2026-10-30' (줄표 있음) — 줄표를 빼고 비교 (전엔 글자 비교로 모든 보고서가 빠져 내부자 거래가 늘 0 이었음)
+    reps = sorted((r for r in j.get("list", []) if r.get("rcept_dt", "").replace("-", "") >= since and num(r.get("sp_stock_lmp_irds_cnt"))),
                   key=lambda r: r["rcept_no"], reverse=True)[:max_docs]
     rows = []
     for r in reps:
@@ -70,6 +71,9 @@ def insider(code, days=90, max_docs=25):
     return {"days": days, "buy": sumamt("매수"), "sell": sumamt("매도"), "buyers": who("매수"), "sellers": who("매도"),
             "major_sell": sumamt("매도", lambda x: x["role"] == "대주주"), "major_buy": sumamt("매수", lambda x: x["role"] == "대주주"),
             "exec_buyers": who("매수", lambda x: x["role"] != "대주주"), "ceo_buy": who("매수", lambda x: x["role"] == "대표이사"),
+            # 국내는 임원·대표 장내매도가 뒤 주가에 더 잘 맞는 신호 (사용자 원칙) — 금액·사람 수·대표이사 수
+            "exec_sell": sumamt("매도", lambda x: x["role"] != "대주주"), "exec_sellers": who("매도", lambda x: x["role"] != "대주주"),
+            "ceo_sell": who("매도", lambda x: x["role"] == "대표이사"),
             "rows": rows[:40], "reports": len(reps),
             # shortcut: 원인 확인용 (DART 키가 GitHub 에만 있어 내 컴퓨터에서 못 돌려 봄) — 장내 거래가 잘 잡히면 지우기
             "debug": {"status": j.get("status"), "n": len(j.get("list", [])), "last": max((r.get("rcept_dt", "") for r in j.get("list", [])), default=None),

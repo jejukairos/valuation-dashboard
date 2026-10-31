@@ -463,6 +463,15 @@ def stock_detail(h, rates_now, fx):
             det["kq"] = kq.collect_us(code, QTRS.get(tkr), hist)
         except Exception as e:  # noqa: BLE001
             REPORT.block("최신 분기 실적 (미국)", f"{name}: {str(e)[:60]}")
+    if mkt == "KR" and det["kq"] and det["qtrs"]:  # 야후에 아직 없는 최신 분기는 잠정실적(매출·영업이익·순이익, 억원 → 원)으로 먼저 — 원가·비용은 분기보고서 뒤
+        det["qtrs"] = dict(det["qtrs"])  # 쌓아 두는 야후 캐시(QTRS)는 건드리지 않음
+        for q in det["kq"].get("quarters") or []:
+            lb = q.get("q") or ""
+            if not re.fullmatch(r"\d\d\.[1-4]Q", lb) or not q.get("sales"):
+                continue
+            e = f"20{lb[:2]}-{('03-31', '06-30', '09-30', '12-31')[int(lb[3]) - 1]}"
+            if e > max(det["qtrs"]):
+                det["qtrs"][e] = {"rev": q["sales"] * 1e8, "prelim": True, **{k: q[f] * 1e8 for k, f in (("op", "op"), ("ni", "ni")) if q.get(f) is not None}}
     oc = str(h.get("data_code") or code)  # 우선주는 보통주 실적으로
     dq = None
     if mkt == "KR":  # DART 분기보고서 (2015년~, 예전 분기는 갱신마다 조금씩 채움)
@@ -912,8 +921,8 @@ def main():
         if rc:
             c["holder_changes"] = [{"name": x["name"], "chg": x["chg_ratio"], "date": x["date"]} for x in rc]
         ins = (hd["companies"].get(c["code"]) or {}).get("insider") or {}
-        if ins.get("major_sell") or ins.get("exec_buyers"):  # 최근 3개월 대주주 장내매도 / 임원 장내매수 (깡토 백테스트에서 의미 있던 두 신호)
-            c["insider"] = {k: ins.get(k) for k in ("major_sell", "exec_buyers", "buy", "sell")}
+        if ins.get("major_sell") or ins.get("exec_buyers") or ins.get("exec_sellers"):  # 최근 3개월 대주주 장내매도 / 임원 장내매수 (깡토 백테스트) + 임원·대표 장내매도 (사용자 원칙)
+            c["insider"] = {k: ins.get(k) for k in ("major_sell", "exec_buyers", "buy", "sell", "exec_sell", "exec_sellers", "ceo_sell")}
 
     print("■ 중요 공시")
     import filings

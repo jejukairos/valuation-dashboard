@@ -404,6 +404,7 @@ function stockCard(c) {
   if (c.rerating_warning) pills.push(`<span class="pill yellow">⚠ 리레이팅 반영 가능성</span>`);
   if (c.new_orders) pills.push(`<span class="pill green">🆕 새 수주 공시 ${c.new_orders}건</span>`);
   if (c.insider?.major_sell) pills.push(`<span class="pill red">⚠ 대주주 장내매도 ${eok(c.insider.major_sell)} (3개월)</span>`);
+  if (c.insider?.exec_sellers) pills.push(`<span class="pill red">⚠ ${c.insider.ceo_sell ? `대표이사 포함 ` : ""}임원 ${c.insider.exec_sellers}명 장내매도 ${eok(c.insider.exec_sell)} (3개월)</span>`);
   if (c.insider?.exec_buyers) pills.push(`<span class="pill green">👀 임원 ${c.insider.exec_buyers}명 장내매수 (3개월)</span>`);
   if (c.kq_new) pills.push(`<span class="pill green">🧾 ${esc(c.kq_new)} 실적 나옴</span>`);
   if (c.kq_wait) pills.push(`<span class="pill yellow">🧾 ${esc(c.kq_wait)} 잠정실적 공시 · 숫자 반영 대기</span>`);
@@ -1203,13 +1204,16 @@ function qtrHTML(d, mode = "q", inKq = false) {  // mode: q = 분기, y = 연간
   const prevC = capex.slice(0, L).filter((v) => v != null), avgC = prevC.length ? prevC.reduce((a, b) => a + b, 0) / prevC.length : null;
   const tC = capex[L] != null && avgC ? (capex[L] > avgC * 1.5 ? "CapEx 대폭 상향" : capex[L] < avgC * 0.67 ? "CapEx 줄어듦" : "") : "";
   const last = qs[L];
+  // 돈의 흐름은 원가·비용이 나뉜 마지막 분기로 — 잠정실적만 있는 최신 분기(prelim)는 매출·영업이익·순이익뿐
+  const full = all.filter(([, q]) => q.cogs != null || q.gp != null || q.opex != null), fq = full.at(-1) || last, part = fq[0] !== last[0];
+  const fLab = yr ? `FY${fq[0].slice(2, 4)}` : qLabel(fq[0]);
   // 부문별 매출: 돈의 흐름 왼쪽은 이 분기와 같은 시점 자료가 있을 때만
   const ps = segPeriods(d.seg), col = ps.length ? segColors(ps) : null;
-  const sp = ps.find(([e]) => nearDay(e, last[0])), spa = sp && segAgo(ps, sp[0]);
-  const segs = sp ? Object.keys(col).filter((s) => sp[1][s]).map((s) => [s, sp[2] ? sp[2][s] : (last[1].rev * sp[1][s]) / 100,
+  const sp = ps.find(([e]) => nearDay(e, fq[0])), spa = sp && segAgo(ps, sp[0]);
+  const segs = sp ? Object.keys(col).filter((s) => sp[1][s]).map((s) => [s, sp[2] ? sp[2][s] : (fq[1].rev * sp[1][s]) / 100,
     sp[2] && spa?.[2]?.[s] > 0 ? (sp[2][s] / spa[2][s] - 1) * 100 : null, col[s], sp[1][s], !sp[2]]) : null;
   const nm = (d.card || d).name || "";
-  const src = `${esc(last[0])} 끝난 ${yr ? "회계연도" : "분기"} · 야후 파이낸스${d.seg ? " · 부문: " + esc(d.seg.src || "") : ""} · ${usd ? "달러" : "원"}`;
+  const src = `${esc(last[0])} 끝난 ${yr ? "회계연도" : "분기"} · 야후 파이낸스${last[1].prelim ? " (최신 분기는 DART 잠정실적)" : ""}${d.seg ? " · 부문: " + esc(d.seg.src || "") : ""} · ${usd ? "달러" : "원"}`;
   const head = inKq ? `<div class="chart-title" style="margin-top:14px"><b>📊 손익 구조 · ${esc(labels[L])}</b> <span class="src">${src}</span></div>`
     : `<h3>📊 ${esc(nm)} 실적 요약 (핵심지표) · ${esc(labels[L])} <span class="src">${src}</span></h3><div class="card">${Object.keys(d.qtrs_y || {}).length >= 2 ? `<div class="seg qseg" style="margin-bottom:8px"><button data-q="q" class="${yr ? "" : "on"}">분기</button><button data-q="y" class="${yr ? "on" : ""}">연간</button></div>` : ""}`;
   return `<div class="qtrbox" data-code="${esc((d.card || d).code || "")}">${head}${acctHTML((d.card || d).code, false)}
@@ -1220,19 +1224,23 @@ function qtrHTML(d, mode = "q", inKq = false) {  // mode: q = 분기, y = 연간
       ${inKq ? "" : qPanel("잉여현금흐름 (FCF)", tF, labels, fcf, null, usd, "var(--good)")}
       ${qPanel("설비투자 (CapEx)", tC, labels, capex, null, usd, "var(--warn)")}
     </div>
-    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(labels[L])} 얼마 벌어서 어디에 썼나</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 → 순이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
-    ${qSankey(last[1], usd, getQ(last[0]), segs)}
+    <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(fLab)} 얼마 벌어서 어디에 썼나</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 → 순이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
+    ${part ? `<div class="note src">⏳ ${esc(labels[L])} 는 잠정실적이라 매출·영업이익·순이익만 있어요 — 원가·비용 나눔은 분기보고서(분기 끝 45일 안)가 나오면 채워져서, 돈의 흐름은 ${esc(fLab)} 기준이에요.</div>` : ""}
+    ${qSankey(fq[1], usd, getQ(fq[0]), segs)}
     ${costHTML(DASH.stocks.find((x) => x.code === (d.card || d).code), d)}
-    ${yr ? "" : (() => {  // 최근 4분기 합계(TTM) · 최근 연간 — 분기는 계절성이 있어 1년치로도 보기
-      const q4 = all.slice(-4).map(([, q]) => q), out = [];
+    ${yr ? "" : (() => {  // 직전 분기 · 1년 전 같은 분기 (나란히 비교) · 최근 4분기 합계(TTM) · 최근 연간 — 접어 두고 눌러서 보기
+      const out = [], pv = full.at(-2), ago = full.find(([e]) => nearDay(e, new Date(fq[0]) - 365 * 864e5));
+      if (pv) out.push([`직전 분기 (${qLabel(pv[0])})`, pv[1], getQ(pv[0])]);
+      if (ago && ago !== pv) out.push([`1년 전 같은 분기 (${qLabel(ago[0])})`, ago[1], getQ(ago[0])]);
+      const q4 = full.slice(-4).map(([, q]) => q);
       if (q4.length === 4 && q4.every((q) => q.rev && q.op != null)) {
         const sum = {};
         for (const key of ["rev", "cogs", "gp", "rnd", "sm", "ga", "sga", "opex", "op"]) if (q4.every((q) => q[key] != null)) sum[key] = q4.reduce((a, q) => a + q[key], 0);
-        out.push([`최근 4분기 합계 (${qLabel(all.at(-4)[0])}~${labels[L]})`, sum]);
+        out.push([`최근 4분기 합계 (${qLabel(full.at(-4)[0])}~${fLab})`, sum]);
       }
       const py = d.pl_year;
       if (py?.rev) out.push([`최근 연간 (${py.end.slice(0, 7)} 결산)`, py]);
-      return out.map(([t, q]) => `<details class="fvt"><summary class="chart-title">💸 ${esc(t)} <span class="src">매출 ${qMoney(q.rev, usd)} · 영업이익률 ${n((q.op / q.rev) * 100, 1)}% · 눌러서 보기</span></summary>${qSankey(q, usd)}</details>`).join("");
+      return out.map(([t, q, a]) => `<details class="fvt"><summary class="chart-title">💸 ${esc(t)} <span class="src">매출 ${qMoney(q.rev, usd)} · 영업이익률 ${n((q.op / q.rev) * 100, 1)}% · 눌러서 보기</span></summary>${qSankey(q, usd, a)}</details>`).join("");
     })()}
     <div class="note src">성장률은 1년 전 ${yr ? "" : "같은 분기 "}대비 (${yr ? "야후 연간 재무제표 최근 4년" : "분기 자료가 쌓이면 빈 칸이 채워져요"}) · 한국 종목은 야후 반영이 실적 발표보다 늦을 수 있어요</div>
   ${inKq ? "" : "</div>"}</div>`;
@@ -1631,7 +1639,10 @@ function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없�
       ${(e.short || []).length ? `<div class="warnbox" style="margin-top:6px"><b>⚡ 핵심만</b><ul class="irl">${e.short.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       <details class="fvt"><summary class="chart-title">📄 자세히 보기</summary><div class="note" style="white-space:pre-wrap;line-height:1.7">${esc(e.body || "")}</div></details>
     </details>`;
-  return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 맨 위만 펼쳐져 있어요</span></h3><div class="card">${next}${moodHTML(DASH.stocks.find((s) => s.code === code))}
+  // 👥 개인투자자 분위기 (earnings.yaml 맨 위 분기 crowd: {v 한 단어, lines}) — 자동 추정(시장 기대감) 옆에 사용자가 본 분위기
+  const cr = list[0]?.crowd, crowd = cr ? `<div class="warnbox" style="margin-top:6px;background:var(--bad-bg);color:var(--bad-ink)">👥 <b>개인투자자 분위기: ${esc(cr.v || "")}</b> <span class="src">(사용자 판단 · ${esc(list[0].quarter)})</span>
+    <ul class="irl">${(cr.lines || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+  return `<h3>📞 실적발표 요약 <span class="src">${list.length}개 분기 · 맨 위만 펼쳐져 있어요</span></h3><div class="card">${next}${moodHTML(DASH.stocks.find((s) => s.code === code))}${crowd}
     ${full(list[0], 0)}
     ${trendHTML(list.find((e) => e.trend)?.trend)}
     ${list.slice(1).map((e, j) => (e.past ? pastCallHTML(e) : full(e, j + 1))).join("")}
@@ -2309,7 +2320,7 @@ function kpiChart(ch) {
   ends.forEach(([x, y, v, col]) => { g += `<text x="${x + 8}" y="${y + 4}" text-anchor="start" class="qv b" style="fill:${col};font-size:13px">${kpiF(v, ch.u)}</text>`; });
   g += tipCols(X, (x1 - x0) / (qs.length - 1), 0, 160, qs.map((q) => [q, ...ch.s.map((s) => (s.v?.[q] == null ? null : `${s.n}: ${kpiF(s.v[q], ch.u)}`))].join("\n")));
   const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${(ch.col || KPI_COL)[si % (ch.col || KPI_COL).length]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
-  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}${ch.note ? `<div class="src" style="padding:0 4px 4px;color:var(--warn-ink)">${esc(ch.note)}</div>` : ""}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
 // 📏 이익 vs 주가 (지난 최대 10년, collector compute.long_cagr): 숫자 표 → 🐣 무슨 뜻 → 🔭 앞으로 3년 단순 계산 → 📌 읽는 법
 // 오래 보면 주가 상승률 ≈ 이익 성장률 × 값(PER) 변화 — 같은 회사도 비싸게 사면(씨젠 PER 35배) 이익 12배에 주가 4배, 싸게 사면(한미 5~7배) 120배
@@ -2822,15 +2833,20 @@ function insiderHTML(x) {
   if (!x || !(x.rows || []).length) return "";
   const big = [];
   if (x.major_sell) big.push(`<div class="warnbox" style="margin-top:6px;background:var(--bad-bg);color:var(--bad-ink)">⚠ <b>대주주 장내매도 ${eok(x.major_sell)}</b><div class="note src">${KKANGTO.major_sell}</div></div>`);
+  // 국내는 임원·대표가 팔 때가 뒤 주가에 더 잘 맞음 (사용자 원칙 · 미국은 CEO·임원 매수가 더 의미) — 행이 아직 없는 옛 데이터는 표에서 직접 셈
+  const es = (x.rows || []).filter((r) => r.kind === "매도" && r.role !== "대주주"), esN = x.exec_sellers ?? new Set(es.map((r) => r.name)).size;
+  const ceoS = x.ceo_sell ?? new Set(es.filter((r) => r.role === "대표이사").map((r) => r.name)).size;
+  if (esN) big.unshift(`<div class="warnbox" style="margin-top:6px;background:var(--bad-bg);color:var(--bad-ink);border-color:var(--bad)">🚨 <b>${ceoS ? `대표이사 ${ceoS}명 포함 ` : ""}임원 ${esN}명 장내매도 ${eok(x.exec_sell ?? es.reduce((a, r) => a + r.amt, 0))}</b> (최근 3개월)
+    <div class="note" style="color:var(--bad-ink)">국내 주식은 주요 임원·대표가 팔면 뒤 주가가 안 좋은 경우가 많아요 — 꼭 확인 (미국은 CEO·임원 매수가 더 의미 있는 신호). 아래 빨간 줄이 매도 거래예요.</div></div>`);
   if (x.exec_buyers) big.push(`<div class="warnbox" style="margin-top:6px;background:var(--good-bg);color:var(--good-ink)">👀 <b>임원 ${x.exec_buyers}명 장내매수${x.ceo_buy ? ` (대표이사 ${x.ceo_buy}명 포함)` : ""}</b><div class="note src">${KKANGTO.exec_buy}</div></div>`);
   if (x.major_buy) big.push(`<div class="note">ℹ 대주주 장내매수 ${eok(x.major_buy)} <span class="src">${KKANGTO.major_buy}</span></div>`);
-  const tag = (r) => (r.role === "대주주" ? `<span class="pill ${r.kind === "매도" ? "red" : ""}">대주주</span>` : r.role === "대표이사" ? `<span class="pill green">대표이사</span>` : `<span class="pill ${r.kind === "매수" ? "green" : ""}">임원</span>`);
+  const tag = (r) => `<span class="pill ${r.kind === "매도" ? "red" : r.role === "대주주" ? "" : "green"}">${esc(r.role)}</span>`;  // 매도 = 빨강 (누가 팔든)
   return `<h3>👥 내부자 거래 <span class="src">최근 3개월 장내매수·매도 · 임원·주요주주 소유보고 (스톡옵션·상여 제외)</span></h3><div class="card">
     <div class="mini"><div>매수<b class="cheap">${eok(x.buy)}</b><span class="src">${x.buyers}명</span></div><div>매도<b class="dear">${eok(x.sell)}</b><span class="src">${x.sellers}명</span></div>
       <div>순매수<b class="${x.buy - x.sell < 0 ? "dear" : "cheap"}">${x.buy - x.sell < 0 ? "−" : ""}${eok(Math.abs(x.buy - x.sell))}</b></div></div>
     ${big.join("")}
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact orders"><thead><tr><th>변동일</th><th>보고자</th><th>사유</th><th>증감(주)</th><th>단가</th><th>금액</th></tr></thead><tbody>
-      ${x.rows.slice(0, 15).map((r) => `<tr><td>${esc((r.date || "").slice(2))}</td><td style="white-space:normal"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a> ${tag(r)}<br><span class="src">${esc(r.pos || "")}</span></td>
+      ${x.rows.slice(0, 15).map((r) => `<tr${r.kind === "매도" ? ' style="background:var(--bad-bg);font-weight:700"' : ""}><td>${esc((r.date || "").slice(2))}</td><td style="white-space:normal"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a> ${tag(r)}<br><span class="src">${esc(r.pos || "")}</span></td>
         <td>장내${esc(r.kind)}</td><td class="${r.chg < 0 ? "dear" : "cheap"}">${r.chg > 0 ? "+" : ""}${n(r.chg, 0)}</td><td>${n(r.price, 0)}</td><td>${eok(r.amt)}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="note src">참고(깡토 블로그 백테스트, 한 사람의 통계): 대주주가 산다는 건 매수 이유가 못 되고, 대주주가 판다는 건 꽤 무거운 경고. 임원이 여러 명 사면 관심종목에 올릴 만함. 그래도 추세(신고가·상대강도)를 먼저 보고, 시장이 나쁘면 비중은 작게. 통계는 과거 결과일 뿐 앞으로를 보장하지 않아요.</div>
@@ -3544,7 +3560,7 @@ function costIndHTML() {
 function costHTML(c, d) {
   const r = c && costRow(c.code, c.industry), s = c && KEYC?.cost?.stock?.[c.code];
   if (!r && !s) return "";
-  const e4 = Object.entries(d.qtrs || {}).filter(([, q]) => q.rev).slice(-4), q4 = e4.map(([, q]) => q);
+  const e4 = Object.entries(d.qtrs || {}).filter(([, q]) => q.rev && !q.prelim).slice(-4), q4 = e4.map(([, q]) => q);  // 잠정(매출·이익만) 분기는 빼고
   const sum = (k) => (q4.length === 4 && q4.every((q) => q[k] != null) ? q4.reduce((a, q) => a + Math.abs(q[k]), 0) : 0);
   const P = [["매출원가", "cogs"], ["영업비용", "opex"], ["연구개발", "rnd"], ["설비투자", "capex"]].map(([t, k]) => (sum(k) && sum("rev") ? `${t} ${n((sum(k) / sum("rev")) * 100, 0)}%` : "")).filter(Boolean);
   const so = r ? (s ? r.so.match(/볼 것:.*$/)?.[0] || "" : r.so) : "";  // 종목 줄이 있으면 업종 설명은 겹쳐서 '볼 것'만
