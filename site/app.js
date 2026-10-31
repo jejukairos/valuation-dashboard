@@ -2038,7 +2038,7 @@ function detailHTML(d) {
     const p = d.pbr;
     const cols = Object.keys(p.bps);
     h += `<h3>PBR 적정주가</h3><div class="card">
-      <h3 style="margin-top:0">적정주가 (BPS × PBR)</h3>${matrixTable(p.matrix, cols, d.price, "PBR ↓ · BPS →")}
+      <h3 style="margin-top:0">적정주가 (BPS × PBR)</h3>${matrixTable([...p.matrix, { label: "PBR 1배 (= BPS)", mult: 1, cells: p.bps }], cols, d.price, "PBR ↓ · BPS →")}
       <h3>ROE 와 PBR</h3><div class="kv">
         <div class="k">ROE 현재 <span class="src">${esc(p.roe_now_label)}</span></div><div class="v">${pct(p.roe_now)}</div>
         <div class="k">ROE 5년 평균</div><div class="v">${pct(p.roe5)}</div>
@@ -2897,7 +2897,7 @@ async function openStock(code) {
     const kpiHtml = await kpiBlock(code, d);
     const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + per12mfHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + per12mfHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
@@ -3470,7 +3470,7 @@ function costHTML(c, d) {
 }
 async function keyBlock(code) {
   const K = await keyLoad(), c = DASH.stocks.find((x) => x.code === code), ind = c?.industry || "";
-  const gs = [...Object.entries(K.industry || {}).filter(([k]) => ind.includes(k)), ...(K.stock?.[code] ? [[c?.name || code, K.stock[code]]] : [])];
+  const gs = [...Object.entries(K.industry || {}).filter(([k, g]) => ind.includes(k) || (g.codes || []).includes(code)), ...(K.stock?.[code] ? [[c?.name || code, K.stock[code]]] : [])];
   return gs.length ? `<h3>🔑 키팩터 · 키차트 <span class="src">주가를 움직이는 숫자 · 변곡점 체크 (산업 탭에도 있어요)</span></h3>${gs.map(([k, g]) => keyGroup(k, g, code)).join("")}` : "";
 }
 // 🛡 방산 (config/defense.yaml): 지정학 연표(사실) + 글쓴이 가설 + 우리 방산 종목 숫자 (stocks.yaml industry 에 '방산')

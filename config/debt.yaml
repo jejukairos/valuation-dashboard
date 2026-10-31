@@ -5,6 +5,18 @@ MSFT:
   - date: "2026-10-29"
     text: "9년 만에 미국 회사채 발행 — 최소 250억$, 만기 2~40년 최대 10종류, 주문 1,150억$ 넘게 몰림 · 설비투자 등에 씀 (2017년엔 170억$)"
     url: https://en.sedaily.com/international/2026/10/30/microsoft-taps-bond-market-first-time-in-9-years-raising-25
+GOOG:
+  - date: "2026-10-29"
+    text: "1~9월 회사채 808억$ (3분기 287억$) + 새 주식 619억$ (6월 공모·사모 305억 + 의무전환우선주 190억 + 3분기 시장 매각 124억) · 3분기 자사주 매입 0 — 올해 전 세계 기업 채권 발행 2위 (블룸버그)"
+    url: https://www.sedaily.com/article/20107820
+META:
+  - date: "2026-10-21"
+    text: "4월 회사채 250억$ (6종류) — 25년 10월 300억$ 때보다 가산금리 높고 주문 약 1,250억 → 960억$ · 5년 CDS 114.8bp 사상 최고 · 4분기 다시 발행(유로화 포함) 관측"
+    url: https://www.itiger.com/hans/news/1185154204
+ORCL:
+  - date: "2026-10-21"
+    text: "연초 회사채 200~250억$ (올해 더 안 낸다고 함) · 7월 S&P 등급 BBB− (투기등급 바로 위) · 27년 빚+주식 약 400억$ 계획 · 5년 CDS 343bp 사상 최고"
+    url: https://www.kucoin.com/news/flash/meta-and-oracle-face-bond-market-scrutiny-amid-ai-spending-surge
 AMZN:
   - date: "2026-10-28"
     text: "올해 전 세계 채권 발행 기업 1위 (정부까지 넣어도 독일·EU·이탈리아 다음 4위, 프랑스 정부보다 많음 · 블룸버그 집계) · 기업 2위는 알파벳"
