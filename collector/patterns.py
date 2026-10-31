@@ -77,7 +77,7 @@ def weekly(px, dg=0, weeks=156):
     if len(s) < 60:
         return None
     w, D = s.values.astype(float), [d.strftime("%Y-%m-%d") for d in s.index]
-    T, r = len(w) - 1, lambda v: round(float(v), dg)
+    T, r = len(w) - 1, lambda v: round(float(v), dg) if dg else int(round(float(v)))  # 한국(원)은 정수 — '257,000.0' 이 안 되게
     sig, lines, levels = [], [], []
     cup = _cup(w, T)
     if cup:

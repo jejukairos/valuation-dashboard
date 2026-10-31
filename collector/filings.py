@@ -115,7 +115,8 @@ def collect(hd=None):
             if r.get("amt", 0) >= 1e8:  # 임원·대주주 1억 원 이상 장내 매매 (한국은 대주주·주요 임원 매도가 더 잘 맞는 신호)
                 sell = r["kind"] == "매도"
                 rows.append({"d": r.get("date") or "", "k": f"👤 {r['role']} {r['kind']}", "lv": "bad" if sell else "good", "amt": r["amt"],
-                             "t": f"{r.get('name', '')} ({r.get('pos', '')})", "x": f"{_eok(r['amt'])} · 주당 {r.get('price') or 0:,.0f}원",
+                             "t": f"{r.get('name', '')} ({r.get('pos', '')})", "x": f"{_eok(r['amt'])} · 주당 {r.get('price') or 0:,.0f}원"
+                             + (f" · {r['kind']} 후 지분 {r['ratio']:.2f}%{' (보고서 기준)' if r.get('ratio_rep') else ''}" if r.get("ratio") else ""),
                              "why": "대주주·임원이 판 뒤엔 주가가 더 빠지는 경우가 많았어요" if sell else "회사를 잘 아는 사람이 자기 돈으로 샀어요", "u": r.get("url")})
         out[code] = sorted(rows, key=lambda x: x["d"], reverse=True)[:20]
     REPORT.success("중요 공시")

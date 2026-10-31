@@ -177,6 +177,17 @@ function scenHTML(c) {
       const x = p.base_val * p.mult[k], up = (x / c.price - 1) * 100;
       return `<td><b>${fmtP(x)}</b><br><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></td>`;
     }).join("")}</tr>`).join("")}</tbody></table></div>` : "");
+  // 📐 PBR 로만 매기는 종목인데 업종 리레이팅 기록이 있으면 PER 로도 (접어 둠): 🔴 약세장 = 리레이팅 전 배수로 보수적 · 🐂 강세장 = 리레이팅 된 배수
+  const perAlt = (mode) => {
+    const a = s.per_alt;
+    if (!a) return "";
+    const m = mode === "easy" ? a.easy : a.tight, mm = { bear: m[0], base: m[1], bull: m[2] }, x = (k) => n(mm[k], 1);
+    const v = Object.fromEntries(Object.entries(mm).map(([k, f]) => [k, a.e12 * f]));
+    const why = mode === "easy" ? `🐂 강세장(금리가 내려가 돈이 들어올 때)엔 리레이팅 됐던 배수를 써요: ${x("bear")} · ${x("base")} · ${x("bull")}배 (업종 보통 ~ 최고) — ${esc(a.history || "")}`
+      : `🔴 지금은 긴축·약세장이라 더 보수적으로 리레이팅 전 배수를 썼어요: ${x("bear")} · ${x("base")} · ${x("bull")}배 (업종 바닥 ~ 보통). 리레이팅 때 PER(${esc(a.history || "")})은 금리가 내려가고 돈이 다시 들어올 때나 기대할 수 있어요.`;
+    return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📐 PER 로도 보기 <span class="src">12MF EPS ${fmtB(a.e12)} × ${x("bear")} · ${x("base")} · ${x("bull")}배 · 눌러서 열기</span></summary>
+      ${scenBoxes(v, [{ kind: "PER", mult: mm }])}<div class="note src">${why}<br>💬 이익(순이익)이 해마다 들쭉날쭉해서(일회성 이익·손실) 적정주가는 위 PBR 로 매기고, PER 은 참고로만 봐요. ${s.rerating ? `🔁 ${esc(s.rerating)}` : ""}</div></details>`;
+  };
   // 🐂 강세장일 때(금리가 내려가 돈이 풀릴 때): 같은 Bear·Base·Bull 칸을 탭으로 — 성장률 × 1.5·1.75·2, 업종·밴드 PER 은 보통·1.5배·2배
   const bm = s.bull_mkt, reg = s.regime;
   const bv = bm ? { bear: bm.lo, base: bm.mid ?? (bm.lo + bm.hi) / 2, bull: bm.hi } : null;
@@ -188,8 +199,8 @@ function scenHTML(c) {
   return `<div class="scen" onclick="event.stopPropagation()">
     <div class="chart-title" style="margin-top:12px"><b>① 앞으로 실적으로 본 적정주가</b> <span class="src">${baseOf(s.parts, "12MF")}</span></div>
     ${tabs}
-    <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}${partRows(s.parts)}</div>
-    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}${partRows(bparts)}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${s.sector?.easy && (s.parts || []).some((p) => /업종/.test(p.src || "")) ? `업종 PER ${s.sector.easy.map((x) => n(x, 1)).join(" · ")}배 (sectors.yaml easy)` : "성장률 × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)"}</div></div>` : ""}
+    <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}${partRows(s.parts)}${perAlt("tight")}</div>
+    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}${partRows(bparts)}${perAlt("easy")}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${s.sector?.easy && (s.parts || []).some((p) => /업종/.test(p.src || "")) ? `업종 PER ${s.sector.easy.map((x) => n(x, 1)).join(" · ")}배 (sectors.yaml easy)` : "성장률 × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)"}</div></div>` : ""}
     ${regLine}
     ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}${c.notes?.y2?.length ? ` · 🗒 메모 ${c.notes.y2.length}` : ""}</span></summary>${scenBoxes(s.y2, s.y2.parts)}${notesHTML(c.notes?.y2, c, s.y2)}</details>` : ""}
     ${multHTML(s)}
@@ -3807,10 +3818,20 @@ function patAlertHTML() {  // 첫 화면: 모양이 맞는 종목 (종류별 개
     .sort((a, b) => Math.min(...a.pat.map((s) => ord.indexOf(s.k))) - Math.min(...b.pat.map((s) => ord.indexOf(s.k))));  // 컵·추세선 돌파가 위로
   if (!L.length) return "";
   const cnt = Object.entries(PAT).map(([k, [i, t]]) => [i, t, L.filter((c) => c.pat.some((s) => s.k === k)).length]).filter(([, , x]) => x);
-  return `<details class="card" style="margin-bottom:12px" open><summary><b>📐 주봉 차트 모양</b> <span class="src">${cnt.map(([i, t, x]) => `${i} ${t} <b>${x}</b>`).join(" · ")} · 주봉 종가 기준 · 참고용</span></summary>
-    <ul class="irl">${L.map((c) => `<li><a href="#stock/${esc(c.code)}">${esc(c.name)}</a> ${c.pat.map(patLi).join(" · ")}</li>`).join("")}</ul></details>`;
+  return `<details class="card" style="margin-bottom:12px" open><summary><b>📐 주봉 차트 모양</b> <span class="src">${cnt.map(([i, t, x]) => `${i} ${t} <b>${x}</b>`).join(" · ")} · 주봉 종가 기준 · 줄을 누르면 차트가 열려요 · 참고용</span></summary>
+    <ul class="irl" style="list-style:none;padding-left:2px">${L.map((c) => `<li><details class="patrow" data-code="${esc(c.code)}"><summary><a href="#stock/${esc(c.code)}">${esc(c.name)}</a> ${c.pat.map(patLi).join(" · ")} <span class="src">▾ 차트</span></summary><div class="cbox"></div></details></li>`).join("")}</ul></details>`;
 }
-function patHTML(d) {  // 종목 상세: 최근 3년 주봉 종가 + 추세선·전고점·손잡이 고점 선 + 조건 설명
+document.addEventListener("toggle", (e) => {  // 📐 줄을 열 때 그 종목 주봉 차트를 받아 그림 (toggle 은 버블링이 안 돼서 capture)
+  const el = e.target;
+  if (!el.matches?.(".patrow") || !el.open || el.dataset.done) return;
+  el.dataset.done = 1;
+  const box = el.querySelector(".cbox");
+  box.innerHTML = `<div class="src">불러오는 중…</div>`;
+  fetch(`data/stocks/${el.dataset.code}.json?v=${encodeURIComponent(DASH.updated_at)}`).then((r) => r.json())
+    .then((d) => { box.innerHTML = patSVG(d) + `<div class="src"><a href="#stock/${esc(el.dataset.code)}">상세 화면에서 '모양 읽는 법'까지 보기 →</a></div>`; })
+    .catch(() => { box.innerHTML = `<div class="src">차트를 못 불러왔어요 — <a href="#stock/${esc(el.dataset.code)}">상세 화면</a>에서 봐 주세요</div>`; });
+}, true);
+function patSVG(d) {  // 최근 3년 주봉 종가 + 추세선·전고점·손잡이 고점 선 (상세 화면·첫 화면 목록 같이 씀)
   const p = d.pattern;
   if (!p?.w?.length) return "";
   const ws = p.w, W = 340, x0 = 6, x1 = W - 52, top = 10, bot = 146, t0 = +new Date(ws[0][0]), t1 = +new Date(ws.at(-1)[0]);
@@ -3824,10 +3845,15 @@ function patHTML(d) {  // 종목 상세: 최근 3년 주봉 종가 + 추세선·
   p.lines.forEach((l) => { g += `<polyline points="${l.p.map(([dt, v]) => `${X(dt)},${Y(v)}`).join(" ")}" fill="none" stroke="${l.k === "cup" ? "var(--good)" : "var(--s2)"}" stroke-width="2.2"${l.k === "lo" ? ' stroke-dasharray="6 3"' : ""}/>`; });
   const last = ws.at(-1);
   g += `<circle cx="${X(last[0])}" cy="${Y(last[1])}" r="3.5" fill="var(--ink)"/><text x="${x1 + 3}" y="${Math.min(bot, Math.max(top + 8, Y(last[1]) + 16))}" class="qv" style="font-size:10px">${esc(F(last[1]))}</text>`;
+  return `<svg viewBox="0 0 ${W} 166" role="img" aria-label="최근 3년 주봉 종가와 추세선">${g}</svg>
+    <div class="src" style="padding:0 4px 4px">── 주봉 종가 · <span style="color:var(--s2)">━</span> 고점끼리 이은 하락 추세선 · <span style="color:var(--s2)">┅</span> 저점끼리 이은 선 · <span style="color:var(--warn)">┅</span> 전고점·손잡이 고점 · <span style="color:var(--good)">━</span> 컵 모양</div>`;
+}
+function patHTML(d) {  // 종목 상세: 차트 + 조건 설명
+  const p = d.pattern;
+  if (!p?.w?.length) return "";
   const sig = p.sig.length ? `<ul class="irl">${p.sig.map((s) => `<li>${patLi(s)}</li>`).join("")}</ul>` : `<div class="note src" style="margin-top:0">지금은 조건에 맞는 모양이 없어요</div>`;
   return `<details${p.sig.length ? " open" : ""}><summary><h3 style="display:inline">📐 주봉 차트 모양 <span class="src">${esc(p.asof)} 주 종가까지 · ${p.sig.length ? p.sig.map((s) => esc(s.t)).join(" · ") : "해당 없음"}</span></h3></summary><div class="card">${sig}
-    <svg viewBox="0 0 ${W} 166" role="img" aria-label="최근 3년 주봉 종가와 추세선">${g}</svg>
-    <div class="src" style="padding:0 4px 4px">── 주봉 종가 · <span style="color:var(--s2)">━</span> 고점끼리 이은 하락 추세선 · <span style="color:var(--s2)">┅</span> 저점끼리 이은 선 · <span style="color:var(--warn)">┅</span> 전고점·손잡이 고점 · <span style="color:var(--good)">━</span> 컵 모양</div>
+    ${patSVG(d)}
     <div class="kidbox" style="margin-top:6px">👀 <b>모양 읽는 법</b><ul class="irl">
       <li>☕ <b>컵위드핸들</b> (윌리엄 오닐): 크게 오른 뒤 12~40% 쉬며 U자 컵을 만들고, 손잡이처럼 3~15% 살짝 눌렸다가 손잡이 고점을 넘는 모양</li>
       <li>📐 <b>하락 추세선</b>: 점점 낮아지는 고점끼리 이은 선 — 위로 뚫으면 내림세가 끝나 가는지 보는 자리 · 저점끼리 이은 선 아래로 깨지면 내림이 빨라질 수 있는 자리</li>
@@ -3876,19 +3902,19 @@ function repNote(x, mkt) {
 }
 function repTable(r, max) {
   const us = r.market === "US", L = (r.list || []).slice(0, max);
-  if (!L.length) return `<div class="src">최근 6개월 리포트 없음</div>`;
+  if (!L.length) return `<div class="src">최근 7개월 리포트 없음</div>`;
   return `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">날짜 · 증권사</th>${us ? "" : '<th style="text-align:left">제목</th>'}<th>목표주가</th><th>의견</th></tr></thead><tbody>
     ${L.map((x) => `<tr><td style="text-align:left;white-space:nowrap"><span class="src">${esc(x.d.slice(5).replace("-", "/"))}</span> ${esc(x.firm)}</td>
       ${us ? "" : `<td style="text-align:left;white-space:normal;min-width:12em"><a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t.replace(/^[^)]*\)\s*/, ""))}</a></td>`}
       <td style="white-space:nowrap">${tpChg(x, r.market)}</td><td>${esc(x.act ? `${x.act} · ${x.rating}` : x.rating || "")}</td></tr>`).join("")}</tbody></table></div>`;
 }
-// 최근 30일 목표가 올린 곳·내린 곳 + 증권사별 최신 목표가 평균
+// 최근 7개월 목표가 올린 곳·내린 곳 (30일 안 개수 따로) + 증권사별 최신 목표가 평균
 function repSum(r) {
-  const cut = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), L = (r.list || []).filter((x) => x.d >= cut && x.tp);
+  const cut = (days) => new Date(Date.now() - days * 864e5).toISOString().slice(0, 10), L = (r.list || []).filter((x) => x.d >= cut(214) && x.tp), n30 = L.filter((x) => x.d >= cut(30)).length;
   const up = L.filter((x) => (x.tp_prev && x.tp > x.tp_prev) || x.tp_dir === "상향").length, dn = L.filter((x) => (x.tp_prev && x.tp < x.tp_prev) || x.tp_dir === "하향").length;
   const last = Object.values(Object.fromEntries([...(r.list || [])].reverse().filter((x) => x.tp).map((x) => [x.firm, x.tp])));
   const avg = last.length ? last.reduce((a, b) => a + b, 0) / last.length : null, c = DASH.stocks.find((s) => s.code === r.code);
-  return L.length || avg ? `<div class="note">최근 30일 리포트 ${L.length}개 · 목표가 <b style="color:var(--good-ink)">올림 ${up}</b> · <b style="color:var(--bad-ink)">내림 ${dn}</b>${avg ? ` · 증권사 ${last.length}곳 최신 목표가 평균 <b>${tpTxt(avg, r.market)}</b>${c?.price ? ` (지금 주가 대비 ${pct((avg / c.price - 1) * 100, 0, true)})` : ""}` : ""}</div>` : "";
+  return L.length || avg ? `<div class="note">최근 7개월 리포트 ${L.length}개 (30일 안 ${n30}개) · 목표가 <b style="color:var(--good-ink)">올림 ${up}</b> · <b style="color:var(--bad-ink)">내림 ${dn}</b>${avg ? ` · 증권사 ${last.length}곳 최신 목표가 평균 <b>${tpTxt(avg, r.market)}</b>${c?.price ? ` (지금 주가 대비 ${pct((avg / c.price - 1) * 100, 0, true)})` : ""}` : ""}</div>` : "";
 }
 async function loadReports() {
   try { await repGet(); } catch (_) { $("#reportsBody").innerHTML = `<div class="empty">리포트를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }

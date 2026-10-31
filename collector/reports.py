@@ -11,7 +11,8 @@ from html import unescape
 from common import CACHE, HTTP, REPORT, load_yaml, now_kst, read_json, write_json
 
 HK = "https://consensus.hankyung.com"
-KEEP = 15  # 종목당 최근 리포트 수
+KEEP = 30  # 종목당 최근 리포트 수
+DAYS = 214  # 오늘 기준 7개월 전까지 발행된 리포트 (사용자 요청 2026-11-01)
 
 
 def _num(s):
@@ -58,7 +59,7 @@ def pdf_prev(url):
     return prev_tp(pypdf.PdfReader(io.BytesIO(r.content)).pages[0].extract_text())
 
 
-def kr(code, days=180, budget=None):
+def kr(code, days=DAYS, budget=None):
     now = now_kst()
     r = HTTP.get(f"{HK}/analysis/list", params={"skinType": "business", "sdate": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
                                                 "edate": now.strftime("%Y-%m-%d"), "search_text": code, "report_type": "CO", "pagenum": 50},
@@ -99,7 +100,7 @@ def collect(todo):
                 lst = kr(code, budget=budget)
                 time.sleep(1)  # 공개 페이지라 천천히
             else:
-                rt = street.ratings("GOOGL" if code == "GOOG" else code, days=180) or {}
+                rt = street.ratings("GOOGL" if code == "GOOG" else code, days=DAYS) or {}
                 lst = [{"d": x["date"], "firm": x["firm"], "rating": x["to"] + (f" ← {x['from']}" if x["from"] and x["from"] != x["to"] else ""),
                         "act": x["action"], "tp": x["pt"], "tp_prev": x["prior"] if x["prior"] != x["pt"] else None} for x in rt.get("rows") or []][:KEEP]
         except Exception as e:  # noqa: BLE001

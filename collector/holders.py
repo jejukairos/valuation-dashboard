@@ -16,7 +16,7 @@ DOCS = read_json(CACHE / "insider_docs.json") or {}  # {접수번호: [거래 �
 def _doc_rows(rcept_no):
     """공시 원문(OpenDART document.xml)에서 장내매수·장내매도 행: 변동일·증감 주식수·단가.
     표 칸 순서(변동 전 → 증감 → 변동 후 → 단가)는 '변동 전 + 증감 = 변동 후'로 확인해서 맞는 것만 쓴다."""
-    key = "v1:" + rcept_no  # 읽는 방식을 고치면 v2 로 올려 다시 읽게
+    key = "v2:" + rcept_no  # 읽는 방식을 고치면 숫자를 올려 다시 읽게 (v2 = 변동 후 주식 수 after 추가)
     if key in DOCS:
         return DOCS[key]
     z = HTTP.get("https://opendart.fss.or.kr/api/document.xml", params={"crtfc_key": dart_key(), "rcept_no": rcept_no})
@@ -38,7 +38,7 @@ def _doc_rows(rcept_no):
                     b, d, a, p = nums[i:i + 4]
                     if (abs(b + d - a) <= 1 or abs(b - d - a) <= 1) and d != 0 and p > 0:  # 매도를 부호 없이 적은 보고서도 있음
                         rows.append({"date": f"{dm.group(1)}-{int(dm.group(2)):02d}-{int(dm.group(3)):02d}" if dm else None,
-                                     "kind": kind, "chg": abs(d) if kind == "매수" else -abs(d), "price": p})
+                                     "kind": kind, "chg": abs(d) if kind == "매수" else -abs(d), "price": p, "after": a})
                         break
     DOCS[key] = rows
     return rows
@@ -61,9 +61,13 @@ def insider(code, days=90, max_docs=25):
             trades = _doc_rows(r["rcept_no"])
         except Exception:  # noqa: BLE001
             continue
+        cnt, rate = num(r.get("sp_stock_lmp_cnt")), num(r.get("sp_stock_lmp_rate"))
+        total = cnt * 100 / rate if cnt and rate else None  # 보고서의 보유 주식 수 ÷ 지분율 = 전체 주식 수
         for t in trades:
             rows.append({**t, "name": (r.get("repror") or "").strip(), "pos": ofc if ofc != "-" else major, "role": role,
                          "amt": round(abs(t["chg"]) * t["price"]),
+                         # 그 거래 뒤 지분율 (원문의 변동 후 주식 수 ÷ 전체 주식 수), 없으면 보고서 기준 지분율
+                         "ratio": round(t["after"] / total * 100, 2) if t.get("after") and total else rate, "ratio_rep": not (t.get("after") and total),
                          "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={r['rcept_no']}"})
     rows.sort(key=lambda x: x.get("date") or "", reverse=True)
     sumamt = lambda k, f=lambda x: True: sum(x["amt"] for x in rows if x["kind"] == k and f(x))  # noqa: E731

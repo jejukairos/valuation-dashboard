@@ -276,6 +276,13 @@ def stock_detail(h, rates_now, fx):
         s_ = SECTORS.get(h.get("sector")) or {}
         scen["rerating"] = h.get("rerating") or s_.get("rerating")
         scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "tight", "easy", "history", "notes")}} if s_ else None
+        # 📐 PBR 로만 적정가를 매기는데 업종에 리레이팅 기록이 있는 종목(롯데쇼핑): PER 로도 Bear·Base·Bull — 화면에선 접어 둠
+        #    🔴 긴축·약세장 = 리레이팅 전 바닥~보통 (sectors.yaml tight 가 있으면 그것) · 🐂 강세장 = 리레이팅 된 보통~최고 (easy)
+        e12 = C.fwd12(hist, "eps")
+        if fm == ["PBR"] and "PER" in methods and scen["rerating"] and str(s_.get("kind", "PER")).upper() == "PER" and s_.get("base") and e12 and e12 > 0:
+            t = s_.get("tight") or [s_["bear"], (s_["bear"] + s_["base"]) / 2, s_["base"]]
+            ez = s_.get("easy") or [s_["base"], (s_["base"] + s_["bull"]) / 2, s_["bull"]]
+            scen["per_alt"] = {"e12": rnd(e12, 2), "tight": [rnd(x, 1) for x in t], "easy": [rnd(x, 1) for x in ez], "history": s_.get("history")}
         if mkt == "KR":
             try:
                 scen["ind"] = kr_stock.sector_per(str(h.get("data_code") or code))
