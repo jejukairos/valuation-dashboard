@@ -135,15 +135,15 @@ def board():
 
 
 # ---------- 차트 스캔 ----------
-def kr_universe(n=300):
-    """KRX 시가총액 상위 n (pykrx, 서버의 KRX 로그인 필요) → [(코드, 이름, 업종, 시총)]. 실패하면 보유·관심 한국 종목."""
+def kr_universe(n=300, min_cap=0):
+    """KRX 시가총액 상위 n (min_cap 원 이상만, pykrx, 서버의 KRX 로그인 필요) → [(코드, 이름, 업종, 시총)]. 실패하면 보유·관심 한국 종목."""
     try:
         from pykrx import stock
         for back in range(8):
             d = (now_kst() - timedelta(days=back)).strftime("%Y%m%d")
             info = pd.concat([stock.get_market_sector_classifications(d, m) for m in ("KOSPI", "KOSDAQ")])
             if info is not None and len(info) > 1000:
-                top = info.sort_values("시가총액", ascending=False).head(n)
+                top = info[info["시가총액"] >= min_cap].sort_values("시가총액", ascending=False).head(n)
                 return [(t, r["종목명"], r["업종명"], float(r["시가총액"])) for t, r in top.iterrows()]
     except Exception as e:  # noqa: BLE001
         print("  KRX 시총 순위 실패 → 보유·관심 종목만:", str(e)[:80])
@@ -298,12 +298,85 @@ def scan():
     return res
 
 
+# ---------- 📈 차트 탭: 주봉 정배열 (텔레그램 '[주봉 정배열]' 과 같은 규칙) ----------
+ALIGN_MA, ALIGN_CAP = (4, 13, 26, 52), 3e11  # 4주 > 13주 > 26주 > 52주 이동평균 · 그 주 시가총액 3,000억 이상
+
+
+def kr_weekly(code, years=3):
+    """네이버 주봉 (수정주가, 날짜 = 그 주 마지막 거래일)."""
+    end, start = now_kst(), now_kst() - timedelta(days=365 * years)
+    txt = HTTP.get(f"https://api.finance.naver.com/siseJson.naver?symbol={code}&requestType=1"
+                   f"&startTime={start:%Y%m%d}&endTime={end:%Y%m%d}&timeframe=week").text
+    rows = re.findall(r'\["(\d{8})",\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)', txt)
+    df = pd.DataFrame([[float(x) for x in r[1:]] for r in rows], index=pd.to_datetime([r[0] for r in rows]),
+                      columns=["Open", "High", "Low", "Close", "Volume"])
+    return df[df["Close"] > 0]
+
+
+def align_flags(close):
+    """주마다 정배열인지 (이평선이 다 있어야 True)."""
+    m = [close.rolling(n).mean() for n in ALIGN_MA]
+    return (m[0] > m[1]) & (m[1] > m[2]) & (m[2] > m[3])
+
+
+def align():
+    """끝난 주(금요일 장 마감 뒤) 기준 정배열 + 그 주 시총 3,000억 이상 → 통과·신규·이탈(이유)·연속 주 수 + 주봉 차트.
+    지난주 시총 = 지금 시총 × (지난주 종가 ÷ 지금 종가) — 시총이 3,000억을 넘나들어도 신규·이탈로 잡혀요 (텔레그램과 같음)."""
+    now = now_kst()
+    fri = (now - timedelta(days=(now.weekday() - 4) % 7)).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    if now.weekday() == 4 and now.hour < 16:
+        fri -= timedelta(days=7)  # 금요일 장중엔 이번 주가 아직 안 끝남
+    uni = [u for u in kr_universe(n=5000, min_cap=ALIGN_CAP * 2 / 3) if u[0].endswith("0")]  # 한 주 -33% 까지는 시총 이탈을 잡음 · 끝자리 0 = 보통주
+    rows, charts_ = [], {}
+    for code, nm, sec, cap in uni:
+        try:
+            w = kr_weekly(code)
+        except Exception as e:  # noqa: BLE001
+            print("  주봉 실패", code, str(e)[:40])
+            continue
+        last = w["Close"].iloc[-1]
+        w = w[w.index <= fri]
+        if len(w) < max(ALIGN_MA) + 2 or not cap:
+            continue
+        f = align_flags(w["Close"])
+        k = 0
+        for x in f.iloc[::-1]:
+            if not x:
+                break
+            k += 1
+        c0, c1 = w["Close"].iloc[-1], w["Close"].iloc[-2]
+        cap0, cap1 = cap * c0 / last, cap * c1 / last
+        rows.append({"code": code, "name": nm, "sec": sec, "cap": r_(cap0, -6), "streak": k, "chg": r_((c0 / c1 - 1) * 100, 1),
+                     "now": bool(f.iloc[-1]) and cap0 >= ALIGN_CAP, "prev": bool(f.iloc[-2]) and cap1 >= ALIGN_CAP,
+                     "al1": bool(f.iloc[-2]), "al0": bool(f.iloc[-1])})
+        charts_[code] = w
+    date = max((w.index[-1] for w in charts_.values()), default=fri).strftime("%Y-%m-%d")
+    by_cap = lambda r: -r["cap"]
+    pas = sorted([r for r in rows if r["now"]], key=by_cap)
+    new = sorted([{**r, "why": "cap" if r["al1"] else "align"} for r in rows if r["now"] and not r["prev"]], key=lambda r: (r["why"] != "cap", -r["cap"]))
+    out = sorted([{**r, "why": "cap" if r["al0"] else "align"} for r in rows if r["prev"] and not r["now"]], key=lambda r: r["code"])
+    keep = {r["code"] for r in pas + out}
+    cut = lambda b: {kk: (vv[-104:] if isinstance(vv, list) else {n: s[-104:] for n, s in vv.items()}) for kk, vv in b.items()}  # 2년
+    pick = lambda r: {k: r[k] for k in ("code", "name", "sec", "cap", "streak", "chg", "why") if k in r}
+    return {"date": date, "rule": "MA4>13>26>52", "min_cap": ALIGN_CAP, "universe": sum(1 for r in rows if r["cap"] >= ALIGN_CAP),
+            "pass": [pick(r) for r in pas], "new": [pick(r) for r in new], "out": [pick(r) for r in out],
+            "charts": {c: cut(bars(charts_[c], ALIGN_MA)) for c in keep}}
+
+
 def main():
     t0 = now_kst()
-    b = board()
-    write_json(DATA / "board.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), **b})
-    print(f"■ 시장 그룹판: 한국 {len(b['kr'])} · 미국 {len(b['us'])}")
+    if "--align" not in sys.argv:
+        b = board()
+        write_json(DATA / "board.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), **b})
+        print(f"■ 시장 그룹판: 한국 {len(b['kr'])} · 미국 {len(b['us'])}")
     if "--board" not in sys.argv:
+        try:  # 실패해도 차트 스캔은 돌게
+            a = align()
+            write_json(DATA / "align.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), **a})
+            print(f"■ 주봉 정배열 {a['date']}: {a['universe']}종목 중 통과 {len(a['pass'])} (신규 {len(a['new'])} / 이탈 {len(a['out'])})")
+        except Exception as e:  # noqa: BLE001
+            print("■ 주봉 정배열 실패:", str(e)[:200])
+    if "--board" not in sys.argv and "--align" not in sys.argv:
         s = scan()
         write_json(DATA / "scan.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), **s})
         for mk in ("kr", "us"):

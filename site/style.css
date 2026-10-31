@@ -377,6 +377,7 @@ ul.news li .src, ul.news li .note { display: block; margin-top: 2px; }
 .sbadge.k { background: var(--ink); color: var(--surface); } .sbadge.y { background: var(--warn-bg); color: var(--warn-ink); }
 .sbadge.r { background: var(--bad-bg); color: var(--bad-ink); } .sbadge.p { background: #ece9fb; color: var(--s7); }
 .cbox { background: var(--surface-2); border-radius: 10px; padding: 6px; margin-top: 6px; }
+.alrow { border-top: 1px solid var(--border); padding: 5px 0; font-size: 14px; } .alrow summary { cursor: pointer; } .alrow .cbox:empty { display: none; }  /* 📈 차트 탭 정배열 줄 */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bchip.down { background: #182a46; color: #8db6f5; } :root:not([data-theme="light"]) .kdn { color: #8db6f5; } :root:not([data-theme="light"]) .sbadge.p { background: #25213f; } }
 :root[data-theme="dark"] .bchip.down { background: #182a46; color: #8db6f5; } :root[data-theme="dark"] .kdn { color: #8db6f5; } :root[data-theme="dark"] .sbadge.p { background: #25213f; }
 .seg.sseg, .seg.scanmk { display: flex; flex-wrap: wrap; } .seg.sseg button { padding: 5px 9px; font-size: 12px; min-height: 30px; }

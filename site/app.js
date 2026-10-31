@@ -3202,7 +3202,9 @@ function showView() {
   const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
-  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  $("#chartView").hidden = view !== "chart";
+  if (view === "chart") loadAlign();
   $("#reportsView").hidden = view !== "reports";
   if (view === "reports") loadReports();
   $("#pbrView").hidden = view !== "pbr";
@@ -3296,7 +3298,7 @@ function candleSVG(ch, kind, fmt, ref) {
     if (bw >= 1.2) g += `<rect x="${X(i) - bw / 2}" y="${Math.min(Y(o), Y(c))}" width="${bw}" height="${Math.max(0.8, Math.abs(Y(o) - Y(c)))}" fill="${col}"/>`;
     g += `<rect x="${X(i) - bw / 2}" y="${v1 - (ch.v[i] / vmax) * (v1 - v0)}" width="${bw}" height="${(ch.v[i] / vmax) * (v1 - v0)}" fill="${col}" opacity=".35"/>`;
   });
-  const maCol = { 50: "var(--ink-2)", 200: "var(--warn)", 10: kind === "m" ? "var(--warn)" : "var(--ink-2)", 30: "var(--warn)" };
+  const maCol = { 50: "var(--ink-2)", 200: "var(--warn)", 10: kind === "m" ? "var(--warn)" : "var(--ink-2)", 30: "var(--warn)", ...AL_COL };
   Object.entries(ch.ma || {}).forEach(([k, a]) => { let d = ""; a.forEach((v, i) => { if (v > 0) d += `${d && a[i - 1] > 0 ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; }); g += `<path d="${d}" fill="none" stroke="${maCol[k] || "var(--ink-2)"}" stroke-width="1.5"/>`; });
   if (ch.rs?.length) {
     const rv = ch.rs.filter((v) => v != null), rl = Math.min(...rv), rh = Math.max(...rv), RY = (v) => rs1 - ((v - rl) / (rh - rl || 1)) * (rs1 - rs0);
@@ -3348,6 +3350,39 @@ function scanHTML() {
     <div class="seg scanmk" style="margin-bottom:8px"><button data-mk="kr" class="${SCAN_MKT === "kr" ? "on" : ""}">🇰🇷 한국</button><button data-mk="us" class="${SCAN_MKT === "us" ? "on" : ""}">🇺🇸 미국</button></div>
     <div class="note src">펀더멘털로 고른 종목을 차트로 확인하는 용도예요 (아이디어 찾기 · 매수/매도 추천 아님). RS = 지수 대비 1년 강도 순위 1~99 (3개월 40% + 6·9·12개월 20%씩)</div>${kinds}</div>`;
 }
+// 📈 차트 탭: 주봉 정배열 (site/data/align.json ← collector/board.py align) — 텔레그램 '[주봉 정배열]' 글과 같은 순서·모양
+const AL_COL = { 4: "var(--bad)", 13: "var(--s4)", 26: "var(--s3)", 52: "var(--s7)" };
+let ALIGN = null;
+async function loadAlign() {
+  if (!ALIGN) {
+    try { ALIGN = await (await fetch("data/align.json?t=" + Date.now(), { cache: "no-store" })).json(); }
+    catch (_) { $("#chartBody").innerHTML = `<div class="empty">⏳ 다음 차트 스캔(평일 아침·장 마감 뒤) 때 채워져요.</div>`; return; }
+  }
+  $("#chartBody").innerHTML = alignHTML(ALIGN);
+}
+function alignHTML(A) {
+  const eok = (v) => `${n(v / 1e8, 0)}억`, WHY = { cap: "시총 3,000억 넘음", align: "정배열 새로" }, WHYO = { cap: "시총 3,000억 아래로", align: "정배열 깨짐" };
+  // 한 줄 = 누르면 주봉 차트가 열리는 details (차트는 열 때 그림)
+  const row = (r, tail = "", tag = "") => `<details class="alrow" data-code="${esc(r.code)}"><summary>${esc(r.name)} <span class="src">(${esc(r.code)})</span> ${eok(r.cap)}${tail}${tag ? ` <span class="sbadge ${tag[1]}">${esc(tag[0])}</span>` : ""}</summary><div class="cbox"></div></details>`;
+  const top3 = [...A.pass].sort((a, b) => b.streak - a.streak || b.cap - a.cap).slice(0, 3);
+  const newSet = new Set(A.new.map((r) => r.code));
+  return `<div class="card" style="line-height:1.7"><b>[주봉 정배열]</b> ${esc(A.date)} 기준 · ${esc(A.rule)}
+    <div><b>통과 ${A.pass.length}종목</b> (신규 ${A.new.length} / 이탈 ${A.out.length}) <span class="src">· 시총 3,000억 이상 ${A.universe}종목 중 · ${esc(A.updated_at || "")}</span></div>
+    <h3 style="margin:10px 0 2px">▶️ 신규 진입 ${A.new.length}</h3>${A.new.map((r) => row(r, "", r.why === "cap" ? [WHY.cap, "y"] : null)).join("") || `<div class="src">없음</div>`}
+    <h3 style="margin:10px 0 2px">▼ 이탈 ${A.out.length}</h3>${A.out.map((r) => row(r, "", [WHYO[r.why], r.why === "cap" ? "y" : "r"])).join("") || `<div class="src">없음</div>`}
+    <h3 style="margin:10px 0 2px">최장 유지</h3>${top3.map((r) => row(r, ` <b>${r.streak}주</b>`)).join("")}</div>
+    <h3>통과 ${A.pass.length}종목 전체 <span class="src">시총 큰 순 · 연속 = 정배열이 이어진 주 수 · 주간 = 이번 주 등락</span></h3>
+    <div class="card">${A.pass.map((r) => row(r, ` · ${r.streak}주 · <span class="${kcol(r.chg)}">${sg(r.chg, 1)}</span>${r.sec ? ` <span class="src">${esc(r.sec)}</span>` : ""}`, newSet.has(r.code) ? ["신규", "k"] : null)).join("")}</div>
+    <div class="note src">선 색: <span style="color:${AL_COL[4]}">━ 4주</span> · <span style="color:${AL_COL[13]}">━ 13주</span> · <span style="color:${AL_COL[26]}">━ 26주</span> · <span style="color:${AL_COL[52]}">━ 52주</span> 이동평균 · 주봉 2년 · 로그 눈금 · 지난주 시총은 지금 시총 × (지난주 종가 ÷ 지금 종가)로 계산해서 3,000억 근처 종목은 원본과 다를 수 있어요 · 아이디어 찾기 용도 (매수·매도 추천 아님)</div>`;
+}
+document.addEventListener("toggle", (e) => {  // toggle 은 버블링이 안 돼서 capture 로
+  const d = e.target;
+  if (!d.matches?.(".alrow") || !d.open || d.dataset.done) return;
+  const c = d.dataset.code, s = DASH?.stocks?.find((x) => x.code === c);
+  d.querySelector(".cbox").innerHTML = candleSVG(ALIGN?.charts?.[c], "w", (v) => `${n(v, 0)}원`)
+    + `<div class="src"><a href="https://finance.naver.com/item/fchart.naver?code=${esc(c)}" target="_blank" rel="noopener">네이버 차트</a>${s ? ` · <a href="#stock/${esc(c)}">우리 상세</a>` : ""}</div>`;
+  d.dataset.done = 1;
+}, true);
 async function loadIndustry() {
   if (!AMZ) {
     try { AMZ = await (await fetch("data/amazon_kbeauty.json?t=" + Date.now(), { cache: "no-store" })).json(); }
