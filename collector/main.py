@@ -627,8 +627,11 @@ def long_q(mkt, dq, kqd, qtrs, sec=None):
             if q.get("sales") is not None and q["q"] not in out:
                 out[q["q"]] = {"rev": q["sales"], **({"op": q["op"]} if q.get("op") is not None else {})}
         for e, v in (qtrs or {}).items():  # FCF·CapEx 는 쌓아 둔 야후 분기에서 (원 → 억원)
-            if v.get("capex") is not None and v.get("fcf") is not None and _klabel(e) in out:
-                out[_klabel(e)].update(capex=rnd(abs(v["capex"]) / 1e8), ocf=rnd((v["fcf"] + abs(v["capex"])) / 1e8))
+            r = out.get(_klabel(e))
+            if r is not None and v.get("gp") is not None and "gp" not in r:  # 보고서 전 잠정 분기의 매출총이익 (kpi.yaml qtr_add = 회사 IR)
+                r["gp"] = rnd(v["gp"] / 1e8)
+            if v.get("capex") is not None and v.get("fcf") is not None and r is not None:
+                r.update(capex=rnd(abs(v["capex"]) / 1e8), ocf=rnd((v["fcf"] + abs(v["capex"])) / 1e8))
     else:
         for e, v in (sec or {}).items():
             out[_klabel(e)] = dict(v)
@@ -709,6 +712,19 @@ def _fair_table(bands, hist, price, currency, kinds):
                              "cells": cells, "pct": {k: rnd((v / price - 1) * 100, 0) if v else None for k, v in cells.items()}})
         out[kind] = {"cols": list(base), "base": {k: rnd(v, dg) for k, v in base.items()}, "rows": rows}
     return out
+
+
+def somong_lines():
+    """somong.yaml + 종목마다 'my:' 줄 번호(my_line) — 화면의 ✏️ '내가 정한 PER 적기' 링크가 깃허브 그 줄로 바로 가게."""
+    sm = load_yaml("somong.yaml") or {}
+    code = None
+    for i, line in enumerate((DATA.parent.parent / "config" / "somong.yaml").read_text(encoding="utf-8").splitlines(), 1):
+        m = re.match(r"""^['"]?([0-9A-Za-z.]+)['"]?:\s*$""", line)
+        if m:
+            code = m.group(1)
+        elif code and line.strip() == "my:" and isinstance(sm.get(code), dict) and isinstance(sm[code].get("my"), dict):
+            sm[code]["my_line"] = i
+    return sm
 
 
 def main():
@@ -926,7 +942,7 @@ def main():
     write_json(CACHE / "segments.json", SEGS)
     write_json(CACHE / "q_cons.json", kq.CONS)  # 발표 전 컨센서스 (예상 대비 계산용)
     write_json(CACHE / "q_hist.json", kq.HIST)
-    write_json(DATA / "somong.json", load_yaml("somong.yaml") or {})  # 강의 체크리스트 (지갑털이·올리고폴리·아무나이겨라·굿보스 등)  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)
+    write_json(DATA / "somong.json", somong_lines())  # 강의 체크리스트 (지갑털이·올리고폴리·아무나이겨라·굿보스 등)  # 기업 프로필 (한 줄 설명·매출 비중·점유율·IR 링크, 조사해서 적는 값)
 
     print("■ 동종업계")
     import peers

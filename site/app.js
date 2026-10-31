@@ -273,7 +273,10 @@ function waysHTML(c, fmtP) {
   const rows = w.map((x, i) => `<tr${x.used ? ' style="font-weight:700"' : ""}><td style="text-align:left">${"①②③"[i]} ${esc(x.name)}${x.used ? " ✔" : ""}<div class="src">${esc(x.src)}</div></td>
     <td>${x.g == null ? "-" : n(x.g, 1) + "%"}</td>${["bear", "base", "bull"].map((k) => `<td>${x[k] == null ? "-" : fmtP(x[k]) + up(x[k])}</td>`).join("")}</tr>`).join("");
   const mp = my.my_per ? e12 * my.my_per : null;
-  const mine = `<tr><td style="text-align:left">④ 내가 정한 PER<div class="src">${my.my_per ? esc(my.my_per_note || "") : "config/somong.yaml 의 my.my_per 에 적으면 나와요"}</div></td>
+  // ✏️ 깃허브 somong.yaml 의 이 종목 'my:' 줄로 바로 (연필 버튼 = 고치기) — 줄 번호는 수집기가 somong.json 에 my_line 으로
+  const ml = smData(c)?.my_line, edit = `https://github.com/jejukairos/valuation-dashboard/${ml ? `blob/main/config/somong.yaml#L${ml}` : "edit/main/config/somong.yaml"}`;
+  const pen = `<a href="${edit}" target="_blank" rel="noopener">✏️ ${my.my_per ? "고치기" : "여기에 적기"}</a>`;
+  const mine = `<tr><td style="text-align:left">④ 내가 정한 PER<div class="src">${my.my_per ? `${esc(my.my_per_note || "")} · ${pen}` : `${pen} — 깃허브 config/somong.yaml 의 이 종목 my: 아래에 <code>my_per: 25</code> (+ <code>my_per_note: 이유</code>) 를 적고 저장 (연필 버튼)`}</div></td>
     <td>${my.my_per ? n(my.my_per, 0) + "배" : "-"}</td><td colspan="3">${mp ? `<b>${fmtP(mp)}</b>${up(mp)}` : "-"}</td></tr>`;
   const sa = (c.scen.ltg_cmp || [])[0]?.[1];
   const cmp = (c.scen.ltg_cmp || []).length ? `<div class="note">3~5년 EPS 성장률 출처 비교: ${c.scen.ltg_cmp.map(([k, v], i) => `${esc(k)} <b>${v == null ? "-" : n(v, 1) + "%"}</b>${i && v != null && sa != null ? ` <span class="src">(시킹알파와 ${v - sa >= 0 ? "+" : ""}${n(v - sa, 1)}%p)</span>` : ""}`).join(" · ")}</div>` : "";
@@ -437,7 +440,7 @@ function stockCard(c) {
       <div class="verdict ${c.verdict}">${L.stock}</div>
       <div class="why">${esc(c.why)}</div></div></div>
     ${c.scen ? scenHTML(c) : `<div class="kv">
-      <div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)}</div>
+      <div class="k">적정주가 <b>Base</b> <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)}</div>
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>`}
     ${divSaHTML(c)}
@@ -732,6 +735,31 @@ function clearY(pts, i, hw = 14) {
   for (const p of [pts[i - 1], pts[i + 1]]) if (p) m = Math.min(m, y + (p[1] - y) * Math.min(1, hw / Math.max(1, Math.abs(p[0] - x))));
   return Math.max(10, m - 7);
 }
+// 🖱 그림 숫자 보기: 칸마다 보이지 않는 막대(data-tip, 줄바꿈 = \n) — 마우스를 올리거나 누르면 그 칸 숫자 상자, 그림 밖을 누르면 닫힘
+function tipCols(X, w, y0, y1, tips) {
+  return tips.map((t, i) => (t ? `<rect class="tiphit" x="${(X(i) - w / 2).toFixed(1)}" y="${y0}" width="${Math.max(1, w).toFixed(1)}" height="${y1 - y0}" data-tip="${esc(t)}"/>` : "")).join("");
+}
+const TIP = Object.assign(document.createElement("div"), { className: "tipbox", hidden: true });
+let TIP_ON = null;
+function tipAt(el, x, y) {
+  if (!TIP.isConnected) document.body.appendChild(TIP);
+  TIP_ON?.classList.remove("on");
+  TIP_ON = el;
+  el.classList.add("on");
+  TIP.innerHTML = el.dataset.tip.split("\n").map((s, i) => (i ? esc(s) : `<b>${esc(s)}</b>`)).join("<br>");
+  TIP.hidden = false;
+  const r = TIP.getBoundingClientRect(), W = document.documentElement.clientWidth;
+  TIP.style.left = `${Math.max(4, Math.min(W - r.width - 4, x + 12))}px`;
+  TIP.style.top = `${y - r.height - 12 < 4 ? y + 16 : y - r.height - 12}px`;
+}
+function tipHide() { if (!TIP_ON) return; TIP.hidden = true; TIP_ON.classList.remove("on"); TIP_ON = null; }
+document.addEventListener("pointermove", (e) => {
+  if (e.pointerType !== "mouse") return;
+  const t = e.target.closest?.(".tiphit");
+  if (t) tipAt(t, e.clientX, e.clientY); else if (!e.target.closest?.("svg")) tipHide();
+});
+document.addEventListener("click", (e) => { const t = e.target.closest?.(".tiphit"); if (t) tipAt(t, e.clientX, e.clientY); else tipHide(); });
+document.addEventListener("scroll", tipHide, { passive: true, capture: true });  // 화면이 움직이면 상자가 엉뚱한 데 남지 않게
 // 막대(값) + 선(%) 미니 차트. 음수 막대는 빨강, 마지막 분기는 진하게
 function qPanel(title, tag, labels, bars, line, usd, color, est = null) {  // est: 칸마다 추정(E) 여부 → 회색, 강조는 마지막 실적 칸
   const W = 300, x0 = 14, bw = (W - 2 * x0) / labels.length, li = est ? est.lastIndexOf(false) : bars.length - 1;
@@ -755,6 +783,8 @@ function qPanel(title, tag, labels, bars, line, usd, color, est = null) {  // es
     if (seg.length > 1) g += `<polyline points="${seg.map((p) => p.join(",")).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
     pts.forEach((p, i) => { if (p) g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${p[0]}" y="${clearY(pts, i)}" text-anchor="middle" class="qv${i === li ? " b hi" : ""}"${line[i] < 0 ? ' style="fill:var(--bad-ink)"' : ""}>${n(line[i], 0)}%</text>`; });
   }
+  const [bn, ln] = title.split(" & ");
+  g += tipCols((i) => x0 + bw * i + bw / 2, bw, 0, 172, labels.map((l, i) => `${l}${est?.[i] ? " (예상)" : ""}\n${bn}: ${bars[i] == null ? "-" : n(bars[i] / dv, dg) + un}${line ? `\n${ln || "비율"}: ${line[i] == null ? "-" : n(line[i], 1) + "%"}` : ""}`));
   return `<div class="qp"><div class="qt"><b>${title} <span class="src">${un}</span></b>${qTag(tag)}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg></div>`;
 }
 function qTag(tag) { return tag ? `<span class="qtag${/-|적자|둔화|역성장|하락/.test(tag) ? " bad" : /늘어|줄어|CapEx/.test(tag) ? " warn" : ""}">${esc(tag)}</span>` : ""; }
@@ -978,6 +1008,7 @@ function kqBars(title, qs, f, est, color, cur, opt = {}) {  // opt.tag = 제목 
         + lab(cx, yt - 13, ev, "qv", "var(--muted)") + lab(cx, yt, q[f], "qv b", color);
     } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? (q[f] < 0 ? "var(--bad)" : color) : null);
   });
+  g += tipCols((i) => x0 + bw * i + bw / 2, bw, 0, 172, qs.map((q, i) => `${q.q}${q.est ? " (예상 E)" : ""}\n${title}: ${q[f] == null ? "-" : SV(q[f]) + unit}${i === li && ev != null ? `\n예상(컨센서스): ${SV(ev)}${unit}` : ""}`));
   const s = ev != null && ev > 0 && qs[li]?.[f] != null ? (qs[li][f] / ev - 1) * 100 : null;  // 마지막 실적 분기 (뒤에 예상 E 가 붙어도)
   const tag = s == null ? "" : `<span class="qtag${s < 0 ? " bad" : ""}">예상대비 ${s >= 0 ? "+" : ""}${n(s, 1)}%</span>`;
   return `<div class="qp"><div class="qt"><b>${title} <span class="src">${unit}</span></b>${tag || opt.tag || ""}</div>${opt.sub ? `<div class="src">${opt.sub}</div>` : ""}<svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg>
@@ -1111,6 +1142,14 @@ function kqNewsHTML() {
     </div>`;
   }).join("")}</div>`;
 }
+// ⚠ 회계 기준 바뀜 메모 (keychart.yaml acct) — 이익률을 1년 전·다른 회사와 맞댈 때 꼭 볼 것. full = 🧾 최신 분기 실적 안, 아니면 그림 위 한 줄
+function acctHTML(code, full = true) {
+  const a = KEYC?.acct?.[code];
+  if (!a) return "";
+  if (!full) return `<div class="note" style="color:var(--warn-ink)">⚠ ${esc(a.short || a.t)} <span class="src">— 🧾 최신 분기 실적의 '회계 기준 메모'</span></div>`;
+  return `<div class="kidbox" style="background:var(--warn-bg)">⚠ <b>회계 기준 메모</b> ${esc(a.t)}<ul class="irl">${(a.lines || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    ${(a.u || []).length ? `<div class="src">출처: ${a.u.map((x) => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>`).join(" · ")}</div>` : ""}</div>`;
+}
 function kqHTML(d) {
   const k = d.kq;
   if (!k) return "";
@@ -1120,6 +1159,7 @@ function kqHTML(d) {
     ${k.prelim && k.filing ? `<div class="note">🧾 ${esc(k.latest)} 숫자는 <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">DART 잠정실적 공시(${esc(k.filing.date)})</a> 값이에요. 네이버에 확정 숫자가 들어오면 자동으로 바뀌어요 (EPS 는 그때 채워짐).</div>` : ""}
     ${kqTable(k)}
     ${(k.points || []).length ? `<div class="chart-title" style="margin-top:8px"><b>✦ 포인트</b></div><ul class="irl">${k.points.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${acctHTML(d.code)}
     ${kqBox(k, d.code)}
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">분기</th><th>매출액</th><th>영업이익</th><th>순이익</th><th>EPS</th></tr></thead><tbody>
       ${k.quarters.slice().reverse().map((q) => `<tr><td>${esc(q.q)}${q.prelim ? ' <span class="src">잠정</span>' : ""}</td>${["sales", "op", "ni", "eps"].map((f) => `<td>${q[f] == null ? "-" : kqF(f, k.cur)(q[f])}</td>`).join("")}</tr>`).join("")}
@@ -1172,7 +1212,7 @@ function qtrHTML(d, mode = "q", inKq = false) {  // mode: q = 분기, y = 연간
   const src = `${esc(last[0])} 끝난 ${yr ? "회계연도" : "분기"} · 야후 파이낸스${d.seg ? " · 부문: " + esc(d.seg.src || "") : ""} · ${usd ? "달러" : "원"}`;
   const head = inKq ? `<div class="chart-title" style="margin-top:14px"><b>📊 손익 구조 · ${esc(labels[L])}</b> <span class="src">${src}</span></div>`
     : `<h3>📊 ${esc(nm)} 실적 요약 (핵심지표) · ${esc(labels[L])} <span class="src">${src}</span></h3><div class="card">${Object.keys(d.qtrs_y || {}).length >= 2 ? `<div class="seg qseg" style="margin-bottom:8px"><button data-q="q" class="${yr ? "" : "on"}">분기</button><button data-q="y" class="${yr ? "on" : ""}">연간</button></div>` : ""}`;
-  return `<div class="qtrbox" data-code="${esc((d.card || d).code || "")}">${head}
+  return `<div class="qtrbox" data-code="${esc((d.card || d).code || "")}">${head}${acctHTML((d.card || d).code, false)}
     <div class="qgrid">
       ${inKq ? "" : qPanel("매출 & 성장률 (1년 전 대비)", tRev, labels, rev, yoy.some((v) => v != null) ? yoy : null, usd, "var(--ink-2)")}
       ${inKq ? "" : qPanel("영업이익 & 영업이익률", tOp, labels, op, opm, usd, "var(--good)")}
@@ -1251,6 +1291,7 @@ function lineChart(o) {
     placed.push(y);
     g += `<text x="${xr}" y="${y}" text-anchor="end" class="qv b" style="fill:${s.col};font-size:12px">${esc(t)}</text>`;
   });
+  g += tipCols(X, (x1 - x0) / N, 0, 146, Lb.map((l, i) => [l, ...S.map((s) => (s.v[i] == null ? null : `${s.n}: ${(s.right ? fr : fl)(s.v[i])}`))].filter(Boolean).join("\n")));
   const lastQ = (i) => (i === N - 1 ? "" : ` <span style="opacity:.7">(${esc(/^\d\d\.\dQ$/.test(Lb[i]) ? `${Lb[i][3]}Q${Lb[i].slice(0, 2)}` : Lb[i])})</span>`);  // 다른 선보다 일찍 끝나면 그 분기
   const leg = `<div class="src" style="padding:0 4px 4px">${S.map((s) => `<span style="color:${s.col}">${s.bar ? "■" : "●"}</span> ${esc(s.n)}${hasR ? (s.right ? " (오른쪽)" : " (왼쪽)") : ""}${s.last ? ` <b style="color:${s.col};font-size:13px">${esc(s.last[0])}</b>${lastQ(s.last[1])}` : ""}`).join(" · ")}</div>`;
   return `<div class="qp"><div class="qt"><b>${esc(o.t)}</b>${o.tag || ""}</div>${o.why ? `<div class="src">${esc(o.why)}</div>` : ""}<svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(o.t)}">${g}</svg>${leg}</div>`;
@@ -1286,7 +1327,7 @@ function longHTML(d, span = 40) {
       lineChart({ t: `${sg.name} 영업이익률`, labels: sk, s: [{ n: "OPM", v: ss.opm, col: "var(--good)" }], fl: fPct }));
   }
   return `<div class="lnbox" data-code="${esc(c.code)}"><div class="chart-title" style="margin-top:14px"><b>📈 10년 실적 추이</b> <span class="src">${esc(all[0])}~${esc(all.at(-1))} · 분기 · ${usd ? "SEC·야후 (달러)" : "DART 분기보고서 · 최신 분기는 잠정실적 (원)"}</span></div>
-    <div class="seg lseg" style="margin-top:6px">${LONG_TABS.map(([m, l]) => `<button data-ln="${m}" class="${m === span ? "on" : ""}">${l}</button>`).join("")}</div>
+    ${acctHTML(c.code, false)}<div class="seg lseg" style="margin-top:6px">${LONG_TABS.map(([m, l]) => `<button data-ln="${m}" class="${m === span ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="qgrid" style="margin-top:6px">${ch.join("")}</div>${all.length < 20 ? `<div class="note src">예전 분기는 갱신 때마다 조금씩 채워져요 (지금 ${all.length}개 분기)</div>` : ""}</div>`;
 }
 document.addEventListener("click", (e) => {
@@ -2005,7 +2046,7 @@ function detailHTML(d) {
   let h = `<div class="card" style="margin-top:12px"><div class="light">${lamp(c.verdict)}<div>
       <div class="verdict ${c.verdict}">${L.stock} <span class="sub">${esc(c.why)}</span></div>
       <div class="big">${money(d.price, d.currency)}</div><div class="sub">${esc(d.price_date)} 종가 · 시가총액 ${capTxt(d)} <span class="src">${esc(d.sources.price)}</span></div></div></div>
-    <div class="kv"><div class="k">적정가 <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)} (${c.gap == null ? "N/A" : pct(c.gap * 100, 0, true)})</div>
+    <div class="kv"><div class="k">적정주가 <b>Base</b> <span class="src">${esc(c.fair_basis)}</span></div><div class="v">${money(c.fair, c.currency)} (${c.gap == null ? "N/A" : pct(c.gap * 100, 0, true)})</div>
     <div class="k">12개월 선행 PER</div><div class="v">${times(c.fwd_per, 2)}</div>
     </div>${scenHTML(c)}`;
   if (bondAlert(c)) h += `<div class="warnbox">⚠ 금리 대비 비쌈: 선행 PER ${times(c.fwd_per, 1)}가 ${esc(c.bond_label)} 금리로 환산한 PER ${times(c.bond_per, 1)}보다 높아요 (주식 이익수익률이 채권 금리보다 낮음).</div>`;
@@ -2167,6 +2208,7 @@ function kpiStack(ch) {
     g += `<text x="${cx}" y="${Y(tot[i]) - 4}" text-anchor="middle" class="qv${i === ks.length - 1 ? " b" : ""}">${kpiF(rnd1(tot[i]), ch.u)}</text>`
       + `<text x="${cx}" y="${bot + 15}" text-anchor="middle" class="qx">${esc(/^\d{4}$/.test(k) ? k.slice(2) : k)}${ytd ? " YTD" : ""}</text>`;
   });
+  g += tipCols((i) => x0 + bw * i + bw / 2, bw, 0, 160, ks.map((k, i) => [`${k}${k === String(ch.ytd) ? " (YTD)" : ""}`, ...ch.s.map((s) => (s.v?.[k] ? `${s.n}: ${kpiF(rnd1(s.v[k]), ch.u)}` : null)), ch.s.length > 1 ? `합계: ${kpiF(rnd1(tot[i]), ch.u)}` : null].filter(Boolean).join("\n")));
   const leg = `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">■</span> ${esc(s.n)}`).join(" · ")}${ch.ytd_note ? ` · YTD = ${esc(ch.ytd_note)}` : ""}${ch.note ? ` · ${esc(ch.note)}` : ""}</div>`;
   return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b>${ch.tag || ""}</div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}</div>`;
 }
@@ -2197,6 +2239,7 @@ function comboHTML(d) {
     const cx = x0 + bw * i + bw / 2;
     g += `<circle cx="${cx}" cy="${LY(opm[i])}" r="3.5" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="2"/><text x="${cx}" y="${clearY(op, i)}" text-anchor="middle" class="qv${i === qs.length - 1 ? " b" : ""}"${opm[i] < 0 ? ' style="fill:var(--bad-ink)"' : ""}>${n(opm[i], 1)}%</text>`;
   });
+  g += tipCols((i) => x0 + bw * i + bw / 2, bw, 0, 172, qs.map((q, i) => `${q.q}${q.prelim ? " 잠정" : ""}\n매출: ${V(q.sales)}${unit}\n영업이익: ${V(q.op)}${unit}\n영업이익률: ${n(opm[i], 1)}%`));
   return `<div class="qp"><div class="qt"><b>📊 분기 매출 · 영업이익 · 영업이익률</b><span class="src">${unit}</span></div><svg viewBox="0 0 ${W} 172" role="img" aria-label="분기 매출 영업이익 영업이익률">${g}</svg>
     <div class="src" style="padding:0 4px 4px"><span style="color:var(--s1)">■</span> 매출 · <span style="color:var(--s4)">■</span> 영업이익 · <span style="color:var(--ink-2)">●</span> 영업이익률</div></div>`;
 }
@@ -2264,6 +2307,7 @@ function kpiChart(ch) {
   const over = ends.length ? ends[ends.length - 1][1] - (bot - 4) : 0;  // 아래 분기 이름과 겹치면 통째로 위로
   if (over > 0) ends.forEach((e) => { e[1] -= over; });
   ends.forEach(([x, y, v, col]) => { g += `<text x="${x + 8}" y="${y + 4}" text-anchor="start" class="qv b" style="fill:${col};font-size:13px">${kpiF(v, ch.u)}</text>`; });
+  g += tipCols(X, (x1 - x0) / (qs.length - 1), 0, 160, qs.map((q) => [q, ...ch.s.map((s) => (s.v?.[q] == null ? null : `${s.n}: ${kpiF(s.v[q], ch.u)}`))].join("\n")));
   const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${(ch.col || KPI_COL)[si % (ch.col || KPI_COL).length]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
   return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
@@ -3306,6 +3350,9 @@ function candleSVG(ch, kind, fmt, ref) {
     g += `<path d="${d}" fill="none" stroke="var(--s7)" stroke-width="1.3"/><text x="${x1 + 6}" y="${RY(rv.at(-1)) + 4}" class="qx" style="fill:var(--s7)">RS</text>`;
   }
   if (ref) g += `<line x1="${x0}" x2="${x1}" y1="${Y(ref.v)}" y2="${Y(ref.v)}" stroke="var(--ink-2)" stroke-dasharray="4 3"/><text x="${x1 - 4}" y="${Y(ref.v) - 4}" text-anchor="end" class="qx">${esc(ref.t)} ${fmt(ref.v)}</text>`;
+  const maU = kind === "w" ? "주선" : kind === "m" ? "개월선" : "일선";
+  g += tipCols(X, (x1 - x0) / N, top, v1, ch.t.map((t, i) => [t, `시가 ${fmt(ch.o[i])} · 고가 ${fmt(ch.h[i])}`, `저가 ${fmt(ch.l[i])} · 종가 ${fmt(ch.c[i])}`,
+    ...Object.entries(ch.ma || {}).map(([k, a]) => (a[i] > 0 ? `${k}${maU} ${fmt(a[i])}` : null)), `거래량 ${n(ch.v[i])}`].filter(Boolean).join("\n")));
   const last = ch.c.at(-1);
   g += `<text x="${x1 + 6}" y="${Y(hi) + 8}" class="qx">${fmt(hi)}</text><text x="${x1 + 6}" y="${Y(lo)}" class="qx">${fmt(lo)}</text>`
     + `<path d="M${x1 + 2},${Y(last)} l6,-4 v8 z" fill="var(--ink)"/><text x="${x1 + 10}" y="${Y(last) + 4}" class="qv b">${fmt(last)}</text>`;
@@ -3435,6 +3482,7 @@ function keyChart(ch) {
     g += `<polyline points="${pv.map((v, i) => (v == null ? "" : `${X(i)},${PY(v)}`)).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`
       + pv.map((v, i) => (v == null ? "" : `<circle cx="${X(i)}" cy="${PY(v)}" r="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${X(i)}" y="${clearY(pp, i)}" text-anchor="middle" class="qv${i === pv.length - 1 ? " b" : ""}"${v < 0 || v < lh / 4 ? ' style="fill:var(--bad-ink)"' : ""}>${n(v, 0)}%</text>`)).join("");
   }
+  g += tipCols(X, bw, 0, 166, L.map((q, i) => [q, ...[...bars, ...lines].map((s) => (s.v[i] == null ? null : `${s.n}: ${V(s.v[i])}${un && un !== "%" ? " " + un : un}`)), ch.pct?.v[i] != null ? `${ch.pct.n}: ${n(ch.pct.v[i], 1)}%` : null].filter(Boolean).join("\n")));
   const leg = [...bars.map((s, si) => `<span style="color:${BC[si % 4]}">■</span> ${esc(s.n)}`), ...lines.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`),
     ...(ch.pct ? [`● ${esc(ch.pct.n)}`] : [])].join(" · ");
   // tbl: true → 그림 위에 모든 칸 숫자 표 (수치 먼저 → 그림 → 🐣 kid)
