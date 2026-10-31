@@ -4035,7 +4035,16 @@ function repSum(r) {
 }
 // 📨 텔레그램 리포트 채널 (data/tg_reports.json ← collector/tg_reports.py, 하루 두 번): 최근 7개월 글 — 제목·그 종목 줄·목표가만, 원문은 링크
 let TGR = null;
-const tgGet = async () => { if (!TGR) TGR = await (await fetch("data/tg_reports.json?t=" + Date.now(), { cache: "no-store" })).json(); return TGR; };
+const tgGet = async () => {
+  if (TGR) return TGR;
+  TGR = await (await fetch("data/tg_reports.json?t=" + Date.now(), { cache: "no-store" })).json();
+  try {  // + 미리보기가 꺼진 채널 (data/tg_api.json ← 이 컴퓨터의 텔레그램 API, tools/tg_api_reports.py) — 같은 칸으로 합침
+    const A = await (await fetch("data/tg_api.json?t=" + Date.now(), { cache: "no-store" })).json();
+    for (const [c, L] of Object.entries(A.stocks || {})) TGR.stocks[c] = [...(TGR.stocks[c] || []), ...L].sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 40);
+    TGR.kr = [...(TGR.kr || []), ...(A.channels || [])];
+  } catch (_) { /* API 채널만 빠짐 */ }
+  return TGR;
+};
 function tgHTML(code, max) {
   const L = TGR?.stocks?.[code] || [], P = L.filter((x) => x.est_w == null).slice(0, max);  // 추정치 순위 글은 📈 이익 추정치 칸에
   if (!P.length) return "";
