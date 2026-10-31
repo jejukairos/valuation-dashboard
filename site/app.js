@@ -254,7 +254,7 @@ function growthHTML(c) {
   const e27 = c.scen.e27, alt = c.scen.alt;
   const warn = alt ? `<div class="warnbox" style="margin-top:6px">⚠ 과거 성장률과 앞으로 예상 성장률이 2배 넘게 달라요. 다른 쪽(${n(alt.g, 1)}%)으로 계산하면
     Bear ${fmtP(alt.bear)} · <b>Base ${fmtP(alt.base)}</b> (${pct((alt.base / c.price - 1) * 100, 0, true)}) · Bull ${fmtP(alt.bull)}</div>` : "";
-  return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🔎 성장률 계산 자세히 <span class="src">출처 · 연도별</span>${alt ? ' <span class="pill yellow">⚠ 성장률 차이 큼</span>' : ""}${c.scen.ltg_cmp && (saAge(c) == null || saAge(c) > 90) ? ' <span class="pill red">🔴 시킹알파 갱신 필요</span>' : ""}</summary>${warn}
+  return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🔎 성장률 계산 자세히 <span class="src">출처 · 연도별</span>${alt ? ' <span class="pill yellow">⚠ 성장률 차이 큼</span>' : ""}${saDue(c) ? ' <span class="pill red">🔴 시킹알파 갱신 필요</span>' : ""}</summary>${warn}
     ${waysHTML(c, fmtP)}
     <div class="note">쓴 성장률: <b>${esc(g.src)}</b></div>
     <div class="note">기본값(${esc(g.window)} EPS 성장률 중앙값) <b>${g.median == null ? "-" : n(g.median, 1) + "%"}</b> · 보정값 ${g.adj == null ? "-" : `<b>${n(g.adj, 1)}%</b> <span class="src">${esc(g.adj_src || "")}</span>`}</div>
@@ -289,15 +289,31 @@ function waysHTML(c, fmtP) {
   const cmp = (c.scen.ltg_cmp || []).length ? `<div class="note">3~5년 EPS 성장률 출처 비교: ${c.scen.ltg_cmp.map(([k, v], i) => `${esc(k)} <b>${v == null ? "-" : n(v, 1) + "%"}</b>${i && v != null && sa != null ? ` <span class="src">(시킹알파와 ${v - sa >= 0 ? "+" : ""}${n(v - sa, 1)}%p)</span>` : ""}`).join(" · ")}</div>` : "";
   const age = saAge(c);
   const stale = c.scen.ltg_cmp ? (sa == null ? `<div class="warnbox" style="margin-top:6px">⚠ <b>시킹알파 값이 비어 있어요.</b> 시킹알파 → ${esc(c.code)} → Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)' 숫자를 config/somong.yaml 의 sa_ltg 에 적어 주세요.</div>`
-    : age > 90 ? `<div class="warnbox" style="margin-top:6px;border-color:var(--bad);background:var(--bad-bg)">🔴 <b>시킹알파 값 갱신 필요!</b> 마지막 확인 ${esc(c.scen.sa_date)} (${age}일 전) — 한 분기가 지났어요. 실적 발표 뒤 바뀌었을 수 있으니 Growth 탭에서 다시 확인해 주세요.${(c.scen.ways || []).some((w) => w.name === "보정값" && /대체/.test(w.src)) ? " 그동안은 평소 시킹알파와 가장 가까웠던 출처로 대신 계산하고 있어요." : ""}</div>`
+    : saDue(c) ? `<div class="warnbox" style="margin-top:6px;border-color:var(--bad);background:var(--bad-bg)">🔴 <b>시킹알파 값 갱신 필요!</b> 마지막 확인 ${esc(c.scen.sa_date)} (${age}일 전 · ${esc(saDue(c))}) — 실적 발표 뒤 바뀌었을 수 있으니 Growth 탭에서 다시 확인해 주세요.${(c.scen.ways || []).some((w) => w.name === "보정값" && /대체/.test(w.src)) ? " 그동안은 평소 시킹알파와 가장 가까웠던 출처로 대신 계산하고 있어요." : ""}</div>`
     : `<div class="note src">시킹알파 값 확인일 ${esc(c.scen.sa_date || "-")} (${age ?? "-"}일 전) · 90일이 지나면 빨간 표시로 갱신하라고 알려줘요</div>`) : "";
   return `${stale}<div class="chart-title" style="margin-top:8px"><b>적정주가 4가지 비교</b> <span class="src">12MF EPS ${fmtP(e12)} 기준 · ✔ = 위 Bear/Base/Bull 에 쓴 방법 · 업종 PER 로 바꾸기 전 값${(c.scen.parts || []).length > 1 ? " (위 값은 PBR 밴드와 평균이라 다를 수 있어요)" : ""}</span></div>
     <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">방법</th><th>성장률</th><th>Bear ×1</th><th>Base ×1.25</th><th>Bull ×1.5</th></tr></thead><tbody>${rows}${mine}</tbody></table></div>${cmp}${c.scen.ltg_note ? `<div class="note src">${esc(c.scen.ltg_note)}</div>` : ""}`;
 }
 // 시킹알파 3-5Y 성장률을 마지막으로 확인한 뒤 지난 날 수 (직접 입력값이라 분기마다 갱신 필요)
 function saAge(c) {
-  const d = c.scen?.sa_date;
+  const d = c.scen?.sa_date || c.sa_div?.date;
   return d ? Math.floor((Date.now() - new Date(d + "T00:00:00+09:00")) / 864e5) : null;
+}
+// 📬 시킹알파 값을 다시 받아야 할 때 (사용자가 올려 줌): 값 없음 · 확인한 뒤 실적 발표(2일 지나 — 애널리스트 추정이 바뀔 시간) · 90일 지남
+function saDue(c) {
+  if (!c.scen?.ltg_cmp && !c.sa_div) return "";
+  const sd = c.scen?.sa_date || c.sa_div?.date, kd = c.kq_date, age = saAge(c);
+  if (!sd || (c.scen?.ltg_cmp && c.scen.ltg_cmp[0][1] == null && !c.sa_div)) return "값 없음";
+  if (kd && kd > sd && Date.now() - new Date(kd + "T00:00:00+09:00") > 2 * 864e5) return `${kd.slice(5).replace("-", "/")} 실적 발표 뒤 아직`;
+  return age > 90 ? `${age}일 지남` : "";
+}
+function saAlertHTML() {  // 🇺🇸 보유 탭 맨 위
+  if (MKT !== "US") return "";
+  const L = DASH.stocks.filter((c) => mktOf(c.code) === "US" && saDue(c));
+  if (!L.length) return "";
+  return `<div class="warnbox" style="margin-top:12px">📬 <b>시킹알파 숫자 올려 주세요</b> (${L.length}종목) <span class="src">실적 발표 뒤 2일이 지났거나 · 값이 없거나 · 90일 지난 종목</span>
+    <div style="margin-top:4px">${L.map((c) => `<a href="https://seekingalpha.com/symbol/${encodeURIComponent(c.code)}${c.sa_div ? "" : "/growth"}" target="_blank" rel="noopener">${esc(c.name)}</a> <span class="src">${esc(saDue(c))}</span>`).join(" · ")}</div>
+    <div class="src" style="margin-top:4px">Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)' 줄(배당주는 Dividends 탭)을 캡처해 채팅에 올려 주시면 config/somong.yaml 에 적어 둘게요</div></div>`;
 }
 // 미국: 내 엑셀 '소몽의 적정주가 템플릿' (성장률 × 100~200 = 적정 PER, × 올해 EPS)
 function somongHTML(c) {
@@ -1124,7 +1140,7 @@ function ma200Line(c) {
 // 🇰🇷 보유 탭엔 한국 종목만, 🇺🇸 보유 탭엔 미국 종목만 (실적 발표·쉬운 요약·일정) — 한국 코드는 숫자 6자리
 const mktOf = (code) => (/^\d/.test(String(code || "")) ? "KR" : "US");
 function renderTop() {
-  $("#estAlert").innerHTML = estAlertHTML();
+  $("#estAlert").innerHTML = saAlertHTML() + estAlertHTML();
   $("#patAlert").innerHTML = patAlertHTML();
   $("#bigTech").innerHTML = bigTechHTML() + moneyHTML();
 }
