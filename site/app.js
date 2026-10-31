@@ -62,10 +62,10 @@ function makeChart(canvas, labels, datasets, opt = {}) {
       elements: { point: { radius: 0, hoverRadius: 4, hitRadius: 8 }, line: { borderWidth: 2, tension: 0 } },
       scales: {
         x: { grid: { display: false }, border: { color: C.grid },
-          ticks: { color: C.muted, maxTicksLimit: 5, maxRotation: 0, autoSkip: true, font: { size: 11 },
+          ticks: { color: C.muted, maxTicksLimit: 5, maxRotation: 0, autoSkip: true, font: { size: 12 },
             callback(v) { const l = this.getLabelForValue(v); return String(l).slice(0, opt.xlen || 7); } } },
         y: { grid: { color: C.grid }, border: { display: false }, beginAtZero: !!opt.zero,
-          ticks: { color: C.muted, maxTicksLimit: 5, font: { size: 11 }, callback: (v) => (opt.yfmt ? opt.yfmt(v) : n(v, 1)) } },
+          ticks: { color: C.muted, maxTicksLimit: 5, font: { size: 12 }, callback: (v) => (opt.yfmt ? opt.yfmt(v) : n(v, 1)) } },
       },
     },
   });
@@ -1884,7 +1884,9 @@ function matrixTable(rows, cols, price, rowHead, what, cur) {
    선 = 그 달의 EPS(BPS) × 배수 4개. Y년 실적(추정치 포함)은 Y년 12월 말에 놓고 달마다 직선으로 이어
    네이버(와이즈리포트)와 같은 값이 나온다 (기아 2028/06/30 = 27E·28E 를 6:6 으로 섞은 값으로 확인).
    미래는 마지막 추정 연도의 9월 30일까지 (네이버와 같음). 배수 = 보는 기간 배수의 하위 10% ~ 상위 10% 를 4등분. */
-const NV_COLORS = ["#d4441c", "#7cc12a", "#a57fd6", "#f5a00f"];
+// 밴드 선 색: 눈이 덜 아프게 너무 밝은 연두·주황 대신 차분하고 서로 잘 구분되는 색 (아래 배수 → 위 배수) · 12MF PER 밴드도 같은 색
+const BAND_COL = ["#7b8494", "#2e8b57", "#c98a12", "#c0392b", "#7d5ba6"];
+const NV_COLORS = BAND_COL.slice(1);
 const NV_STYLES = [["rectRot", 0], ["rect", 0], ["triangle", 0], ["triangle", 180]];
 const NV_PERIODS = [["5", "5년"], ["10", "10년"], ["all", "역사적"]];
 const DAY = 86400000;
@@ -1961,8 +1963,8 @@ function drawNv(id, d, key, kind, period) {
   const C = themeColors(), usd = d.currency === "USD";
   const fmt = (v) => (usd ? "$" + n(v, 2) : n(v) + " 원");
   const ds = s.mults.map((m, i) => ({ label: `${n(m, s.dg)}배`, data: s.base.map((b) => (b ? Math.round(b * m * (usd ? 100 : 1)) / (usd ? 100 : 1) : null)),
-    borderColor: NV_COLORS[i], backgroundColor: NV_COLORS[i], borderWidth: 2.5, pointStyle: NV_STYLES[i][0], pointRotation: NV_STYLES[i][1], pointHoverRadius: 7 }));
-  ds.push({ label: "수정주가", data: s.price, borderColor: "#2f6fdb", backgroundColor: "#2f6fdb", borderWidth: 3, pointStyle: "circle", pointHoverRadius: 7 });
+    borderColor: NV_COLORS[i], backgroundColor: NV_COLORS[i], borderWidth: 2.4, pointStyle: NV_STYLES[i][0], pointRotation: NV_STYLES[i][1], pointHoverRadius: 7 }));
+  ds.push({ label: "수정주가", data: s.price, borderColor: C.s1, backgroundColor: C.s1, borderWidth: 3.5, pointStyle: "circle", pointHoverRadius: 7 });
   if (charts.has(id)) charts.get(id).destroy();
   charts.set(id, new Chart(cv, {
     type: "line", data: { labels: s.labels, datasets: ds }, plugins: [nvCross],
@@ -1971,7 +1973,7 @@ function drawNv(id, d, key, kind, period) {
       interaction: { mode: "index", intersect: false },
       elements: { point: { radius: 0, hitRadius: 6 }, line: { tension: 0 } },
       plugins: {
-        legend: { position: "bottom", labels: { color: C.ink, boxWidth: 14, boxHeight: 3, padding: 8, font: { size: 12 },
+        legend: { position: "bottom", labels: { color: C.ink, boxWidth: 16, boxHeight: 4, padding: 10, font: { size: 13 },
           generateLabels: (ch) => ch.data.datasets.map((x, i) => ({ text: x.label, fillStyle: ch.isDatasetVisible(i) ? x.borderColor : C.grid,
             strokeStyle: "transparent", lineWidth: 0, hidden: false, fontColor: ch.isDatasetVisible(i) ? C.ink : C.muted, datasetIndex: i })) } },
         tooltip: { backgroundColor: C.surface, titleColor: C.ink, bodyColor: C.ink, borderColor: C.grid, borderWidth: 1, padding: 10,
@@ -1981,10 +1983,10 @@ function drawNv(id, d, key, kind, period) {
       },
       scales: {
         x: { grid: { display: false }, border: { color: C.axis || C.grid },
-          ticks: { color: C.muted, autoSkip: false, maxRotation: 0, font: { size: 11 },
+          ticks: { color: C.muted, autoSkip: false, maxRotation: 0, font: { size: 12 },
             callback(v) { const l = this.getLabelForValue(v); return l.slice(5, 7) === "01" && +l.slice(0, 4) % s.tickStep === 0 ? l.slice(0, 7) + "/01" : ""; } } },
         y: { beginAtZero: true, grid: { color: C.grid }, border: { display: false },
-          ticks: { color: C.muted, maxTicksLimit: 4, font: { size: 11 }, callback: (v) => (usd ? "$" + n(v) : n(v)) } },
+          ticks: { color: C.muted, maxTicksLimit: 4, font: { size: 12 }, callback: (v) => (usd ? "$" + n(v) : n(v)) } },
       },
     },
   }));
@@ -2033,10 +2035,10 @@ function drawKf(d, period) {
   if (!cv) return;
   if (!s) { if (charts.has("kf-chart")) charts.get("kf-chart").destroy(); $("#kf-note").textContent = "이 기간은 자료가 부족해요."; return; }
   const C = themeColors(), flat = (v) => s.pe.map(() => v);
-  const ds = [{ label: "P/E (NTM)", data: s.pe, borderColor: "#7c3aed", borderWidth: 2 },
-    { label: `High ${n(s.hi, 1)}배`, data: flat(s.hi), borderColor: C.muted, borderDash: [5, 4], borderWidth: 1 },
-    { label: `Median ${n(s.med, 1)}배`, data: flat(s.med), borderColor: C.ink2, borderDash: [5, 4], borderWidth: 1.3 },
-    { label: `Low ${n(s.lo, 1)}배`, data: flat(s.lo), borderColor: C.muted, borderDash: [5, 4], borderWidth: 1 }];
+  const ds = [{ label: "P/E (NTM)", data: s.pe, borderColor: C.s7, borderWidth: 3 },
+    { label: `High ${n(s.hi, 1)}배`, data: flat(s.hi), borderColor: BAND_COL[3], borderDash: [6, 4], borderWidth: 2 },
+    { label: `Median ${n(s.med, 1)}배`, data: flat(s.med), borderColor: C.ink2, borderDash: [6, 4], borderWidth: 2 },
+    { label: `Low ${n(s.lo, 1)}배`, data: flat(s.lo), borderColor: BAND_COL[1], borderDash: [6, 4], borderWidth: 2 }];
   makeChart(cv, s.labels, ds, { fmt: (v) => n(v, 1) + "배", yfmt: (v) => n(v, 0) + "x", xlen: 7 });
   const pos = s.hi > s.lo ? ((s.cur - s.lo) / (s.hi - s.lo)) * 100 : null;
   $("#kf-note").innerHTML = `${legend(ds.map((x) => [x.label, x.borderColor, !!x.borderDash]))}
@@ -2052,6 +2054,20 @@ function wireKf(d) {
   });
 }
 
+// 밴드차트(네이버 방식) · 선행 PER 추이 · PER 적정주가 — 종목 상세에서 '📈 12MF PER 밴드' 바로 아래에 (모든 종목)
+function perValHTML(d) {
+  let h = `<h3>밴드차트</h3><div class="card">${nvSeg()}${nvBlock("nv-per", "PER 차트")}${nvBlock("nv-pbr", "PBR 차트")}</div>`;
+  h += kfBlock();
+  if (d.per && d.bands.PER) {
+    const p = d.per;
+    const cols = Object.keys(p.eps);
+    h += `<h3>PER 적정주가</h3><div class="card">
+      <h3 style="margin-top:0">선행 PER</h3><div class="kv">${cols.map((k) => `<div class="k">${k} PER <span class="src">EPS ${k} ${money(p.eps[k], d.currency)} · ${esc(d.sources.consensus)}</span></div><div class="v">${times(p.fwd_per[k], 2)}</div>`).join("")}</div>
+      <h3>적정주가 시나리오 (EPS × PER)</h3>${matrixTable(p.matrix, cols, d.price, "PER ↓ · EPS →", null, d.currency)}
+      ${p.rerating_warning ? `<div class="warnbox">${esc(p.rerating_warning)}</div>` : ""}</div>`;
+  }
+  return h;
+}
 function detailHTML(d) {
   const c = d.card;
   const L = LIGHT[c.verdict] || LIGHT.na;
@@ -2077,16 +2093,6 @@ function detailHTML(d) {
   h += `</div>`;
 
   h += `<!--profile-->`;
-  h += `<h3>밴드차트</h3><div class="card">${nvSeg()}${nvBlock("nv-per", "PER 차트")}${nvBlock("nv-pbr", "PBR 차트")}</div>`;
-  h += kfBlock();
-  if (d.per && d.bands.PER) {
-    const p = d.per;
-    const cols = Object.keys(p.eps);
-    h += `<h3>PER 적정주가</h3><div class="card">
-      <h3 style="margin-top:0">선행 PER</h3><div class="kv">${cols.map((k) => `<div class="k">${k} PER <span class="src">EPS ${k} ${money(p.eps[k], d.currency)} · ${esc(d.sources.consensus)}</span></div><div class="v">${times(p.fwd_per[k], 2)}</div>`).join("")}</div>
-      <h3>적정주가 시나리오 (EPS × PER)</h3>${matrixTable(p.matrix, cols, d.price, "PER ↓ · EPS →", null, d.currency)}
-      ${p.rerating_warning ? `<div class="warnbox">${esc(p.rerating_warning)}</div>` : ""}</div>`;
-  }
   if (d.pbr && d.bands.PBR) {
     const p = d.pbr;
     const cols = Object.keys(p.bps);
@@ -2615,9 +2621,9 @@ function per12mfHTML(d) {
 function drawPer12mf(d) {
   const cv = document.getElementById("p12"), s = cv && per12mfSeries(d);
   if (!s) return;
-  const C = themeColors(), usd = d.currency === "USD", shades = [C.muted, C.ink2, C.s3, C.s4, C.s2, C.s7];
-  const ds = [{ label: "주가", data: s.pts.map((p) => p[1]), borderColor: C.s1, borderWidth: 2.5 },
-    ...s.ms.map((m, i) => ({ label: `${n(m, 1)}배`, data: s.pts.map((p) => p[2] * m), borderColor: shades[i % shades.length], borderWidth: 1.3 }))];
+  const C = themeColors(), usd = d.currency === "USD";
+  const ds = [{ label: "주가", data: s.pts.map((p) => p[1]), borderColor: C.s1, borderWidth: 3.5 },
+    ...s.ms.map((m, i) => ({ label: `${n(m, 1)}배`, data: s.pts.map((p) => p[2] * m), borderColor: BAND_COL[i % BAND_COL.length], borderWidth: 2.4 }))];
   makeChart(cv, s.pts.map((p) => p[0]), ds, { fmt: (v) => (usd ? "$" + n(v, 2) : n(v) + "원"), yfmt: (v) => (usd ? "$" + n(v) : v >= 10000 ? n(v / 10000, 0) + "만" : n(v)) });
   document.getElementById("p12-legend").innerHTML = legend(ds.map((x) => [x.label, x.borderColor, false]));
 }
@@ -2958,7 +2964,7 @@ async function openStock(code) {
     const kpiHtml = await kpiBlock(code, d);
     const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + per12mfHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
