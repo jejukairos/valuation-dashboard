@@ -326,7 +326,9 @@ def align():
     fri = (now - timedelta(days=(now.weekday() - 4) % 7)).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
     if now.weekday() == 4 and now.hour < 16:
         fri -= timedelta(days=7)  # 금요일 장중엔 이번 주가 아직 안 끝남
-    uni = [u for u in kr_universe(n=5000, min_cap=ALIGN_CAP * 2 / 3) if u[0].endswith("0")]  # 한 주 -33% 까지는 시총 이탈을 잡음 · 끝자리 0 = 보통주
+    # 한 주 -33% 까지는 시총 이탈을 잡음 · 끝자리 0 = 보통주 · 리츠·인프라 펀드는 뺌 (원본 글에 없음)
+    # shortcut: 리츠는 이름으로 거름 (KRX 업종이 지주사와 같은 '기타금융'), 이름에 안 드러나는 리츠가 생기면 KRX 증권 구분으로
+    uni = [u for u in kr_universe(n=5000, min_cap=ALIGN_CAP * 2 / 3) if u[0].endswith("0") and not re.search("리츠|리얼티|인프라", u[1])]
     rows, charts_ = [], {}
     for code, nm, sec, cap in uni:
         try:
