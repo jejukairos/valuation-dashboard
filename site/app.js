@@ -1124,13 +1124,21 @@ function ma200Line(c) {
 // 🇰🇷 보유 탭엔 한국 종목만, 🇺🇸 보유 탭엔 미국 종목만 (실적 발표·쉬운 요약·일정) — 한국 코드는 숫자 6자리
 const mktOf = (code) => (/^\d/.test(String(code || "")) ? "KR" : "US");
 function renderTop() {
-  $("#easyNews").innerHTML = easyNewsHTML();
-  $("#kqNews").innerHTML = kqNewsHTML();
   $("#estAlert").innerHTML = estAlertHTML();
   $("#patAlert").innerHTML = patAlertHTML();
-  $("#irCal").innerHTML = irCalHTML();
   $("#bigTech").innerHTML = bigTechHTML() + moneyHTML();
 }
+// 🧾 실적 탭 (예전엔 보유 탭 맨 위): 쉬운 요약 · 실적 발표(최근 3일) · 실적발표·컨콜 일정 — 🇰🇷/🇺🇸 버튼
+let EARN_MKT = "KR";
+function renderEarn() {
+  const keep = MKT;
+  MKT = EARN_MKT;  // 아래 함수들은 MKT 로 시장을 고름
+  const h = easyNewsHTML() + kqNewsHTML() + irCalHTML();
+  MKT = keep;
+  $("#earnBody").innerHTML = `<div class="seg earnmk" style="margin-bottom:8px">${[["KR", "🇰🇷 한국"], ["US", "🇺🇸 미국"]].map(([k, l]) => `<button data-mk="${k}" class="${k === EARN_MKT ? "on" : ""}">${l}</button>`).join("")}</div>`
+    + (h || `<div class="empty">최근 3일 안에 나온 ${EARN_MKT === "US" ? "미국" : "한국"} 종목 실적이 없어요.</div>`);
+}
+document.addEventListener("click", (e) => { const b = e.target.closest(".earnmk button"); if (b) { EARN_MKT = b.dataset.mk; renderEarn(); } });
 function kqNewsHTML() {
   // 최근 발표일 먼저 (같은 날이면 보유 → 관심 순서 그대로)
   const list = DASH.stocks.filter((c) => c.kq_brief && mktOf(c.code) === MKT).sort((a, b) => (b.kq_brief.date || "").localeCompare(a.kq_brief.date || ""));
@@ -2398,20 +2406,52 @@ function patternHTML(p) {
     ${p.check ? `<div>👀 <b>확인할 때</b>: ${esc(p.check)}</div>` : ""}${p.result ? `<div>✅ <b>결과</b>: ${esc(p.result)}</div>` : ""}
     ${p.src ? `<div class="src" style="margin-top:4px">출처: ${esc(p.src)}</div>` : ""}</div>`;
 }
+// 1년 전 같은 분기(±20일)와 비교한 성장률 {달력 분기: %} — 결산 달이 다른 회사(엔비디아·마이크론)도 '끝나기 45일 전'이 든 달력 분기로 맞춤
+function yoyOf(rows) {
+  const T = (e) => new Date(e).getTime(), out = {};
+  const cq = (e) => { const t = new Date(T(e) - 45 * 864e5); return `${String(t.getFullYear()).slice(2)}.${Math.floor(t.getMonth() / 3) + 1}Q`; };
+  for (const [e, v] of [...rows].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    const p = rows.find(([e2]) => Math.abs(T(e) - 365.25 * 864e5 - T(e2)) < 20 * 864e5);
+    if (p && p[1] > 0 && v != null) out[cq(e)] = rnd1((v / p[1] - 1) * 100);
+  }
+  return out;
+}
+const last6 = (o) => Object.fromEntries(Object.entries(o).slice(-6));
+// 📈 매출 성장률 (YoY) 자동: kpi.yaml 에 같은 그래프가 없는 종목만 (분기 실적에서 계산)
+function revYoyHTML(d, k) {
+  if (k.charts.some((c) => /^매출 성장률/.test(c.t))) return "";
+  const L = d.longq || {}, v = {};  // 10년 분기 실적 (키 = 달력 분기 '26.3Q') — 없으면 야후 분기 실적
+  for (const q of Object.keys(L).sort()) { const p = L[`${+q.slice(0, 2) - 1}${q.slice(2)}`]; if (p?.rev > 0 && L[q].rev != null) v[q] = rnd1((L[q].rev / p.rev - 1) * 100); }
+  return kpiChart({ t: "매출 성장률 (YoY)", u: "%", s: [{ n: "매출", v: last6(Object.keys(v).length >= 2 ? v : yoyOf(Object.entries(d.qtrs || {}).filter(([, q]) => q.rev).map(([e, q]) => [e, q.rev]))) }],
+    why: "1년 전 같은 분기보다 매출이 얼마나 늘었나 · 분기 실적(DART·SEC·야후·잠정 공시)으로 자동 계산" });
+}
+// 📉 주식 수 증가율 (YoY): 새 주식을 찍으면(증자·주식 보상·전환사채 전환) 이익이 그대로여도 한 주당 몫(EPS)이 줄어요 — 모든 종목
+function dilHTML(d) {
+  const S = d.shq, v = last6(yoyOf(Object.entries(S?.q || {}))), ks = Object.keys(v);
+  if (ks.length < 2) return "";
+  const g = v[ks.at(-1)], eps = (1 / (1 + g / 100) - 1) * 100;
+  const kid = Math.abs(g) < 0.5 ? "1년 전과 주식 수가 거의 같아요 — 한 주가 가져가는 몫이 묽어지지 않았어요."
+    : g > 0 ? `1년 새 주식이 ${n(g, 1)}% 늘었어요. 회사 이익이 그대로여도 한 주가 가져가는 몫(EPS)은 약 ${n(-eps, 1)}% 줄어요. 새 주식을 찍어 돈을 모으거나(증자) 직원에게 주식으로 월급을 주면 이렇게 돼요.`
+    : `1년 새 주식이 ${n(-g, 1)}% 줄었어요 (자사주를 사서 없앰). 이익이 그대로여도 한 주가 가져가는 몫은 약 ${n(eps, 1)}% 늘어요.`;
+  return kpiChart({ t: S.src === "dart" ? "주식 수 증가율 (YoY)" : "희석주식수 증가율 (YoY)", u: "%", s: [{ n: "주식 수", v }], kid,
+    why: S.src === "dart" ? "보통주 유통주식수 (발행 − 자사주, 분기 말) · DART 분기·반기·사업보고서 — 3분기 보고서는 11월 중순"
+      : "희석 가중평균 주식 수 (주식 보상·전환사채 포함) · 최근 분기 야후, 예전 분기 SEC (예전 4분기는 연간·9개월 평균으로 계산한 근사값)",
+    note: g >= 5 ? "⚠ 1년 새 5% 넘게 늘었어요 — 증자·주식 보상이 이익 성장을 깎아 먹는지 확인" : "" });
+}
 async function kpiBlock(code, d) {
   if (KPI === null) { try { KPI = (await (await fetch("data/kpi.json?v=" + encodeURIComponent(DASH.updated_at))).json()) || {}; } catch (_) { KPI = {}; } }
-  const k = KPI[code] || KPI[KPI_ALIAS[code]];
-  if (!k?.charts?.length) return "";
+  const k = KPI[code] || KPI[KPI_ALIAS[code]] || { charts: [], auto: true };  // kpi.yaml 에 없는 종목도 자동 그림(손익·매출 성장률·현금흐름·주식 수)은 보여 줌
   const ch = k.charts.map(kpiChart);
-  ch.unshift(comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률
-  ch.splice(2, 0, opYoyHTML(d, k), fcfBars(d, k), annualOpmHTML(d));  // 매출 성장률 다음에 영업이익 성장률 · 현금흐름 · 연간 매출 & 영업이익률
-  return `<h3>🔑 핵심 지표 <span class="src">${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김</span></h3><div class="card kpi">
-    <div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key || "")}</div>
+  ch.unshift(comboHTML(d), revYoyHTML(d, k));  // 맨 앞: 분기 매출·영업이익·영업이익률 (+ kpi.yaml 에 없으면 매출 성장률)
+  ch.splice(3, 0, opYoyHTML(d, k), fcfBars(d, k), dilHTML(d), annualOpmHTML(d));  // 매출 성장률 다음에 영업이익 성장률 · 현금흐름 · 주식 수 증가율 · 연간 매출 & 영업이익률
+  if (!ch.some(Boolean)) return "";
+  return `<h3>🔑 핵심 지표 <span class="src">${k.auto ? "자동 계산 — 분기 실적·현금흐름·주식 수 (사업부별 숫자는 아직 안 넣음)" : `${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김`}</span></h3><div class="card kpi">
+    ${k.key ? `<div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key)}</div>` : ""}
     ${(k.patterns || []).map(patternHTML).join("")}
     <div class="qgrid" style="margin-top:8px">${ch.join("")}</div>
     ${ordersGuideHTML(k, d)}
     ${k.memo ? `<div class="note src">${esc(k.memo)}</div>` : ""}
-    <div class="note src">출처: ${(k.src || []).map((s) => (s.u ? `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>` : esc(s.t))).join(" · ")}</div>
+    ${k.src?.length ? `<div class="note src">출처: ${k.src.map((s) => (s.u ? `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>` : esc(s.t))).join(" · ")}</div>` : ""}
   </div>`;
 }
 // 🎯 사업부문별 컨센서스(예상) vs 실적 (config/seg_cons.yaml) — 실적이 비어 있으면 '다음 실적 전에 볼 예상치'
@@ -3275,7 +3315,9 @@ function showView() {
   const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
-  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  $("#earnView").hidden = view !== "earn";
+  if (view === "earn") renderEarn();
   $("#chartView").hidden = view !== "chart";
   if (view === "chart") loadAlign();
   $("#reportsView").hidden = view !== "reports";
@@ -3344,7 +3386,7 @@ function boardHTML() {
     return `<div class="bcard${c.idx ? " idx" : ""}${chg ? " bchg" : ""}"><div class="bhd"><b>${esc(c.name)}</b> <span class="src">${esc(c.idx ? "" : kr ? `${c.sym} ETF` : c.sym)}</span><span class="${kcol(c.chg_d)} bchd">${sg(c.chg_d, 1)}</span></div>
       ${boardSpark(c)}
       <div class="bchips">${chipHTML("일", c.chips?.d)}${chipHTML("주", c.chips?.w)}${chipHTML("월", c.chips?.m)}</div>
-      <div class="src bft">1개월 ${sg(c.r1m)} · ${c.idx ? `52주 고점 대비 ${sg(c.dd52)}` : `3개월 상대 ${sg(c.rel3m, 0, "%p")}`}</div></div>`;
+      <div class="src bft">1주 <b class="${kcol(c.r1w)}">${sg(c.r1w, 1)}</b> · 올해 <b class="${kcol(c.ytd)}">${sg(c.ytd, 1)}</b> · 1개월 ${sg(c.r1m)} · ${c.idx ? `52주 고점 대비 ${sg(c.dd52)}` : `3개월 상대 ${sg(c.rel3m, 0, "%p")}`}</div></div>`;
   };
   // 지수는 정해진 순서로 맨 앞 (코스피·코스닥 / S&P500·나스닥100·러셀2000·동일가중), 업종은 3개월 상대 강도 센 순서
   const IO = ["KOSPI", "KOSDAQ", "SPY", "QQQ", "IWM", "RSP"], r3 = (c) => c.rel3m ?? -999;
@@ -3352,7 +3394,32 @@ function boardHTML() {
   const sec = (t, list, kr) => (list?.length ? `<h3>${t}</h3><div class="bgrid">${order(list).map((c) => card(c, kr)).join("")}</div>` : "");
   return `<h2>🗺 시장 그룹판 <span class="src">일·주·월 추세 · 2년 주봉 종가와 30주선 · ${esc(B.updated_at || "")}</span></h2>
     <div class="note src">칩: <span class="bchip up">일▲</span> 이평 위·이평 상승 · <span class="bchip down">주▼</span> 이평 아래·이평 하락 · <span class="bchip mix">월▲</span> 엇갈림 · <span class="bchip up chg">일▲</span> 오늘 바뀜 · 일 = 50일선, 주 = 30주선, 월 = 10개월선 · 업종은 3개월 상대수익률(지수 대비) 순 · 주황 테두리 = 오늘 칩이 바뀐 곳</div>
-    ${sec("🇰🇷 한국 — 업종은 KRX 업종지수(구성종목 시총 가중)를 따라가는 ETF", B.kr, true)}${sec("🇺🇸 미국 — 지수·섹터·산업 ETF", B.us, false)}`;
+    ${sec("🇰🇷 한국 — 업종은 KRX 업종지수(구성종목 시총 가중)를 따라가는 ETF", B.kr, true)}${sec("🇺🇸 미국 — 지수·섹터·산업 ETF", B.us, false)}${aiHTML(B.ai)}`;
+}
+// 🤖 주요 AI 인프라 상승추세 판단: 일봉 종가(검정) + 200일선(파랑) · 🟢 200일선 위 · 🟠 아래로 내려옴 (한 달 안에 바뀌면 🟢→🟠)
+function aiHTML(list) {
+  if (!list?.length) return "";
+  const dot = (s) => `<span style="color:${s === "up" ? "var(--good)" : "var(--warn)"};font-size:18px">●</span>`;
+  const card = (c) => {
+    const W = 320, H = 170, x0 = 34, x1 = 312, top = 14, bot = 146, all = [...c.c, ...c.ma].filter((v) => v != null);
+    const lo = Math.min(...all), hi = Math.max(...all), X = (i) => x0 + ((x1 - x0) * i) / (c.c.length - 1), Y = (v) => bot - ((v - lo) / (hi - lo || 1)) * (bot - top);
+    const path = (a) => a.map((v, i) => (v == null ? "" : `${i && a[i - 1] != null ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`)).join("");
+    let g = [lo, (lo + hi) / 2, hi].map((v) => `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${x0 - 4}" y="${Y(v) + 4}" text-anchor="end" class="qx">${n(v, v < 100 ? 1 : 0)}</text>`).join("");
+    c.t.forEach((d, i) => { if (i && d.slice(0, 5) !== c.t[i - 1].slice(0, 5) && /\.(01|04|07|10)$/.test(d.slice(0, 5))) g += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle" class="qx">${d.slice(0, 5)}</text>`; });
+    g += `<path d="${path(c.ma)}" fill="none" stroke="var(--s1)" stroke-width="3"/><path d="${path(c.c)}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
+    const L = c.c.length - 1, flip = c.days <= 20;  // 한 달(20거래일) 안에 상태가 바뀌었으면 끝을 동그라미로
+    if (flip) g += `<circle cx="${X(L) - 6}" cy="${Y(c.c[L])}" r="16" fill="${c.s === "up" ? "var(--good)" : "var(--warn)"}" fill-opacity=".18" stroke="${c.s === "up" ? "var(--good)" : "var(--warn)"}" stroke-width="2"/>`;
+    g += tipCols(X, (x1 - x0) / L, top, bot, c.t.map((d, i) => `${d}\n종가 $${n(c.c[i], 2)}${c.ma[i] != null ? `\n200일선 $${n(c.ma[i], 2)}` : ""}`));
+    const sig = flip ? `${dot(c.s === "up" ? "down" : "up")}→${dot(c.s)}` : dot(c.s);
+    return `<div class="card" style="padding:8px 10px"><div class="bhd"><b>${esc(c.name)}</b> <span class="src">${esc(c.what)} · ${esc(c.sym)}</span><span class="bchd">${sig}</span></div>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.name)} 일봉과 200일선">${g}</svg>
+      <div class="src">$${n(c.c[L], 2)} <span class="${kcol(c.chg_d)}">${sg(c.chg_d, 1)}</span> · 200일선 $${n(c.ma[L], 2)} 대비 <b style="color:${c.s === "up" ? "var(--good)" : "var(--warn-ink)"}">${sg(c.gap, 1)}</b> · ${c.s === "up" ? "위" : "아래"} ${c.days}일째</div></div>`;
+  };
+  const down = list.filter((c) => c.s === "down");
+  return `<h3>🤖 주요 AI 인프라 상승추세 판단 <span class="src">일봉 약 10개월 · 검정 = 종가 · <span style="color:var(--s1)">━</span> 200일선</span></h3>
+    <div class="kidbox">🐣 200일선은 지난 200일(약 10개월) 평균 가격이에요. 주가가 이 선 위에 있으면 큰 흐름이 올라가는 중(🟢), 아래로 내려오면 큰 흐름이 꺾일 수 있다는 경고(🟠)예요. 지금 6곳 중 <b>${down.length}곳</b>${down.length ? `(${down.map((c) => esc(c.name)).join("·")})` : ""}이 200일선 아래예요.</div>
+    <div class="grid g2" style="margin-top:8px">${list.map(card).join("")}</div>
+    <div class="note src">${dot("up")} 200일선 위 · ${dot("down")} 200일선 아래 · ${dot("up")}→${dot("down")} 최근 한 달 안에 아래로 내려옴 (동그라미) · 사용자 전달 '주요 AI인프라 상승추세 판단'(10/31) 6종목 · 야후 수정주가 · 기술적 분석은 참고 수단일 뿐이에요 (매수·매도 추천 아님)</div>`;
 }
 // 캔들 차트 (일봉 2년 · 주봉 5년 · 월봉 10년): 이평선 · RS 선(지수 대비) · 거래량 · 마지막 가격 · 기준선(전일 종가 / 12주 고점)
 function candleSVG(ch, kind, fmt, ref) {

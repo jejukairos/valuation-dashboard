@@ -46,6 +46,32 @@ def quarters(rows):
     return out
 
 
+def avg_quarters(rows, splits=()):
+    """가중평균 주식 수(희석) 공시 행 → {분기 끝 날짜: 3개월 평균}. 평균이라 빼기 대신 기간 가중:
+    4분기 = (연간 평균 × 연간 일수 − 9개월 평균 × 9개월 일수) ÷ 남은 일수. 분할 전에 낸 값은 분할 비율만큼 곱함."""
+    span = {}
+    for r in rows:
+        if r.get("start") and r.get("end") and ((r["start"], r["end"]) not in span or r["filed"] > span[(r["start"], r["end"])]["filed"]):
+            span[(r["start"], r["end"])] = r
+    days = lambda s, e: (time.mktime(time.strptime(e, "%Y-%m-%d")) - time.mktime(time.strptime(s, "%Y-%m-%d"))) / 86400
+    val = {}
+    for (s, e), r in span.items():
+        v = float(r["val"])
+        for sd, ratio in splits:
+            if r["filed"] < sd and e < sd:
+                v *= ratio
+        val[(s, e)] = v
+    out = {e: v for (s, e), v in val.items() if 80 <= days(s, e) <= 100}
+    for (s, e), v in val.items():
+        if e in out or days(s, e) <= 100:
+            continue
+        prev = [(e2, x) for (s2, e2), x in val.items() if s2 == s and 80 <= days(e2, e) <= 100]
+        if prev:
+            L, L2 = days(s, e), days(s, prev[0][0])
+            out[e] = (v * L - prev[0][1] * L2) / (L - L2)
+    return out
+
+
 def instants(rows):
     best = {}
     for r in rows:
@@ -54,8 +80,9 @@ def instants(rows):
     return {e: float(r["val"]) for e, r in best.items()}
 
 
-def pull(facts):
+def pull(facts, splits=()):
     g = (facts.get("facts") or {}).get("us-gaap") or {}
+    dil = avg_quarters(((g.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("units") or {}).get("shares") or [], splits)
     got = {}
     for k, names in TAGS.items():
         vals = {}
@@ -74,6 +101,8 @@ def pull(facts):
         rp = next((v for d, v in got["rpo"].items() if abs(time.mktime(time.strptime(d, "%Y-%m-%d")) - time.mktime(time.strptime(e, "%Y-%m-%d"))) < 20 * 86400), None)
         if rp is not None:
             row["rpo"] = round(rp / 1e6)
+        if e in dil:
+            row["dil"] = round(dil[e] / 1e6, 1)  # 희석 주식 수 (백만 주)
         if row:
             out[e] = row
     return out
@@ -151,7 +180,10 @@ def main():
         if r.status_code != 200:
             print("  실패", t, r.status_code)
             continue
-        saved[t] = {**saved.get(t, {}), **pull(r.json())}
+        import yfinance as yf
+        sp = [(str(d.date()), float(x)) for d, x in yf.Ticker(t).splits.items() if x and x != 1]
+        new = pull(r.json(), sp)
+        saved[t] = {e: {**saved.get(t, {}).get(e, {}), **new.get(e, {})} for e in sorted(set(saved.get(t, {})) | set(new))}
         ks = sorted(saved[t])
         print(f"  {t}: {len(ks)}개 분기 ({ks[0] if ks else '-'} ~ {ks[-1] if ks else '-'})")
     path.write_text(json.dumps(saved, ensure_ascii=False, indent=0), encoding="utf-8")
@@ -164,6 +196,11 @@ if __name__ == "__main__":
         q = quarters([R("2024-01-01", "2024-03-31", 10), R("2024-01-01", "2024-06-30", 25), R("2024-01-01", "2024-09-30", 45),
                       R("2024-01-01", "2024-12-31", 70), R("2024-01-01", "2024-03-31", 11, "2025-06-01")])
         assert q == {"2024-03-31": 11, "2024-06-30": 14, "2024-09-30": 20, "2024-12-31": 25}, q
+        # 주식 수 평균: 1~3분기 100·100·130 이고 9개월 평균 110, 연간 평균 115 → 4분기 ≈ 130 · 분할(10:1) 전에 낸 값은 ×10
+        w = avg_quarters([R("2024-01-01", "2024-03-31", 100), R("2024-04-01", "2024-06-30", 100), R("2024-07-01", "2024-09-30", 130),
+                          R("2024-01-01", "2024-09-30", 110), R("2024-01-01", "2024-12-31", 115), R("2023-10-01", "2023-12-31", 9, "2024-01-20")],
+                         [("2024-06-10", 10.0)])
+        assert abs(w["2024-12-31"] - 130) < 0.5 and w["2023-12-31"] == 90 and w["2024-03-31"] == 100, w
         a = av_pull({"quarterlyReports": [{"fiscalDateEnding": "2026-09-30", "totalRevenue": "17103000000", "operatingIncome": "2880000000", "grossProfit": "None"},
                                           {"fiscalDateEnding": "2013-12-31", "totalRevenue": "1"}]},
                     {"quarterlyReports": [{"fiscalDateEnding": "2026-09-30", "operatingCashflow": "4025000000", "capitalExpenditures": "-486000000"}]})

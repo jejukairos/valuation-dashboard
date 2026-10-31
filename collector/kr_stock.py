@@ -407,6 +407,25 @@ def _dart_fin_q(cc, year, rc):
     return []
 
 
+def dart_shares(stock_code, limit=8):
+    """정기보고서 '주식의 총수' → {분기 끝 날짜: 보통주 유통주식수 (발행 − 자기주식)} — 주식 수 증가율(YoY)용.
+    dart_quarters 처럼 한 번 낸 보고서는 캐시 (cache/darts_{코드}.json), 갱신마다 limit 개씩 최근 3년 치를 채움."""
+    path = CACHE / f"darts_{stock_code}.json"
+    cache = read_json(path, {})
+    cc, y = corp_code(stock_code), now_kst().year
+    todo = [(yy, rc) for yy in range(y, y - 4, -1) for rc in ("11014", "11012", "11013", "11011") if f"{yy}_{rc}" not in cache]
+    for year, rc in todo[:limit]:
+        j = HTTP.get("https://opendart.fss.or.kr/api/stockTotqySttus.json",
+                     params={"crtfc_key": dart_key(), "corp_code": cc, "bsns_year": year, "reprt_code": rc}).json()
+        row = next((r for r in j.get("list") or [] if "보통" in (r.get("se") or "")), None)
+        if row and _amt(row.get("distb_stock_co")):
+            cache[f"{year}_{rc}"] = _amt(row["distb_stock_co"])
+        elif j.get("status") == "013" and year < y - 1:  # 013 = 자료 없음. 오래된 보고서가 없으면 상장 전 → 0 으로 기억 (다시 안 받음)
+            cache[f"{year}_{rc}"] = 0
+    write_json(path, cache)
+    return {f"{k[:4]}-{QREP[k[5:]]}-{'31' if QREP[k[5:]] in ('03', '12') else '30'}": v for k, v in sorted(cache.items()) if v}
+
+
 def dart_dilution(stock_code, days=365):
     """최근 1년 주식 수가 늘 수 있는 공시 (유상증자·전환사채(CB)·신주인수권부사채(BW)·교환사채) — 주요사항보고서."""
     cc = corp_code(stock_code)

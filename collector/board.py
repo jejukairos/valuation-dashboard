@@ -22,8 +22,17 @@ US_BOARD = [("SPY", "S&P 500"), ("QQQ", "나스닥100"), ("IWM", "러셀2000"), 
             ("IGV", "소프트웨어"), ("ARKK", "혁신성장(투기 성향)"), ("XLE", "에너지"), ("XOP", "석유·가스 개발"), ("XLV", "헬스케어"),
             ("GDX", "금광"), ("XLK", "기술"), ("SMH", "반도체"), ("XBI", "바이오"), ("XLY", "경기소비재"), ("XLP", "필수소비재"),
             ("XLB", "소재"), ("XLF", "금융"), ("XLC", "커뮤니케이션"), ("XRT", "소매"), ("IYT", "운송"), ("XLI", "산업재"),
-            ("XLU", "유틸리티"), ("ITA", "항공우주·방산"), ("URA", "우라늄·원자력")]
+            ("XLU", "유틸리티"), ("ITA", "항공우주·방산"), ("URA", "우라늄·원자력"),
+            # 사용자 전달 '주요 ETF Weekly'·'많이 오른/빠진 ETF 10' (2026-10-31) 에 있던 것
+            ("ARKG", "혁신 바이오(유전체)"), ("OIH", "오일서비스"), ("SLV", "은"), ("GLD", "금"), ("CIBR", "사이버보안"),
+            ("MAGS", "빅테크 7"), ("ARKF", "블록체인·핀테크"), ("LYTE", "포토닉스·광학"), ("SOXX", "반도체 30종목"),
+            ("NCLD", "AI 클라우드 인프라"), ("DRAM", "메모리 반도체"), ("ETHA", "이더리움 현물"), ("IBIT", "비트코인 현물"),
+            ("EWY", "한국 (MSCI)"), ("HUMN", "휴머노이드 로봇"), ("MOO", "농업·애그리비즈니스"), ("USO", "원유"),
+            ("SCHD", "미국 배당주"), ("ILF", "중남미"), ("VNQ", "미국 리츠·부동산")]
 US_IDX = {"SPY", "QQQ", "IWM", "RSP"}
+# 🤖 주요 AI 인프라 상승추세 판단 (사용자 전달 그림 2026-10-31): 200일선 위 = 초록, 아래로 내려오면 = 주황
+AI_INFRA = [("SNDK", "샌디스크", "메모리"), ("INTC", "인텔", "CPU"), ("GLW", "코닝", "광통신"), ("NBIS", "네비우스", "데이터센터"),
+            ("BE", "블룸에너지", "전력"), ("DELL", "델", "서버")]
 SECTOR_KO = {"Information Technology": "정보기술", "Health Care": "헬스케어", "Financials": "금융", "Consumer Discretionary": "경기소비재",
              "Communication Services": "커뮤니케이션", "Industrials": "산업재", "Consumer Staples": "필수소비재", "Energy": "에너지",
              "Utilities": "유틸리티", "Real Estate": "부동산", "Materials": "소재"}
@@ -99,7 +108,8 @@ def board_card(sym, name, df, bench=None, idx=False, n_const=None):
     w2 = wk.iloc[-104:]
     ret = lambda s, k: (s.iloc[-1] / s.iloc[-1 - k] - 1) * 100 if len(s) > k else None
     hi52 = df["High"].iloc[-252:].max() if "High" in df else c.iloc[-252:].max()
-    out = {"sym": sym, "name": name, "idx": idx, "n": n_const,
+    y0 = c[c.index.year < c.index[-1].year]  # 작년 마지막 종가 → 올해 수익률 (올해 상장이면 없음)
+    out = {"sym": sym, "name": name, "idx": idx, "n": n_const, "r1w": r_(ret(c, 5), 1), "ytd": r_((c.iloc[-1] / y0.iloc[-1] - 1) * 100, 1) if len(y0) else None,
            "w": [r_(v, 4) for v in w2], "ma": [r_(v, 4) for v in ma30.loc[w2.index]], "d0": w2.index[0].strftime("%Y-%m"),
            "dates": [d.strftime("%y.%m") for d in w2.index], "chg_d": r_(ret(c, 1), 1), "chg_2y": r_((w2.iloc[-1] / w2.iloc[0] - 1) * 100, 0),
            "peak_2y": r_((w2.max() / w2.iloc[0] - 1) * 100, 0), "r1m": r_(ret(c, 21), 0), "dd52": r_((c.iloc[-1] / hi52 - 1) * 100, 0),
@@ -131,7 +141,24 @@ def board():
         if t in px:
             us.append(board_card(t, name, px[t], spy, idx=t in US_IDX))
     key = lambda c: (not c["idx"], -(c.get("rel3m") if c.get("rel3m") is not None else -999))
-    return {"kr": sorted(kr, key=key), "us": sorted(us, key=key)}
+    pa = us_ohlcv([t for t, _, _ in AI_INFRA], period="3y")
+    ai = [ma200_card(t, name, what, pa[t]["Close"]) for t, name, what in AI_INFRA if t in pa]
+    return {"kr": sorted(kr, key=key), "us": sorted(us, key=key), "ai": [c for c in ai if c]}
+
+
+def ma200_card(sym, name, what, c, n=205):
+    """🤖 AI 인프라 카드: 최근 약 10개월 일봉 종가 + 200일선, 지금 200일선 위(up)·아래(down)와 그 상태가 며칠째인지(days)."""
+    ma = c.rolling(200).mean()
+    a = (c > ma)[ma.notna()].tolist()
+    if not a:
+        return None
+    k = len(a) - 1
+    while k > 0 and a[k - 1] == a[-1]:
+        k -= 1
+    w = c.index[-n:]
+    return {"sym": sym, "name": name, "what": what, "s": "up" if a[-1] else "down", "days": len(a) - k,
+            "gap": r_((c.iloc[-1] / ma.iloc[-1] - 1) * 100, 1), "chg_d": r_((c.iloc[-1] / c.iloc[-2] - 1) * 100, 1),
+            "t": [d.strftime("%y.%m.%d") for d in w], "c": [r_(v) for v in c.loc[w]], "ma": [r_(v) for v in ma.loc[w]]}
 
 
 # ---------- 차트 스캔 ----------
@@ -397,6 +424,9 @@ if __name__ == "__main__":
         d = pd.DataFrame({"Open": base, "High": [x * 1.01 for x in base], "Low": [x * 0.99 for x in base], "Close": base, "Volume": [1e6] * 400}, index=idx)
         s = scan_one(d)
         assert "week" in s and s["week"]["below"] >= 15, s
+        drop = up.copy(); drop.iloc[-3:] = 100  # 마지막 3일 200일선 아래로 → 주황 3일째
+        m = ma200_card("X", "x", "x", drop)
+        assert m["s"] == "down" and m["days"] == 3 and len(m["c"]) == 205 and ma200_card("X", "x", "x", up)["s"] == "up", m
         print("ok")
     else:
         main()

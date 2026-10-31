@@ -21,6 +21,7 @@
   <nav class="tabbar" id="tabbar">
     <a href="#" data-view="main" class="on">🇰🇷 보유</a>
     <a href="#us" data-view="us">🇺🇸 보유</a>
+    <a href="#earn" data-view="earn">🧾 실적</a>
     <a href="#news" data-view="news">📰 뉴스</a>
     <a href="#reports" data-view="reports">📑 리포트</a>
     <a href="#industry" data-view="industry">🏭 산업</a>
@@ -55,6 +56,11 @@
       <option value="sheet">내 시트 순서</option>
     </select></div>
   <div class="grid g3" id="watchCards"></div>
+</main>
+<main class="wrap" id="earnView" hidden>
+  <h2>🧾 실적</h2>
+  <p class="sub">보유·관심·공동 종목의 최근 3일 실적발표 쉬운 요약 · 예상 대비 실적 · 앞으로 30일 실적발표·컨퍼런스콜 일정이에요. 종목 이름을 누르면 상세 화면.</p>
+  <div id="earnBody"></div>
 </main>
 <main class="wrap" id="newsView" hidden>
   <h2>뉴스</h2>
@@ -114,11 +120,8 @@
 </main>
 <main class="wrap" id="mainView">
   <div id="failBox"></div>
-  <div id="easyNews"></div>
-  <div id="kqNews"></div>
   <div id="estAlert"></div>
   <div id="patAlert"></div>
-  <div id="irCal"></div>
   <div id="bigTech"></div>
 
   <h2 id="cmpTitle">보유종목 비교표</h2>

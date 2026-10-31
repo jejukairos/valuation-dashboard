@@ -484,6 +484,17 @@ def stock_detail(h, rates_now, fx):
     det["op_yoy"] = op_yoy(oc, mkt, det["kq"], QTRS.get(tkr), (KPI_CFG.get(oc) or {}).get("op_yoy"), dq=dq)
     det["longq"] = long_q(mkt, dq, det["kq"], QTRS.get(tkr), SEC_LONG.get(code))  # 📈 10년 실적 추이
     LONGQ[code] = det["longq"]
+    det["shq"] = None  # 📉 주식 수 증가율(YoY)용 분기 주식 수 {분기 끝 날짜: 주}
+    if mkt == "KR":  # 보통주 유통주식수 (발행 − 자기주식, 분기 말) — DART 정기보고서
+        try:
+            det["shq"] = {"src": "dart", "q": kr_stock.dart_shares(oc)}
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("DART 주식 수", f"{name}: {str(e)[:60]}")
+    else:  # 희석 가중평균 — 예전 분기는 SEC (tools/sec_backfill.py), 야후가 주는 최근 5~6분기는 야후 (날짜가 며칠 다른 같은 분기는 야후로)
+        yq = {e: v["dil"] for e, v in (QTRS.get(tkr) or {}).items() if v.get("dil")}
+        q = {e: v["dil"] * 1e6 for e, v in (SEC_LONG.get(code) or {}).items() if v.get("dil")
+             and not any(abs((pd.Timestamp(e) - pd.Timestamp(y)).days) < 20 for y in yq)}
+        det["shq"] = {"src": "sec", "q": dict(sorted({**q, **yq}.items()))} if q or yq else None
     sd = CMP.get("samsung_ds") or {}
     if oc == "005930" and sd.get("rev"):  # 삼성전자는 순수 반도체 회사가 아니라 DS(반도체) 부문만 따로 (조원 → 억원)
         det["longq_seg"] = {"name": "DS(반도체)", "q": {str(k): {"rev": v * 1e4, **({"op": sd["op"][k] * 1e4} if (sd.get("op") or {}).get(k) is not None else {})}

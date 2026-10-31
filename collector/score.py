@@ -59,7 +59,8 @@ def _by_period(inc, cf):
             "ga": (inc, "General And Administrative Expense"), "sga": (inc, "Selling General And Administration"),
             "opex": (inc, "Operating Expense"), "op": (inc, "Operating Income"), "tax": (inc, "Tax Provision"), "ni": (inc, "Net Income"),
             "fcf": (cf, "Free Cash Flow"), "capex": (cf, "Capital Expenditure"),
-            "ltdi": (cf, "Long Term Debt Issuance")}  # 🏦 회사채·장기 대출로 새로 빌린 돈
+            "ltdi": (cf, "Long Term Debt Issuance"),  # 🏦 회사채·장기 대출로 새로 빌린 돈
+            "dil": (inc, "Diluted Average Shares")}  # 📉 희석 주식 수 (미국만 씀 — 한국은 우선주가 섞여 DART 주식 총수를 씀)
     out = {}
     for col in inc.columns:
         d = {}
