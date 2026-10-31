@@ -837,8 +837,15 @@ def main():
             else:
                 first[str(h["code"])] = dict(h, _also=[])
                 todo.append((first[str(h["code"])], g))
+    budget = float(os.environ.get("STOCK_BUDGET_MIN") or 55) * 60  # ⏱ 시작부터 이만큼 지나면 남은 종목은 직전 값 → 뒤 작업·저장은 끝까지
+    skipped = []
     for i, (h, g) in enumerate(todo):
         code = str(h["code"])
+        if (now_kst() - t0).total_seconds() > budget and code in prev_cards:
+            cards.append(dict(prev_cards[code], stale=True, order=i, group=g, also=h["_also"]))
+            skipped.append(h["name"])
+            REPORT.block("시간 부족", f"{h['name']}: 직전 값 그대로 (다음 갱신 때 다시 계산)")
+            continue
         try:
             det = stock_detail(h, {"us10y": us10, "kr3y": kr3, "regime": regime}, fx)
             det["card"]["order"] = i
@@ -990,7 +997,7 @@ def main():
         "updated_at": t0.strftime("%Y-%m-%d %H:%M"),
         "rates": r, "market": m, "signals": {"us": us_sig, "kr": kr_sig},
         "stocks": cards, "fx": fx,
-        "status": {"failures": REPORT.failures, "blocked": REPORT.blocked, "ok": len(REPORT.ok),
+        "status": {"failures": REPORT.failures, "blocked": REPORT.blocked, "ok": len(REPORT.ok), "stale": skipped,
                    "finished_at": now_kst().strftime("%Y-%m-%d %H:%M")},
         "settings": {"bond_signal": SETTINGS["bond_signal"], "stock_signal": SETTINGS["stock_signal"],
                      "fair_value": SETTINGS["fair_value"], "band": SETTINGS["band"],

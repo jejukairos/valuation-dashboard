@@ -1,0 +1,45 @@
+name: 텔레그램 리포트 채널
+
+on:
+  schedule:
+    - cron: "30 22 * * *"     # 매일 07:30 KST = 전날 22:30 UTC
+    - cron: "30 8 * * *"      # 매일 17:30 KST
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["collector/tg_reports.py", ".github/workflows/tg.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tg
+  cancel-in-progress: false
+
+jobs:
+  tg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 채널 검색 (보유·관심·공동 종목, 최근 7개월)
+        env:
+          PYTHONIOENCODING: utf-8
+        run: cd collector && python -u tg_reports.py
+      - name: 저장
+        if: always()
+        run: |
+          git config user.name "valuation-bot"
+          git config user.email "valuation-bot@users.noreply.github.com"
+          git add site/data/tg_reports.json 2>/dev/null || true
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "텔레그램 리포트 채널 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done
+          exit 1

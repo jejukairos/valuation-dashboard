@@ -3872,8 +3872,8 @@ function estBoardHTML(mkt) {  // 리포트 탭: 종목마다 추정치 1주·1�
     <div class="note src">🔄 상향 전환? = 한 달 동안 내려가다 최근 1주 올라감 · ⚠ 꺾임? = 한 달 동안 오르다 최근 1주 내려감 · 한국은 매일 쌓기 시작한 날부터 비교돼요 (1주·1개월 칸은 그만큼 지나야 채워짐)</div></div>`;
 }
 function estHTML(d) {  // 종목 상세: 연도별 추정치 지금 vs 1일·1주·1개월·3개월·6개월·1년 전 + 흐름 그림 + 다른 출처(블룸버그 등)
-  const e = d.est, sd = e?.seed;
-  if (!e && !sd) return "";
+  const e = d.est, sd = e?.seed, tw = (TGR?.stocks?.[d.code] || []).filter((x) => x.est_w != null).slice(0, 8);
+  if (!e && !sd && !tw.length) return "";
   const us = e?.unit === "$", F = (v) => (v == null ? "-" : us ? `$${n(v, 2)}` : kpiF(v, "억원")), SP = ["1일", "1주", "1개월", "3개월", "6개월", "1년"];
   const ys = Object.keys(e?.chg || {}).sort(), b = DASH.stocks.find((x) => x.code === d.code)?.est, [tu, td] = tpCnt(d.code);
   let h = b?.sig ? `<div class="note" style="margin-top:0"><b>${esc(b.sig)}</b> — ${esc(b.y)}년 ${esc(b.what)} 예상 1주 ${estP(b["1주"])} · 1개월 ${estP(b["1개월"])} · 3개월 ${estP(b["3개월"])}${tu || td ? ` · 목표가 최근 30일 <b style="color:var(--good-ink)">올림 ${tu}</b> · <b style="color:var(--bad-ink)">내림 ${td}</b>` : ""}</div>` : "";
@@ -3884,6 +3884,7 @@ function estHTML(d) {  // 종목 상세: 연도별 추정치 지금 vs 1일·1�
     const at = Object.fromEntries(ys.map((y) => [y, Object.fromEntries(e.pts[y])]));
     h += `<div class="qgrid" style="margin-top:8px">${lineChart({ t: `${e.what} 예상 흐름 (${e.since}부터 매일)`, labels: ds, s: ys.map((y, i) => ({ n: `${y}E`, v: ds.map((x) => at[y][x] ?? null), col: KPI_COL[i % 4] })), fl: (v) => (us ? `$${n(v, 2)}` : kpiF(Math.round(v), "억원")), tick: (i) => (i === 0 || i === ds.length - 1 ? ds[i].slice(5) : "") })}</div>`;
   }
+  if (tw.length) h += `<div class="note">📨 <b>텔레그램 ked_epic_ai 퀀트 시그널</b> — 12M Fwd 영업이익 추정치 <b>1주 변화</b> (시장 전체 상·하위 10위에 들 때만 나와요): ${tw.map((x) => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.d.slice(5).replace("-", "/"))}</a> ${estP(x.est_w)}`).join(" · ")}</div>`;
   if (sd) {  // 사용자가 보낸 다른 출처 (config/est_seed.yaml)
     const cols = Object.keys(Object.values(sd.rows)[0] || {}).filter((k) => k !== "지금");
     h += `<div class="chart-title" style="margin-top:10px"><b>📎 ${esc(sd.src || "")}</b> <span class="src">${esc(sd.what)} 예상 · ${esc(sd.unit)}${sd.vs ? ` · ${esc(sd.vs.d)} 대비 ${Object.keys(sd.rows).map((y) => (sd.vs[y] ? `${y}E ${n(sd.vs[y], 1)} → ${n(sd.rows[y]["지금"], 1)} (${pct((sd.rows[y]["지금"] / sd.vs[y] - 1) * 100, 1, true)})` : "")).filter(Boolean).join(" · ")}` : ""}</span></div>
@@ -3908,17 +3909,30 @@ function repTable(r, max) {
       ${us ? "" : `<td style="text-align:left;white-space:normal;min-width:12em"><a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t.replace(/^[^)]*\)\s*/, ""))}</a></td>`}
       <td style="white-space:nowrap">${tpChg(x, r.market)}</td><td>${esc(x.act ? `${x.act} · ${x.rating}` : x.rating || "")}</td></tr>`).join("")}</tbody></table></div>`;
 }
-// 최근 7개월 목표가 올린 곳·내린 곳 (30일 안 개수 따로) + 증권사별 최신 목표가 평균
+// 최근 7개월 목표가 올린 곳·내린 곳 (30일 안 개수 따로) + 증권사별 최신 목표가 평균 — 한경 목록 + 텔레그램 리포트 채널에 나온 목표가
 function repSum(r) {
-  const cut = (days) => new Date(Date.now() - days * 864e5).toISOString().slice(0, 10), L = (r.list || []).filter((x) => x.d >= cut(214) && x.tp), n30 = L.filter((x) => x.d >= cut(30)).length;
+  const tg = (TGR?.stocks?.[r.code] || []).filter((x) => x.tp && x.firm).map((x) => ({ d: x.d, firm: x.firm, tp: x.tp, tp_dir: x.dir }));
+  const all = [...(r.list || []), ...tg].sort((a, b) => (a.d < b.d ? 1 : -1));
+  const cut = (days) => new Date(Date.now() - days * 864e5).toISOString().slice(0, 10), L = all.filter((x) => x.d >= cut(214) && x.tp), n30 = L.filter((x) => x.d >= cut(30)).length;
   const up = L.filter((x) => (x.tp_prev && x.tp > x.tp_prev) || x.tp_dir === "상향").length, dn = L.filter((x) => (x.tp_prev && x.tp < x.tp_prev) || x.tp_dir === "하향").length;
-  const last = Object.values(Object.fromEntries([...(r.list || [])].reverse().filter((x) => x.tp).map((x) => [x.firm, x.tp])));
+  const last = Object.values(Object.fromEntries([...L].reverse().map((x) => [x.firm, x.tp])));
   const avg = last.length ? last.reduce((a, b) => a + b, 0) / last.length : null, c = DASH.stocks.find((s) => s.code === r.code);
-  return L.length || avg ? `<div class="note">최근 7개월 리포트 ${L.length}개 (30일 안 ${n30}개) · 목표가 <b style="color:var(--good-ink)">올림 ${up}</b> · <b style="color:var(--bad-ink)">내림 ${dn}</b>${avg ? ` · 증권사 ${last.length}곳 최신 목표가 평균 <b>${tpTxt(avg, r.market)}</b>${c?.price ? ` (지금 주가 대비 ${pct((avg / c.price - 1) * 100, 0, true)})` : ""}` : ""}</div>` : "";
+  return L.length || avg ? `<div class="note">최근 7개월 리포트 ${L.length}개 (30일 안 ${n30}개)${tg.length ? ` <span class="src">· 텔레그램 채널 목표가 ${tg.length}개 포함</span>` : ""} · 목표가 <b style="color:var(--good-ink)">올림 ${up}</b> · <b style="color:var(--bad-ink)">내림 ${dn}</b>${avg ? ` · 증권사 ${last.length}곳 최신 목표가 평균 <b>${tpTxt(avg, r.market)}</b>${c?.price ? ` (지금 주가 대비 ${pct((avg / c.price - 1) * 100, 0, true)})` : ""}` : ""}</div>` : "";
+}
+// 📨 텔레그램 리포트 채널 (data/tg_reports.json ← collector/tg_reports.py, 하루 두 번): 최근 7개월 글 — 제목·그 종목 줄·목표가만, 원문은 링크
+let TGR = null;
+const tgGet = async () => { if (!TGR) TGR = await (await fetch("data/tg_reports.json?t=" + Date.now(), { cache: "no-store" })).json(); return TGR; };
+function tgHTML(code, max) {
+  const L = TGR?.stocks?.[code] || [], P = L.filter((x) => x.est_w == null).slice(0, max);  // 추정치 순위 글은 📈 이익 추정치 칸에
+  if (!P.length) return "";
+  const D = (x) => esc(x.d.slice(5).replace("-", "/")), dc = (d) => (d === "하향" ? "var(--bad-ink)" : d === "상향" ? "var(--good-ink)" : "inherit");
+  return `<div class="news-h" style="margin-top:10px">📨 텔레그램 리포트 채널 <span class="src">최근 7개월 ${L.length}개 · ${esc((TGR.kr || []).concat(TGR.us || []).length)}개 채널 · ${esc(TGR.updated_at || "")}</span></div>
+    <ul class="irl">${P.map((x) => `<li><span class="src">${D(x)} · ${esc(x.ch)}</span> <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>${x.tp ? ` · 🎯 ${esc(x.firm || "")} <b>${tpTxt(x.tp, mktOf(code))}</b>${x.dir ? ` <b style="color:${dc(x.dir)}">${esc(x.dir)}</b>` : ""}` : ""}${x.s ? `<div class="src">${esc(x.s)}</div>` : ""}</li>`).join("")}</ul>`;
 }
 async function loadReports() {
   try { await repGet(); } catch (_) { $("#reportsBody").innerHTML = `<div class="empty">리포트를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
   try { await newsGet(); } catch (_) { /* 해외 증권사 기사만 빠짐 */ }
+  try { await tgGet(); } catch (_) { /* 텔레그램 채널 글만 빠짐 */ }
   const all = REPS.stocks || [], grps = ["전체", ...new Set(all.map((r) => r.group))];
   $("#reportsIntro").innerHTML = `${esc(REPS.updated_at || "")} 갱신 · ${esc(REPS.src || "")}<br><span class="src">원문은 증권사 PDF 링크로만 — 여기엔 숫자와 짧은 요약 · 참고용 (매수·매도 추천 아님)</span>`;
   const latest = (r) => r.notes?.[0]?.d || r.list?.[0]?.d || "";
@@ -3927,7 +3941,7 @@ async function loadReports() {
   $("#reportsBody").innerHTML = (REP_CODE ? `<div class="note"><a href="#reports">← 전체 종목 리포트</a></div>` : `<div class="seg repmk" style="margin-bottom:8px"><button data-mk="KR" class="${REP_MKT === "KR" ? "on" : ""}">🇰🇷 한국 리포트</button><button data-mk="US" class="${REP_MKT === "US" ? "on" : ""}">🇺🇸 미국 리포트</button></div>
     <div class="chips repgrp" style="margin-bottom:10px">${grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === REP_GRP ? "on" : ""}">${esc(g)}</button>`).join("")}</div>${estBoardHTML(REP_MKT)}`)
     + `<div class="grid g2">${list.map((r) => `<div class="card" id="rep-${esc(r.code)}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:17px">${esc(r.name)}</b>
-      <span class="src">${esc(r.group)} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>${repSum(r)}${(r.notes || []).map((x) => repNote(x, r.market)).join("")}${repTable(r, 15)}${ibHTML(r.code)}</div>`).join("") || `<div class="empty">리포트가 없어요.</div>`}</div>`;
+      <span class="src">${esc(r.group)} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>${repSum(r)}${(r.notes || []).map((x) => repNote(x, r.market)).join("")}${repTable(r, 15)}${tgHTML(r.code, 15)}${ibHTML(r.code)}</div>`).join("") || `<div class="empty">리포트가 없어요.</div>`}</div>`;
 }
 document.addEventListener("click", (e) => {
   const m = e.target.closest("#reportsBody .repmk button"), g = e.target.closest("#reportsBody .repgrp button");
@@ -3939,10 +3953,11 @@ async function repBlock(code) {
   let r;
   try { r = (await repGet()).stocks.find((x) => x.code === code); } catch (_) { r = null; }
   try { await newsGet(); } catch (_) { /* 뉴스 없으면 해외 증권사 기사만 빠짐 */ }
-  const ib = ibHTML(code), has = r && ((r.notes || []).length || (r.list || []).length);
-  if (!has && !ib) return "";
+  try { await tgGet(); } catch (_) { /* 텔레그램 채널 글만 빠짐 */ }
+  const ib = ibHTML(code), tg = tgHTML(code, 5), has = r && ((r.notes || []).length || (r.list || []).length);
+  if (!has && !ib && !tg) return "";
   return `<h3>🎯 증권사 시각 <span class="src"><a href="#reports/${esc(code)}">리포트 탭에서 전체 보기 →</a></span></h3><div class="card">${has ? `${repSum(r)}
-    ${(r.notes || []).slice(0, 2).map((x) => repNote(x, r.market)).join("")}${repTable(r, 4)}` : ""}${ib}
+    ${(r.notes || []).slice(0, 2).map((x) => repNote(x, r.market)).join("")}${repTable(r, 4)}` : ""}${tg}${ib}
     <div class="note"><a href="#reports/${esc(code)}">📑 ${esc(r?.name || "")} 리포트 전체 (요약·목표가 변화) 보기 →</a></div></div>`;
 }
 // 🌍 해외 증권사(골드만·JP모건·모건스탠리 등)가 한국 종목에 낸 리포트 — 원문이 비공개라 그걸 다룬 기사 (news.json ib)
@@ -4066,14 +4081,23 @@ function watchCard(r) {
 }
 
 /* ---------- 전체 ---------- */
+// 🚨 데이터 갱신이 끝까지 안 됐을 때 모든 탭 맨 위에 (data/run_status.json ← update.yml '갱신 상태 기록') + 시간이 모자라 직전 값으로 둔 종목
+let RUNST = null;
+function runAlertHTML(rs, s) {
+  const st = s?.stale || [];
+  if (rs && !rs.ok) return `<div class="warnbox" style="margin-top:8px;border-color:var(--bad);background:var(--bad-bg)">🚨 <b>데이터 갱신이 끝까지 안 됐어요</b> <span class="src">(${esc(rs.at)} · ${rs.attempt}/${rs.max}번째 시도${rs.outcome === "cancelled" ? " · 시간 초과" : ""})</span><br>
+    화면 숫자는 <b>${esc(rs.data_at || "-")}</b> 갱신 기준이에요. ${rs.attempt < rs.max ? "자동으로 다시 시도하고 있어요." : `${rs.max}번 다 실패해서 다음 예약 갱신(평일 07:30·18:30) 때 다시 해요.`}${rs.last_ok ? ` · 마지막 성공 ${esc(rs.last_ok)}` : ""} · <a href="${esc(rs.url)}" target="_blank" rel="noopener">작업 기록</a></div>`;
+  return st.length ? `<div class="warnbox" style="margin-top:8px">⏱ 이번 갱신은 시간이 모자라 ${st.length}종목(${st.map(esc).join("·")})을 직전 값으로 뒀어요 — 다음 갱신 때 다시 계산해요.</div>` : "";
+}
 function renderAll() {
   const s = DASH.status;
   $("#updated").textContent = `마지막 갱신 ${DASH.updated_at} (KST)`;
   const chip = $("#statusChip");
   chip.hidden = false;
-  const nf = s.failures.length;
-  chip.className = "status-chip" + (nf ? "" : " ok");
-  chip.textContent = nf ? `⚠ 실패 ${nf}건` : "✓ 모두 정상";
+  const nf = s.failures.length, bad = RUNST && !RUNST.ok;
+  chip.className = "status-chip" + (nf || bad ? "" : " ok");
+  chip.textContent = bad ? "🚨 갱신 실패" : nf ? `⚠ 실패 ${nf}건` : "✓ 모두 정상";
+  $("#runAlert").innerHTML = runAlertHTML(RUNST, s);
   $("#failBox").innerHTML = nf || s.blocked.length ? `<details class="fail card" style="margin-top:12px" ${nf ? "" : ""}>
       <summary>${nf ? `⚠ 이번 갱신에서 ${nf}개 항목을 못 받아서 직전 값을 보여주고 있어요` : "ℹ 대체 출처를 쓴 항목"}</summary>
       <ul>${s.failures.map((f) => `<li><b>${esc(f.item)}</b> — ${esc(f.reason)}</li>`).join("")}
@@ -4109,6 +4133,7 @@ async function load() {
     try { EVENTS = await (await fetch("data/events.json?t=" + Date.now(), { cache: "no-store" })).json() || []; } catch (_) { EVENTS = []; }
     try { SOMONG = await (await fetch("data/somong.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { SOMONG = {}; }
     try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { CAPEX = {}; }  // 🇺🇸 탭 빅테크 현금흐름
+    try { RUNST = await (await fetch("data/run_status.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { RUNST = null; }  // 🚨 갱신 실패 알림
   } catch (e) {
     $("#updated").textContent = "데이터를 불러오지 못했어요";
     return;
