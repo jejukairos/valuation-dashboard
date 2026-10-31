@@ -328,7 +328,7 @@ def align():
         fri -= timedelta(days=7)  # 금요일 장중엔 이번 주가 아직 안 끝남
     # 한 주 -33% 까지는 시총 이탈을 잡음 · 끝자리 0 = 보통주 · 리츠·인프라 펀드는 뺌 (원본 글에 없음)
     # shortcut: 리츠는 이름으로 거름 (KRX 업종이 지주사와 같은 '기타금융'), 이름에 안 드러나는 리츠가 생기면 KRX 증권 구분으로
-    uni = [u for u in kr_universe(n=5000, min_cap=ALIGN_CAP * 2 / 3) if u[0].endswith("0") and not re.search("리츠|리얼티|인프라", u[1])]
+    uni = [u for u in kr_universe(n=5000, min_cap=ALIGN_CAP * 2 / 3) if u[0].endswith("0") and not re.search("(?<!메)리츠|리얼티|인프라", u[1])]  # 메리츠금융지주는 남김
     rows, charts_ = [], {}
     for code, nm, sec, cap in uni:
         try:
