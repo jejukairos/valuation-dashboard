@@ -256,13 +256,13 @@ def stock_detail(h, rates_now, fx):
         other = pg["adj"] if pg["g"] == pg["median"] else pg["median"]
         e12 = C.fwd12(hist, "eps")
         if other and other > 0 and e12 and e12 > 0 and fm == ["PER"] and max(other, pg["g"]) / min(other, pg["g"]) >= 2:
-            scen["alt"] = {"g": rnd(other, 1), **{k: rnd(e12 * other * f, 2) for k, f in (("bear", 1), ("base", 1.5), ("bull", 2))}}
+            scen["alt"] = {"g": rnd(other, 1), **{k: rnd(e12 * other * f, 2) for k, f in C.GROWTH_MULT.items()}}
         # 내 엑셀의 성장률 방법들을 나란히: ① 기본값 ② 보정값 ③ Finviz (④ 내가 정한 PER 은 화면에서 somong.yaml 값으로)
         ways = [("기본값", pg["median"], f"{pg['window']} EPS 성장률 중앙값"), ("보정값", adj[0][0], adj[0][1] or "컨센서스 없음")]
         if mkt == "US":
             ways.append(("Finviz", fv5, "Finviz EPS next 5Y"))
         scen["ways"] = [{"name": nm, "g": rnd(g, 1), "src": s, "used": bool(g) and rnd(g, 1) == pg["g"],
-                         **({k: rnd(e12 * g * f, 2) for k, f in (("bear", 1), ("base", 1.5), ("bull", 2))} if g and g > 0 and e12 and e12 > 0 else {})}
+                         **({k: rnd(e12 * g * f, 2) for k, f in C.GROWTH_MULT.items()} if g and g > 0 and e12 and e12 > 0 else {})}
                         for nm, g, s in ways]  # 성장률 15% → PER 15배 (숫자 그대로)
         scen["e12"] = rnd(e12, 2) if e12 else None
         if mkt == "US":

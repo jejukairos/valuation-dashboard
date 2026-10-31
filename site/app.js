@@ -171,6 +171,12 @@ function scenHTML(c) {
       return `<div class="${k}${k === "base" ? " on" : ""}"><span>${l} <b>${ko}</b></span><b>${fmtP(v[k])}</b><span class="src basis">${why}</span><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></div>`;
     }).join("")}</div>`;
   }
+  // PER·PBR 을 같이 보는 종목(현대차 등): 칸 바로 아래에 방법마다 하방·적정·최대를 따로 (위 칸은 두 값의 평균)
+  const partRows = (parts) => ((parts || []).length > 1 ? `<div class="tbl-wrap"><table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">방법별 <span class="src">위 칸 = 평균</span></th>${pts.map(([, l, ko]) => `<th>${l} ${ko}</th>`).join("")}</tr></thead><tbody>
+    ${parts.map((p) => `<tr><td style="text-align:left"><b>${esc(p.kind)}</b> <span class="src">${pts.map(([k]) => n(p.mult[k], p.kind === "PBR" ? 2 : 1)).join(" · ")}배 × ${p.kind === "PER" ? "EPS" : "BPS"}</span></td>${pts.map(([k]) => {
+      const x = p.base_val * p.mult[k], up = (x / c.price - 1) * 100;
+      return `<td><b>${fmtP(x)}</b><br><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></td>`;
+    }).join("")}</tr>`).join("")}</tbody></table></div>` : "");
   // 🐂 강세장일 때(금리가 내려가 돈이 풀릴 때): 같은 Bear·Base·Bull 칸을 탭으로 — 성장률 × 1.5·1.75·2, 업종·밴드 PER 은 보통·1.5배·2배
   const bm = s.bull_mkt, reg = s.regime;
   const bv = bm ? { bear: bm.lo, base: bm.mid ?? (bm.lo + bm.hi) / 2, bull: bm.hi } : null;
@@ -182,8 +188,8 @@ function scenHTML(c) {
   return `<div class="scen" onclick="event.stopPropagation()">
     <div class="chart-title" style="margin-top:12px"><b>① 앞으로 실적으로 본 적정주가</b> <span class="src">${baseOf(s.parts, "12MF")}</span></div>
     ${tabs}
-    <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}</div>
-    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${s.sector?.easy && (s.parts || []).some((p) => /업종/.test(p.src || "")) ? `업종 PER ${s.sector.easy.map((x) => n(x, 1)).join(" · ")}배 (sectors.yaml easy)` : "성장률 × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)"}</div></div>` : ""}
+    <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}${partRows(s.parts)}</div>
+    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}${partRows(bparts)}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${s.sector?.easy && (s.parts || []).some((p) => /업종/.test(p.src || "")) ? `업종 PER ${s.sector.easy.map((x) => n(x, 1)).join(" · ")}배 (sectors.yaml easy)` : "성장률 × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)"}</div></div>` : ""}
     ${regLine}
     ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}${c.notes?.y2?.length ? ` · 🗒 메모 ${c.notes.y2.length}` : ""}</span></summary>${scenBoxes(s.y2, s.y2.parts)}${notesHTML(c.notes?.y2, c, s.y2)}</details>` : ""}
     ${multHTML(s)}
@@ -238,7 +244,7 @@ function floorHTML(c) {
   if (s.rerating) out.push(`<div class="note src">🔁 리레이팅: ${esc(s.rerating)}</div>`);
   return warn + (out.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🏷 업종 PER · 리레이팅 메모</summary>${out.join("")}</details>` : "");
 }
-// 성장률 방식 (내 엑셀 '소몽의 적정주가 템플릿'): 성장률 = EPS 전년 대비 성장률 중앙값, PER = 성장률 × 1 / 1.5 / 2
+// 성장률 방식 (내 엑셀 '소몽의 적정주가 템플릿'): 성장률 = EPS 전년 대비 성장률 중앙값, PER = 성장률 × 1 / 1.25 / 1.5
 function growthHTML(c) {
   const g = c.scen?.growth;
   if (!g) return "";
@@ -256,16 +262,16 @@ function growthHTML(c) {
       <tr><td>EPS</td>${g.eps.map((v) => `<td>${fmtE(v)}</td>`).join("")}</tr>
       <tr><td>성장률</td>${g.yoy.map((v) => `<td class="${v != null && v < 0 ? "dear" : ""}">${v == null ? "-" : n(v, 0) + "%"}</td>`).join("")}</tr></tbody></table></div>
     <table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">적정 PER</th><th>배수</th><th>× 12MF EPS</th>${e27 ? "<th>× 27E EPS</th>" : ""}</tr></thead><tbody>
-      ${[["Bear 하방 (× 1)", "bear"], ["Base 적정주가 (× 1.5)", "base"], ["Bull 최대 (× 2)", "bull"]].map(([l, k]) => `<tr><td>${l}</td><td style="text-align:right">${n(g.mult[k], 1)}배${g.raw && g.raw[k] !== g.mult[k] ? `<br><span class="src">성장률로는 ${n(g.raw[k], 1)}</span>` : ""}</td>
+      ${[["Bear 하방 (× 1)", "bear"], ["Base 적정주가 (× 1.25)", "base"], ["Bull 최대 (× 1.5)", "bull"]].map(([l, k]) => `<tr><td>${l}</td><td style="text-align:right">${n(g.mult[k], 1)}배${g.raw && g.raw[k] !== g.mult[k] ? `<br><span class="src">성장률로는 ${n(g.raw[k], 1)}</span>` : ""}</td>
         <td style="text-align:right"><b>${fmtP(c.scen[k])}</b></td>${e27 ? `<td style="text-align:right">${fmtP(e27[k])}</td>` : ""}</tr>`).join("")}</tbody></table>
     ${c.eps_srcs && Object.keys(c.eps_srcs).length ? `<div class="chart-title" style="margin-top:8px"><b>EPS 추정치 출처</b> <span class="src">시킹알파(유료) 대신 받을 수 있는 출처들의 평균을 써요</span></div>
       <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">연도</th>${["야후", "나스닥", "Finviz", "평균"].map((k) => `<th>${k}</th>`).join("")}</tr></thead><tbody>
       ${Object.entries(c.eps_srcs).map(([y, s]) => `<tr><td>${esc(y)}${s.note ? " ⚠" : ""}</td>${["야후", "나스닥", "Finviz", "평균"].map((k) => `<td${k === "평균" ? ' style="font-weight:700"' : ""}>${s[k] == null ? "-" : n(s[k], 2)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
       ${Object.values(c.eps_srcs).some((s) => s.note) ? `<div class="note src">⚠ = 출처끼리 15% 넘게 달라서 평균 대신 야후 값을 썼어요 (일회성 이익 포함 여부 등 기준 차이)</div>` : ""}` : ""}
-    <div class="note src">내 엑셀 방식: 하방 = 성장률 × 1 (더 빠지면 안전마진), 적정주가 = × 1.5, 최대 = × 2 (금리가 다시 내려갈 때) · 한국은 컨센서스 3년 영업이익 성장률, 미국은 3~5년 EPS 성장률 · 성장률로 잡은 하방이 지금 가격보다 50% 넘게 높으면 성장률이 너무 센 것이라 업종 PER(없으면 이 종목 PER 밴드) · PER·PBR 을 같이 보는 종목은 PBR 밴드 값과 평균</div>
+    <div class="note src">하방 = 성장률 × 1 (더 빠지면 안전마진), 적정주가 = × 1.25, 최대 = × 1.5 (사용자 원칙 · 강세장 칸은 × 1.5 · 1.75 · 2) · 한국은 컨센서스 3년 영업이익 성장률, 미국은 3~5년 EPS 성장률 · 성장률로 잡은 하방이 지금 가격보다 50% 넘게 높으면 성장률이 너무 센 것이라 업종 PER(없으면 이 종목 PER 밴드) · PER·PBR 을 같이 보는 종목은 PBR 밴드 값과 평균</div>
   </details>`;
 }
-// 내 엑셀의 적정주가 방법 4가지를 나란히: ① 기본값 ② 보정값 ③ Finviz (성장률 × 1 / 1.5 / 2) ④ 내가 정한 PER (somong.yaml my.my_per)
+// 내 엑셀의 적정주가 방법 4가지를 나란히: ① 기본값 ② 보정값 ③ Finviz (성장률 × 1 / 1.25 / 1.5) ④ 내가 정한 PER (somong.yaml my.my_per)
 function waysHTML(c, fmtP) {
   const w = c.scen?.ways, e12 = c.scen?.e12;
   if (!w || !e12) return "";
@@ -286,7 +292,7 @@ function waysHTML(c, fmtP) {
     : age > 90 ? `<div class="warnbox" style="margin-top:6px;border-color:var(--bad);background:var(--bad-bg)">🔴 <b>시킹알파 값 갱신 필요!</b> 마지막 확인 ${esc(c.scen.sa_date)} (${age}일 전) — 한 분기가 지났어요. 실적 발표 뒤 바뀌었을 수 있으니 Growth 탭에서 다시 확인해 주세요.${(c.scen.ways || []).some((w) => w.name === "보정값" && /대체/.test(w.src)) ? " 그동안은 평소 시킹알파와 가장 가까웠던 출처로 대신 계산하고 있어요." : ""}</div>`
     : `<div class="note src">시킹알파 값 확인일 ${esc(c.scen.sa_date || "-")} (${age ?? "-"}일 전) · 90일이 지나면 빨간 표시로 갱신하라고 알려줘요</div>`) : "";
   return `${stale}<div class="chart-title" style="margin-top:8px"><b>적정주가 4가지 비교</b> <span class="src">12MF EPS ${fmtP(e12)} 기준 · ✔ = 위 Bear/Base/Bull 에 쓴 방법 · 업종 PER 로 바꾸기 전 값${(c.scen.parts || []).length > 1 ? " (위 값은 PBR 밴드와 평균이라 다를 수 있어요)" : ""}</span></div>
-    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">방법</th><th>성장률</th><th>Bear ×1</th><th>Base ×1.5</th><th>Bull ×2</th></tr></thead><tbody>${rows}${mine}</tbody></table></div>${cmp}${c.scen.ltg_note ? `<div class="note src">${esc(c.scen.ltg_note)}</div>` : ""}`;
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">방법</th><th>성장률</th><th>Bear ×1</th><th>Base ×1.25</th><th>Bull ×1.5</th></tr></thead><tbody>${rows}${mine}</tbody></table></div>${cmp}${c.scen.ltg_note ? `<div class="note src">${esc(c.scen.ltg_note)}</div>` : ""}`;
 }
 // 시킹알파 3-5Y 성장률을 마지막으로 확인한 뒤 지난 날 수 (직접 입력값이라 분기마다 갱신 필요)
 function saAge(c) {

@@ -879,7 +879,25 @@ TSLA:
     - n: 미국
       v: {25.3Q: 20.4, 25.4Q: 22.6, 26.1Q: 24.8, 26.2Q: 26.2, 26.3Q: 26.8}
     why: 하이브리드는 값이 비싸고 이익이 커서 비중이 오르면 믹스(차종 구성)가 좋아짐
+  - t: 친환경차 도매 판매 — 하이브리드 늘고 전기차 줄고
+    u: 천 대
+    s:
+    - n: 하이브리드(HEV)
+      v: {25.3Q: 161, 25.4Q: 168, 26.1Q: 174, 26.2Q: 188, 26.3Q: 167}
+    - n: 전기차(EV)
+      v: {25.3Q: 76, 25.4Q: 57, 26.1Q: 59, 26.2Q: 69, 26.3Q: 69}
+    - n: 플러그인(PHEV)
+      v: {25.3Q: 11, 25.4Q: 8, 26.1Q: 8, 26.2Q: 8, 26.3Q: 7}
+    why: "3Q26 하이브리드 161 → 167천 대 (+3.7%, 미국 +18.4%) · 전기차 76 → 69천 대 (-9.2%) · 전체 도매가 -11.3% 인데 하이브리드는 늘어 비중 18.2% (회사 IR 3Q26 p.9 '친환경차 판매')"
+  - t: 판매보증비 (판매관리비 안)
+    u: 조원
+    s:
+    - n: 판매보증비
+      v: {24.4Q: 1.25, 25.1Q: 0.90, 25.2Q: 0.90, 25.3Q: 1.26, 25.4Q: 0.98, 26.1Q: 0.93, 26.2Q: 0.96, 26.3Q: 0.03}
+    why: "해외 판매분 보증 충당부채는 분기말 환율로 다시 계산돼요 — 원화가 강해지면 줄고 약해지면 늘어요 · 3Q26 340억 = 원화 급강세(달러 -12.6%)로 평소(분기 0.9~1.3조)보다 약 1조 덜 나가 영업이익을 크게 키운 회계 효과 (판관비 -19.2% 의 대부분)"
+    note: "회사 IR '판매관리비 구성'(급여·마케팅·판매보증비·경상연구비·기타) 표의 십억원 숫자 — 다섯 항목 합 = 판매관리비로 맞춰 봄 · 원화가 다시 약해지면 반대로 판매보증비가 튀어 이익을 깎을 수 있어요"
   src:
+  - {t: 3Q26 실적발표 PDF (DART 첨부, 판매관리비 구성 p.13·친환경차 p.9), u: 'https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261029800228'}
   - {t: 2Q26 실적발표 PDF (회사 IR), u: 'https://www.hyundai.com/content/dam/hyundai/ww/en/images/company/investor-relations/ir-events/pdf/ko/2026/q2-2026-earnings-call-pt-final-ko.pdf'}
   - {t: 1Q26 실적발표 PDF (회사 IR), u: 'https://www.hyundai.com/content/dam/hyundai/ww/en/images/company/investor-relations/ir-events/pdf/ko/2026/q1-2026-earnings-call-pt-final-ko.pdf'}
   - {t: 4Q25 실적발표 PDF (회사 IR), u: 'https://www.hyundai.com/content/dam/hyundai/ww/en/images/company/investor-relations/ir-events/pdf/ko/2026/q4-2025-earnings-call-pt-ko.pdf'}

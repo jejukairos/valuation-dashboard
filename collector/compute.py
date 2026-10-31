@@ -149,12 +149,16 @@ def cons_growth(hist, y0, key="eps"):
     return g, f"컨센서스 {'영업이익' if key == 'op' else 'EPS'} {txt} → {how}"
 
 
+# 성장률 방식 적정 PER = 성장률 × (하방, 적정, 최대) — 사용자 2026-10-31: 상방 × 2 는 너무 커서 × 1 · 1.25 · 1.5 (모든 종목)
+GROWTH_MULT = {"bear": 1, "base": 1.25, "bull": 1.5}
+
+
 def growth_fair(hist, adj_candidates=(), force_adj=False):
     """내 엑셀 '소몽의 적정주가 템플릿' 방식의 적정 PER.
     평균성장률 = 21년~올해(E) EPS 전년 대비 성장률의 중앙값 (코로나·기저효과·금리 급등기 튀는 해의 영향을 줄임).
     역성장한 해가 있거나 성장률이 50% 를 넘으면(이익 변동이 너무 큼) 보정값(앞으로 3~5년 연평균 성장률 추정) 사용.
     force_adj: 보정값이 있으면 늘 보정값 (한국 = 컨센서스 3년 영업이익 성장률).
-    적정 PER: Bear(하방) = 성장률 × 1, Base(적정주가) = × 1.5, Bull(최대, 금리가 다시 내려갈 때) = × 2."""
+    적정 PER: Bear(하방) = 성장률 × 1, Base(적정주가) = × 1.25, Bull(최대) = × 1.5 (GROWTH_MULT) — 강세장 칸은 × 1.5 · 1.75 · 2."""
     y = now_kst().year
     years = list(range(y - 6, y + 3))
     eps = {yy: (hist.get(yy) or {}).get("eps") for yy in years}
@@ -184,7 +188,7 @@ def growth_fair(hist, adj_candidates=(), force_adj=False):
     else:
         return None
     return {"g": rnd(g, 1), "src": src, "median": rnd(med, 1), "adj": rnd(adj_v, 1), "adj_src": adj_src,
-            "mult": {"bear": rnd(g, 1), "base": rnd(g * 1.5, 1), "bull": rnd(g * 2, 1)},
+            "mult": {k: rnd(g * f, 1) for k, f in GROWTH_MULT.items()},
             "years": [ylabel(yy) if (hist.get(yy) or {}).get("estimate") else str(yy)[2:] for yy in years],
             "eps": [eps[yy] for yy in years], "yoy": [None] + [rnd(yoy.get(yy), 1) for yy in years[1:]],
             "window": f"{str(y - 5)[2:]}~{str(y)[2:]}E"}
@@ -239,7 +243,7 @@ def too_high(m, e12, price, band, sector=None, sec_name=None):
 
 def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
     """적정주가 Bear(하방) / Base(적정주가) / Bull(최대): 12개월 선행(12MF) EPS·BPS × 배수.
-    PER 배수는 성장률 방식(growth_fair: 성장률 × 1 / 1.5 / 2)이 있으면 그것, 업종 배수(sectors.yaml)를 고른 종목은 그것,
+    PER 배수는 성장률 방식(growth_fair: 성장률 × 1 / 1.25 / 1.5)이 있으면 그것, 업종 배수(sectors.yaml)를 고른 종목은 그것,
     둘 다 없으면 그 종목의 10년 밴드 하단·평균·상단. PBR 은 10년 밴드. PER·PBR 둘 다 쓰는 종목은 평균."""
     parts = []
     for kind in kinds:
@@ -250,7 +254,7 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
         if kind == "PER" and per_growth:
             m = dict(per_growth["mult"])
             src = per_growth.get("part_src") or f"성장률 {per_growth['g']:g}%"
-            how = per_growth.get("how") or f"{per_growth.get('label') or '성장률'} {per_growth['g']:g}% × 1 · 1.5 · 2"
+            how = per_growth.get("how") or f"{per_growth.get('label') or '성장률'} {per_growth['g']:g}% × " + " · ".join(f"{f:g}" for f in GROWTH_MULT.values())
         elif sector and sector.get("kind", "PER").upper() == kind:
             t = sector.get("tight") if kind == "PER" else None
             m = dict(zip(("bear", "base", "bull"), t)) if t else {k: sector[k] for k in ("bear", "base", "bull")}
