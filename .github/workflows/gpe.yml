@@ -1,4 +1,4 @@
-name: 글로벌 동종 12MF PER
+name: 글로벌 동종 12MF PER · 직원 수
 
 on:
   schedule:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["collector/global_pe.py", "config/global_peers.yaml", ".github/workflows/gpe.yml"]
+    paths: ["collector/global_pe.py", "collector/employees.py", "config/global_peers.yaml", ".github/workflows/gpe.yml"]
 
 permissions:
   contents: write
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   gpe:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,12 +33,19 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: cd collector && python -u global_pe.py
+      - name: 👥 직원 수 (한국 DART 직원 현황 · 미국 연간 보고서 숫자)
+        if: always()
+        env:
+          DART_KEY: ${{ secrets.DART_KEY }}
+          PYTHONIOENCODING: utf-8
+        run: cd collector && python -u employees.py
       - name: 저장
         if: always()
         run: |
           git config user.name "valuation-bot"
           git config user.email "valuation-bot@users.noreply.github.com"
-          git add site/data/global_pe.json 2>/dev/null || true
+          git add site/data/global_pe.json site/data/employees.json 2>/dev/null || true
+          git add cache/demp_*.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "글로벌 동종 12MF PER $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done

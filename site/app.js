@@ -2274,7 +2274,7 @@ function kpiStack(ch) {
   });
   g += tipCols((i) => x0 + bw * i + bw / 2, bw, 0, 160, ks.map((k, i) => [`${k}${k === String(ch.ytd) ? " (YTD)" : ""}`, ...ch.s.map((s) => (s.v?.[k] ? `${s.n}: ${kpiF(rnd1(s.v[k]), ch.u)}` : null)), ch.s.length > 1 ? `합계: ${kpiF(rnd1(tot[i]), ch.u)}` : null].filter(Boolean).join("\n")));
   const leg = `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">■</span> ${esc(s.n)}`).join(" · ")}${ch.ytd_note ? ` · YTD = ${esc(ch.ytd_note)}` : ""}${ch.note ? ` · ${esc(ch.note)}` : ""}</div>`;
-  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b>${ch.tag || ""}</div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}</div>`;
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b>${ch.tag || ""}</div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
 const rnd1 = (v) => Math.round(v * 10) / 10;
 // 📊 분기 매출 · 영업이익 · 영업이익률 한 그림 (막대 두 개 + 위에 영업이익률 선, 최근 5분기 실적)
@@ -2470,12 +2470,30 @@ function dilHTML(d) {
       : "희석 가중평균 주식 수 (주식 보상·전환사채 포함) · 최근 분기 야후, 예전 분기 SEC (예전 4분기는 연간·9개월 평균으로 계산한 근사값)",
     note: g >= 5 ? "⚠ 1년 새 5% 넘게 늘었어요 — 증자·주식 보상이 이익 성장을 깎아 먹는지 확인" : "" });
 }
+// 👥 직원 수 (data/employees.json ← collector/employees.py): AI 시대엔 직원이 늘어나는지·줄어드는지 + 1인당 매출 — 모든 종목
+let EMP = null;
+function empHTML(d) {
+  const e = EMP?.stocks?.[d.code] || EMP?.stocks?.[KPI_ALIAS[d.code]], pts = Object.entries(e?.pts || {}).sort();
+  if (pts.length < 2) return "";
+  const yearly = new Set(pts.map(([ds]) => ds.slice(5, 7))).size === 1;  // 한 해 한 번(미국 회계연도 말)이면 칸 이름은 연도만
+  const big = Math.max(...pts.map((p) => p[1])) >= 1e4, lab = (ds) => (yearly ? ds.slice(0, 4) : `${ds.slice(2, 4)}.${ds.slice(5, 7)}`);  // 1만 명 넘으면 '만명'으로 (막대 위 글자가 겹치지 않게)
+  const v = Object.fromEntries(pts.map(([ds, x]) => [lab(ds), big ? x / 1e4 : x]));
+  const [d1, n1] = pts.at(-1), prev = pts.filter(([ds]) => ds <= `${+d1.slice(0, 4) - 1}${d1.slice(4)}`).at(-1), yoy = prev ? (n1 / prev[1] - 1) * 100 : null;
+  const usd = d.currency === "USD", L = d.longq || {}, revY = (y) => { const q = [1, 2, 3, 4].map((k) => L[`${String(y).slice(2)}.${k}Q`]?.rev); return q.every((x) => x != null) ? q.reduce((a, x) => a + x, 0) : null; };
+  const yE = +d1.slice(0, 4) - (+d1.slice(5, 7) < 12 ? 1 : 0), per = (y) => { const r = revY(y), p = pts.filter(([ds]) => ds.startsWith(String(y))).at(-1) || pts.filter(([ds]) => ds.startsWith(String(y + 1))).at(0); return r && p ? r / p[1] : null; };
+  const p1 = per(yE), p0 = per(yE - 1), pf = (x) => (usd ? `$${n(x * 1e6 / 1e3, 0)}K` : `${n(x, 1)}억원`);
+  const note = p1 ? `1인당 매출 ${yE}년 ${pf(p1)}${p0 ? ` (1년 전 ${pf(p0)}, ${pct((p1 / p0 - 1) * 100, 0, true)})` : ""}` : "";
+  return kpiStack({ kind: "stack", t: `👥 직원 수 ${big ? n(n1 / 1e4, 1) + "만" : n(n1)}명${yoy != null ? ` · 1년 새 ${pct(yoy, 1, true)}` : ""}`, u: big ? "만" : "명", s: [{ n: "직원 수", v }],
+    why: `${e.src || ""}${e.stale ? " · 이번엔 못 받아 직전 값" : ""} · 날짜 = 회계연도 말(한국은 12월 말·6월 말)`, note,
+    kid: "AI 로 같은 일을 더 적은 사람이 하게 되면, 직원 수는 그대로거나 줄어도 매출은 늘어요. 그래서 직원 수와 '1인당 매출'이 같이 오르는지(혹은 직원은 줄고 1인당 매출은 오르는지)가 AI 시대의 핵심 신호예요." });
+}
 async function kpiBlock(code, d) {
   if (KPI === null) { try { KPI = (await (await fetch("data/kpi.json?v=" + encodeURIComponent(DASH.updated_at))).json()) || {}; } catch (_) { KPI = {}; } }
+  if (EMP === null) { try { EMP = (await (await fetch("data/employees.json?t=" + Date.now(), { cache: "no-store" })).json()) || {}; } catch (_) { EMP = {}; } }
   const k = KPI[code] || KPI[KPI_ALIAS[code]] || { charts: [], auto: true };  // kpi.yaml 에 없는 종목도 자동 그림(손익·매출 성장률·현금흐름·주식 수)은 보여 줌
   const ch = k.charts.map(kpiChart);
   ch.unshift(comboHTML(d), revYoyHTML(d, k));  // 맨 앞: 분기 매출·영업이익·영업이익률 (+ kpi.yaml 에 없으면 매출 성장률)
-  ch.splice(3, 0, opYoyHTML(d, k), fcfBars(d, k), dilHTML(d), annualOpmHTML(d));  // 매출 성장률 다음에 영업이익 성장률 · 현금흐름 · 주식 수 증가율 · 연간 매출 & 영업이익률
+  ch.splice(3, 0, opYoyHTML(d, k), fcfBars(d, k), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 매출 성장률 다음에 영업이익 성장률 · 현금흐름 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
   if (!ch.some(Boolean)) return "";
   return `<h3>🔑 핵심 지표 <span class="src">${k.auto ? "자동 계산 — 분기 실적·현금흐름·주식 수 (사업부별 숫자는 아직 안 넣음)" : `${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김`}</span></h3><div class="card kpi">
     ${k.key ? `<div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key)}</div>` : ""}
