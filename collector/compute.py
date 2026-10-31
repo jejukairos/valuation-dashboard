@@ -226,6 +226,9 @@ def too_high(m, e12, price, band, sector=None, sec_name=None):
     why = (f"성장률 PER {m['bear']:g}배가 {cap:g}배를 넘어 의미가 없어서" if over else
            f"성장률 PER {m['bear']:g}배로 잡은 하방이 지금 가격보다 {(e12 * m['bear'] / price - 1) * 100:.0f}% 높아서")
     if sector and str(sector.get("kind", "PER")).upper() == "PER":
+        t = sector.get("tight")  # 긴축·약세장 보수 배수 [하방, 적정, 상방] (sectors.yaml) — 없으면 바닥 · 보통 · 최고
+        if t:
+            return dict(zip(("bear", "base", "bull"), t)), f"{sec_name} 업종 PER 긴축·약세장 보수 배수 ({' · '.join(f'{x:g}' for x in t)}) — {why}"
         return {k: sector[k] for k in ("bear", "base", "bull")}, f"{sec_name} 업종 PER (바닥 · 보통 · 최고) — {why}"
     st = (band or {}).get("periods", {})
     st = st.get("10y") or st.get("all") or {}
@@ -249,9 +252,10 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
             src = per_growth.get("part_src") or f"성장률 {per_growth['g']:g}%"
             how = per_growth.get("how") or f"{per_growth.get('label') or '성장률'} {per_growth['g']:g}% × 1 · 1.5 · 2"
         elif sector and sector.get("kind", "PER").upper() == kind:
-            m = {k: sector[k] for k in ("bear", "base", "bull")}
+            t = sector.get("tight") if kind == "PER" else None
+            m = dict(zip(("bear", "base", "bull"), t)) if t else {k: sector[k] for k in ("bear", "base", "bull")}
             src = sector["name"]
-            how = f"{src} 업종 PER (바닥 · 보통 · 최고)"
+            how = f"{src} 업종 PER " + (f"긴축·약세장 보수 배수 ({' · '.join(f'{x:g}' for x in t)})" if t else "(바닥 · 보통 · 최고)")
         else:
             b = bands.get(kind) or {}
             st = b.get("periods", {}).get("10y") or b.get("periods", {}).get("all") or {}
@@ -262,8 +266,12 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
             how = f"{src} {kind} 하단(하위 10%) · 평균 · 상단(상위 10%)"
         # 🐂 강세장(금리가 내려가 돈이 풀릴 때) 범위: 성장률 방식은 성장률 × 1.5 ~ × 2, 업종·밴드 PER 은 보통 ~ 보통 × 2 (10·20·30 → 20~40),
         #    PBR 은 보통 ~ 최고
+        #    업종에 easy [하방, 적정, 상방] 을 적으면 강세장 칸은 그 배수 그대로 (화장품 브랜드 15 · 22.5 · 30)
         grow = kind == "PER" and per_growth and not per_growth.get("part_src")
-        bm = ({"lo": per_growth["g"] * 1.5, "hi": per_growth["g"] * 2} if grow else
+        ez = ((per_growth or {}).get("easy") if kind == "PER" and per_growth else
+              sector.get("easy") if kind == "PER" and sector and src == sector.get("name") else None)
+        bm = ({"lo": ez[0], "hi": ez[-1]} if ez else
+              {"lo": per_growth["g"] * 1.5, "hi": per_growth["g"] * 2} if grow else
               {"lo": m["base"], "hi": m["base"] * 2} if kind == "PER" else {"lo": m["base"], "hi": m["bull"]})
         cap, over = None, {}
         if kind == "PER":  # 12MF PER 35배 넘는 칸은 의미가 없다고 봐서 35배로 다시 계산 (⚠ 표시)
@@ -271,7 +279,7 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
             over = {k: rnd(x, 1) for k, x in {**m, **{"bm_" + kk: vv for kk, vv in bm.items()}}.items() if x and x > cap}
             m = {k: min(x, cap) for k, x in m.items()}
             bm = {k: min(x, cap) for k, x in bm.items()}
-        bm["mid"] = (bm["lo"] + bm["hi"]) / 2  # 강세장 Base = 하방·상방 가운데 (성장률 × 1.75)
+        bm["mid"] = min(ez[1], cap or ez[1]) if ez else (bm["lo"] + bm["hi"]) / 2  # 강세장 Base = 하방·상방 가운데 (성장률 × 1.75)
         parts.append({"kind": kind, "base_val": rnd(v, 2), "mult": {k: rnd(x, 2) for k, x in m.items()}, "src": src, "how": how,
                       "price": {k: v * x for k, x in m.items()}, "bm": {k: rnd(x, 2) for k, x in bm.items()},
                       "bm_price": {k: v * x for k, x in bm.items()}, **({"capped": {"max": cap, "from": over}} if over else {})})
@@ -508,6 +516,14 @@ if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% �
     assert s["bull_mkt"] == {"lo": 20000, "mid": 27500, "hi": 35000} and s["parts"][0]["capped"]["from"] == {"bm_hi": 40}, s
     s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 25, "mult": {"bear": 25, "base": 37.5, "bull": 50}})
     assert (s["bear"], s["base"], s["bull"]) == (25000, 35000, 35000) and s["bull_mkt"] == {"lo": 35000, "mid": 35000, "hi": 35000}, s
+    # 업종에 tight·easy 를 적으면 (화장품 브랜드): 긴축 10 · 15 · 20, 강세장 15 · 22.5 · 30
+    sec2 = {**sec, "tight": [10, 15, 20], "easy": [15, 22.5, 30]}
+    t2 = too_high(m, 1000, 15000, band, sec2, "화장품 브랜드")
+    assert t2[0] == {"bear": 10, "base": 15, "bull": 20} and "보수" in t2[1], t2
+    s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 20, "mult": t2[0], "part_src": "화장품 브랜드 업종 PER", "easy": [15, 22.5, 30]})
+    assert (s["bear"], s["base"], s["bull"]) == (10000, 15000, 20000) and s["bull_mkt"] == {"lo": 15000, "mid": 22500, "hi": 30000}, s
+    s = scenarios(10000, h, {}, ["PER"], sector={**sec2, "name": "화장품 브랜드"})
+    assert (s["base"], s["bull_mkt"]["mid"]) == (15000, 22500), s
     # 하방부터 35배를 넘는 성장률(39.6%)은 성장률 방식 대신 PER 밴드로 (두산에너빌리티)
     assert too_high({"bear": 39.6, "base": 59.4, "bull": 79.2}, 919, 56500, band)[0] == {"bear": 8, "base": 15, "bull": 25}
     print("ok")

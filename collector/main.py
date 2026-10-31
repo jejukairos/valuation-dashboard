@@ -245,6 +245,8 @@ def stock_detail(h, rates_now, fx):
             pg["raw"], pg["how"] = dict(pg["mult"]), hi[1]
             pg["mult"] = {k: rnd(v, 1) for k, v in hi[0].items()}
             pg["part_src"] = f"{h['sector']} 업종 PER" if "업종" in hi[1] else "PER 밴드"
+            if "업종" in hi[1] and (SECTORS.get(h.get("sector")) or {}).get("easy"):
+                pg["easy"] = SECTORS[h["sector"]]["easy"]  # 🐂 강세장 칸 업종 배수 (sectors.yaml easy)
     scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg)
     if scen and pg:
         scen["growth"] = pg
@@ -273,7 +275,7 @@ def stock_detail(h, rates_now, fx):
         scen["regime"] = (rates_now.get("regime") or {}).get(mkt)  # 🐂 강세장 칸 옆에 '지금 시장' 표시용
         s_ = SECTORS.get(h.get("sector")) or {}
         scen["rerating"] = h.get("rerating") or s_.get("rerating")
-        scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "history", "notes")}} if s_ else None
+        scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "tight", "easy", "history", "notes")}} if s_ else None
         if mkt == "KR":
             try:
                 scen["ind"] = kr_stock.sector_per(str(h.get("data_code") or code))

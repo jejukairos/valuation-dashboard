@@ -183,7 +183,7 @@ function scenHTML(c) {
     <div class="chart-title" style="margin-top:12px"><b>① 앞으로 실적으로 본 적정주가</b> <span class="src">${baseOf(s.parts, "12MF")}</span></div>
     ${tabs}
     <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}</div>
-    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · 성장률 × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)</div></div>` : ""}
+    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${s.sector?.easy && (s.parts || []).some((p) => /업종/.test(p.src || "")) ? `업종 PER ${s.sector.easy.map((x) => n(x, 1)).join(" · ")}배 (sectors.yaml easy)` : "성장률 × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)"}</div></div>` : ""}
     ${regLine}
     ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}${c.notes?.y2?.length ? ` · 🗒 메모 ${c.notes.y2.length}` : ""}</span></summary>${scenBoxes(s.y2, s.y2.parts)}${notesHTML(c.notes?.y2, c, s.y2)}</details>` : ""}
     ${multHTML(s)}
@@ -232,6 +232,7 @@ function floorHTML(c) {
   const warn = s.bear > c.price * 1.5 ? `<div class="warnbox" style="margin-top:6px">⚠ 하방(Bear)이 지금 가격보다 ${pct((s.bear / c.price - 1) * 100, 0)} 높아요. 추정 EPS 가 너무 높거나 이익이 한 해 튄 건 아닌지 확인이 필요해요.</div>` : "";
   const out = [];
   if (sec) out.push(`<div class="note src">🏷 ${esc(sec.name)} PER 역사: 바닥 ${n(sec.bear, 1)} · 보통 ${n(sec.base, 1)} · 최고 ${n(sec.bull, 1)}배${sec.history ? ` — ${esc(sec.history)}` : ""}</div>`);
+  if (sec?.tight) out.push(`<div class="note">📏 적정주가에 쓰는 배수 (사용자 원칙): 🔴 긴축·약세장 <b>${sec.tight.map((x) => n(x, 1)).join(" · ")}배</b> · 🐂 강세장 <b>${(sec.easy || []).map((x) => n(x, 1)).join(" · ")}배</b> <span class="src">— 하락장엔 지금 PER 근처에서 보수적으로, 금리 인하·수급이 들어올 때 넓힘</span></div>`);
   (sec?.notes || []).forEach((x) => out.push(`<div class="note src">📝 ${esc(x.date)} ${esc(x.source)}: ${esc(x.text)}</div>`));
   if (ind && (ind.per || ind.peer_med)) out.push(`<div class="note src">🏭 네이버 업종 PER${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 최근 4분기 ${ind.per == null ? "-" : n(ind.per, 1) + "배"}${ind.peer_med ? ` · 같은 업종 ${ind.peers.length}곳 중앙값 <b>${n(ind.peer_med, 1)}배</b> (${ind.peers.filter((p) => p.per).map((p) => `${esc(p.name)} ${n(p.per, 1)}${p.fwd ? "" : "*"}`).join(" · ")})` : ""}${ind.peers.some((p) => p.per && !p.fwd) ? " <span>* 추정치 없어 현재 PER</span>" : ""}</div>`);
   if (s.rerating) out.push(`<div class="note src">🔁 리레이팅: ${esc(s.rerating)}</div>`);
