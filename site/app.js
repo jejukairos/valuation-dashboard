@@ -506,13 +506,13 @@ function renderCards() {
   jumpBar("#stockCards", "#cardJump");
 }
 // 🔎 종목 찾기 줄: 아래에 그려진 [data-jump] 칸들로 이름 목록을 만들고, 이름을 누르거나 검색하면 그 칸으로 스크롤 (실적 탭·보유 탭)
-function jumpBar(rootSel, barSel) {
+function jumpBar(rootSel, barSel, ph = "🔎 종목 이름 검색 (예: 에이피알) → Enter") {
   const root = $(rootSel), bar = $(barSel);
   if (!root || !bar) return;
   const seen = new Map();  // 종목마다 첫 칸으로
   root.querySelectorAll("[data-jump]").forEach((el) => { if (!seen.has(el.dataset.jump)) seen.set(el.dataset.jump, [el.dataset.jname || el.dataset.jump, el]); });
   if (seen.size < 2) { bar.innerHTML = ""; return; }
-  bar.innerHTML = `<div class="jumpbar"><input type="search" placeholder="🔎 종목 이름 검색 (예: 에이피알) → Enter" aria-label="종목 검색" autocomplete="off">
+  bar.innerHTML = `<div class="jumpbar"><input type="search" placeholder="${esc(ph)}" aria-label="검색" autocomplete="off">
     <div class="chips">${[...seen].map(([c, [nm]]) => `<button class="chip" data-to="${esc(c)}">${esc(nm)}</button>`).join("")}</div></div>`;
   const go = (c) => {
     const el = seen.get(c)?.[1];
@@ -2823,20 +2823,41 @@ function globalPeHTML(d) {
     <div class="note src">${esc(GPE.how || "")} · 우리 종목: 이번·다음 해 EPS 를 섞되, 3개월 넘은 과거 칸은 그때까지 발표된 분기 영업이익으로 어림한 이익의 0.6~1.6배 안으로 묶음 · ⚠ 과거 칸은 '그때 증권사 예상'이 아니라 어림이라 리포트 그림과 다를 수 있어요 (지금 칸은 컨센서스 그대로) · 작은 글씨 = config/global_peers.yaml notes (+ 할인·프리미엄이 가장 컸던 때·지금은 자동)</div></div>`;
 }
 // 🏭 산업 탭: 업종마다 글로벌 대표 3~6곳 12MF PER + 가운데 값
-function gpeIndHTML() {
-  const gs = Object.entries(GPE?.groups || {});
-  if (!gs.length) return "";
+// 🏭 산업 탭 업종 칸 하나: 🌍 글로벌 대표 기업 12MF PER (config/global_peers.yaml 그룹)
+function gpeCard(k) {
+  const g = GPE?.groups?.[k], ds = Object.keys(g?.avg || {}).sort();
+  if (ds.length < 12) return "";
   const nm = (c) => DASH.stocks.find((x) => x.code === c)?.name || c;
-  return `<h2>🌍 업종별 글로벌 대표 기업 12MF PER <span class="src">${esc(GPE.updated_at || "")} · 주간 · 야후</span></h2>
-    <div class="note src">업종마다 세계 대표 회사 3~6곳의 12개월 선행 PER · 검은 점선 = 가운데 값(중앙값) · 우리 종목과의 할인·프리미엄은 종목 상세 맨 위 '🌍 글로벌 동종 대비' 그림 · ${esc(GPE.how || "")}</div>
-    <div class="grid g2">${gs.map(([k, g]) => {
-      const ds = Object.keys(g.avg).sort();
-      if (ds.length < 12) return "";
-      const lines = g.peers.map((p, i) => ({ n: p.n, v: ds.map((x) => p.pe[x] ?? null), col: GPE_COL[i % GPE_COL.length], w: 1.6 })).concat([{ n: "가운데 값", v: ds.map((x) => g.avg[x]), col: "var(--ink)", w: 2.6, dash: "5 3" }]);
-      return `<div class="card"><b>${esc(k)}</b> <span class="src">${esc(g.title)}</span>
-        <div class="note" style="margin-top:2px">지금 가운데 값 <b>${n(g.avg[ds.at(-1)], 1)}배</b> · ${g.peers.map((p) => `${esc(p.n)} ${p.now == null ? "-" : n(p.now, 1) + "배"}`).join(" · ")}</div>
-        ${gpeChart(ds, lines)}${g.codes.length ? `<div class="src">우리 종목: ${g.codes.map((c) => `<a href="#stock/${esc(c)}">${esc(nm(c))}</a>`).join(" · ")}</div>` : ""}</div>`;
-    }).join("")}</div>`;
+  const lines = g.peers.map((p, i) => ({ n: p.n, v: ds.map((x) => p.pe[x] ?? null), col: GPE_COL[i % GPE_COL.length], w: 1.6 })).concat([{ n: "가운데 값", v: ds.map((x) => g.avg[x]), col: "var(--ink)", w: 2.6, dash: "5 3" }]);
+  return `<h3>🌍 글로벌 대표 기업 12MF PER <span class="src">${esc(g.title)} · 주간 · 야후 · ${esc(GPE.updated_at || "")}</span></h3><div class="card">
+    <div class="note" style="margin-top:0">지금 가운데 값 <b>${n(g.avg[ds.at(-1)], 1)}배</b> · ${g.peers.map((p) => `${esc(p.n)} ${p.now == null ? "-" : n(p.now, 1) + "배"}`).join(" · ")}</div>
+    ${gpeChart(ds, lines)}${g.codes.length ? `<div class="src">우리 종목과 할인·프리미엄은 종목 상세 맨 위 '🌍 글로벌 동종 대비': ${g.codes.map((c) => `<a href="#stock/${esc(c)}">${esc(nm(c))}</a>`).join(" · ")}</div>` : ""}
+    <div class="note src">검은 점선 = 가운데 값(중앙값) · ${esc(GPE.how || "")}</div></div>`;
+}
+// 📦 라면·화장품 수출 (config/exports.yaml → data/exports.json): 이번 달 나라별 표(전년·전월비, 영업일수 감안 일평균) + 2020년부터 월별 금액 + 전년비
+let EXP = null;
+const EXP_K = { ramen: ["🍜 라면 수출", "HS 1902.30", ["전체", "미국", "중국", "일본"]], cosmetics: ["💄 화장품 수출", "HS 3304", ["전체", "미국", "중국", "일본", "영국"]] };
+function expHTML(kind) {
+  const E = EXP?.[kind], L = EXP?.latest, [title, hs, show] = EXP_K[kind];
+  if (!E || !L) return "";
+  const dy = (yy) => ((1 + yy / 100) * L.days.ly / L.days.this - 1) * 100;  // 영업일수 감안 일평균 전년비
+  const tbl = (k, nm) => (L[k] ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(nm)}</th><th>${esc(L.ym)}</th><th>전년비</th><th>전월비</th><th>일평균 전년비</th></tr></thead><tbody>
+    ${Object.entries(L[k]).map(([c, [v, yy, mm]]) => `<tr><td style="text-align:left">${esc(c)}</td><td><b>$${n(v, 1)}m</b></td><td class="${kcol(yy)}">${sg(yy)}</td><td class="${kcol(mm)}">${sg(mm)}</td><td class="${kcol(dy(yy))}">${sg(dy(yy))}</td></tr>`).join("")}</tbody></table></div>` : "");
+  const ms = [...new Set(Object.values(E).flatMap((s) => Object.keys(s)))].sort(), all = [];
+  for (let y = +ms[0].slice(0, 4), m = +ms[0].slice(5); `${y}-${String(m).padStart(2, "0")}` <= ms.at(-1); m === 12 ? (y++, m = 1) : m++) all.push(`${y}-${String(m).padStart(2, "0")}`);
+  // 연도별 같은 달 비교 (가로 1~12월, 해마다 선 하나 · 올해만 주황 굵게 — 사용자 전달 그림 모양)
+  const yrs = [...new Set(ms.map((x) => x.slice(0, 4)))].sort(), YC = ["#c7d9f2", "#9cc0ea", "#6fa2de", "#4383cf", "#2563b0", "#173f7a"];
+  const season = (c) => (E[c] ? lineChart({ t: `${c} 월별 수출 — 연도별 같은 달 비교`, labels: Array.from({ length: 12 }, (_, i) => `${i + 1}월`), fl: (v) => n(v, 0),
+    s: yrs.map((y, i) => ({ n: `${y}년`, v: Array.from({ length: 12 }, (_, m) => E[c][`${y}-${String(m + 1).padStart(2, "0")}`] ?? null), col: i === yrs.length - 1 ? "#e8692f" : YC[Math.max(0, YC.length - (yrs.length - 1) + i)] })),
+    tick: (i) => (i % 2 === 0 ? `${i + 1}월` : "") }) : "");
+  const ago = (x) => `${+x.slice(0, 4) - 1}${x.slice(4)}`, yoy = all.slice(-36);
+  const ylines = show.slice(0, 3).filter((c) => E[c]).map((c, i) => ({ n: c, v: yoy.map((x) => (E[c][x] && E[c][ago(x)] ? (E[c][x] / E[c][ago(x)] - 1) * 100 : null)), col: i ? GPE_COL[(i - 1) % GPE_COL.length] : "var(--ink)" }));
+  return `<h3 id="kc-exp-${kind}">${title} <span class="src">${hs} · 월별 · 백만 달러 · ${esc(L.src || "")}</span></h3><div class="card">
+    ${tbl(kind, "나라")}${kind === "cosmetics" ? `<details class="fvt"><summary class="chart-title">기초(스킨케어) · 색조(메이크업·립·아이) 나눠 보기</summary>${tbl("skincare", "기초")}${tbl("makeup", "색조")}</details>` : ""}
+    <div class="src">영업일수 ${L.days.this}일 (전월 ${L.days.prev}일 · 작년 ${L.days.ly}일) · 일평균 전년비 = 영업일수를 맞춘 비교</div>
+    <div class="qgrid">${season("전체")}${season("미국")}</div>
+    ${lineChart({ t: "전년 같은 달 대비 %", labels: yoy, s: ylines, fl: (v) => `${n(v, 0)}%`, zero: true, tick: (i) => (yoy[i].endsWith("-01") ? `'${yoy[i].slice(2, 4)}` : "") })}
+    <div class="note src">2020-01~2025-12 = UN Comtrade (관세청이 UN 에 보낸 숫자라 발표와 조금 다를 수 있음) · 2026 = 사용자가 보내 주는 관세청 월간 글 (2026-01~08 은 아직 빈칸)</div></div>`;
 }
 function per12mfHTML(d) {
   if (!(d.methods || []).includes("PER")) return "";
@@ -3194,7 +3215,9 @@ async function openStock(code) {
     const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     try { await gpeGet(); } catch (_) { /* 🌍 글로벌 비교 그림만 빠짐 */ }
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    const EXP_CODE = { "003230": ["ramen", "🍜 라면 수출"], "278470": ["cosmetics", "💄 화장품 수출"], "483650": ["cosmetics", "💄 화장품 수출"] }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
+    const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
@@ -3720,7 +3743,18 @@ async function loadIndustry() {
   if (!DEF) { try { DEF = await (await fetch("data/defense.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { DEF = {}; } }
   await keyLoad();
   try { await gpeGet(); } catch (_) { /* 🌍 업종별 글로벌 PER 만 빠짐 */ }
-  $("#industryBody").innerHTML = gpeIndHTML() + capexHTML() + keyIndHTML() + costIndHTML() + defenseHTML() + amzHTML();  // 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭으로
+  if (!EXP) { try { EXP = await (await fetch("data/exports.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { EXP = {}; } }
+  // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
+  const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
+  const secs = [["💄 화장품", () => expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
+    ["🍜 라면·음식료", () => expHTML("ramen")],
+    ["💾 반도체", () => key("반도체")], ["🧱 기판·CCL", () => key("기판") + gpeCard("CCL·기판")],
+    ["🛡 방산", () => key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
+    ["🏬 백화점", () => gpeCard("백화점")], ["🚗 자동차", () => gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
+    .map(([t, f]) => [t, f()]);
+  secs.push(["🔑 그 밖의 업종", Object.keys(K).filter((k) => !used.has(k)).map((k) => keyGroup(k, K[k])).join("")], ["⚖️ 고정비·변동비 (전 업종)", costIndHTML()]);
+  $("#industryBody").innerHTML = secs.filter(([, h]) => h).map(([t, h]) => `<section data-jump="${esc(t)}" data-jname="${esc(t)}" style="margin-top:18px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">${t}</h2>${h}</section>`).join("");
+  jumpBar("#industryBody", "#indJump", "🔎 업종 검색 (예: 화장품) → Enter");
   setTimeout(kcGo, 50);  // 종목 상세에서 '자세한 내용 →' 으로 왔으면 그 카드로
   drawAmz();
 }
