@@ -3721,6 +3721,7 @@ async function loadIndustry() {
   await keyLoad();
   try { await gpeGet(); } catch (_) { /* 🌍 업종별 글로벌 PER 만 빠짐 */ }
   $("#industryBody").innerHTML = gpeIndHTML() + capexHTML() + keyIndHTML() + costIndHTML() + defenseHTML() + amzHTML();  // 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭으로
+  setTimeout(kcGo, 50);  // 종목 상세에서 '자세한 내용 →' 으로 왔으면 그 카드로
   drawAmz();
 }
 // 🔑 키팩터 · 키차트 (config/keychart.yaml): 업종 묶음 = 산업 탭 + 그 업종 종목 상세, 종목 묶음 = 그 종목 상세
@@ -3789,9 +3790,10 @@ function keyTrack(t) {
 }
 function keyCard(c, open) {
   const li = (x) => `<li>${esc(x)}</li>`;
-  return `<details class="card" style="margin-top:8px;background:var(--surface-2)"${open ? " open" : ""}><summary><b>📌 ${esc(c.t)}</b> <span class="src">${esc(c.d || "")}</span></summary>
+  return `<details class="card" style="margin-top:8px;background:var(--surface-2)"${c.id ? ` id="kc-${esc(c.id)}"` : ""}${open ? " open" : ""}><summary><b>📌 ${esc(c.t)}</b> <span class="src">${esc(c.d || "")}</span></summary>
     <div class="qgrid" style="margin-top:6px">${(c.charts || []).map(keyChart).join("")}${(c.wf || []).map(keyWf).join("")}</div>
     ${(c.lines || []).length ? `<ul class="irl">${c.lines.map(li).join("")}</ul>` : ""}${keyTrack(c.track)}
+    ${c.go ? `<div class="note"><a href="#industry" data-kc="${esc(c.go)}">👉 자세한 내용: 산업 탭 '${esc(c.go_t || "전체 카드")}' 보기 →</a></div>` : ""}
     ${(c.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>변곡점 체크</b><ul class="irl">${c.turn.map(li).join("")}</ul></div>` : ""}
     <div class="note src">출처: ${esc(c.src || "")}${(c.u || []).map((x) => ` · <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>`).join("")}</div></details>`;
 }
@@ -3799,7 +3801,22 @@ function keyCard(c, open) {
 function keyGroup(name, g, code) {
   return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}
     ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
-    ${(g.cards || []).map((c) => keyCard(c, !code || [].concat(c.code).includes(code))).join("")}</div>`;
+    ${(g.cards || []).filter((c) => code || !c.stock_only).map((c) => keyCard(c, !code || [].concat(c.code).includes(code))).join("")}</div>`;
+}
+// 종목 상세의 '자세한 내용 →' 링크: 산업 탭으로 가서 그 카드(id="kc-…")를 펼치고 스크롤
+let KC_GO = null;
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-kc]");
+  if (!a) return;
+  KC_GO = a.dataset.kc;
+  if (location.hash === "#industry") { e.preventDefault(); kcGo(); }
+});
+function kcGo() {
+  const el = KC_GO && document.getElementById(`kc-${KC_GO}`);
+  if (!el) return;
+  KC_GO = null;
+  el.open = true;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function keyIndHTML() {
   const I = Object.entries(KEYC?.industry || {});
