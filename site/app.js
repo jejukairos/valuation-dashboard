@@ -2840,9 +2840,9 @@ const EXP_K = { ramen: ["🍜 라면 수출", "HS 1902.30", ["전체", "미국",
 function expHTML(kind) {
   const E = EXP?.[kind], L = EXP?.latest, [title, hs, show] = EXP_K[kind];
   if (!E || !L) return "";
-  const dy = (yy) => ((1 + yy / 100) * L.days.ly / L.days.this - 1) * 100;  // 영업일수 감안 일평균 전년비
-  const tbl = (k, nm) => (L[k] ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(nm)}</th><th>${esc(L.ym)}</th><th>전년비</th><th>전월비</th><th>일평균 전년비</th></tr></thead><tbody>
-    ${Object.entries(L[k]).map(([c, [v, yy, mm]]) => `<tr><td style="text-align:left">${esc(c)}</td><td><b>$${n(v, 1)}m</b></td><td class="${kcol(yy)}">${sg(yy)}</td><td class="${kcol(mm)}">${sg(mm)}</td><td class="${kcol(dy(yy))}">${sg(dy(yy))}</td></tr>`).join("")}</tbody></table></div>` : "");
+  const dy = (yy) => (yy == null ? null : ((1 + yy / 100) * L.days.ly / L.days.this - 1) * 100);  // 영업일수 감안 일평균 전년비 (영업일수는 사용자 글에만 있음)
+  const tbl = (k, nm) => (L[k] ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(nm)}</th><th>${esc(L.ym)}</th><th>전년비</th><th>전월비</th>${L.days ? "<th>일평균 전년비</th>" : ""}</tr></thead><tbody>
+    ${Object.entries(L[k]).map(([c, [v, yy, mm]]) => `<tr><td style="text-align:left">${esc(c)}</td><td><b>$${n(v, 1)}m</b></td><td class="${kcol(yy)}">${sg(yy)}</td><td class="${kcol(mm)}">${sg(mm)}</td>${L.days ? `<td class="${kcol(dy(yy))}">${sg(dy(yy))}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : "");
   const ms = [...new Set(Object.values(E).flatMap((s) => Object.keys(s)))].sort(), all = [];
   for (let y = +ms[0].slice(0, 4), m = +ms[0].slice(5); `${y}-${String(m).padStart(2, "0")}` <= ms.at(-1); m === 12 ? (y++, m = 1) : m++) all.push(`${y}-${String(m).padStart(2, "0")}`);
   // 연도별 같은 달 비교 (가로 1~12월, 해마다 선 하나 · 올해만 주황 굵게 — 사용자 전달 그림 모양)
@@ -2854,10 +2854,10 @@ function expHTML(kind) {
   const ylines = show.slice(0, 3).filter((c) => E[c]).map((c, i) => ({ n: c, v: yoy.map((x) => (E[c][x] && E[c][ago(x)] ? (E[c][x] / E[c][ago(x)] - 1) * 100 : null)), col: i ? GPE_COL[(i - 1) % GPE_COL.length] : "var(--ink)" }));
   return `<h3 id="kc-exp-${kind}">${title} <span class="src">${hs} · 월별 · 백만 달러 · ${esc(L.src || "")}</span></h3><div class="card">
     ${tbl(kind, "나라")}${kind === "cosmetics" ? `<details class="fvt"><summary class="chart-title">기초(스킨케어) · 색조(메이크업·립·아이) 나눠 보기</summary>${tbl("skincare", "기초")}${tbl("makeup", "색조")}</details>` : ""}
-    <div class="src">영업일수 ${L.days.this}일 (전월 ${L.days.prev}일 · 작년 ${L.days.ly}일) · 일평균 전년비 = 영업일수를 맞춘 비교</div>
+    ${L.days ? `<div class="src">영업일수 ${L.days.this}일 (전월 ${L.days.prev}일 · 작년 ${L.days.ly}일) · 일평균 전년비 = 영업일수를 맞춘 비교</div>` : ""}
     <div class="qgrid">${season("전체")}${season("미국")}</div>
     ${lineChart({ t: "전년 같은 달 대비 %", labels: yoy, s: ylines, fl: (v) => `${n(v, 0)}%`, zero: true, tick: (i) => (yoy[i].endsWith("-01") ? `'${yoy[i].slice(2, 4)}` : "") })}
-    <div class="note src">2020-01~2025-12 = UN Comtrade (관세청이 UN 에 보낸 숫자라 발표와 조금 다를 수 있음) · 2026 = 사용자가 보내 주는 관세청 월간 글 (2026-01~08 은 아직 빈칸)</div></div>`;
+    <div class="note src">월별 금액 = 관세청 수출입실적 API (공공데이터포털, 매일 확인 · 확정치는 다음 달 중순쯤) · 아직 API 에 없는 최신 달 = 관세청 월초 발표 (사용자 전달) · 기초 = 기초화장용(3304.99.10) · 색조 = 립 + 아이 + 메이크업용</div></div>`;
 }
 function per12mfHTML(d) {
   if (!(d.methods || []).includes("PER")) return "";

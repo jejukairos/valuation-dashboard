@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "'' = 최근 2년 · full = 2020년부터 · probe = 응답 모양 시험"
+        description: "'' = 2020년부터 다시 받기 · probe = 응답 모양 시험"
         default: ""
 
 permissions:
