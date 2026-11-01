@@ -24,6 +24,10 @@ CN = {"전체": "", "중국": "CN", "홍콩": "HK", "미국": "US", "일본": "J
 HS = {"190230": ({"ramen": ("1902301010",)},["전체", "중국", "미국", "일본", "필리핀", "영국", "러시아", "말레이시아", "네덜란드"]),
       "3304": ({"cosmetics": ("3304",), "skincare": ("3304991",), "makeup": ("330410", "330420", "3304992")},
                ["전체", "중국", "홍콩", "미국", "일본", "폴란드", "영국"])}
+# 💾 반도체·IT (사용자 전달 GS '10월 한국 테크 수출', 2026-11-02): 나라 합계만 · d["tech"][품목] · HBM 은 MCP(복합구조칩)로 잡힘
+TECH = {"854232": {"메모리": ("854232",), "D램": ("8542321010",), "낸드": ("8542321030",), "MCP·HBM": ("8542323000",)},
+        "852351": {"SSD": ("8523511",)}, "853224": {"MLCC": ("853224",)}, "8524": {"디스플레이": ("8524",)},
+        "850760": {"2차전지": ("850760",)}, "8486": {"반도체 장비": ("8486",)}}
 Y0 = 2020
 
 
@@ -75,12 +79,16 @@ def pct(a, b):
     return round((a / b - 1) * 100) if a is not None and b else None
 
 
-def table(d, ym):
-    """새 달 표: 나라마다 [금액, 전년비, 전월비]."""
+assert monthly([{"year": "2026.09", "hsCode": c, "expDlr": v} for c, v in (("8542321010", "1000000000"), ("8542323000", "2000000000"), ("8542321030", "500000000"))],
+               TECH["854232"]) == {"메모리": {"2026-09": 3500.0}, "D램": {"2026-09": 1000.0}, "낸드": {"2026-09": 500.0}, "MCP·HBM": {"2026-09": 2000.0}}
+
+
+def table(d, ym, keys=("ramen", "cosmetics", "skincare", "makeup")):
+    """새 달 표: 나라(반도체·IT 는 품목)마다 [금액, 전년비, 전월비]."""
     y, m = int(ym[:4]), int(ym[5:])
     ly, pm = f"{y - 1}-{m:02d}", (f"{y}-{m - 1:02d}" if m > 1 else f"{y - 1}-12")
     lat = {"ym": ym, "src": f"관세청 수출입실적 API ({ym}, 자동)"}
-    for k in ("ramen", "cosmetics", "skincare", "makeup"):
+    for k in keys:
         lat[k] = {c: [s[ym], pct(s[ym], s.get(ly)), pct(s[ym], s.get(pm))] for c, s in d.get(k, {}).items() if s.get(ym) is not None}
     return lat
 
@@ -101,34 +109,37 @@ def main():
         sys.exit("CUSTOMS_KEY 없음")
     d = yaml.safe_load(PATH.read_text(encoding="utf-8"))
     got, fail, now = 0, [], now_kst()
-    for hs, (kinds, names) in HS.items():
-        for nm in names:
-            for y in range(Y0, now.year + 1):
-                t0 = time.time()
-                try:
-                    v = monthly(get(hs, CN[nm], f"{y}01", f"{y}12"), kinds)
-                    print(hs, nm, y, sum(map(len, v.values())), "칸", f"{time.time() - t0:.0f}초")
-                except Exception as e:  # noqa: BLE001
-                    print(hs, nm, y, "실패", e, f"{time.time() - t0:.0f}초")
-                    fail.append(f"{hs}/{nm}/{y}: {e}")
-                    if nm != "전체" and "등록되지 않은" in str(e):
-                        break  # 나라별 API 가 아직 안 열렸으면 그 나라 나머지 해는 건너뜀
-                    continue
-                for k, s in v.items():
-                    d.setdefault(k, {}).setdefault(nm, {}).update(s)  # 관세청 숫자가 Comtrade·사용자 글 숫자보다 우선
-                    got += len(s)
-                time.sleep(0.3)
+    jobs = [(hs, kinds, nm) for hs, (kinds, names) in HS.items() for nm in names] + [(hs, items, "") for hs, items in TECH.items()]  # "" = 반도체·IT
+    for hs, kinds, nm in jobs:
+        for y in range(Y0, now.year + 1):
+            t0 = time.time()
+            try:
+                v = monthly(get(hs, CN.get(nm, ""), f"{y}01", f"{y}12"), kinds)
+                print(hs, nm or "IT", y, sum(map(len, v.values())), "칸", f"{time.time() - t0:.0f}초")
+            except Exception as e:  # noqa: BLE001
+                print(hs, nm or "IT", y, "실패", e, f"{time.time() - t0:.0f}초")
+                fail.append(f"{hs}/{nm or 'IT'}/{y}: {e}")
+                if nm not in ("전체", "") and "등록되지 않은" in str(e):
+                    break  # 나라별 API 가 아직 안 열렸으면 그 나라 나머지 해는 건너뜀
+                continue
+            for k, s in v.items():  # 관세청 숫자가 Comtrade·사용자 글 숫자보다 우선
+                (d.setdefault(k, {}).setdefault(nm, {}) if nm else d.setdefault("tech", {}).setdefault(k, {})).update(s)
+                got += len(s)
+            time.sleep(0.3)
     print(f"관세청 {got}칸 · 실패 {len(fail)}", *fail[:12], sep="\n")
     if not got:
         sys.exit("관세청에서 받은 숫자 없음")
     text = PATH.read_text(encoding="utf-8")
     head = text.split("\nramen:", 1)[0]
-    new = max(d["ramen"]["전체"])
+    new, newt, ch = max(d["ramen"]["전체"]), max(d.get("tech", {}).get("메모리") or [""]), False
     if new > str(d["latest"]["ym"]):
-        d["latest"] = table(d, new)
+        d["latest"], ch = table(d, new), True
+    if newt > str((d.get("tech_latest") or {}).get("ym", "")):
+        d["tech_latest"], ch = table(d, newt, ("tech",)), True
+    if ch:  # 표를 새로 쓰면 손으로 단 줄 끝 메모는 사라짐
         head = "".join(x + "\n" for x in head.splitlines() if x.startswith("#")) + yaml.safe_dump(
-            {"latest": d["latest"]}, allow_unicode=True, sort_keys=False, width=1000, default_flow_style=None)
-    body = yaml.safe_dump({k: {s: dict(sorted(v.items())) for s, v in d[k].items()} for k in ("ramen", "cosmetics", "skincare", "makeup") if k in d},
+            {k: d[k] for k in ("latest", "tech_latest") if d.get(k)}, allow_unicode=True, sort_keys=False, width=1000, default_flow_style=None)
+    body = yaml.safe_dump({k: {s: dict(sorted(v.items())) for s, v in d[k].items()} for k in ("ramen", "cosmetics", "skincare", "makeup", "tech") if k in d},
                           allow_unicode=True, sort_keys=False, width=1000)
     PATH.write_text(head.rstrip() + "\n" + body, encoding="utf-8")
     write_json(DATA / "exports.json", yaml.safe_load(PATH.read_text(encoding="utf-8")))
