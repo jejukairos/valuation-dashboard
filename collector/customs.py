@@ -32,9 +32,9 @@ def get(hs, cnty, a, b):
     if cnty:
         p["cntyCd"] = cnty
     err = ""
-    for _ in range(3):
+    for _ in range(2):
         try:
-            r = requests.get(URL if cnty else ITEM, params=p, timeout=60)
+            r = requests.get(URL if cnty else ITEM, params=p, timeout=(10, 40))
             break
         except requests.RequestException as e:  # 메시지에 주소(=키)가 들어갈 수 있어 종류만 남김
             err = type(e).__name__
@@ -103,9 +103,12 @@ def main():
     for hs, (kinds, names) in HS.items():
         for nm in names:
             for y in range(Y0, now.year + 1):
+                t0 = time.time()
                 try:
                     v = monthly(get(hs, CN[nm], f"{y}01", f"{y}12"), kinds)
+                    print(hs, nm, y, sum(map(len, v.values())), "칸", f"{time.time() - t0:.0f}초")
                 except Exception as e:  # noqa: BLE001
+                    print(hs, nm, y, "실패", e, f"{time.time() - t0:.0f}초")
                     fail.append(f"{hs}/{nm}/{y}: {e}")
                     if nm != "전체" and "등록되지 않은" in str(e):
                         break  # 나라별 API 가 아직 안 열렸으면 그 나라 나머지 해는 건너뜀
