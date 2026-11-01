@@ -86,11 +86,12 @@ def table(d, ym):
 
 
 def probe():
-    for nm, args in [("미국 라면 25.10", ("190230", "US", "202510", "202510")), ("미국 화장품 25.10", ("3304", "US", "202510", "202510")),
-                     ("전체 라면 26.08~10", ("190230", "", "202608", "202610"))]:
+    for nm, args in [("미국 라면 26.09", ("190230", "US", "202609", "202609"))] + [
+            (f"전체 {h} 25.10·26.09", (h, "", "202509", "202610")) for h in ("854232", "852351", "853224", "8524", "850760", "8486")]:
         try:
             rows = get(*args)
-            print(nm, len(rows), "줄", rows[:2], monthly(rows, HS[args[0]][0]))
+            print(nm, len(rows), "줄", sorted((r.get("year"), r.get("hsCode") or r.get("hsCd"), r.get("statKor"), round(int(r["expDlr"]) / 1e6, 1))
+                                             for r in rows if r.get("year") in ("2025.10", "2026.09", "총계")))
         except Exception as e:  # noqa: BLE001
             print(nm, "실패:", e)
 
