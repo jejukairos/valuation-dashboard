@@ -17,6 +17,7 @@ from common import DATA, now_kst, write_json
 ROOT = Path(__file__).resolve().parent.parent
 PATH = ROOT / "config" / "exports.yaml"
 URL = "https://apis.data.go.kr/1220000/nitemtrade/getNitemtradeList"
+ITEM = "https://apis.data.go.kr/1220000/Itemtrade/getItemtradeList"  # 품목별(나라 합계) — '전체' 줄
 KEY = unquote(os.environ.get("CUSTOMS_KEY", "").strip())  # 'Encoding' 키를 넣어도 되게 한 번 풂
 CN = {"중국": "CN", "홍콩": "HK", "미국": "US", "일본": "JP", "필리핀": "PH", "영국": "GB", "러시아": "RU", "말레이시아": "MY", "네덜란드": "NL", "폴란드": "PL"}
 WANT = {"ramen": ("190230", ["중국", "미국", "일본", "필리핀", "영국", "러시아", "말레이시아", "네덜란드"]),
@@ -66,10 +67,11 @@ assert monthly([{"year": "2026.01", "hsCd": "3304", "expDlr": "5000000"}, {"year
 def probe():
     for nm, args in [("미국 라면 25.10", ("190230", "US", "202510", "202510")), ("나라 없이 라면 25.10", ("190230", "", "202510", "202510")),
                      ("미국 화장품 25년", ("3304", "US", "202501", "202512")), ("미국 기초 25.10", ("330499", "US", "202510", "202510")),
-                     ("품목별(나라 X) API 라면 25.10", ("190230", "", "202510", "202510", "https://apis.data.go.kr/1220000/Itemtrade/getItemtradeList"))]:
+                     ("품목별 API 라면 25.10", ("190230", "", "202510", "202510", ITEM)), ("품목별 API 화장품 25.09~10", ("3304", "", "202509", "202510", ITEM)),
+                     ("품목별 API 기초 26.01", ("330499", "", "202601", "202601", ITEM))]:
         try:
             rows = get(*args)
-            print(nm, len(rows), "줄", [{k: r.get(k) for k in ("year", "statCd", "statCdCntnKor1", "hsCd", "expDlr")} for r in rows[:4]], monthly(rows, args[0]))
+            print(nm, len(rows), "줄", rows[:5], monthly(rows, args[0]))
         except Exception as e:  # noqa: BLE001
             print(nm, "실패:", e)
 
