@@ -2907,7 +2907,7 @@ function gpeCard(k) {
 }
 // 📦 라면·화장품 수출 (config/exports.yaml → data/exports.json): 이번 달 나라별 표(전년·전월비, 영업일수 감안 일평균) + 2020년부터 월별 금액 + 전년비
 let EXP = null;
-const EXP_K = { ramen: ["🍜 라면 수출", "HS 1902.30", ["전체", "미국", "중국", "일본"]], cosmetics: ["💄 화장품 수출", "HS 3304", ["전체", "미국", "중국", "일본", "영국"]] };
+const EXP_K = { ramen: ["🍜 라면 수출", "HS 1902.30.1010",["전체", "미국", "중국", "일본"]], cosmetics: ["💄 화장품 수출", "HS 3304", ["전체", "미국", "중국", "일본", "영국"]] };
 function expHTML(kind) {
   const E = EXP?.[kind], L = EXP?.latest, [title, hs, show] = EXP_K[kind];
   if (!E || !L) return "";
