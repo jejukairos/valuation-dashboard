@@ -1178,7 +1178,78 @@ const mktOf = (code) => (/^\d/.test(String(code || "")) ? "KR" : "US");
 function renderTop() {
   $("#estAlert").innerHTML = saAlertHTML() + estAlertHTML();
   $("#patAlert").innerHTML = patAlertHTML();
-  $("#bigTech").innerHTML = bigTechHTML() + moneyHTML();
+  $("#bigTech").innerHTML = bigTechHTML() + moneyHTML() + dotMapHTML();
+}
+// 📍 보유·관심 종목 지도 (사용자 전달 그림 '28년 Fwd EPS 증가율과 PER' 모양, 2026-11-01) — 카드의 fwd_mult 만으로 계산:
+// PER 로 적정가를 매기는 종목 = 다다음해 EPS 증가율(EPS 비 = PER 비의 역수) × 24개월 선행 PER · PBR 로 매기는 종목 = ROE(= PBR ÷ PER, 12MF) × PBR
+function dotMap(o) {  // o = {id, t, pts: [{x, y, n, own}], fx, fy, xt, yt}
+  const W = 340, H = 330, x0 = 30, x1 = W - 8, top = 22, bot = H - 30;
+  const md = o.pts.map((p) => p.y).sort((a, b) => a - b)[o.pts.length >> 1], cap = Math.max(o.cap || 40, 2.5 * md);  // 테슬라·두산에너빌리티처럼 너무 멀면 그림 밖 (회귀선에서도 뺌) — 나머지 점이 몰려 이름이 겹치지 않게
+  const inn = o.pts.filter((p) => p.y > 0 && p.y <= cap && p.x >= -30 && p.x <= 100), out = o.pts.filter((p) => !inn.includes(p));
+  if (inn.length < 3) return "";
+  const mx = inn.reduce((s, p) => s + p.x, 0) / inn.length, my = inn.reduce((s, p) => s + p.y, 0) / inn.length;
+  const b = inn.reduce((s, p) => s + (p.x - mx) * (p.y - my), 0) / (inn.reduce((s, p) => s + (p.x - mx) ** 2, 0) || 1), fit = (x) => my + b * (x - mx);
+  const xl = Math.min(0, ...inn.map((p) => p.x)), xh = Math.max(...inn.map((p) => p.x)) * 1.1 + 1, yh = Math.max(...inn.map((p) => p.y)) * 1.1;
+  const X = (v) => x0 + ((v - xl) / (xh - xl)) * (x1 - x0), Y = (v) => bot - (v / yh) * (bot - top);
+  let g = `<clipPath id="${o.id}c"><rect x="${x0}" y="${top}" width="${x1 - x0}" height="${bot - top}"/></clipPath>`;
+  for (let i = 0; i <= 4; i++) {
+    const xv = xl + (i / 4) * (xh - xl), yv = (i / 4) * yh;
+    g += `<line x1="${x0}" x2="${x1}" y1="${Y(yv)}" y2="${Y(yv)}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${Y(yv) + 3}" text-anchor="end" class="qx">${esc(o.fy(yv))}</text>`
+      + `<text x="${X(xv)}" y="${bot + 12}" text-anchor="middle" class="qx">${esc(o.fx(xv))}</text>`;
+  }
+  if (xl < 0) g += `<line x1="${X(0)}" x2="${X(0)}" y1="${top}" y2="${bot}" stroke="var(--axis)"/>`;
+  g += `<line x1="${X(xl)}" x2="${X(xh)}" y1="${Y(fit(xl))}" y2="${Y(fit(xh))}" stroke="var(--muted)" stroke-dasharray="4 3" clip-path="url(#${o.id}c)"/>`;
+  g += `<text x="${x1}" y="${bot + 24}" text-anchor="end" class="qx">${esc(o.xt)} →</text><text x="4" y="10" class="qx">↑ ${esc(o.yt)}</text>`;
+  // 이름표: 점·다른 이름표와 안 겹치는 자리(오른쪽 → 왼쪽 → 위 → 아래)를 차례로 찾음
+  const boxes = inn.map((p) => [X(p.x) - 3.5, Y(p.y) - 3.5, X(p.x) + 3.5, Y(p.y) + 3.5]);
+  [...inn].sort((p, q) => q.own - p.own || q.y - p.y).forEach((p) => {
+    const cx = X(p.x), cy = Y(p.y), w = [...p.n].reduce((s, ch) => s + (ch.charCodeAt(0) > 255 ? 9.5 : 5.6), 0);
+    const cand = [[5, 3.5, 0], [-5, 3.5, 1], [-w / 2, -6, 0], [-w / 2, 13, 0], [5, -6, 0], [5, 13, 0], [-5, -6, 1], [-5, 13, 1]];
+    let pick = cand[0];
+    for (const c of cand) {
+      const bx = c[2] ? cx + c[0] - w : cx + c[0], box = [bx, cy + c[1] - 8.5, bx + w, cy + c[1] + 1.5];
+      if (box[0] >= 0 && box[2] <= W && box[1] >= 0 && !boxes.some((q) => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) { pick = c; boxes.push(box); break; }
+    }
+    g += `<circle cx="${cx}" cy="${cy}" r="${p.own ? 4.2 : 3.4}" fill="${p.own ? "var(--s1)" : "var(--surface)"}" stroke="${p.own ? "var(--s1)" : "var(--muted)"}" stroke-width="1.6"><title>${esc(`${p.n}: ${o.xt} ${o.fx(p.x)} · ${o.yt} ${o.fy(p.y)}`)}</title></circle>`
+      + `<text x="${cx + pick[0]}" y="${cy + pick[1]}" text-anchor="${pick[2] ? "end" : "start"}" style="font-size:9.5px;fill:var(${p.own ? "--ink" : "--muted"});font-weight:${p.own ? 700 : 400}">${esc(p.n)}</text>`;
+  });
+  const gap = (p) => (p.y / fit(p.x) - 1) * 100, rk = inn.filter((p) => fit(p.x) > 0).sort((p, q) => gap(p) - gap(q));
+  return { svg: `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.t)}">${g}</svg>`, rk, gap, out, b };
+}
+function dotMapHTML() {
+  const S = (DASH?.stocks || []).filter((c) => c.market === MKT && ["보유", "관심"].includes(c.group) && c.fwd_mult);
+  if (!S.length) return "";
+  const kinds = (c) => (c.scen?.parts || []).map((p) => p.kind), nm = (c) => c.name.replace("디펜스앤에어로스페이스", "디펜스");
+  const per = [], pbr = [];
+  S.forEach((c) => {
+    const P = c.fwd_mult.PER || {}, B = c.fwd_mult.PBR || {}, ys = Object.keys(P).filter((k) => /^\d\dE$/.test(k)).sort(), [a, b2, c2] = ys.slice(-3).map((k) => P[k]);
+    if (kinds(c).includes("PER") && b2 > 0 && c2 > 0) {
+      // 24개월 선행 = 12MF 와 같은 비율로 한 해씩 밀어서 섞음 (비율 w 는 12MF PER 에서 거꾸로 구함 → 미국 회계연도 끝도 그대로 반영)
+      let w = a > 0 && P["12MF"] > 0 && a !== b2 ? (1 / P["12MF"] - 1 / b2) / (1 / a - 1 / b2) : NaN;
+      if (!(w >= 0 && w <= 1)) { const d = new Date(); w = Math.max(0, (12 - d.getMonth() - d.getDate() / 31) / 12); }
+      per.push({ x: (b2 / c2 - 1) * 100, y: 1 / (w / b2 + (1 - w) / c2), n: nm(c), own: c.group === "보유", yl: ys.at(-1) });
+    }
+    if (kinds(c).includes("PBR") && B["12MF"] > 0 && P["12MF"] > 0) pbr.push({ x: (B["12MF"] / P["12MF"]) * 100, y: B["12MF"], n: nm(c), own: c.group === "보유" });
+  });
+  const yE = per[0]?.yl || "28E", pE = `${+yE.slice(0, 2) - 1}E`;
+  const card = (m, t, unit, kid, src) => {
+    if (!m) return "";
+    const top = (arr) => arr.map((p) => `${esc(p.n)} <span class="src">${pct(m.gap(p), 0, true)}</span>`).join(" · ");
+    return `<div class="qp"><div class="qt"><b>${esc(t)}</b></div>
+      <div class="src" style="margin:2px 0 4px">선보다 아래 (같은 ${unit}에 비해 배수 낮음): ${top(m.rk.slice(0, 3))}<br>선보다 위 (배수 높음): ${top(m.rk.slice(-3).reverse())}</div>
+      ${m.svg}<div class="src">● 보유 · ○ 관심 · 점선 = 이 종목들 평균 관계 · 이름 옆 % = 점선에서 위아래로 떨어진 정도 · 점을 누르면 숫자${m.out.length ? ` · 그림 밖: ${m.out.map((p) => `${esc(p.n)} (${n(p.x, 0)}%, ${n(p.y, 1)}배)`).join(", ")}` : ""}</div>
+      <div class="kidbox" style="margin-top:6px">🐣 ${kid}${m.b < 0 ? ` <b>지금 이 종목들은 점선이 거꾸로(오른쪽 아래로) 기울어 있어요</b> — ${unit}이 높은 종목이 오히려 배수가 낮게 거래되는 중이에요.` : ""}</div><div class="note src">${src}</div></div>`;
+  };
+  const m1 = per.length >= 3 && dotMap({ id: `dmper${MKT}`, t: "", pts: per, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 0)}배`, xt: `${yE} EPS 증가율`, yt: "24개월 선행 PER" });
+  const m2 = pbr.length >= 3 && dotMap({ id: `dmpbr${MKT}`, t: "", pts: pbr, cap: 3, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 1)}배`, xt: "ROE (12MF)", yt: "PBR (12MF)" });
+  if (!m1 && !m2) return "";
+  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📍 보유·관심 종목 지도</b> <span class="src">${MKT === "KR" ? "🇰🇷" : "🇺🇸"} 이익 증가율 대비 PER · ROE 대비 PBR · 참고용 (매수·매도 추천 아님)</span></summary>
+    <div class="qgrid">${card(m1, `${pE}→${yE} EPS 증가율 × 24개월 선행 PER`, "EPS 증가율",
+      "오른쪽으로 갈수록 이익이 빨리 늘 거라는 예상, 위로 갈수록 주가가 이익에 비해 비싸요. 보통은 빨리 크는 회사일수록 PER 이 높아서 점들이 점선 근처에 모여요. 점선보다 한참 아래면 '성장에 비해 덜 쳐준다', 한참 위면 '성장보다 더 쳐준다'는 뜻이에요 (예상이 틀리면 달라져요).",
+      `PER 로 적정가를 매기는 종목만 · EPS 증가율 = 증권사 컨센서스 ${pE} → ${yE} · 24개월 선행 PER = 1~2년 뒤 12개월 EPS 기준 · PBR 로 매기는 종목(삼성전자·SK하이닉스 등)은 ROE × PBR 그림`)}
+    ${card(m2, "ROE × PBR (12개월 선행)", "ROE",
+      "ROE 는 '내 돈(자본) 100원으로 1년에 얼마 버나', PBR 은 '자본의 몇 배에 사고파나'예요. 돈을 잘 버는(ROE 높은) 회사일수록 PBR 이 높은 게 보통이라 점선 근처에 모여요. 점선보다 아래면 버는 힘에 비해 싸게, 위면 비싸게 거래되는 쪽이에요.",
+      "적정가를 BPS × PBR 로 매기는 종목 (현대차·기아처럼 PER·PBR 둘 다 쓰면 양쪽 그림에 다 나옴) · ROE ≈ 12MF PBR ÷ 12MF PER")}</div></details>`;
 }
 // 🧾 실적 탭 (예전엔 보유 탭 맨 위): 쉬운 요약 · 실적 발표(최근 3일) · 실적발표·컨콜 일정 — 🇰🇷/🇺🇸 버튼
 let EARN_MKT = "KR";
