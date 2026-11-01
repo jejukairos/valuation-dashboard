@@ -1,0 +1,46 @@
+name: 라면·화장품 수출 (관세청)
+
+on:
+  schedule:
+    - cron: "10 1 * * *"      # 매일 10:10 KST (관세청 월간 확정 숫자는 다음 달 중순쯤 들어옴)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "'' = 최근 2년 · full = 2020년부터 · probe = 응답 모양 시험"
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: exports
+  cancel-in-progress: false
+
+jobs:
+  exports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 관세청 품목별 국가별 수출 (라면 HS 1902.30 · 화장품 3304 · 기초 3304.99)
+        env:
+          CUSTOMS_KEY: ${{ secrets.CUSTOMS_KEY }}
+          PYTHONIOENCODING: utf-8
+          MODE: ${{ github.event.inputs.mode }}
+        run: cd collector && python -u customs.py $MODE
+      - name: 저장
+        run: |
+          git config user.name "valuation-bot"
+          git config user.email "valuation-bot@users.noreply.github.com"
+          git add config/exports.yaml site/data/exports.json 2>/dev/null || true
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "관세청 수출 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done
+          exit 1
