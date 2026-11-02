@@ -748,6 +748,14 @@ function somongHTMLcard(c) {
     <div class="note">지금 고점 대비 <b>${pct(m.dd, 1)}</b></div>
     <div class="ladder">${m.levels.map(([lv, p]) => `<div class="${m.dd <= lv ? "hit" : ""}"><span>${lv}%</span><b>${money(p, c.currency)}</b></div>`).join("")}</div>
     <div class="note src">색칠된 칸 = 이미 그 구간까지 내려옴 · 강의: 월 투자금 절반은 자동 적립, 절반은 비상금으로 모아 고점 대비 하락 구간에서 3번 나눠 사고 마지막 1번은 남겨 두기</div>` : "";
+  // 📜 예전에 고점 대비 -40% 넘게 빠진 뒤 흐름 (somong.yaml mdd_hist — 삼성전자, 사용자 2026-11-02): 표 → 그림 → 🐣
+  const h = s?.mdd_hist;
+  const mh = h ? `<div class="chart-title" style="margin-top:12px"><b>📜 예전에 고점 대비 -40% 넘게 빠졌을 때</b> <span class="src">${esc(h.src)}</span></div>
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">언제</th><th>고점 대비 최저</th><th>저점 뒤 1개월</th><th>3개월</th><th>5개월</th></tr></thead><tbody>
+    ${h.cases.map(([m2, w, lo, ...r]) => `<tr><td style="text-align:left">${esc(m2)} <span class="src">${esc(w)}</span></td><td>${n(lo, 0)}%</td>${r.map((v) => `<td class="${kcol(v)}">${sg(v, 1)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    ${lineChart({ t: "저점 뒤 누적 수익률 — 예전 5번", labels: h.labels, fl: (v) => `${n(v, 0)}%`, zero: true, tick: (i) => h.labels[i],
+      s: [{ n: "하나증권 평균", v: h.path, col: "var(--ink)" }, { n: "우리 계산 평균", v: h.ours, col: "var(--s1)" }, { n: "가운데 값", v: h.median, col: "var(--s3)" }] })}
+    <ul class="irl">${(h.lines || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>${h.kid ? `<div class="kidbox" style="font-size:13px">🐣 ${esc(h.kid)}</div>` : ""}` : "";
   const ev = (s?.events || []).length ? `<div class="chart-title" style="margin-top:12px"><b>🧥 여름에 패딩사기</b> <span class="src">이벤트(D-DAY) 3~6개월 전에 미리 · 이벤트 날 즈음엔 나눠서 정리</span></div>
     <ul class="irl">${s.events.map((e) => `<li><b>${esc(e.date)}</b> ${esc(e.what)}${e.src ? ` <a href="${esc(e.src)}" target="_blank" rel="noopener">출처</a>` : ""}</li>`).join("")}</ul>
     ${s.season ? `<div class="note">🔁 반복 패턴: ${esc(s.season)}</div>` : ""}` : "";
@@ -759,12 +767,12 @@ function somongHTMLcard(c) {
     ${my.review ? ` · 검토: <b>${esc(my.review)}</b>` : ""}${my.rank ? ` · 순위 ${esc(my.rank)}` : ""}${my.greed_price ? ` · 욕망시 ${esc(my.greed_price)}` : ""}</div>
     <div class="note src">강의: 산 이유가 사라지면 매도를 고려 · 수익률이 아니라 '지금 다시 산다면?'으로 순위를 매겨 낮은 순위부터 정리(현금 확보·갈아타기)</div>`;
   return `<details class="fvt sm" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:10px">📋 소몽 체크리스트 ${sc == null ? "" : `<b class="smsc ${sc >= 90 ? "ok" : ""}">${sc}점</b>`}
-      ${past?.score != null ? `<span class="src">(25.4.7 당시 ${past.score}점)</span>` : ""}<div class="smchips">${chips}</div></summary>
+      ${past?.score != null ? `<span class="src">(25.4.7 당시 ${past.score}점)</span>` : ""}${h ? ' <span class="src">· 📜 -40% 급락 뒤 패턴</span>' : ""}<div class="smchips">${chips}</div></summary>
     ${s ? `<div class="note src">점수 = 100 − X 1개당 10 − △ 1개당 5 (지갑털이·올리고폴리·아무나이겨라) + 굿보스·거인의 어깨 5 · 강의 기준: 90점 넘으면 투자 고려 · 조사일 ${esc(s.checked_at || "")}</div>
       ${reason("wallet", "지갑털이 (내 돈·시간을 점점 더 가져가나)")}${reason("oligopoly", "올리고폴리 (1~3위 합 50% 이상)")}${reason("anyone_wins", "아무나이겨라 (누가 이기든 돈 버나)")}
       ${reason("good_boss", "굿보스 (믿을 만한 경영자)")}${reason("giant", "거인의 어깨 (큰 기관·거물 보유)")}
       ${past ? `<div class="note">🕰 25.4.7 당시 내 판단: 지갑 ${esc(past.wallet || "-")} · 올리고 ${esc(past.oligopoly || "-")} · 아무나 ${esc(past.anyone_wins || "-")} · 굿보스/거인 ${esc(past.boss || "-")} · ${esc(past.score ?? "-")}점${past.season ? " · " + esc(past.season) : ""}${past.range ? " · 하방~상방 " + esc(past.range) : ""}${past.greed ? " · 욕망시 " + esc(past.greed) : ""}</div>` : ""}` : ""}
-    ${ladder}${ev}${dv}${mine}
+    ${ladder}${mh}${ev}${dv}${mine}
   </details>`;
 }
 
@@ -4178,7 +4186,8 @@ function estBoardHTML(mkt) {  // 리포트 탭: 종목마다 추정치 1주·1�
 }
 function estHTML(d) {  // 종목 상세: 연도별 추정치 지금 vs 1일·1주·1개월·3개월·6개월·1년 전 + 흐름 그림 + 다른 출처(블룸버그 등)
   const e = d.est, sd = e?.seed, tw = (TGR?.stocks?.[d.code] || []).filter((x) => x.est_w != null).slice(0, 8);
-  if (!e && !sd && !tw.length) return "";
+  const rv = revHTML(d.code);
+  if (!e && !sd && !tw.length && !rv) return "";
   const us = e?.unit === "$", F = (v) => (v == null ? "-" : us ? `$${n(v, 2)}` : kpiF(v, "억원")), SP = ["1일", "1주", "1개월", "3개월", "6개월", "1년"];
   const ys = Object.keys(e?.chg || {}).sort(), b = DASH.stocks.find((x) => x.code === d.code)?.est, [tu, td] = tpCnt(d.code);
   let h = b?.sig ? `<div class="note" style="margin-top:0"><b>${esc(b.sig)}</b> — ${esc(b.y)}년 ${esc(b.what)} 예상 1주 ${estP(b["1주"])} · 1개월 ${estP(b["1개월"])} · 3개월 ${estP(b["3개월"])}${tu || td ? ` · 목표가 최근 30일 <b style="color:var(--good-ink)">올림 ${tu}</b> · <b style="color:var(--bad-ink)">내림 ${td}</b>` : ""}</div>` : "";
@@ -4189,6 +4198,7 @@ function estHTML(d) {  // 종목 상세: 연도별 추정치 지금 vs 1일·1�
     const at = Object.fromEntries(ys.map((y) => [y, Object.fromEntries(e.pts[y])]));
     h += `<div class="qgrid" style="margin-top:8px">${lineChart({ t: `${e.what} 예상 흐름 (${e.since}부터 매일)`, labels: ds, s: ys.map((y, i) => ({ n: `${y}E`, v: ds.map((x) => at[y][x] ?? null), col: KPI_COL[i % 4] })), fl: (v) => (us ? `$${n(v, 2)}` : kpiF(Math.round(v), "억원")), tick: (i) => (i === 0 || i === ds.length - 1 ? ds[i].slice(5) : "") })}</div>`;
   }
+  h += rv;
   if (tw.length) h += `<div class="note">📨 <b>텔레그램 ked_epic_ai 퀀트 시그널</b> — 12M Fwd 영업이익 추정치 <b>1주 변화</b> (시장 전체 상·하위 10위에 들 때만 나와요): ${tw.map((x) => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.d.slice(5).replace("-", "/"))}</a> ${estP(x.est_w)}`).join(" · ")}</div>`;
   if (sd) {  // 사용자가 보낸 다른 출처 (config/est_seed.yaml)
     const cols = Object.keys(Object.values(sd.rows)[0] || {}).filter((k) => k !== "지금");
@@ -4253,13 +4263,20 @@ function tgRows(L, code) {
       · ${g.map((x) => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${tgLab(x)}</a>`).join(" · ")}</li>`;
   }).join("");
 }
+// 📊 maddingStock '주간 EPS 컨센서스 리비전' (일요일 밤) — 최근 7일 안에 그 종목이 TOP 8·적자·참고 칸에 나왔으면 한 줄 (사용자 2026-11-02 '일주일 유지')
+const revTxt = (r) => (r.note ? esc(r.note) : `${r.y1 != null ? `올해 EPS ${estP(r.y1)} · 내년 ${estP(r.y2)}` : ""}${r.op != null ? ` · 영업이익 ${estP(r.op)}` : ""}${r.px != null ? ` · 주가 ${sg(r.px, 1)}` : ""}`);
+const revSec = (s) => (s.includes("상향 TOP") ? "▲ 상향 TOP 8" : s.includes("하향 TOP") ? "▼ 하향 TOP 8" : s.includes("적자") ? "적자·저EPS 영업이익" : s);
+function revHTML(code) {
+  const x = tgSort((TGR?.stocks?.[code] || []).filter((p) => p.rev && p.d >= kstDay(6)))[0];
+  return x ? `<div class="note" style="margin-top:6px">📊 <b>주간 EPS 리비전</b> <span class="src">maddingStock ${esc(x.rev.wk)} · 전주 대비</span> <b>${esc(revSec(x.rev.sec))}</b> ${revTxt(x.rev)} · <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a></div>` : "";
+}
 // 📄 오늘·어제 리포트 (보유 탭 카드, 소몽 체크리스트 위 — 사용자 2026-11-02): 📥 PDF·요약(DOC_POOL) · ✨ 짧은 요약(에픽 AI)
 function tgDayHTML(code) {
   if (!TGR) return "";
-  const L = tgSort((TGR.stocks?.[code] || []).filter((x) => x.d >= kstDay(1) && x.est_w == null));
+  const L = tgSort((TGR.stocks?.[code] || []).filter((x) => x.d >= kstDay(1) && x.est_w == null && !x.rev));
   const at = [TGR.updated_at, TGR.api_at].filter(Boolean).map((s) => s.slice(5)).join(" · ");
-  return L.length ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 리포트 ${L.length}개</b> <span class="src">📥 텔레그램에서 PDF 받기 · ✨ 짧은 요약 · 확인 ${esc(at)}</span></div><ul class="irl">${tgRows(L, code)}</ul>`
-    : `<div class="src" style="margin-top:10px">📄 오늘·어제 새 리포트 없음 · 확인 ${esc(at)}</div>`;
+  return (L.length ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 리포트 ${L.length}개</b> <span class="src">📥 텔레그램에서 PDF 받기 · ✨ 짧은 요약 · 확인 ${esc(at)}</span></div><ul class="irl">${tgRows(L, code)}</ul>`
+    : `<div class="src" style="margin-top:10px">📄 오늘·어제 새 리포트 없음 · 확인 ${esc(at)}</div>`) + revHTML(code);
 }
 // 📥 최근 7일 리포트 (리포트 탭 맨 위): 보유·관심·공동 종목, 날짜별 — 링크만 (PDF 는 텔레그램에 있어 사이트 용량을 안 씀, 7일 지나면 저절로 빠짐)
 function tgWeekHTML(mkt) {
@@ -4270,9 +4287,11 @@ function tgWeekHTML(mkt) {
     for (const x of L) if (x.d >= kstDay(6) && x.est_w == null && (x.pdf || x.tp || x.ch === "ked_epic_ai")) ((days[x.d] ||= {})[code] ||= []).push(x);
   }
   const D = Object.keys(days).sort().reverse(), wd = (d) => "일월화수목금토"[new Date(d + "T12:00:00Z").getUTCDay()];
-  if (!D.length) return "";
+  const RV = Object.keys(TGR.stocks || {}).filter((c) => names[c] && mktOf(c) === mkt).map((c) => [c, revHTML(c)]).filter(([, h]) => h);
+  if (!D.length && !RV.length) return "";
   const ch = (u, t) => `<a href="https://t.me/${u}" target="_blank" rel="noopener">${t}</a>`;
-  return `<div class="card" style="margin-bottom:10px"><b>📥 최근 7일 리포트 — 보유·관심 종목</b>
+  return `<div class="card" style="margin-bottom:10px">${RV.length ? `<b>📊 이번 주 EPS 리비전 — 보유·관심 종목</b> <span class="src">${ch("maddingStock", "maddingStock")} 주간 글에 이름이 나온 종목만 (TOP 8 밖 '외 N종목'은 이름이 없어요) · 7일 유지</span>
+    ${RV.map(([c, h]) => h.replace("📊 <b>주간 EPS 리비전</b>", `<b>${esc(names[c])}</b>`)).join("")}<div style="margin-top:10px"></div>` : ""}<b>📥 최근 7일 리포트 — 보유·관심 종목</b>
     <div class="src">📥 PDF·요약 = ${ch("DOC_POOL", "DOC_POOL")} (누르면 텔레그램에서 PDF 받기) · ✨ 요약 = ${ch("ked_epic_ai", "에픽 AI")} 리서치 요약 (목표가 올림·내림) · 7일 지나면 목록에서 저절로 빠져요 · 확인 ${esc([TGR.updated_at, TGR.api_at].filter(Boolean).join(" · "))}</div>
     ${D.map((d, i) => {
       const S = Object.entries(days[d]).sort((a, b) => b[1].length - a[1].length), n = S.reduce((a, [, L]) => a + L.length, 0);

@@ -65,11 +65,42 @@ def parse(text, names):
             out["firm"] = f
     if own and (d := re.search(r"목표\s*주?가\s*(상향|하향|유지)", title)):
         out["dir"] = d.group(1)
+    if (r := revision(text, names)):
+        out["rev"] = r
     if "추정치 변화" in title and "1주" in title:
         m = next((re.search(rf"\d+\.\s*{re.escape(n)}\s*([+-]\d+(?:\.\d+)?)%", text) for n in names if re.search(rf"\d+\.\s*{re.escape(n)}\s*[+-]", text)), None)
         if m:
             out["est_w"] = float(m.group(1))
     return out
+
+
+NUM = r"([+-]\d+(?:\.\d+)?)%"
+
+
+def revision(text, names):
+    """maddingStock '주간 EPS 컨센서스 리비전' (매주 일요일 밤) → 그 종목 줄 {wk 기간, sec 칸(상향 TOP·하향 TOP·적자… ·참고), y1 올해 EPS %, y2 내년 EPS %, op 영업이익 %, px 주가 %}.
+    TOP 8 · 적자 종목 · 참고(주가 미반영·저PER 상향·목표주가 상향)에 이름이 나올 때만 — '외 N종목'은 이름이 없어 못 씀."""
+    if "EPS 컨센서스 리비전" not in text.strip().split("\n", 1)[0]:
+        return None
+    wk, sec = re.search(r"(\d{1,2}/\d{1,2})\s*→\s*(\d{1,2}/\d{1,2})", text), ""
+    for s in (x.strip() for x in text.split("\n")):
+        if s[:1] in ("▲", "▼", "▌"):
+            sec = s.lstrip("▲▼▌ ").strip()
+            continue
+        n = next((n for n in names if re.match(rf"{re.escape(n)}(?![가-힣A-Za-z])", s) or (sec == "참고" and n in s)), None)
+        if not n:
+            continue
+        out = {"wk": f"{wk[1]}→{wk[2]}" if wk else "", "sec": sec}
+        if sec == "참고":  # '저PER 상향  HDC현대산업개발 3.0배 · 티앤엘 5.2배' → 그 종목 조각만
+            out["note"] = f"{s.split('  ')[0]} {next((p for p in s.split(' · ') if n in p), s).split('  ')[-1]}"[:80]
+            return out
+        if (m := re.search(rf"{NUM}/{NUM}", s)):
+            out.update(y1=float(m[1]), y2=float(m[2]))
+        for k, w in (("op", "영익"), ("px", "주가")):
+            if (m := re.search(rf"{w}\s*{NUM}", s)):
+                out[k] = float(m[1])
+        return out
+    return None
 
 
 def collect():
@@ -109,6 +140,12 @@ if __name__ == "__main__":
         assert not about("[✨ 리서치 요약] 에이피알 목표주가 하향\n목표주가 460,000원 | 키움증권", ["키움증권", "039490"])
         assert about("[키움증권 / 증권]\n3분기 순이익 증가", ["키움증권", "039490"]) and about("에이피알 | 키움증권", ["에이피알", "278470"])
         assert parse("[키움증권 / 증권]\n목표주가 370,000원\n한국투자증권", ["키움증권", "039490"])["firm"] == "한국투자증권"
+        rv = ("주간 EPS 컨센서스 리비전\n10/26 → 11/01 · 연간 추정 · 784종목\n\n▲ 상향 TOP\n대한항공 +21.5%/+12.1%  영익 -6.8%  주가 +5.8%\n외 23종목\n"
+              "▼ 하향 TOP\n대한전선 -77.6%/-6.3%  영익 -8.1%  주가 -3.2%\n▌ 적자·저EPS 종목의 영업이익 변화\n엘앤에프  영익 -3.7%  주가 -1.4%\n"
+              "▌ 참고\n저PER 상향  HDC현대산업개발 3.0배 · 티앤엘 5.2배\n목표주가 상향  이노와이어리스 +23.1% · 디아이 +11.8%")
+        assert parse(rv, ["대한항공", "003490"])["rev"] == {"wk": "10/26→11/01", "sec": "상향 TOP", "y1": 21.5, "y2": 12.1, "op": -6.8, "px": 5.8}
+        assert parse(rv, ["대한전선"])["rev"]["sec"] == "하향 TOP" and parse(rv, ["엘앤에프"])["rev"] == {"wk": "10/26→11/01", "sec": "적자·저EPS 종목의 영업이익 변화", "op": -3.7, "px": -1.4}
+        assert parse(rv, ["디아이"])["rev"]["note"] == "목표주가 상향 디아이 +11.8%" and "rev" not in parse(rv, ["삼성전자"])
         p = parse("[✨ 리서치] 목표주가 상향/하향 보고서\n- 롯데쇼핑 | 120,000 | 하나증권\n- 롯데케미칼 | 60,000 | 하나증권", ["롯데쇼핑"])
         assert p["tp"] == 120000 and p["firm"] == "하나증권" and "dir" not in p, p
         assert "est_w" not in parse("[퀀트 시그널] 12M Fwd 영업이익 추정치 변화 | 1주간 변화\n1. 롯데에너지머티리얼즈 +3.1%", ["롯데쇼핑"])
