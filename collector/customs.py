@@ -94,12 +94,15 @@ def table(d, ym, keys=("ramen", "cosmetics", "skincare", "makeup")):
 
 
 def probe():
+    """나라별 API 가 열렸는지 + 새 품목 후보의 HS 10자리·품목 이름·26.09 금액 (전력기기·소스·아이스크림·담배 코드 고르기)."""
     for nm, args in [("미국 라면 26.09", ("190230", "US", "202609", "202609"))] + [
-            (f"전체 {h} 25.10·26.09", (h, "", "202510", "202609")) for h in ("854232", "852351", "853224", "8524", "850760", "8486")]:
+            (f"전체 {h} 26.09", (h, "", "202609", "202609")) for h in ("8504", "8535", "8537", "8544", "2103", "2105", "2402")]:
         try:
             rows = get(*args)
-            print(nm, len(rows), "줄", sorted((r.get("year"), r.get("hsCode") or r.get("hsCd"), r.get("statKor"), round(int(r["expDlr"]) / 1e6, 1))
-                                             for r in rows if r.get("year") in ("2025.10", "2026.09", "총계")))
+            print(nm, len(rows), "줄")
+            for r in sorted(rows, key=lambda r: r.get("hsCode") or ""):
+                if r.get("year") != "총계":
+                    print("   ", r.get("hsCode"), r.get("statKor"), round(int(r.get("expDlr") or 0) / 1e6, 2))
         except Exception as e:  # noqa: BLE001
             print(nm, "실패:", e)
 
