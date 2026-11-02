@@ -60,10 +60,22 @@ groups:
       - {name: DB하이텍, market: KR, code: "000990"}
       - {name: 리노공업, market: KR, code: "058470"}
       - {name: 마이크론, market: US, code: MU}
+      - {name: 창신메모리(CXMT), market: CN, code: 688825.SS}
       - {name: 엔비디아, market: US, code: NVDA}
       - {name: TSMC, market: US, code: TSM}
       - {name: ASML, market: EU, code: ASML.AS}
       - {name: 인피니언, market: EU, code: IFX.DE}
+
+  - name: 기판·전자부품
+    holdings: ["009150", "353200"]
+    peers:
+      - {name: 삼성전기, market: KR, code: "009150"}
+      - {name: 대덕전자, market: KR, code: "353200"}
+      - {name: 이수페타시스, market: KR, code: "007660"}
+      - {name: 심텍, market: KR, code: "222800"}
+      - {name: 무라타, market: JP, code: 6981.T}
+      - {name: 이비덴, market: JP, code: 4062.T}
+      - {name: 유니마이크론, market: TW, code: 3037.TW}
 
   - name: 자동차
     holdings: ["005380", "000270", TSLA]

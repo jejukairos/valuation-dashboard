@@ -137,6 +137,10 @@
      ①③④ 는 자동 (kpiBlock: 10년 분기 실적·SEC/야후 희석 주식 수·DART 유통주식수·야후 FCF) — ② 부문별은 kpi.yaml 에 손으로 (회사 보도자료 부문 매출, 6분기).
      회사가 따로 발표하는 '조정 FCF'가 야후 FCF 와 크게 다르면(인텔 2Q26 -84억$ vs +44.5억$) kpi.yaml 에 그림을 하나 더 + why 에 차이 이유.
      미국 종목 희석 주식 수 예전 분기는 이 컴퓨터에서 tools/sec_backfill.py 를 한 번씩 (서버는 SEC 가 막음).
+3-9. 🎙 경쟁사 컨퍼런스콜 (config/peer_calls.yaml, 화면: 종목 상세 '동종업계 비교' 아래):
+   - lists 에 있는 경쟁사가 새 분기 콜을 하면 calls 의 그 코드 맨 위에 추가 (quarter·date·u·src·vs·short 3~4줄·guide·tone·us). 콜이 없으면 none 에 이유.
+   - 우리가 earnings.yaml 로 요약하는 종목은 calls 에 넣지 않음 (화면이 그 요약을 그대로 씀).
+   - 경쟁사 고르는 규칙: 업종마다 6곳 · 미국 2 + 유럽/일본 2 + 한국 2 · 시총 1조 원 미만 제외 · 새 경쟁사는 peers.yaml 그룹에도 넣어 시총을 받기.
 4. (tools/ir_live.ps1 이 부른 경우엔 파일 수정까지만 — 확인·올리기는 스크립트가 함)
    YAML 이 읽히는지 확인(python 으로 load) → 커밋 메시지 "<종목> <분기> 실적발표 요약" + 끝에 빈 줄과
    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" → `git pull --rebase; git push`.

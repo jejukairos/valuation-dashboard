@@ -3240,13 +3240,14 @@ function drawHolders(code) {
 
 /* ---------- 4. 동종업계 비교 ---------- */
 let PEERS = null;
-const FLAG = { KR: "🇰🇷", US: "🇺🇸", EU: "🇪🇺", JP: "🇯🇵" };
+const FLAG = { KR: "🇰🇷", US: "🇺🇸", EU: "🇪🇺", JP: "🇯🇵", TW: "🇹🇼", CN: "🇨🇳" };
 async function peersBlock(code, noPbr) {
   if (!PEERS) {
     try { PEERS = await (await fetch("data/peers.json?t=" + encodeURIComponent(DASH.updated_at))).json(); }
     catch (e) { return ""; }
   }
   const gs = PEERS.groups.filter((g) => g.holdings.includes(code));
+  const calls = await peerCallsHTML(code);
   // 미국 빅테크는 PBR 비교가 의미 없어서 PBR 열과 ROE-PBR 산점도를 뺀다
   return gs.map((g, gi) => {
     const warns = g.rows.filter((r) => r.warn && !noPbr).map((r) => `${esc(r.name)}: ${esc(r.warn)}`);
@@ -3266,7 +3267,33 @@ async function peersBlock(code, noPbr) {
       <div id="peer-legend-${gi}"></div>`}
       <div class="note src">시총은 원화 환산(환율: 달러 ${n(PEERS.fx.USD, 0)} · 유로 ${n(PEERS.fx.EUR, 0)} · 엔 ${n(PEERS.fx.JPY, 2)}원) · 한국: 네이버 증권·와이즈리포트(선행 PER = 12개월 선행), ROE 는 최근 연간 실적 · 해외: 야후 파이낸스(선행 PER = 향후 12개월, ROE = 최근 12개월) · ${esc(PEERS.updated_at)}
       ${warns.length ? "<br>" + warns.join("<br>") : ""}</div></div>`;
-  }).join("");
+  }).join("") + calls;
+}
+// 🎙 경쟁사 컨퍼런스콜 (config/peer_calls.yaml, 사용자 2026-11-03): 시총 큰 순 · 1조 미만 빼기 · 우리가 요약하는 종목은 그 요약을 그대로
+let PCALL = null;
+async function peerCallsHTML(code) {
+  if (!PCALL) { try { PCALL = await (await fetch("data/peer_calls.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { PCALL = {}; } }
+  const list = PCALL.lists?.[code];
+  if (!list?.length) return "";
+  const rowOf = {};
+  (PEERS?.groups || []).forEach((g) => g.rows.forEach((r) => { rowOf[r.code] = r; }));
+  const ps = list.map((c) => ({ c, r: rowOf[c] || {} })).filter((x) => x.r.cap_krw == null || x.r.cap_krw >= 1e12)
+    .sort((a, b) => (b.r.cap_krw ?? -1) - (a.r.cap_krw ?? -1));
+  const li = (x) => `<li>${esc(x)}</li>`;
+  const item = (x) => {
+    const own = (EARNINGS[x.c] || []).find((q) => !q.past), e = own ? null : (PCALL.calls?.[x.c] || [])[0];
+    const name = x.r.name || PCALL.names?.[x.c] || x.c, tag = PCALL.tags?.[x.c];
+    const meta = [x.r.cap_krw != null ? `시총 ${n(x.r.cap_krw / 1e12, 1)}조` : "", own ? `${own.quarter} · 우리 요약` : e ? `${e.quarter}${e.date ? " · " + e.date : ""}` : "아직 없음"].filter(Boolean).join(" · ");
+    const head = `${FLAG[x.r.market] || ""} <b>${esc(name)}</b>${tag ? ` <span class="qtag muted">${esc(tag)}</span>` : ""} ${e?.tone ? voiceTag(e.tone) : ""} <span class="src">${esc(meta)}</span>`;
+    const body = own ? `<ul class="irl">${(own.short || []).slice(0, 3).map(li).join("")}</ul><div class="note"><a href="#stock/${esc(x.c)}">이 종목 상세에서 전체 요약 보기 →</a></div>`
+      : e ? `${e.none ? `<div class="note">ℹ️ ${esc(e.none)}</div>` : ""}${e.vs ? `<div class="note" style="margin-top:4px"><b>${esc(e.vs)}</b></div>` : ""}
+        <ul class="irl">${(e.short || []).map(li).join("")}</ul>${e.guide ? `<div class="note">🧭 가이던스: ${esc(e.guide)}</div>` : ""}
+        ${e.us ? `<div class="kidbox" style="margin-top:6px">👉 우리 종목에는: ${esc(e.us)}</div>` : ""}
+        <div class="src">${esc(e.src || "")}${e.u ? ` · <a href="${esc(e.u)}" target="_blank" rel="noopener">원문 보기</a>` : ""}</div>`
+      : `<div class="note src">요약이 아직 없어요.</div>`;
+    return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">${head}</summary>${body}</details>`;
+  };
+  return `<h3>🎙 경쟁사 컨퍼런스콜</h3><div class="card"><div class="note src">시가총액 큰 순 · 1조 원 미만은 빼요 · 눌러서 열기 · 꼬리표 = 경영진 말투</div>${ps.map(item).join("")}</div>`;
 }
 function drawPeers(code) {
   if (!PEERS) return;
