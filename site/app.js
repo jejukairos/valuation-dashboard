@@ -2924,8 +2924,9 @@ function expHTML(kind) {
   if (!L || (!E && !L[kind])) return "";  // 월별 그림(E)이 아직 없어도 증권사 표만 먼저
   const fm = (v) => (v == null ? "-" : eok ? `$${n(v / 100, 0)}억` : `$${n(v, 1)}m`);
   const dy = (yy) => (yy == null ? null : ((1 + yy / 100) * L.days.ly / L.days.this - 1) * 100);  // 영업일수 감안 일평균 전년비 (영업일수는 사용자 글에만 있음)
-  const tbl = (k, nm) => (L[k] ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(nm)}</th><th>${esc(L.ym)}</th><th>전년비</th><th>전월비</th>${L.days ? "<th>일평균 전년비</th>" : ""}</tr></thead><tbody>
-    ${Object.entries(L[k]).map(([c, [v, yy, mm]]) => `<tr><td style="text-align:left">${esc(c)}</td><td><b>${fm(v)}</b></td><td class="${kcol(yy)}">${sg(yy)}</td><td class="${kcol(mm)}">${sg(mm)}</td>${L.days ? `<td class="${kcol(dy(yy))}">${sg(dy(yy))}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : "");
+  const hv = (k) => Object.values(L[k]).some((r) => r[0] != null);  // 금액이 하나도 없으면(증권사 % 만 준 표) 금액 칸을 뺌
+  const tbl = (k, nm) => (L[k] ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(nm)}${hv(k) ? "" : ` (${esc(L.ym)})`}</th>${hv(k) ? `<th>${esc(L.ym)}</th>` : ""}<th>전년비</th><th>전월비</th>${L.days ? "<th>일평균 전년비</th>" : ""}</tr></thead><tbody>
+    ${Object.entries(L[k]).map(([c, [v, yy, mm]]) => `<tr><td style="text-align:left">${esc(c)}</td>${hv(k) ? `<td><b>${fm(v)}</b></td>` : ""}<td class="${kcol(yy)}">${sg(yy)}</td><td class="${kcol(mm)}">${sg(mm)}</td>${L.days ? `<td class="${kcol(dy(yy))}">${sg(dy(yy))}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : "");
   const ms = [...new Set(Object.values(E || {}).flatMap((s) => Object.keys(s)))].sort(), all = [];
   if (ms.length) for (let y = +ms[0].slice(0, 4), m = +ms[0].slice(5); `${y}-${String(m).padStart(2, "0")}` <= ms.at(-1); m === 12 ? (y++, m = 1) : m++) all.push(`${y}-${String(m).padStart(2, "0")}`);
   // 연도별 같은 달 비교 (가로 1~12월, 해마다 선 하나 · 올해만 주황 굵게 — 사용자 전달 그림 모양)
