@@ -28,6 +28,15 @@ HS = {"190230": ({"ramen": ("1902301010",)},["전체", "중국", "미국", "일�
 TECH = {"854232": {"메모리": ("854232",), "D램": ("8542321010",), "낸드": ("8542321030",), "MCP·HBM": ("8542323000",)},
         "852351": {"SSD": ("8523511",)}, "853224": {"MLCC": ("853224",)}, "8524": {"디스플레이": ("8524",)},
         "850760": {"2차전지": ("850760",)}, "8486": {"반도체 장비": ("8486",)}}
+# ⚡ 전력기기 · 🥫 음식료 (사용자 전달 증권사 '전력기기/음식료 수출입 통계', 2026-11-02 · HS 이름은 probe 로 확인):
+#   변압기 3줄·아이스크림·담배는 코드가 확실. 배전반·GIS·초고압케이블·소스는 증권사 정의를 몰라 후보를 나눠 받음 —
+#   10월 확정치(11월 중순)가 들어오면 증권사 전년비(배전반 +1,288% · GIS +168% · 케이블 +54% · 소스 +43%)와 맞는 쪽으로 정리
+POWER = {"8504": {"초고압변압기": ("850423",), "배전변압기 650~10,000kVA": ("850422",), "배전변압기 650kVA 이하": ("850421",)},
+         "8535": {"GIS·차단기 (72.5kV 이상)": ("853529",)},
+         "8537": {"배전반 (1kV 초과)": ("8537203",), "배전반 (1kV 이하)": ("8537104",)},
+         "8544": {"전력케이블 (1kV 초과)": ("854460",), "초고압케이블 (8544.60.3)": ("8544603",)}}
+FOOD = {"2103": {"소스": ("2103",), "기타 소스 (2103.90.9090)": ("2103909090",)}, "2105": {"아이스크림": ("2105",)}, "2402": {"담배": ("240220",)}}
+GROUPS = {"tech": TECH, "power": POWER, "food": FOOD}  # 나라 합계만 · d[묶음][품목]
 Y0 = 2020
 
 
@@ -81,6 +90,8 @@ def pct(a, b):
 
 assert monthly([{"year": "2026.09", "hsCode": c, "expDlr": v} for c, v in (("8542321010", "1000000000"), ("8542323000", "2000000000"), ("8542321030", "500000000"))],
                TECH["854232"]) == {"메모리": {"2026-09": 3500.0}, "D램": {"2026-09": 1000.0}, "낸드": {"2026-09": 500.0}, "MCP·HBM": {"2026-09": 2000.0}}
+assert monthly([{"year": "2026.09", "hsCode": c, "expDlr": v} for c, v in (("8544603010", "67600000"), ("8544601010", "16500000"), ("8544700000", "9"))],
+               POWER["8544"]) == {"전력케이블 (1kV 초과)": {"2026-09": 84.1}, "초고압케이블 (8544.60.3)": {"2026-09": 67.6}}
 
 
 def table(d, ym, keys=("ramen", "cosmetics", "skincare", "makeup")):
@@ -112,21 +123,22 @@ def main():
         sys.exit("CUSTOMS_KEY 없음")
     d = yaml.safe_load(PATH.read_text(encoding="utf-8"))
     got, fail, now = 0, [], now_kst()
-    jobs = [(hs, kinds, nm) for hs, (kinds, names) in HS.items() for nm in names] + [(hs, items, "") for hs, items in TECH.items()]  # "" = 반도체·IT
-    for hs, kinds, nm in jobs:
+    jobs = ([(hs, kinds, nm, None) for hs, (kinds, names) in HS.items() for nm in names]
+            + [(hs, items, "", g) for g, G in GROUPS.items() for hs, items in G.items()])  # "" = 나라 합계 묶음 (반도체·IT · 전력기기 · 음식료)
+    for hs, kinds, nm, grp in jobs:
         for y in range(Y0, now.year + 1):
             t0 = time.time()
             try:
                 v = monthly(get(hs, CN.get(nm, ""), f"{y}01", f"{y}12"), kinds)
-                print(hs, nm or "IT", y, sum(map(len, v.values())), "칸", f"{time.time() - t0:.0f}초")
+                print(hs, nm or grp, y, sum(map(len, v.values())), "칸", f"{time.time() - t0:.0f}초")
             except Exception as e:  # noqa: BLE001
-                print(hs, nm or "IT", y, "실패", e, f"{time.time() - t0:.0f}초")
-                fail.append(f"{hs}/{nm or 'IT'}/{y}: {e}")
+                print(hs, nm or grp, y, "실패", e, f"{time.time() - t0:.0f}초")
+                fail.append(f"{hs}/{nm or grp}/{y}: {e}")
                 if nm not in ("전체", "") and "등록되지 않은" in str(e):
                     break  # 나라별 API 가 아직 안 열렸으면 그 나라 나머지 해는 건너뜀
                 continue
             for k, s in v.items():  # 관세청 숫자가 Comtrade·사용자 글 숫자보다 우선
-                (d.setdefault(k, {}).setdefault(nm, {}) if nm else d.setdefault("tech", {}).setdefault(k, {})).update(s)
+                (d.setdefault(k, {}).setdefault(nm, {}) if nm else d.setdefault(grp, {}).setdefault(k, {})).update(s)
                 got += len(s)
             time.sleep(0.3)
     print(f"관세청 {got}칸 · 실패 {len(fail)}", *fail[:12], sep="\n")
@@ -139,10 +151,10 @@ def main():
         d["latest"], ch = table(d, new), True
     if newt > str((d.get("tech_latest") or {}).get("ym", "")):
         d["tech_latest"], ch = table(d, newt, ("tech",)), True
-    if ch:  # 표를 새로 쓰면 손으로 단 줄 끝 메모는 사라짐
+    if ch:  # 표를 새로 쓰면 손으로 단 줄 끝 메모는 사라짐 (power_latest·food_latest 같은 손으로 적은 표도 그대로 다시 씀)
         head = "".join(x + "\n" for x in head.splitlines() if x.startswith("#")) + yaml.safe_dump(
-            {k: d[k] for k in ("latest", "tech_latest") if d.get(k)}, allow_unicode=True, sort_keys=False, width=1000, default_flow_style=None)
-    body = yaml.safe_dump({k: {s: dict(sorted(v.items())) for s, v in d[k].items()} for k in ("ramen", "cosmetics", "skincare", "makeup", "tech") if k in d},
+            {k: d[k] for k in d if (k == "latest" or k.endswith("_latest")) and d[k]}, allow_unicode=True, sort_keys=False, width=1000, default_flow_style=None)
+    body = yaml.safe_dump({k: {s: dict(sorted(v.items())) for s, v in d[k].items()} for k in ("ramen", "cosmetics", "skincare", "makeup", *GROUPS) if k in d},
                           allow_unicode=True, sort_keys=False, width=1000)
     PATH.write_text(head.rstrip() + "\n" + body, encoding="utf-8")
     write_json(DATA / "exports.json", yaml.safe_load(PATH.read_text(encoding="utf-8")))
