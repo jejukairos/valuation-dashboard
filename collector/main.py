@@ -247,7 +247,7 @@ def stock_detail(h, rates_now, fx):
             pg["part_src"] = f"{h['sector']} 업종 PER" if "업종" in hi[1] else "PER 밴드"
             if "업종" in hi[1] and (SECTORS.get(h.get("sector")) or {}).get("easy"):
                 pg["easy"] = SECTORS[h["sector"]]["easy"]  # 🐂 강세장 칸 업종 배수 (sectors.yaml easy)
-    scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg)
+    scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg, keep=bool(h.get("keep_mult")))
     if scen and pg:
         scen["growth"] = pg
         e27 = (hist.get(y0 + 1) or {}).get("eps")

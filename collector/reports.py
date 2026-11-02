@@ -128,6 +128,15 @@ if __name__ == "__main__":
         assert prev_tp("목표주가 (하향) 350,000원\n현재 직전 변동\n목표주가 350,000 460,000 ▼") == (460000.0, "하향")
         assert prev_tp("목표주가(12M) 600,000원(유지)") == (None, "유지") and prev_tp("투자의견 BUY, 목표주가 1,800,000원 유지") == (None, "유지")
         print("ok")
+    elif sys.argv[1:] == ["--all"]:  # 리포트만 따로 갱신 (tg.yml 저녁 매시간) — 본 갱신(main.py)과 같은 종목 목록
+        from common import DATA
+        sy, todo, seen = load_yaml("stocks.yaml"), [], set()
+        for key, g in (("holdings", "보유"), ("watchlist", "관심"), ("joint", "공동")):
+            for h in sy.get(key) or []:
+                if str(h["code"]) not in seen:
+                    seen.add(str(h["code"]))
+                    todo.append((h, g))
+        write_json(DATA / "reports.json", collect(todo))
     else:
         for x in kr(sys.argv[1] if len(sys.argv) > 1 else "005930")[:5]:
             print(x)

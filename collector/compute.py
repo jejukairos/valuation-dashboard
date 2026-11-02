@@ -241,10 +241,11 @@ def too_high(m, e12, price, band, sector=None, sec_name=None):
     return None
 
 
-def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
+def scenarios(price, hist, bands, kinds, sector=None, per_growth=None, keep=False):
     """적정주가 Bear(하방) / Base(적정주가) / Bull(최대): 12개월 선행(12MF) EPS·BPS × 배수.
     PER 배수는 성장률 방식(growth_fair: 성장률 × 1 / 1.25 / 1.5)이 있으면 그것, 업종 배수(sectors.yaml)를 고른 종목은 그것,
-    둘 다 없으면 그 종목의 10년 밴드 하단·평균·상단. PBR 은 10년 밴드. PER·PBR 둘 다 쓰는 종목은 평균."""
+    둘 다 없으면 그 종목의 10년 밴드 하단·평균·상단. PBR 은 10년 밴드. PER·PBR 둘 다 쓰는 종목은 평균.
+    keep = 업종·밴드 배수를 '하방 × 1 · 1.25 · 1.5' 로 바꾸지 않고 그대로 (stocks.yaml keep_mult — 에이피알 10 · 15 · 20)."""
     parts = []
     for kind in kinds:
         key = {"PER": "eps", "PBR": "bps"}.get(kind)
@@ -277,7 +278,9 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None):
         bm = ({"lo": ez[0], "hi": ez[-1]} if ez else
               {"lo": per_growth["g"] * 1.5, "hi": per_growth["g"] * 2} if grow else
               {"lo": m["base"], "hi": m["base"] * 2} if kind == "PER" else {"lo": m["base"], "hi": m["bull"]})
-        if m["base"] != m["bear"] * GROWTH_MULT["base"]:  # 사용자 원칙(2026-11-01): 모든 방법 Base = 하방 × 1.25, Bull = 하방 × 1.5 (강세장 칸은 그대로)
+        if keep and m["base"] != m["bear"] * GROWTH_MULT["base"]:
+            how += " — 이 종목은 배수 그대로 (사용자 지정 2026-11-02)"
+        elif m["base"] != m["bear"] * GROWTH_MULT["base"]:  # 사용자 원칙(2026-11-01): 모든 방법 Base = 하방 × 1.25, Bull = 하방 × 1.5 (강세장 칸은 그대로)
             m = {k: m["bear"] * f for k, f in GROWTH_MULT.items()}
             how += f" → 하방 {m['bear']:g}배 × 1 · 1.25 · 1.5"
         cap, over = None, {}
@@ -531,6 +534,8 @@ if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% �
     assert (s["bear"], s["base"], s["bull"]) == (10000, 12500, 15000) and s["bull_mkt"] == {"lo": 15000, "mid": 22500, "hi": 30000}, s
     s = scenarios(10000, h, {}, ["PER"], sector={**sec2, "name": "화장품 브랜드"})
     assert (s["base"], s["bull_mkt"]["mid"]) == (12500, 22500), s
+    s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 20, "mult": t2[0], "part_src": "화장품 브랜드 업종 PER"}, keep=True)  # 에이피알: 10 · 15 · 20 그대로
+    assert (s["bear"], s["base"], s["bull"]) == (10000, 15000, 20000) and "그대로" in s["parts"][0]["how"], s
     # 하방부터 35배를 넘는 성장률(39.6%)은 성장률 방식 대신 PER 밴드로 (두산에너빌리티)
     assert too_high({"bear": 39.6, "base": 59.4, "bull": 79.2}, 919, 56500, band)[0] == {"bear": 8, "base": 15, "bull": 25}
     print("ok")

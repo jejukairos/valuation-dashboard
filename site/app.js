@@ -482,6 +482,7 @@ function stockCard(c) {
     ${c.scen ? `<div class="chart-title" style="margin-top:14px"><b>② 지난 10년 밴드에서 지금 위치</b> <span class="src">0% = 10년 중 가장 싼 쪽 · 100% = 가장 비싼 쪽</span></div>` : ""}
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
     <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
+    <div class="tgday" data-code="${esc(c.code)}" onclick="event.stopPropagation()">${tgDayHTML(c.code)}</div>
     ${somongHTMLcard(c)}
     ${tipranksHTML(c)}
     ${streetHTML(c)}
@@ -504,6 +505,7 @@ function renderCards() {
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
   drawGauges(list);
   jumpBar("#stockCards", "#cardJump");
+  tgGet().then(() => document.querySelectorAll("#stockCards .tgday").forEach((el) => { el.innerHTML = tgDayHTML(el.dataset.code); })).catch(() => {});
 }
 // 🔎 종목 찾기 줄: 아래에 그려진 [data-jump] 칸들로 이름 목록을 만들고, 이름을 누르거나 검색하면 그 칸으로 스크롤 (실적 탭·보유 탭)
 function jumpBar(rootSel, barSel, ph = "🔎 종목 이름 검색 (예: 에이피알) → Enter") {
@@ -4214,17 +4216,61 @@ const tgGet = async () => {
   TGR = await (await fetch("data/tg_reports.json?t=" + Date.now(), { cache: "no-store" })).json();
   try {  // + 미리보기가 꺼진 채널 (data/tg_api.json ← 이 컴퓨터의 텔레그램 API, tools/tg_api_reports.py) — 같은 칸으로 합침
     const A = await (await fetch("data/tg_api.json?t=" + Date.now(), { cache: "no-store" })).json();
-    for (const [c, L] of Object.entries(A.stocks || {})) TGR.stocks[c] = [...(TGR.stocks[c] || []), ...L].sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 40);
+    for (const [c, L] of Object.entries(A.stocks || {})) TGR.stocks[c] = tgSort([...(TGR.stocks[c] || []), ...L]).slice(0, 40);
     TGR.kr = [...(TGR.kr || []), ...(A.channels || [])];
+    TGR.api_at = A.updated_at;
   } catch (_) { /* API 채널만 빠짐 */ }
   return TGR;
 };
+const tgSort = (L) => [...L].sort((a, b) => (b.d + (b.hm || "")).localeCompare(a.d + (a.hm || "")));
+const kstDay = (k = 0) => new Date(Date.now() + 9 * 36e5 - k * 864e5).toISOString().slice(0, 10);
+const tgLab = (x) => (x.pdf ? "📥 PDF·요약" : x.ch === "ked_epic_ai" ? "✨ 요약" : "🔗 원문");
+// 목표가: '540,000 → 435,000 하향' (에픽 AI 요약은 이전 목표가도 있음)
+const tgTp = (x, code) => (x.tp ? `${x.tp_prev ? `${tpTxt(x.tp_prev, mktOf(code))} → ` : ""}<b>${tpTxt(x.tp, mktOf(code))}</b>${x.dir
+  ? ` <b style="color:${x.dir === "하향" ? "var(--bad-ink)" : x.dir === "상향" ? "var(--good-ink)" : "inherit"}">${esc(x.dir)}</b>` : ""}` : "");
+// 같은 증권사 글(DOC_POOL PDF + 에픽 AI 요약)은 한 줄로 링크를 나란히, 증권사가 없는 업종·시황 글은 제목으로
+function tgRows(L, code) {
+  const by = new Map();
+  for (const x of L) { const k = x.firm || x.u; if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
+  return [...by.values()].map((g) => {
+    const t = g.find((x) => x.tp_prev) || g.find((x) => x.tp) || g[0];
+    return `<li><span class="src">${esc(g[0].d.slice(5).replace("-", "/"))}${g[0].hm ? " " + esc(g[0].hm) : ""}</span> ${g[0].firm ? `<b>${esc(g[0].firm)}</b> ${tgTp(t, code)}` : esc(g[0].t)}
+      · ${g.map((x) => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${tgLab(x)}</a>`).join(" · ")}</li>`;
+  }).join("");
+}
+// 📄 오늘·어제 리포트 (보유 탭 카드, 소몽 체크리스트 위 — 사용자 2026-11-02): 📥 PDF·요약(DOC_POOL) · ✨ 짧은 요약(에픽 AI)
+function tgDayHTML(code) {
+  if (!TGR) return "";
+  const L = tgSort((TGR.stocks?.[code] || []).filter((x) => x.d >= kstDay(1) && x.est_w == null));
+  const at = [TGR.updated_at, TGR.api_at].filter(Boolean).map((s) => s.slice(5)).join(" · ");
+  return L.length ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 리포트 ${L.length}개</b> <span class="src">📥 텔레그램에서 PDF 받기 · ✨ 짧은 요약 · 확인 ${esc(at)}</span></div><ul class="irl">${tgRows(L, code)}</ul>`
+    : `<div class="src" style="margin-top:10px">📄 오늘·어제 새 리포트 없음 · 확인 ${esc(at)}</div>`;
+}
+// 📥 최근 7일 리포트 (리포트 탭 맨 위): 보유·관심·공동 종목, 날짜별 — 링크만 (PDF 는 텔레그램에 있어 사이트 용량을 안 씀, 7일 지나면 저절로 빠짐)
+function tgWeekHTML(mkt) {
+  if (!TGR) return "";
+  const names = Object.fromEntries(DASH.stocks.map((c) => [c.code, c.name])), days = {};
+  for (const [code, L] of Object.entries(TGR.stocks || {})) {
+    if (!names[code] || mktOf(code) !== mkt) continue;
+    for (const x of L) if (x.d >= kstDay(6) && x.est_w == null && (x.pdf || x.tp || x.ch === "ked_epic_ai")) ((days[x.d] ||= {})[code] ||= []).push(x);
+  }
+  const D = Object.keys(days).sort().reverse(), wd = (d) => "일월화수목금토"[new Date(d + "T12:00:00Z").getUTCDay()];
+  if (!D.length) return "";
+  const ch = (u, t) => `<a href="https://t.me/${u}" target="_blank" rel="noopener">${t}</a>`;
+  return `<div class="card" style="margin-bottom:10px"><b>📥 최근 7일 리포트 — 보유·관심 종목</b>
+    <div class="src">📥 PDF·요약 = ${ch("DOC_POOL", "DOC_POOL")} (누르면 텔레그램에서 PDF 받기) · ✨ 요약 = ${ch("ked_epic_ai", "에픽 AI")} 리서치 요약 (목표가 올림·내림) · 7일 지나면 목록에서 저절로 빠져요 · 확인 ${esc([TGR.updated_at, TGR.api_at].filter(Boolean).join(" · "))}</div>
+    ${D.map((d, i) => {
+      const S = Object.entries(days[d]).sort((a, b) => b[1].length - a[1].length), n = S.reduce((a, [, L]) => a + L.length, 0);
+      return `<details${i === 0 ? " open" : ""} style="margin-top:6px"><summary><b>${esc(d.slice(5).replace("-", "/"))} (${wd(d)})</b> <span class="src">${S.length}종목 · ${n}개</span></summary>
+        ${S.map(([code, L]) => `<div style="margin-top:6px"><a href="#reports/${esc(code)}"><b>${esc(names[code])}</b></a><ul class="irl">${tgRows(tgSort(L), code)}</ul></div>`).join("")}</details>`;
+    }).join("")}</div>`;
+}
 function tgHTML(code, max) {
   const L = TGR?.stocks?.[code] || [], P = L.filter((x) => x.est_w == null).slice(0, max);  // 추정치 순위 글은 📈 이익 추정치 칸에
   if (!P.length) return "";
-  const D = (x) => esc(x.d.slice(5).replace("-", "/")), dc = (d) => (d === "하향" ? "var(--bad-ink)" : d === "상향" ? "var(--good-ink)" : "inherit");
+  const D = (x) => esc(x.d.slice(5).replace("-", "/"));
   return `<div class="news-h" style="margin-top:10px">📨 텔레그램 리포트 채널 <span class="src">최근 7개월 ${L.length}개 · ${esc((TGR.kr || []).concat(TGR.us || []).length)}개 채널 · ${esc(TGR.updated_at || "")}</span></div>
-    <ul class="irl">${P.map((x) => `<li><span class="src">${D(x)} · ${esc(x.ch)}</span> <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>${x.tp ? ` · 🎯 ${esc(x.firm || "")} <b>${tpTxt(x.tp, mktOf(code))}</b>${x.dir ? ` <b style="color:${dc(x.dir)}">${esc(x.dir)}</b>` : ""}` : ""}${x.s ? `<div class="src">${esc(x.s)}</div>` : ""}</li>`).join("")}</ul>`;
+    <ul class="irl">${P.map((x) => `<li><span class="src">${D(x)} · ${esc(x.ch)}</span> <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>${x.pdf ? ' <span class="src">📥 PDF</span>' : ""}${x.tp ? ` · 🎯 ${esc(x.firm || "")} ${tgTp(x, code)}` : ""}${x.s ? `<div class="src">${esc(x.s)}</div>` : ""}</li>`).join("")}</ul>`;
 }
 async function loadReports() {
   try { await repGet(); } catch (_) { $("#reportsBody").innerHTML = `<div class="empty">리포트를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
@@ -4236,7 +4282,7 @@ async function loadReports() {
   const list = REP_CODE ? all.filter((r) => r.code === REP_CODE)
     : all.filter((r) => r.market === REP_MKT && (REP_GRP === "전체" || r.group === REP_GRP)).sort((a, b) => latest(b).localeCompare(latest(a)));
   $("#reportsBody").innerHTML = (REP_CODE ? `<div class="note"><a href="#reports">← 전체 종목 리포트</a></div>` : `<div class="seg repmk" style="margin-bottom:8px"><button data-mk="KR" class="${REP_MKT === "KR" ? "on" : ""}">🇰🇷 한국 리포트</button><button data-mk="US" class="${REP_MKT === "US" ? "on" : ""}">🇺🇸 미국 리포트</button></div>
-    <div class="chips repgrp" style="margin-bottom:10px">${grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === REP_GRP ? "on" : ""}">${esc(g)}</button>`).join("")}</div>${estBoardHTML(REP_MKT)}`)
+    <div class="chips repgrp" style="margin-bottom:10px">${grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === REP_GRP ? "on" : ""}">${esc(g)}</button>`).join("")}</div>${tgWeekHTML(REP_MKT)}${estBoardHTML(REP_MKT)}`)
     + `<div class="grid g2">${list.map((r) => `<div class="card" id="rep-${esc(r.code)}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:17px">${esc(r.name)}</b>
       <span class="src">${esc(r.group)} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>${repSum(r)}${(r.notes || []).map((x) => repNote(x, r.market)).join("")}${repTable(r, 15)}${tgHTML(r.code, 15)}${ibHTML(r.code)}</div>`).join("") || `<div class="empty">리포트가 없어요.</div>`}</div>`;
 }
@@ -4417,7 +4463,7 @@ function renderAll() {
   ["네이버 증권", "와이즈리포트", "OpenDART"].forEach((x) => srcs.add(x));
   $("#footer").innerHTML = `<p><b>투자 판단 참고용</b>이에요. 매수·매도 추천이 아니며, 숫자는 출처의 사정으로 틀리거나 늦을 수 있어요.</p>
     <p>데이터 출처: ${[...srcs].map(esc).join(" · ")}</p>
-    <p>마지막 갱신: ${esc(DASH.updated_at)} KST · 갱신 시각: 평일 07:30, 18:30</p>`;
+    <p>마지막 갱신: ${esc(DASH.updated_at)} KST · 갱신 시각: 전체 = 평일 07:30, 18:30 · 리포트·텔레그램·뉴스 = 매일 07:30, 17:30 + 일~목 19:30~01:30 매시간</p>`;
 }
 
 async function load() {

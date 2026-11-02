@@ -1,9 +1,12 @@
-name: 텔레그램 리포트 채널
+name: 텔레그램 리포트 채널 · 한경 리포트 · 뉴스
 
 on:
   schedule:
-    - cron: "30 22 * * *"     # 매일 07:30 KST = 전날 22:30 UTC
-    - cron: "30 8 * * *"      # 매일 17:30 KST
+    - cron: "30 22 * * *"       # 매일 07:30 KST = 전날 22:30 UTC
+    - cron: "30 8 * * *"        # 매일 17:30 KST
+    # 사용자가 휴대폰을 보는 일~목 20:00~02:00 (2026-11-02 요청): KST 19:30 · 20:30 … 다음날 01:30 매시간
+    # (UTC 일~목 10:30~16:30 · GitHub 예약은 보통 10~30분 늦게 시작)
+    - cron: "30 10-16 * * 0-4"
   workflow_dispatch:
   push:
     branches: [main]
@@ -19,7 +22,7 @@ concurrency:
 jobs:
   tg:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,13 +36,18 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: cd collector && python -u tg_reports.py
+      - name: 한경 리포트 목록 · 뉴스 (본 갱신 07:30·18:30 사이에도 새 글)
+        if: always()
+        env:
+          PYTHONIOENCODING: utf-8
+        run: cd collector && python -u reports.py --all && python -u news.py
       - name: 저장
         if: always()
         run: |
           git config user.name "valuation-bot"
           git config user.email "valuation-bot@users.noreply.github.com"
-          git add site/data/tg_reports.json 2>/dev/null || true
+          git add site/data/tg_reports.json site/data/reports.json site/data/news.json cache/news.json cache/reports_pdf.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
-          git commit -m "텔레그램 리포트 채널 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          git commit -m "리포트·뉴스 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done
           exit 1

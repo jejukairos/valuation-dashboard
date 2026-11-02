@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "collector"))
 from common import DATA, load_yaml, now_kst, write_json  # noqa: E402
-from tg_reports import DAYS, parse  # noqa: E402
+from tg_reports import DAYS, about, parse  # noqa: E402
 
 SECRETS = Path.home() / ".tg-secrets"
 CHANNELS = {"YoungTiger_stock": "KR", "DOC_POOL": "KR", "aethersemiresearch": "US"}  # 사용자 '리포트자료모음' 중 미리보기가 꺼진 3곳
@@ -43,8 +43,8 @@ async def fetch(cut):
                 async for m in client.iter_messages(ch, limit=MAX_MSGS):
                     if m.date < cut:
                         break
-                    if m.message:
-                        msgs.append((m.id, m.date, m.message))
+                    if m.message:  # pdf = 글에 PDF 파일이 붙어 있음 (DOC_POOL: 요약 + 리포트 PDF → 링크 누르면 텔레그램에서 받음)
+                        msgs.append((m.id, m.date, m.message, bool(m.file and (m.file.mime_type or "").endswith("pdf"))))
             except Exception as e:  # noqa: BLE001 - 한 채널이 안 돼도 나머지는
                 print(f"  {ch}: 실패 {type(e).__name__}")
             out[ch] = msgs
@@ -76,10 +76,11 @@ def main():
         for ch, mk in CHANNELS.items():
             if (mk == "US") != us:
                 continue
-            for mid, dt, text in raw.get(ch, []):
-                if hit(text, names, us):
-                    posts.append({"d": dt.astimezone(timezone(timedelta(hours=9))).strftime("%Y-%m-%d"), "ch": ch,
-                                  "u": f"https://t.me/{ch}/{mid}", **parse(text, names)})
+            for mid, dt, text, pdf in raw.get(ch, []):
+                if hit(text, names, us) and about(text, names):
+                    kst = dt.astimezone(timezone(timedelta(hours=9)))
+                    posts.append({"d": kst.strftime("%Y-%m-%d"), "hm": kst.strftime("%H:%M"), "ch": ch,
+                                  "u": f"https://t.me/{ch}/{mid}", **({"pdf": True} if pdf else {}), **parse(text, names)})
         if posts:
             stocks[code] = sorted(posts, key=lambda p: p["d"], reverse=True)[:30]
     write_json(DATA / "tg_api.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "channels": list(CHANNELS),

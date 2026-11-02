@@ -32,6 +32,7 @@ holdings:
     industry: 화장품
     methods: [PER]
     sector: 화장품 브랜드
+    keep_mult: true   # 업종 보수 배수 10 · 15 · 20 그대로 (× 1 · 1.25 · 1.5 로 줄이지 않음) — 사용자 2026-11-02 '화장품 시총 1위가 12.5배는 이해 안 됨'
     avg_price:
     quantity:
 

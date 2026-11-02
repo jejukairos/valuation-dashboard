@@ -110,6 +110,11 @@ if __name__ == "__main__":  # 혼자 돌려 보기: python collector/news.py
     m = merge(None, [{"t": "가나다라마", "s": "A", "u": "1", "d": now_kst().strftime("%Y-%m-%d %H:%M")}], "x", 5)
     assert m[0]["f"] == "" and merge(m, [{"t": "가나다라마", "s": "B", "u": "2", "d": m[0]["d"]}], "y", 5)[0]["ss"] == ["A", "B"]
     sy = load_yaml("stocks.yaml")
-    todo = [(h, g) for key, g in (("holdings", "보유"), ("watchlist", "관심"), ("joint", "공동")) for h in (sy.get(key) or [])]
+    todo, seen = [], set()  # 본 갱신(main.py)처럼 여러 묶음에 있는 종목은 한 번만 (tg.yml 저녁 매시간에도 씀)
+    for key, g in (("holdings", "보유"), ("watchlist", "관심"), ("joint", "공동")):
+        for h in sy.get(key) or []:
+            if str(h["code"]) not in seen:
+                seen.add(str(h["code"]))
+                todo.append((h, g))
     write_json(DATA / "news.json", collect(todo))
     print(REPORT.failures or "ok")
