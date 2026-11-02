@@ -88,7 +88,7 @@ def collect():
             for q in names:
                 try:
                     for x in filter(lambda x: about(x["text"], names), search(ch, q, cut)):
-                        posts.setdefault(x["id"], {"d": x["d"], "ch": ch, "u": f"https://t.me/{x['id']}", **parse(x["text"], names)})
+                        posts.setdefault(x["id"], {"d": x["d"], "hm": x["hm"], "ch": ch, "u": f"https://t.me/{x['id']}", **parse(x["text"], names)})
                 except Exception as e:  # noqa: BLE001 - 한 채널이 막혀도 나머지는 모은다
                     fails.append(f"{ch} {q}: {str(e)[:50]}")
         out[code] = sorted(posts.values(), key=lambda p: p["d"], reverse=True)[:30]
