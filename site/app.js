@@ -2917,15 +2917,17 @@ const EXP_K = { ramen: ["🍜 라면 수출", "HS 1902.30.1010", ["전체", "미
     `${EXP_NOTE} · 메모리 = HS 8542.32 전체 · D램 = 8542.32.1010 · 낸드 = 8542.32.1030 (플래시) · MCP·HBM = 8542.32.3000 복합구조칩 (HBM 이 여기로 잡힘) · SSD = 8523.51.1 · MLCC = 8532.24 · 디스플레이 = 8524 · 2차전지 = 8507.60 (리튬이온) · 반도체 장비 = 8486 · 표(맨 위)는 증권사 묶음이라 그림 숫자와 정의가 다를 수 있어요`],
   power: ["⚡ 전력기기 수출", "나라 합계", ["초고압변압기", "배전변압기 650~10,000kVA", "초고압케이블 (8544.60.3)", "GIS·차단기 (72.5kV 이상)", "배전반 (1kV 초과)"], "품목 · 지역", false,
     `${EXP_NOTE} · 초고압변압기 = HS 8504.23 (10,000kVA 초과) · 배전변압기 = 8504.22 (650~10,000kVA) · 8504.21 (650kVA 이하) · 증권사 정의 확인 전 후보: GIS·차단기 = 8535.29 (72.5kV 이상) · 배전반 = 8537.20.3000 (1kV 초과 배전용) · 초고압케이블 = 8544.60.3 · 표(맨 위)는 증권사 1일 잠정치 (전월비·전년비만)`],
+  car: ["🚗 자동차 수출", "산업부 월별 · 관세청 HS", ["승용차 (HS 8703)", "자동차부품 (HS 8708)", "화물차 (HS 8704)"], "달", 1,
+    `표·선 그림 = 산업통상부 월별 자동차 수출액 (다올투자증권 글, 사용자 전달) · 아래 월별 그림 = 관세청 수출입실적 API (매일 확인 · 확정치는 다음 달 중순쯤) · 승용차 = HS 8703 (중고차 포함이라 산업부 '자동차'와 금액이 다를 수 있어요) · 화물차 = 8704 · 자동차부품 = 8708`],
   food: ["🥫 소스·아이스크림·담배 수출", "나라 합계", ["소스", "담배", "아이스크림"], "품목 · 지역", false,
     `${EXP_NOTE} · 소스 = HS 2103 전체 (후보: 2103.90.9090 기타 소스) · 아이스크림 = 2105 · 담배 = 2402.20 필터담배 · 라면은 위 🍜 라면 칸 · 표(맨 위)는 증권사 1일 잠정치 (전월비·전년비만)`] };
 function expHTML(kind) {
   const E = EXP?.[kind], L = EXP?.[`${kind}_latest`] || EXP?.latest, [title, hs, show, col1, eok, note] = EXP_K[kind];
   if (!L || (!E && !L[kind])) return "";  // 월별 그림(E)이 아직 없어도 증권사 표만 먼저
-  const fm = (v) => (v == null ? "-" : eok ? `$${n(v / 100, 0)}억` : `$${n(v, 1)}m`);
+  const fm = (v) => (v == null ? "-" : eok ? `$${n(v / 100, eok === true ? 0 : eok)}억` : `$${n(v, 1)}m`);  // eok 숫자 = 소수 자리 (자동차 65.5억)
   const dy = (yy) => (yy == null ? null : ((1 + yy / 100) * L.days.ly / L.days.this - 1) * 100);  // 영업일수 감안 일평균 전년비 (영업일수는 사용자 글에만 있음)
   const hv = (k) => Object.values(L[k]).some((r) => r[0] != null);  // 금액이 하나도 없으면(증권사 % 만 준 표) 금액 칸을 뺌
-  const tbl = (k, nm) => (L[k] ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(nm)}${hv(k) ? "" : ` (${esc(L.ym)})`}</th>${hv(k) ? `<th>${esc(L.ym)}</th>` : ""}<th>전년비</th><th>전월비</th>${L.days ? "<th>일평균 전년비</th>" : ""}</tr></thead><tbody>
+  const tbl = (k, nm) => (L[k] ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(nm)}${hv(k) ? "" : ` (${esc(L.ym)})`}</th>${hv(k) ? `<th>${esc(L.vh || L.ym)}</th>` : ""}<th>전년비</th><th>전월비</th>${L.days ? "<th>일평균 전년비</th>" : ""}</tr></thead><tbody>
     ${Object.entries(L[k]).map(([c, [v, yy, mm]]) => `<tr><td style="text-align:left">${esc(c)}</td>${hv(k) ? `<td><b>${fm(v)}</b></td>` : ""}<td class="${kcol(yy)}">${sg(yy)}</td><td class="${kcol(mm)}">${sg(mm)}</td>${L.days ? `<td class="${kcol(dy(yy))}">${sg(dy(yy))}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : "");
   const ms = [...new Set(Object.values(E || {}).flatMap((s) => Object.keys(s)))].sort(), all = [];
   if (ms.length) for (let y = +ms[0].slice(0, 4), m = +ms[0].slice(5); `${y}-${String(m).padStart(2, "0")}` <= ms.at(-1); m === 12 ? (y++, m = 1) : m++) all.push(`${y}-${String(m).padStart(2, "0")}`);
@@ -2940,6 +2942,13 @@ function expHTML(kind) {
   return `<h3 id="kc-exp-${kind}">${title} <span class="src">${hs} · 월별 · ${eok ? "억" : "백만"} 달러 · ${esc(L.src || "")}</span></h3><div class="card">
     ${(L.notes || []).length ? `<ul class="irl" style="margin-top:0">${L.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${tbl(kind, col1)}${kind === "cosmetics" ? `<details class="fvt"><summary class="chart-title">기초(스킨케어) · 색조(메이크업·립·아이) 나눠 보기</summary>${tbl("skincare", "기초")}${tbl("makeup", "색조")}</details>` : ""}
+    ${L.timeline && L[kind] ? (() => {  // 🚗 줄 = 달인 표 → 선으로 이은 월별 그림 (막대 = 전년비) + 🐣
+      const R = Object.entries(L[kind]).reverse(), lb = R.map(([k]) => k);
+      return lineChart({ t: `월별 ${title.replace(/^\S+\s/, "")} — 선으로 이음`, labels: lb, fl: (v) => `${n(v, 0)}억`, fr: (v) => `${n(v, 0)}%`,
+        s: [{ n: "수출액 (억 달러)", v: R.map(([, r]) => (r[0] == null ? null : r[0] / 100)), col: "var(--ink)" }, { n: "전년비 %", v: R.map(([, r]) => r[1]), bar: true, right: true, col: "var(--s1)" }],
+        tick: (i) => (i % 2 === 0 || i === lb.length - 1 ? `${lb[i].slice(0, 2)}.${+lb[i].slice(3)}` : "") })
+        + (L.kid ? `<div class="kidbox" style="margin:4px 0;font-size:13px">🐣 ${esc(L.kid)}</div>` : "");
+    })() : ""}
     ${L.days ? `<div class="src">영업일수 ${L.days.this}일 (${L.days.prev ? `전월 ${L.days.prev}일 · ` : ""}작년 ${L.days.ly}일) · 일평균 전년비 = 영업일수를 맞춘 비교</div>` : ""}
     <div class="qgrid">${season(show[0])}${season(show[1])}</div>
     ${E ? ych("전년 같은 달 대비 %", show.slice(0, 3)) : ""}${E && show.length > 5 ? ych("전년 같은 달 대비 % (부품·장비)", show.slice(5)) : ""}
@@ -3302,6 +3311,7 @@ async function openStock(code) {
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     try { await gpeGet(); } catch (_) { /* 🌍 글로벌 비교 그림만 빠짐 */ }
     const EXP_CODE = { "003230": ["ramen", "🍜 라면 수출"], "278470": ["cosmetics", "💄 화장품 수출"], "483650": ["cosmetics", "💄 화장품 수출"], "034020": ["power", "⚡ 전력기기 수출 (변압기·GIS·케이블)"],
+      ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
     $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
@@ -3837,7 +3847,7 @@ async function loadIndustry() {
     ["🍜 라면·음식료", () => expHTML("ramen") + expHTML("food")],
     ["💾 반도체", () => expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => expHTML("power")], ["🧱 기판·CCL", () => key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
-    ["🏬 백화점", () => gpeCard("백화점")], ["🚗 자동차", () => gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
+    ["🏬 백화점", () => gpeCard("백화점")], ["🚗 자동차", () => expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
   secs.push(["🔑 그 밖의 업종", Object.keys(K).filter((k) => !used.has(k)).map((k) => keyGroup(k, K[k])).join("")], ["⚖️ 고정비·변동비 (전 업종)", costIndHTML()]);
   $("#industryBody").innerHTML = secs.filter(([, h]) => h).map(([t, h]) => `<section data-jump="${esc(t)}" data-jname="${esc(t)}" style="margin-top:18px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">${t}</h2>${h}</section>`).join("");

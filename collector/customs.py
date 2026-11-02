@@ -36,7 +36,9 @@ POWER = {"8504": {"초고압변압기": ("850423",), "배전변압기 650~10,000
          "8537": {"배전반 (1kV 초과)": ("8537203",), "배전반 (1kV 이하)": ("8537104",)},
          "8544": {"전력케이블 (1kV 초과)": ("854460",), "초고압케이블 (8544.60.3)": ("8544603",)}}
 FOOD = {"2103": {"소스": ("2103",), "기타 소스 (2103.90.9090)": ("2103909090",)}, "2105": {"아이스크림": ("2105",)}, "2402": {"담배": ("240220",)}}
-GROUPS = {"tech": TECH, "power": POWER, "food": FOOD}  # 나라 합계만 · d[묶음][품목]
+# 🚗 자동차 (사용자 전달 다올 '월별 한국 자동차 수출액', 산업부 숫자 2026-11-02): 산업부 월별은 car_latest 표, 여기는 관세청 HS 로 2020년부터
+CAR = {"8703": {"승용차 (HS 8703)": ("8703",)}, "8704": {"화물차 (HS 8704)": ("8704",)}, "8708": {"자동차부품 (HS 8708)": ("8708",)}}
+GROUPS = {"tech": TECH, "power": POWER, "food": FOOD, "car": CAR}  # 나라 합계만 · d[묶음][품목]
 Y0 = 2020
 
 
@@ -61,7 +63,22 @@ def get(hs, cnty, a, b):
     auth, code = root.findtext(".//returnAuthMsg"), root.findtext(".//resultCode")
     if auth or code not in (None, "00", "0"):
         raise RuntimeError(f"{code} {auth or root.findtext('.//resultMsg')}")
-    return [{c.tag: (c.text or "").strip() for c in it} for it in root.iter("item")]
+    items = [{c.tag: (c.text or "").strip() for c in it} for it in root.iter("item")]
+    if len(items) >= p["numOfRows"]:  # 한 쪽에 다 안 들어옴 (승용차·부품처럼 세부 코드가 많은 품목) → 기간을 나눠 다시
+        raise Full(f"{hs} {a}~{b} {len(items)}줄")
+    return items
+
+
+class Full(RuntimeError):
+    pass
+
+
+def year_rows(hs, cnty, y):
+    """한 해 (1,000줄이 넘으면 반년씩 두 번)."""
+    try:
+        return get(hs, cnty, f"{y}01", f"{y}12")
+    except Full:
+        return get(hs, cnty, f"{y}01", f"{y}06") + get(hs, cnty, f"{y}07", f"{y}12")
 
 
 def monthly(rows, kinds):
@@ -129,7 +146,7 @@ def main():
         for y in range(Y0, now.year + 1):
             t0 = time.time()
             try:
-                v = monthly(get(hs, CN.get(nm, ""), f"{y}01", f"{y}12"), kinds)
+                v = monthly(year_rows(hs, CN.get(nm, ""), y), kinds)
                 print(hs, nm or grp, y, sum(map(len, v.values())), "칸", f"{time.time() - t0:.0f}초")
             except Exception as e:  # noqa: BLE001
                 print(hs, nm or grp, y, "실패", e, f"{time.time() - t0:.0f}초")
