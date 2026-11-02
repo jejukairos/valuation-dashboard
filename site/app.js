@@ -3850,7 +3850,7 @@ function keyChart(ch) {
   const bars = ch.bars || [], lines = ch.lines || [], tot = L.map((_, i) => bars.reduce((a, s) => a + (s.v[i] || 0), 0));
   const all = [...(bars.length ? tot : []), ...lines.flatMap((s) => s.v)].filter((v) => v != null);
   if (N < 2 || !all.length) return "";
-  const jo = ch.u === "억원" && Math.max(...all) >= 1e4, dv = jo ? 1e4 : 1, un = jo ? "조원" : ch.u || "", V = (v) => n(v / dv, jo ? 1 : 0);
+  const jo = ch.u === "억원" && Math.max(...all) >= 1e4, dv = jo ? 1e4 : 1, un = jo ? "조원" : ch.u || "", V = (v) => n(v / dv, jo ? 1 : ch.d || 0);  // d = 소수 자리 (DDR5 값 등)
   const top = ch.pct ? 72 : 24, bot = 146, hi = Math.max(...all) * 1.08, Y = (v) => bot - (v / hi) * (bot - top);
   const BC = ["var(--muted)", "var(--s1)", "var(--s3)", "var(--s4)"];
   let g = `<line x1="${x0}" x2="${W - x0}" y1="${bot}" y2="${bot}" stroke="var(--axis)"/>`;
