@@ -3303,16 +3303,22 @@ async function peerCallsHTML(code) {
     const { own, e } = x;
     const name = x.r.name || PCALL.names?.[x.c] || x.c, tag = PCALL.tags?.[x.c];
     const meta = [x.r.cap_krw != null ? `시총 ${n(x.r.cap_krw / 1e12, 1)}조` : "", own ? `${own.quarter}${own.date ? " · " + own.date : ""} · 우리 요약` : e ? `${e.quarter}${e.date ? " · " + e.date : ""}` : "아직 없음"].filter(Boolean).join(" · ");
-    const head = `${FLAG[x.r.market] || ""} <b>${esc(name)}</b>${tag ? ` <span class="qtag muted">${esc(tag)}</span>` : ""} ${e?.tone ? voiceTag(e.tone) : ""} <span class="src">${esc(meta)}</span>`;
-    const body = own ? `<ul class="irl">${(own.short || []).slice(0, 3).map(li).join("")}</ul><div class="note"><a href="#stock/${esc(x.c)}">이 종목 상세에서 전체 요약 보기 →</a></div>`
-      : e ? `${e.none ? `<div class="note">ℹ️ ${esc(e.none)}</div>` : ""}${e.vs ? `<div class="note" style="margin-top:4px"><b>${esc(e.vs)}</b></div>` : ""}
-        <ul class="irl">${(e.short || []).map(li).join("")}</ul>${e.guide ? `<div class="note">🧭 가이던스: ${esc(e.guide)}</div>` : ""}
-        ${e.us ? `<div class="kidbox" style="margin-top:6px">👉 우리 종목에는: ${esc(e.us)}</div>` : ""}
+    // 사용자 2026-11-03: 숫자 말고 '지난 콜 대비 달라진 점'(뉴팩트·어조·K뷰티 첫 언급·새 사업·비용)이 먼저 — 숫자는 접어 둠
+    const ownDiff = (own?.diff || []).slice(0, 4).map((d) => `${d.t === "bad" ? "⚠" : d.t === "good" ? "🚀" : "🆕"} ${d.k}: ${d.b} → ${d.a}`);
+    const diff = own ? ownDiff : e?.diff || [];
+    const head = `${FLAG[x.r.market] || ""} <b>${esc(name)}</b>${tag ? ` <span class="qtag muted">${esc(tag)}</span>` : ""} ${e?.tone ? voiceTag(e.tone) : ""} <span class="src">${esc(meta)}</span>`
+      + (diff[0] ? `<div class="src" style="font-weight:400;margin:2px 0 0 1.2em">📌 ${esc(diff[0])}</div>` : "");
+    const diffBox = diff.length ? `<div class="chart-title" style="margin-top:6px"><b>📌 지난 콜${(own?.diff_from || e?.prev) ? `(${esc(own?.diff_from || e.prev)})` : ""} 대비 달라진 점</b></div><ul class="irl">${diff.map(li).join("")}</ul>` : "";
+    const nums = (vs, short) => (vs || short?.length ? `<details style="margin-top:4px"><summary class="src">🔢 숫자 보기</summary>${vs ? `<div class="note">${esc(vs)}</div>` : ""}<ul class="irl">${(short || []).map(li).join("")}</ul></details>` : "");
+    const body = own ? `${diffBox}${(own.voice || []).slice(0, 1).map((v) => `<div class="note">💬 ${voiceTag(v.v)} “${esc(v.q)}”</div>`).join("")}${nums(null, (own.short || []).slice(0, 3))}<div class="note"><a href="#stock/${esc(x.c)}">이 종목 상세에서 전체 요약 보기 →</a></div>`
+      : e ? `${e.none ? `<div class="note">ℹ️ ${esc(e.none)}</div>` : ""}${diffBox}${e.quote ? `<div class="note">💬 “${esc(e.quote)}”</div>` : ""}
+        ${!diff.length ? `<ul class="irl">${(e.short || []).map(li).join("")}</ul>` : ""}${e.guide ? `<div class="note">🧭 가이던스: ${esc(e.guide)}</div>` : ""}
+        ${e.us ? `<div class="kidbox" style="margin-top:6px">👉 우리 종목에는: ${esc(e.us)}</div>` : ""}${diff.length ? nums(e.vs, e.short) : e.vs ? `<div class="note src">${esc(e.vs)}</div>` : ""}
         <div class="src">${esc(e.src || "")}${e.u ? ` · <a href="${esc(e.u)}" target="_blank" rel="noopener">원문 보기</a>` : ""}</div>`
       : `<div class="note src">요약이 아직 없어요.</div>`;
     return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">${head}</summary>${body}</details>`;
   };
-  return `<h3>🎙 경쟁사 컨퍼런스콜</h3><div class="card"><div class="note src">최신 발표 순 · 시총 1조 원 미만은 빼요 · 눌러서 열기 · 꼬리표 = 경영진 말투</div>${ps.map(item).join("")}</div>`;
+  return `<h3>🎙 경쟁사 컨퍼런스콜</h3><div class="card"><div class="note src">최신 발표 순 · 📌 = 지난 콜 대비 달라진 점 (🆕 새 사실 · 💪 어조·포부 · 🇰🇷 K-뷰티·한국 언급 · 🚀 성장성 · 🧭 새 사업 · ⚠ 비용·위험) · 시총 1조 원 미만은 빼요 · 눌러서 열기</div>${ps.map(item).join("")}</div>`;
 }
 function drawPeers(code) {
   if (!PEERS) return;
@@ -3936,19 +3942,69 @@ async function loadIndustry() {
   await keyLoad();
   try { await gpeGet(); } catch (_) { /* 🌍 업종별 글로벌 PER 만 빠짐 */ }
   if (!EXP) { try { EXP = await (await fetch("data/exports.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { EXP = {}; } }
+  if (!AUTOS) { try { AUTOS = await (await fetch("data/autosales.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { AUTOS = {}; } }
   // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const secs = [["💄 화장품", () => expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => expHTML("ramen") + expHTML("food")],
     ["💾 반도체", () => expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => expHTML("power")], ["🔋 2차전지", () => key("2차전지")], ["🧱 기판·CCL", () => key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
-    ["🏬 백화점", () => gpeCard("백화점")], ["🚗 자동차", () => expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
+    ["🏬 백화점", () => gpeCard("백화점")], ["🚗 자동차", () => autosalesHTML() + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
   secs.push(["🔑 그 밖의 업종", Object.keys(K).filter((k) => !used.has(k)).map((k) => keyGroup(k, K[k])).join("")], ["⚖️ 고정비·변동비 (전 업종)", costIndHTML()]);
   $("#industryBody").innerHTML = secs.filter(([, h]) => h).map(([t, h]) => `<section data-jump="${esc(t)}" data-jname="${esc(t)}" style="margin-top:18px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">${t}</h2>${h}</section>`).join("");
   jumpBar("#industryBody", "#indJump", "🔎 업종 검색 (예: 화장품) → Enter");
   setTimeout(kcGo, 50);  // 종목 상세에서 '자세한 내용 →' 으로 왔으면 그 카드로
   drawAmz();
+}
+// 🚗 현대차·기아 월별 글로벌 도매판매 (data/autosales.json ← collector/autosales.py, DART 월 판매 공시가 올라오면 다음 갱신 때 자동)
+//   사용자 2026-11-03: 증권사 막대그림보다 쉽게 — 몇 대 팔았는지 + 전월·전 분기·전년 같은 때 대비 % 를 숫자로 먼저
+let AUTOS = null;
+function autosalesHTML() {
+  const cars = (AUTOS?.cars || []).filter((c) => c.months.length);
+  if (!cars.length) return "";
+  const addM = (ym, k) => { const t = +ym.slice(0, 4) * 12 + (+ym.slice(5) - 1) + k; return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`; };
+  const pc = (a, b) => (a != null && b ? (a / b - 1) * 100 : null);
+  const cell = (v) => `<b class="${v == null ? "" : v >= 0 ? "kup" : "kdn"}">${sg(v, 1)}</b>`;
+  const card = (c) => {
+    const M = Object.fromEntries(c.months.map((r) => [r[0], r])), L = c.months.at(-1)[0], tot = (ym) => M[ym]?.[4] ?? null;
+    const sum3 = (end) => { const v = [0, -1, -2].map((k) => tot(addM(end, k))); return v.every((x) => x != null) ? v.reduce((a, b) => a + b, 0) : null; };
+    const qE = addM(L, -(+L.slice(5) % 3)), qLab = `${qE.slice(2, 4)}년 ${(+qE.slice(5)) / 3}분기`, mo = +L.slice(5);
+    const r = M[L], lyR = M[addM(L, -12)];
+    const rows = [[`${mo}월`, tot(L), "전월", pc(tot(L), tot(addM(L, -1))), pc(tot(L), tot(addM(L, -12)))],
+      [qLab, sum3(qE), "전 분기", pc(sum3(qE), sum3(addM(qE, -3))), pc(sum3(qE), sum3(addM(qE, -12)))],
+      ...(mo % 3 ? [[`최근 3개월 (${addM(L, -2).slice(5)}~${mo}월)`, sum3(L), "직전 3개월", pc(sum3(L), sum3(addM(L, -3))), pc(sum3(L), sum3(addM(L, -12)))]] : []),
+      ...(c.last?.ytd && c.last.ym === L ? [[`올해 누적 (1~${mo}월)`, c.last.ytd, "", null, pc(c.last.ytd, c.last.ytd_ly)]] : [])];
+    const tbl = `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">기간</th><th>판매 (대)</th><th>전월·전 분기 대비</th><th>작년 같은 때 대비</th></tr></thead><tbody>
+      ${rows.map(([k, v, w, a, b]) => `<tr><td style="text-align:left">${esc(k)}</td><td><b>${v == null ? "-" : n(v)}</b></td><td>${w ? `<span class="src">${w}</span> ${cell(a)}` : "-"}</td><td>${cell(b)}</td></tr>`).join("")}</tbody></table></div>`;
+    // 분기별 (최근 6분기, QoQ·YoY) · 연도별 (12달 다 있는 해 + 올해 누적은 작년 같은 달까지와 비교) — 사용자 2026-11-03 "QoQ·YoY 가 중요, 연도별도"
+    const qRows = [0, 1, 2, 3, 4, 5].map((k) => addM(qE, -3 * k)).filter((e) => sum3(e) != null)
+      .map((e) => [`${e.slice(2, 4)}.${(+e.slice(5)) / 3}Q`, sum3(e), pc(sum3(e), sum3(addM(e, -3))), pc(sum3(e), sum3(addM(e, -12)))]);
+    const yt = (y, upto) => { const v = Array.from({ length: upto }, (_, i) => tot(`${y}-${String(i + 1).padStart(2, "0")}`)); return v.every((x) => x != null) ? v.reduce((a, b) => a + b, 0) : null; };
+    const Y0 = +L.slice(0, 4), yRows = [Y0 - 3, Y0 - 2, Y0 - 1].filter((y) => yt(y, 12) != null).map((y) => [`${y}년`, yt(y, 12), pc(yt(y, 12), yt(y - 1, 12))]);
+    if (mo < 12) yRows.push([`${Y0}년 1~${mo}월`, yt(Y0, mo) ?? c.last?.ytd, pc(yt(Y0, mo) ?? c.last?.ytd, yt(Y0 - 1, mo) ?? c.last?.ytd_ly)]);
+    const mini = (h, rs, cols) => `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${h}</th><th>판매 (대)</th>${cols.map((x) => `<th>${x}</th>`).join("")}</tr></thead><tbody>
+      ${rs.map(([k, v, ...p]) => `<tr><td style="text-align:left">${esc(k)}</td><td>${v == null ? "-" : n(v)}</td>${p.map((x) => `<td>${cell(x)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    const qy = `<div class="grid g2" style="margin-top:6px">${qRows.length ? mini("분기별", qRows, ["QoQ", "YoY"]) : ""}${yRows.length ? mini("연도별", yRows, ["YoY"]) : ""}</div>`;
+    const split = r ? `<div class="note">${mo}월 국내 <b>${n(r[1])}</b>대 (${sg(pc(r[1], lyR?.[1]), 1)}) · 해외 <b>${n(r[2])}</b>대 (${sg(pc(r[2], lyR?.[2]), 1)})${r[3] ? ` · 특수 ${n(r[3])}대` : ""} <span class="src">괄호 = 작년 같은 달 대비</span></div>` : "";
+    // 그림: 최근 36개월 막대 (같은 달 = 주황) · 점선 = 이번 달 · 막대에 손을 대면 그달 숫자
+    const rs = c.months.slice(-36).filter((x) => x[4]), N = rs.length, W = 600, H = 196, x0 = 52, x1 = 592, top = 14, bot = 166;
+    const vs = rs.map((x) => x[4]), lo = Math.floor((Math.min(...vs) * 0.92) / 1e4) * 1e4, hi = Math.max(...vs) * 1.02;
+    const X = (i) => x0 + ((x1 - x0) * (i + 0.5)) / N, bw = ((x1 - x0) / N) * 0.72, Y = (v) => bot - ((v - lo) / (hi - lo)) * (bot - top);
+    let g = [lo, (lo + hi) / 2, hi].map((v) => `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${x0 - 4}" y="${Y(v) + 4}" text-anchor="end" class="qx">${n(v / 1e4, 0)}만</text>`).join("");
+    rs.forEach((x, i) => {
+      g += `<rect x="${X(i) - bw / 2}" y="${Y(x[4])}" width="${bw}" height="${bot - Y(x[4])}" rx="1.5" fill="${x[0].slice(5) === L.slice(5) ? "var(--s2)" : "var(--s1)"}"/>`;
+      if (x[0].endsWith("-01")) g += `<text x="${X(i)}" y="${H - 14}" text-anchor="middle" class="qx">'${x[0].slice(2, 4)}</text>`;
+    });
+    g += `<line x1="${x0}" x2="${x1}" y1="${Y(tot(L))}" y2="${Y(tot(L))}" stroke="var(--ink-2)" stroke-dasharray="4 3"/><text x="${x1}" y="${Y(tot(L)) - 4}" text-anchor="end" class="qv b">${n(tot(L))}</text>`;
+    g += tipCols(X, (x1 - x0) / N, top, bot, rs.map((x) => `${x[0]}\n${n(x[4])}대 (국내 ${n(x[1])} · 해외 ${n(x[2])})\n전월 ${sg(pc(x[4], tot(addM(x[0], -1))), 1)} · 작년 같은 달 ${sg(pc(x[4], tot(addM(x[0], -12))), 1)}`));
+    return `<div class="card" style="padding:8px 10px"><div class="bhd"><b style="font-size:17px">${esc(c.name)}</b> <span class="src">${esc(c.code)} · ${esc(L)} 판매</span>${c.last?.url ? `<span class="bchd"><a href="${esc(c.last.url)}" target="_blank" rel="noopener" class="src">DART 공시 ${esc(c.last.date.slice(5))}</a></span>` : ""}</div>
+      ${tbl}${split}${qy}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.name)} 월별 판매">${g}</svg>
+      <div class="src">최근 36개월 · <span style="color:var(--s2)">■</span> 매년 ${mo}월 · 점선 = 이번 달 · 세로축은 ${n(lo / 1e4, 0)}만 대부터 (차이가 잘 보이게)</div></div>`;
+  };
+  return `<h3>🚗 현대차·기아 글로벌 도매판매 <span class="src">DART 월 판매 공시 (매달 1~2일) · 공시가 올라오면 다음 갱신 때 자동 · ${esc(AUTOS.updated_at || "")}</span></h3>
+    <div class="grid g2">${cars.map(card).join("")}</div>
+    <div class="kidbox">🐣 도매판매 = 공장에서 대리점·해외 법인으로 내보낸 차 수예요 (손님에게 판 '소매'와는 조금 달라요). 차는 달마다 일하는 날 수가 달라서, <b>작년 같은 달</b>과 비교하는 게 가장 정확해요. 전월·전 분기 대비는 흐름이 바뀌는지 볼 때 써요.</div>`;
 }
 // 🔑 키팩터 · 키차트 (config/keychart.yaml): 업종 묶음 = 산업 탭 + 그 업종 종목 상세, 종목 묶음 = 그 종목 상세
 let KEYC = null;

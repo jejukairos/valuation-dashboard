@@ -973,6 +973,8 @@ def main():
     write_json(DATA / "kpi.json", load_yaml("kpi.yaml") or {})  # 🔑 종목별 핵심 지표 (실적발표·전자공시에서 옮김, 상세 화면)
     import kbeauty
     write_json(DATA / "amazon_kbeauty.json", kbeauty.collect())  # 🏭 산업 탭: 아마존 K-뷰티 Top100 (텔레그램 3곳 크로스체크)
+    import autosales
+    write_json(DATA / "autosales.json", autosales.collect())  # 🚗 산업 탭: 현대차·기아 월 판매 (DART 공시 올라오면 자동)
     write_json(DATA / "profiles.json", load_yaml("profiles.yaml") or {})
     write_json(DATA / "earnings.json", load_yaml("earnings.yaml") or {})  # 실적발표(컨퍼런스콜) 요약
     write_json(DATA / "events.json", load_yaml("events.yaml") or [])  # 🐣 주린이용 쉬운 이벤트 요약 (공시·촉매·전망 변화)
