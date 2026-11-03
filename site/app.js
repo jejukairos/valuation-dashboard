@@ -3299,8 +3299,11 @@ async function peerCallsHTML(code) {
     .filter((x) => x.r.cap_krw == null || x.r.cap_krw >= 1e12)
     .sort((a, b) => String(when(b)).localeCompare(String(when(a))) || (b.r.cap_krw ?? -1) - (a.r.cap_krw ?? -1));
   const li = (x) => `<li>${esc(x)}</li>`;
+  const TGP = (await tgGet().catch(() => null))?.peers || {};  // 📨 텔레그램 '미국 주식 인사이더' 실적·어닝콜 요약 (collector/tg_reports.py PEER_Q)
   const item = (x) => {
     const { own, e } = x;
+    const f = (TGP[x.c] || [])[0], newer = f && f.d > String(e?.date || own?.date || "");
+    const feed = f ? `<div class="src">📨 미국 주식 인사이더 요약: <a href="${esc(f.u)}" target="_blank" rel="noopener">${esc(f.t)}</a> ${mdDay(f.d)}${newer ? " — 아래 우리 요약보다 새 글이에요 (다음 예약 작업 때 반영)" : ""}</div>` : "";
     const name = x.r.name || PCALL.names?.[x.c] || x.c, tag = PCALL.tags?.[x.c];
     const meta = [x.r.cap_krw != null ? `시총 ${n(x.r.cap_krw / 1e12, 1)}조` : "", own ? `${own.quarter}${own.date ? " · " + own.date : ""} · 우리 요약` : e ? `${e.quarter}${e.date ? " · " + e.date : ""}` : "아직 없음"].filter(Boolean).join(" · ");
     // 사용자 2026-11-03: 숫자 말고 '지난 콜 대비 달라진 점'(뉴팩트·어조·K뷰티 첫 언급·새 사업·비용)이 먼저 — 숫자는 접어 둠
@@ -3316,7 +3319,7 @@ async function peerCallsHTML(code) {
         ${e.us ? `<div class="kidbox" style="margin-top:6px">👉 우리 종목에는: ${esc(e.us)}</div>` : ""}${diff.length ? nums(e.vs, e.short) : e.vs ? `<div class="note src">${esc(e.vs)}</div>` : ""}
         <div class="src">${esc(e.src || "")}${e.u ? ` · <a href="${esc(e.u)}" target="_blank" rel="noopener">원문 보기</a>` : ""}</div>`
       : `<div class="note src">요약이 아직 없어요.</div>`;
-    return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">${head}</summary>${body}</details>`;
+    return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">${head}${newer ? ` <span class="qtag">📨 새 실적 요약 ${mdDay(f.d)}</span>` : ""}</summary>${feed}${body}</details>`;
   };
   return `<h3>🎙 경쟁사 컨퍼런스콜</h3><div class="card"><div class="note src">최신 발표 순 · 📌 = 지난 콜 대비 달라진 점 (🆕 새 사실 · 💪 어조·포부 · 🇰🇷 K-뷰티·한국 언급 · 🚀 성장성 · 🧭 새 사업 · ⚠ 비용·위험) · 시총 1조 원 미만은 빼요 · 눌러서 열기</div>${ps.map(item).join("")}</div>`;
 }

@@ -13,7 +13,11 @@ from street import _text
 
 AICA = "aicorporateanalysisdeepdive"  # 기사 요약(원문 링크) + '종목 3Q26 증권사 리포트 종합'(몇 곳·목표가 상향/유지/하향) — 사용자 2026-11-03 크로스체크용
 KR_CH = ["report_figure_by_offset", "ked_epic_ai", "maddingStock", AICA]
-US_CH = ["Fundeasyearnings", "fundeasy_choi"]
+INSIDER = "insidertracking"  # 미국 주식 인사이더 — '(티커) Q3 어닝콜 요약'·'실적 요약' (사용자 2026-11-03: 경쟁사 실적·콜은 여기 참고) · 뉴스도 많아 제목에 종목이 있을 때만
+US_CH = ["Fundeasyearnings", "fundeasy_choi", INSIDER]
+# 🎙 경쟁사(미국) 새 실적 요약 알림: peer_calls 의 미국 경쟁사 → 그 회사 이름이 제목에 있고 '실적·어닝·콜' 글
+# shortcut: 회사 이름 검색어를 손으로 적음 — 경쟁사를 새로 넣으면 여기에도 한 줄
+PEER_Q = {"EL": "Lauder", "ELF": "e.l.f.", "MU": "마이크론", "LMT": "록히드", "RTX": "RTX"}
 OFF = ["YoungTiger_stock", "DOC_POOL", "aethersemiresearch"]  # t.me/s 미리보기가 꺼져 있음 (2026-11-01 확인)
 DAYS, PAGES = 214, 3  # 7개월 · 검색어마다 최대 3쪽(쪽당 약 20글)
 
@@ -132,15 +136,29 @@ def collect():
         for ch in US_CH if us else KR_CH:
             for q in names:
                 try:
-                    for x in filter(lambda x: about(x["text"], names) and (ch != AICA or aica_ok(x["text"], names)), search(ch, q, cut)):
+                    ok = lambda x: about(x["text"], names) and (ch != AICA or aica_ok(x["text"], names)) and (ch != INSIDER or any(n in x["text"].split("\n", 1)[0] for n in names))  # noqa: E731
+                    for x in filter(ok, search(ch, q, cut)):
                         posts.setdefault(x["id"], {"d": x["d"], "hm": x["hm"], "ch": ch, "u": f"https://t.me/{x['id']}",
                                                    **({"src": x["src"]} if x.get("src") else {}), **parse(x["text"], names)})
                 except Exception as e:  # noqa: BLE001 - 한 채널이 막혀도 나머지는 모은다
                     fails.append(f"{ch} {q}: {str(e)[:50]}")
         out[code] = sorted(posts.values(), key=lambda p: p["d"], reverse=True)[:30]
         print(f"  {h['name']}: {len(out[code])}개")
+    peers, pcut = {}, (now_kst() - pd.Timedelta(days=45)).strftime("%Y-%m-%d")
+    for code, q in PEER_Q.items():
+        try:  # 회사 이름과 티커 둘 다로 검색 ('RTX(RTX) Q3 2026 어닝콜 요약' · 'The Estée Lauder Companies … 실적 요약')
+            hits = {x["id"]: x for qq in (q, code) for x in search(INSIDER, qq, pcut) if peer_hit(x["text"], q) or peer_hit(x["text"], f"({code})")}
+            peers[code] = sorted([{"d": x["d"], "t": x["text"].split("\n", 1)[0][:120], "u": f"https://t.me/{x['id']}"} for x in hits.values()], key=lambda p: p["d"], reverse=True)[:5]
+        except Exception as e:  # noqa: BLE001
+            fails.append(f"{INSIDER} {q}: {str(e)[:50]}")
     return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "days": DAYS, "kr": KR_CH, "us": US_CH, "off": OFF,
-            "fails": fails[:30], "stocks": out}
+            "fails": fails[:30], "stocks": out, "peers": peers}
+
+
+def peer_hit(text, q):
+    """제목(첫 줄)에 회사 이름 + 실적·어닝·콜 → 경쟁사 실적 요약 글."""
+    t = text.strip().split("\n", 1)[0]
+    return q.lower() in t.lower() and bool(re.search(r"실적|어닝|컨퍼런스콜|콜 요약", t))
 
 
 if __name__ == "__main__":
@@ -170,6 +188,8 @@ if __name__ == "__main__":
         s = parse("팬오션 3Q26 증권사 리포트 종합\n2026.11.03 | 10개사 리포트\n• 주가\n목표가 상향 2 / 유지 8 / 하향 0", ["팬오션"])["sum"]
         assert s == {"n": 10, "up": 2, "keep": 8, "down": 0}, s
         assert aica_ok("LG엔솔 3분기 영업익\n► 관련 기업\nLG에너지솔루션 · LG화학", ["LG화학"]) and not aica_ok("대통령 부동산 발언\n► 관련 산업\n건설\n현대건설 언급", ["현대건설"])
+        assert peer_hit("The Estée Lauder Companies 2027 회계연도 1분기 실적 요약\n📍실적", "Lauder") and peer_hit("마이크론(MU) Q4 FY2026 어닝콜 요약", "마이크론")
+        assert not peer_hit("디인포메이션에 따르면 마이크론 HBM 수출 규제", "마이크론")
         print("ok")
     else:
         d = collect()
