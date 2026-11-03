@@ -4,13 +4,15 @@
 미리보기가 꺼진 채널(OFF)은 텔레그램 API 가 있어야 읽혀서 아직 빠짐."""
 import re
 import sys
+from html import unescape
 
 import pandas as pd
 
 from common import DATA, HTTP, load_yaml, now_kst, write_json
 from street import _text
 
-KR_CH = ["report_figure_by_offset", "ked_epic_ai", "maddingStock"]
+AICA = "aicorporateanalysisdeepdive"  # 기사 요약(원문 링크) + '종목 3Q26 증권사 리포트 종합'(몇 곳·목표가 상향/유지/하향) — 사용자 2026-11-03 크로스체크용
+KR_CH = ["report_figure_by_offset", "ked_epic_ai", "maddingStock", AICA]
 US_CH = ["Fundeasyearnings", "fundeasy_choi"]
 OFF = ["YoungTiger_stock", "DOC_POOL", "aethersemiresearch"]  # t.me/s 미리보기가 꺼져 있음 (2026-11-01 확인)
 DAYS, PAGES = 214, 3  # 7개월 · 검색어마다 최대 3쪽(쪽당 약 20글)
@@ -28,7 +30,8 @@ def search(ch, q, cut):
             pid, dt, t = b.split('"', 1)[0], re.search(r'datetime="([^"]+)"', b), _text(b)
             if t and dt:
                 ts = pd.Timestamp(dt.group(1)).tz_convert("Asia/Seoul")
-                out.append({"id": pid, "d": ts.strftime("%Y-%m-%d"), "hm": ts.strftime("%H:%M"), "text": t})
+                src = re.search(r'href="(https?://(?!t\.me/)[^"]+)"', b)  # 글에 붙은 원문(기사·리포트) 첫 링크
+                out.append({"id": pid, "d": ts.strftime("%Y-%m-%d"), "hm": ts.strftime("%H:%M"), "text": t, **({"src": unescape(src.group(1))} if src else {})})
         oldest = min((x["d"] for x in out), default=cut)
         before = min(int(b.split('"', 1)[0].rsplit("/", 1)[-1]) for b in blocks)
         if oldest < cut or len(blocks) < 15:
@@ -42,6 +45,13 @@ FIRM = r"([가-힣A-Za-z&]+(?:투자증권|증권|자산운용|리서치|Securit
 def about(text, names):
     """종목 이름이 증권사(키움증권 등)면 다른 종목 리포트의 '글쓴 증권사'로도 나와서, 첫 줄(제목)에 있거나 종목 코드가 있을 때만 그 종목 글."""
     return not names[0].endswith("증권") or names[0] in text.strip().split("\n", 1)[0] or any(c in text for c in names[1:])
+
+
+def aica_ok(text, names):
+    """AICA 는 시황·정책 기사도 많아서, 제목이나 '관련 기업' 줄에 그 종목이 있을 때만 (관련 없는 글이 섞이지 않게)."""
+    lines = [x.strip() for x in text.split("\n") if x.strip()]
+    rel = next((lines[i + 1] for i, x in enumerate(lines[:-1]) if "관련 기업" in x), "")
+    return any(n in (lines[0] if lines else "") or n in rel for n in names)
 
 
 def parse(text, names):
@@ -67,6 +77,10 @@ def parse(text, names):
         out["dir"] = d.group(1)
     if (r := revision(text, names)):
         out["rev"] = r
+    if own and "리포트 종합" in title:  # AICA '삼성전기 3Q26 IR·증권사 리포트 종합 · 14개사 리포트 · 목표가는 상향 4·하향 2'
+        seg = next((m.group(0) for m in re.finditer(r"목표가[^\n]{0,40}", text) if re.search(r"(상향|유지|하향)\s*\d", m.group(0))), "")
+        g = lambda rx, s=text: (lambda m: int(m.group(1)) if m else None)(re.search(rx, s))  # noqa: E731
+        out["sum"] = {"n": g(r"(\d+)\s*개사") or g(r"증권사\s*(\d+)\s*곳"), "up": g(r"상향\s*(\d+)", seg), "keep": g(r"유지\s*(\d+)", seg), "down": g(r"하향\s*(\d+)", seg)}
     if "추정치 변화" in title and "1주" in title:
         m = next((re.search(rf"\d+\.\s*{re.escape(n)}\s*([+-]\d+(?:\.\d+)?)%", text) for n in names if re.search(rf"\d+\.\s*{re.escape(n)}\s*[+-]", text)), None)
         if m:
@@ -118,8 +132,9 @@ def collect():
         for ch in US_CH if us else KR_CH:
             for q in names:
                 try:
-                    for x in filter(lambda x: about(x["text"], names), search(ch, q, cut)):
-                        posts.setdefault(x["id"], {"d": x["d"], "hm": x["hm"], "ch": ch, "u": f"https://t.me/{x['id']}", **parse(x["text"], names)})
+                    for x in filter(lambda x: about(x["text"], names) and (ch != AICA or aica_ok(x["text"], names)), search(ch, q, cut)):
+                        posts.setdefault(x["id"], {"d": x["d"], "hm": x["hm"], "ch": ch, "u": f"https://t.me/{x['id']}",
+                                                   **({"src": x["src"]} if x.get("src") else {}), **parse(x["text"], names)})
                 except Exception as e:  # noqa: BLE001 - 한 채널이 막혀도 나머지는 모은다
                     fails.append(f"{ch} {q}: {str(e)[:50]}")
         out[code] = sorted(posts.values(), key=lambda p: p["d"], reverse=True)[:30]
@@ -150,6 +165,11 @@ if __name__ == "__main__":
         assert p["tp"] == 120000 and p["firm"] == "하나증권" and "dir" not in p, p
         assert "est_w" not in parse("[퀀트 시그널] 12M Fwd 영업이익 추정치 변화 | 1주간 변화\n1. 롯데에너지머티리얼즈 +3.1%", ["롯데쇼핑"])
         assert "tp" not in parse("오늘 실적발표 예정\n• 롯데쇼핑 (023530)\n• 신세계 목표주가 300,000원", ["롯데쇼핑"])  # 다른 종목 목표가는 안 잡음
+        s = parse("삼성전기 3Q26 IR·증권사 리포트 종합\n2026.10.29 | IR(10/28) + 14개사 리포트\n14개사 모두 '27 영업이익을 높게 제시. 목표가는 상향 4·하향 2로 엇갈림", ["삼성전기", "009150"])["sum"]
+        assert s == {"n": 14, "up": 4, "keep": None, "down": 2}, s
+        s = parse("팬오션 3Q26 증권사 리포트 종합\n2026.11.03 | 10개사 리포트\n• 주가\n목표가 상향 2 / 유지 8 / 하향 0", ["팬오션"])["sum"]
+        assert s == {"n": 10, "up": 2, "keep": 8, "down": 0}, s
+        assert aica_ok("LG엔솔 3분기 영업익\n► 관련 기업\nLG에너지솔루션 · LG화학", ["LG화학"]) and not aica_ok("대통령 부동산 발언\n► 관련 산업\n건설\n현대건설 언급", ["현대건설"])
         print("ok")
     else:
         d = collect()

@@ -3308,7 +3308,7 @@ async function peerCallsHTML(code) {
     const diff = own ? ownDiff : e?.diff || [];
     const head = `${FLAG[x.r.market] || ""} <b>${esc(name)}</b>${tag ? ` <span class="qtag muted">${esc(tag)}</span>` : ""} ${e?.tone ? voiceTag(e.tone) : ""} <span class="src">${esc(meta)}</span>`
       + (diff[0] ? `<div class="src" style="font-weight:400;margin:2px 0 0 1.2em">📌 ${esc(diff[0])}</div>` : "");
-    const diffBox = diff.length ? `<div class="chart-title" style="margin-top:6px"><b>📌 지난 콜${(own?.diff_from || e?.prev) ? `(${esc(own?.diff_from || e.prev)})` : ""} 대비 달라진 점</b></div><ul class="irl">${diff.map(li).join("")}</ul>` : "";
+    const diffBox = diff.length ? `<div class="chart-title" style="margin-top:6px"><b>📌 지난 콜${(own?.diff_from || e?.prev) ? ` ${esc(own?.diff_from || e.prev)}` : ""} 대비 달라진 점</b></div><ul class="irl">${diff.map(li).join("")}</ul>` : "";
     const nums = (vs, short) => (vs || short?.length ? `<details style="margin-top:4px"><summary class="src">🔢 숫자 보기</summary>${vs ? `<div class="note">${esc(vs)}</div>` : ""}<ul class="irl">${(short || []).map(li).join("")}</ul></details>` : "");
     const body = own ? `${diffBox}${(own.voice || []).slice(0, 1).map((v) => `<div class="note">💬 ${voiceTag(v.v)} “${esc(v.q)}”</div>`).join("")}${nums(null, (own.short || []).slice(0, 3))}<div class="note"><a href="#stock/${esc(x.c)}">이 종목 상세에서 전체 요약 보기 →</a></div>`
       : e ? `${e.none ? `<div class="note">ℹ️ ${esc(e.none)}</div>` : ""}${diffBox}${e.quote ? `<div class="note">💬 “${esc(e.quote)}”</div>` : ""}
@@ -4403,7 +4403,7 @@ function tgRows(L, code) {
   return [...by.values()].map((g) => {
     const t = g.find((x) => x.tp_prev) || g.find((x) => x.tp) || g[0];
     return `<li><span class="src">${esc(g[0].d.slice(5).replace("-", "/"))}${g[0].hm ? " " + esc(g[0].hm) : ""}</span> ${g[0].firm ? `<b>${esc(g[0].firm)}</b> ${tgTp(t, code)}` : esc(g[0].t)}
-      · ${g.map((x) => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${tgLab(x)}</a>`).join(" · ")}</li>`;
+      · ${g.map((x) => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${tgLab(x)}</a>${x.src ? ` · <a href="${esc(x.src)}" target="_blank" rel="noopener">📰 원문</a>` : ""}`).join(" · ")}</li>`;
   }).join("");
 }
 // 📊 maddingStock '주간 EPS 컨센서스 리비전' (일요일 밤) — 최근 7일 안에 그 종목이 TOP 8·적자·참고 칸에 나왔으면 한 줄 (사용자 2026-11-02 '일주일 유지')
@@ -4442,11 +4442,21 @@ function tgDayHTML(code) {
       <div class="src">${links.join(" · ")}</div></div></details>`;
   };
   const at = [REPS?.updated_at, TGR?.updated_at, TGR?.api_at].filter(Boolean).map((s) => s.slice(5)).join(" · ");
+  // 🧾 텔레그램 AI 채널 '증권사 리포트 종합' (최근 10일) ↔ 우리 한경 목록 같은 기간 (사용자 2026-11-03 크로스체크)
+  const sm = tgSort((TGR?.stocks?.[code] || []).filter((x) => x.sum && x.d >= kstDay(9)))[0];
+  let sumLine = "";
+  if (sm) {
+    const from = new Date(new Date(sm.d + "T00:00:00Z") - 4 * 864e5).toISOString().slice(0, 10);
+    const ours = (r?.list || []).filter((x) => x.d >= from && x.d <= sm.d), up = ours.filter((x) => (x.tp_prev && x.tp > x.tp_prev) || x.tp_dir === "상향").length, dn = ours.filter((x) => (x.tp_prev && x.tp < x.tp_prev) || x.tp_dir === "하향").length;
+    const s = sm.sum, tp = [s.up != null ? `상향 ${s.up}` : "", s.keep != null ? `유지 ${s.keep}` : "", s.down != null ? `하향 ${s.down}` : ""].filter(Boolean).join(" · ");
+    sumLine = `<div class="note" style="margin-top:6px">🧾 <b>증권사 리포트 종합</b> <span class="src">${mdDay(sm.d)} 텔레그램 AI 기업분석 채널</span> — ${s.n ? `${s.n}곳` : ""}${tp ? ` · 목표가 ${tp}` : ""}
+      <span class="src">↔ 우리 한경 목록 ${mdDay(from)}~${mdDay(sm.d)} ${ours.length}곳 · 상향 ${up} · 하향 ${dn}</span> · <a href="${esc(sm.u)}" target="_blank" rel="noopener">종합 글</a></div>`;
+  }
   const n_ = Math.min(10, co.length + inds.length);
   const body = [...co.map(coRow), ...inds.map((x) => `<div class="rpd"><span class="src">${mdDay(x.d)}</span> 🏭 <b>${esc(x.firm)}</b> · <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a> <span class="src">(${esc(ind)} 업종 리포트)</span></div>`)].slice(0, 10).join("");
   return (n_ ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 리포트 ${n_}개</b> <span class="src">종목 리포트 → 업종 리포트 순 · 눌러서 요약·목표가 계산 · 확인 ${esc(at)}</span></div>${body}`
     : web.length ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 증권사 리포트 없음</b> <span class="src">대신 🌐 이 종목이 나온 인터넷 글 · 확인 ${esc(at)}</span></div><ul class="irl">${tgRows(web, code)}</ul>`
-    : `<div class="src" style="margin-top:10px">📄 오늘·어제 새 리포트 없음 · 확인 ${esc(at)}</div>`) + revHTML(code);
+    : `<div class="src" style="margin-top:10px">📄 오늘·어제 새 리포트 없음 · 확인 ${esc(at)}</div>`) + sumLine + revHTML(code);
 }
 // 📥 최근 7일 리포트 (리포트 탭 맨 위): 보유·관심·공동 종목, 날짜별 — 링크만 (PDF 는 텔레그램에 있어 사이트 용량을 안 씀, 7일 지나면 저절로 빠짐)
 function tgWeekHTML(mkt) {
