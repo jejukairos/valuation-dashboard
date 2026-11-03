@@ -141,6 +141,12 @@
    - lists 에 있는 경쟁사가 새 분기 콜을 하면 calls 의 그 코드 맨 위에 추가 (quarter·date·u·src·vs·short 3~4줄·guide·tone·us). 콜이 없으면 none 에 이유.
    - 우리가 earnings.yaml 로 요약하는 종목은 calls 에 넣지 않음 (화면이 그 요약을 그대로 씀).
    - 경쟁사 고르는 규칙: 업종마다 6곳 · 미국 2 + 유럽/일본 2 + 한국 2 · 시총 1조 원 미만 제외 · 새 경쟁사는 peers.yaml 그룹에도 넣어 시총을 받기.
+3-10. 📄 오늘·어제 증권사 리포트 요약 (config/reports.yaml, 화면: 보유 탭 카드 '📄 오늘·어제 리포트' — 줄을 누르면 펼쳐짐):
+   - site/data/reports.json 의 보유 종목(group 보유) list 에서 오늘·어제(d) 리포트 중 reports.yaml 에 같은 날짜·증권사가 없는 것.
+   - PDF 숫자 읽기: `.venv\Scripts\python.exe -X utf8 tools\report_text.py <u>` → 그 종목 맨 위에 {d, firm, t, tp, tp_prev, rating, why 3~4줄, eps, val} 추가.
+     why 는 사용자 예시처럼 짧게 (첫 줄 = 이번 분기·내년 이익 숫자, 다음 = 걱정 vs 증권사 답, 성장 이유, 다음 해 이야기) — 원문 문장을 옮기지 말고 우리 말로.
+     val = 목표가 계산 방식 (예: '12개월 선행 EPS × PER 20.4배') · 일회성이 숫자를 바꿨으면 '⚠ 한 번만 있는 일' 줄 · 매수·매도 추천 문구 금지.
+   - 하루 10개까지, 시총 큰 보유 종목부터.
 4. (tools/ir_live.ps1 이 부른 경우엔 파일 수정까지만 — 확인·올리기는 스크립트가 함)
    YAML 이 읽히는지 확인(python 으로 load) → 커밋 메시지 "<종목> <분기> 실적발표 요약" + 끝에 빈 줄과
    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" → `git pull --rebase; git push`.

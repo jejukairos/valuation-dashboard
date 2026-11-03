@@ -13,6 +13,8 @@ $log = Join-Path $td "ir_live.log"
 function Log($m) { Add-Content -Path $log -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm') $m" -Encoding UTF8 }
 $py = Join-Path $repo ".venv\Scripts\python.exe"
 $claude = Join-Path $env:USERPROFILE ".local\bin\claude.exe"
+# claude 출력(UTF-8)을 그대로 받기 — 안 하면 한글 브랜드 이름이 CP949 로 깨져 아마존 표 JSON 이 못 읽힘 (2026-10-30·11-01 실패 원인)
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8
 $edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 $port = 9355
 

@@ -282,7 +282,23 @@ function growthHTML(c) {
     <div class="note src">하방 = 성장률 × 1 (더 빠지면 안전마진), 적정주가 = × 1.25, 최대 = × 1.5 (사용자 원칙 · 강세장 칸은 × 1.5 · 1.75 · 2) · 한국은 컨센서스 3년 영업이익 성장률, 미국은 3~5년 EPS 성장률 · 성장률로 잡은 하방이 지금 가격보다 50% 넘게 높으면 성장률이 너무 센 것이라 업종 PER(없으면 이 종목 PER 밴드) · PER·PBR 을 같이 보는 종목은 PBR 밴드 값과 평균</div>
   </details>`;
 }
-// 내 엑셀의 적정주가 방법 4가지를 나란히: ① 기본값 ② 보정값 ③ Finviz (성장률 × 1 / 1.25 / 1.5) ④ 내가 정한 PER (somong.yaml my.my_per)
+// ④ 내가 정한 PER: 12MF EPS × 내 PER = 적정주가 · 성장률(✔ 방법) 대비 몇 배인지 (Bear ×1 · Base ×1.25 · Bull ×1.5 와 같은 잣대)
+const MYPER = {};
+const myPerGet = (code) => { try { const v = parseFloat(localStorage.getItem("myper:" + code)); return v > 0 ? v : null; } catch (_) { return null; } };
+function myPerOut(code, per) {
+  const m = MYPER[code];
+  if (!m || !(per > 0) || !m.e12) return '<span class="src">숫자를 넣으면 적정주가가 나와요</span>';
+  const v = m.e12 * per, k = m.g > 0 ? per / m.g : null;
+  return `<b>${m.fmtP(v)}</b> <em class="${v >= m.price ? "up" : "dn"}">${pct((v / m.price - 1) * 100, 0, true)}</em>${k ? `<div class="src">성장률 ${n(m.g, 1)}% 의 ${n(k, 2)}배 — ${k < 1 ? "Bear(×1)보다 낮음" : k < 1.25 ? "Bear ×1 ~ Base ×1.25 사이" : k < 1.5 ? "Base ×1.25 ~ Bull ×1.5 사이" : "Bull(×1.5)보다 높음"}</div>` : ""}`;
+}
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (!t.matches?.(".myper")) return;
+  const v = parseFloat(t.value), code = t.dataset.code;
+  try { if (v > 0) localStorage.setItem("myper:" + code, String(v)); else localStorage.removeItem("myper:" + code); } catch (_) { /* 저장 못 해도 계산은 보여 줌 */ }
+  t.closest("tr").querySelector(".myper-out").innerHTML = myPerOut(code, v);
+});
+// 내 엑셀의 적정주가 방법 4가지를 나란히: ① 기본값 ② 보정값 ③ Finviz (성장률 × 1 / 1.25 / 1.5) ④ 내가 정한 PER (칸에 입력 · 없으면 somong.yaml my.my_per)
 function waysHTML(c, fmtP) {
   const w = c.scen?.ways, e12 = c.scen?.e12;
   if (!w || !e12) return "";
@@ -290,12 +306,12 @@ function waysHTML(c, fmtP) {
   const up = (v) => (v == null ? "" : ` <em class="${v >= c.price ? "up" : "dn"}">${pct((v / c.price - 1) * 100, 0, true)}</em>`);
   const rows = w.map((x, i) => `<tr${x.used ? ' style="font-weight:700"' : ""}><td style="text-align:left">${"①②③"[i]} ${esc(x.name)}${x.used ? " ✔" : ""}<div class="src">${esc(x.src)}</div></td>
     <td>${x.g == null ? "-" : n(x.g, 1) + "%"}</td>${["bear", "base", "bull"].map((k) => `<td>${x[k] == null ? "-" : fmtP(x[k]) + up(x[k])}</td>`).join("")}</tr>`).join("");
-  const mp = my.my_per ? e12 * my.my_per : null;
-  // ✏️ 깃허브 somong.yaml 의 이 종목 'my:' 줄로 바로 (연필 버튼 = 고치기) — 줄 번호는 수집기가 somong.json 에 my_line 으로
-  const ml = smData(c)?.my_line, edit = `https://github.com/jejukairos/valuation-dashboard/${ml ? `blob/main/config/somong.yaml#L${ml}` : "edit/main/config/somong.yaml"}`;
-  const pen = `<a href="${edit}" target="_blank" rel="noopener">✏️ ${my.my_per ? "고치기" : "여기에 적기"}</a>`;
-  const mine = `<tr><td style="text-align:left">④ 내가 정한 PER<div class="src">${my.my_per ? `${esc(my.my_per_note || "")} · ${pen}` : `${pen} — 깃허브 config/somong.yaml 의 이 종목 my: 아래에 <code>my_per: 25</code> (+ <code>my_per_note: 이유</code>) 를 적고 저장 (연필 버튼)`}</div></td>
-    <td>${my.my_per ? n(my.my_per, 0) + "배" : "-"}</td><td colspan="3">${mp ? `<b>${fmtP(mp)}</b>${up(mp)}` : "-"}</td></tr>`;
+  // ④ 칸에 숫자만 넣으면 바로 계산 (사용자 2026-11-03: 깃허브 편집은 어려움) — 이 기기 브라우저에 저장, 비어 있으면 somong.yaml my_per · EPS 가 바뀌면 저절로 다시 계산
+  MYPER[c.code] = { e12, price: c.price, g: w.find((x) => x.used)?.g, fmtP };
+  const per = myPerGet(c.code) ?? my.my_per ?? null;
+  const mine = `<tr><td style="text-align:left">④ 내가 정한 PER<div class="src">${my.my_per_note ? `${esc(my.my_per_note)} · ` : ""}칸에 숫자만 넣으면 바로 계산 (이 휴대폰에 저장)</div></td>
+    <td><input type="number" inputmode="decimal" min="0" step="0.5" class="myper" data-code="${esc(c.code)}" value="${per ?? ""}" placeholder="예: 20" aria-label="내가 정한 PER" onclick="event.stopPropagation()"> 배</td>
+    <td colspan="3" class="myper-out" style="text-align:left">${myPerOut(c.code, per)}</td></tr>`;
   const sa = (c.scen.ltg_cmp || [])[0]?.[1];
   const cmp = (c.scen.ltg_cmp || []).length ? `<div class="note">3~5년 EPS 성장률 출처 비교: ${c.scen.ltg_cmp.map(([k, v], i) => `${esc(k)} <b>${v == null ? "-" : n(v, 1) + "%"}</b>${i && v != null && sa != null ? ` <span class="src">(시킹알파와 ${v - sa >= 0 ? "+" : ""}${n(v - sa, 1)}%p)</span>` : ""}`).join(" · ")}</div>` : "";
   const age = saAge(c);
@@ -505,7 +521,7 @@ function renderCards() {
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
   drawGauges(list);
   jumpBar("#stockCards", "#cardJump");
-  tgGet().then(() => document.querySelectorAll("#stockCards .tgday").forEach((el) => { el.innerHTML = tgDayHTML(el.dataset.code); })).catch(() => {});
+  Promise.all([tgGet().catch(() => null), repGet().catch(() => null)]).then(() => document.querySelectorAll("#stockCards .tgday").forEach((el) => { el.innerHTML = tgDayHTML(el.dataset.code); }));
 }
 // 🔎 종목 찾기 줄: 아래에 그려진 [data-jump] 칸들로 이름 목록을 만들고, 이름을 누르거나 검색하면 그 칸으로 스크롤 (실적 탭·보유 탭)
 function jumpBar(rootSel, barSel, ph = "🔎 종목 이름 검색 (예: 에이피알) → Enter") {
@@ -3277,13 +3293,16 @@ async function peerCallsHTML(code) {
   if (!list?.length) return "";
   const rowOf = {};
   (PEERS?.groups || []).forEach((g) => g.rows.forEach((r) => { rowOf[r.code] = r; }));
-  const ps = list.map((c) => ({ c, r: rowOf[c] || {} })).filter((x) => x.r.cap_krw == null || x.r.cap_krw >= 1e12)
-    .sort((a, b) => (b.r.cap_krw ?? -1) - (a.r.cap_krw ?? -1));
+  // 최신 발표 순 (사용자 2026-11-03 — 처음엔 시총 순) · 날짜가 같으면 시총 큰 순 · 요약 없는 곳은 맨 뒤
+  const when = (x) => x.own?.date || x.e?.date || "";
+  const ps = list.map((c) => { const own = (EARNINGS[c] || []).find((q) => !q.past); return { c, r: rowOf[c] || {}, own, e: own ? null : (PCALL.calls?.[c] || [])[0] }; })
+    .filter((x) => x.r.cap_krw == null || x.r.cap_krw >= 1e12)
+    .sort((a, b) => String(when(b)).localeCompare(String(when(a))) || (b.r.cap_krw ?? -1) - (a.r.cap_krw ?? -1));
   const li = (x) => `<li>${esc(x)}</li>`;
   const item = (x) => {
-    const own = (EARNINGS[x.c] || []).find((q) => !q.past), e = own ? null : (PCALL.calls?.[x.c] || [])[0];
+    const { own, e } = x;
     const name = x.r.name || PCALL.names?.[x.c] || x.c, tag = PCALL.tags?.[x.c];
-    const meta = [x.r.cap_krw != null ? `시총 ${n(x.r.cap_krw / 1e12, 1)}조` : "", own ? `${own.quarter} · 우리 요약` : e ? `${e.quarter}${e.date ? " · " + e.date : ""}` : "아직 없음"].filter(Boolean).join(" · ");
+    const meta = [x.r.cap_krw != null ? `시총 ${n(x.r.cap_krw / 1e12, 1)}조` : "", own ? `${own.quarter}${own.date ? " · " + own.date : ""} · 우리 요약` : e ? `${e.quarter}${e.date ? " · " + e.date : ""}` : "아직 없음"].filter(Boolean).join(" · ");
     const head = `${FLAG[x.r.market] || ""} <b>${esc(name)}</b>${tag ? ` <span class="qtag muted">${esc(tag)}</span>` : ""} ${e?.tone ? voiceTag(e.tone) : ""} <span class="src">${esc(meta)}</span>`;
     const body = own ? `<ul class="irl">${(own.short || []).slice(0, 3).map(li).join("")}</ul><div class="note"><a href="#stock/${esc(x.c)}">이 종목 상세에서 전체 요약 보기 →</a></div>`
       : e ? `${e.none ? `<div class="note">ℹ️ ${esc(e.none)}</div>` : ""}${e.vs ? `<div class="note" style="margin-top:4px"><b>${esc(e.vs)}</b></div>` : ""}
@@ -3293,7 +3312,7 @@ async function peerCallsHTML(code) {
       : `<div class="note src">요약이 아직 없어요.</div>`;
     return `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">${head}</summary>${body}</details>`;
   };
-  return `<h3>🎙 경쟁사 컨퍼런스콜</h3><div class="card"><div class="note src">시가총액 큰 순 · 1조 원 미만은 빼요 · 눌러서 열기 · 꼬리표 = 경영진 말투</div>${ps.map(item).join("")}</div>`;
+  return `<h3>🎙 경쟁사 컨퍼런스콜</h3><div class="card"><div class="note src">최신 발표 순 · 시총 1조 원 미만은 빼요 · 눌러서 열기 · 꼬리표 = 경영진 말투</div>${ps.map(item).join("")}</div>`;
 }
 function drawPeers(code) {
   if (!PEERS) return;
@@ -3921,7 +3940,7 @@ async function loadIndustry() {
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const secs = [["💄 화장품", () => expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => expHTML("ramen") + expHTML("food")],
-    ["💾 반도체", () => expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => expHTML("power")], ["🧱 기판·CCL", () => key("기판") + gpeCard("CCL·기판")],
+    ["💾 반도체", () => expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => expHTML("power")], ["🔋 2차전지", () => key("2차전지")], ["🧱 기판·CCL", () => key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => gpeCard("백화점")], ["🚗 자동차", () => expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
@@ -4338,12 +4357,39 @@ function revHTML(code) {
   const x = tgSort((TGR?.stocks?.[code] || []).filter((p) => p.rev && p.d >= kstDay(6)))[0];
   return x ? `<div class="note" style="margin-top:6px">📊 <b>주간 EPS 리비전</b> <span class="src">maddingStock ${esc(x.rev.wk)} · 전주 대비</span> <b>${esc(revSec(x.rev.sec))}</b> ${revTxt(x.rev)} · <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a></div>` : "";
 }
-// 📄 오늘·어제 리포트 (보유 탭 카드, 소몽 체크리스트 위 — 사용자 2026-11-02): 📥 PDF·요약(DOC_POOL) · ✨ 짧은 요약(에픽 AI)
+// 📄 오늘·어제 리포트 (보유 탭 카드, 소몽 체크리스트 위 — 사용자 2026-11-02·03): ① 이 종목 증권사 리포트 (한경 컨센서스 목록 + 텔레그램으로 온 것 + 사용자 전달 요약 reports.yaml)
+//   → ② 이 업종 산업 리포트 (reports.json industry) → ③ 둘 다 없을 때만 🌐 인터넷(텔레그램) 글 · 최대 10개 · 줄을 누르면 요약·목표가 계산 방식
+const fKey = (f) => (f || "").replace(/^한투/, "한국").replace(/\s/g, "").slice(0, 2);  // 증권사 이름 앞 두 글자로 같은 곳 찾기
+const mdDay = (d) => d.slice(5).replace("-", "/");
 function tgDayHTML(code) {
-  if (!TGR) return "";
-  const L = tgSort((TGR.stocks?.[code] || []).filter((x) => x.d >= kstDay(1) && x.est_w == null && !x.rev));
-  const at = [TGR.updated_at, TGR.api_at].filter(Boolean).map((s) => s.slice(5)).join(" · ");
-  return (L.length ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 리포트 ${L.length}개</b> <span class="src">📥 텔레그램에서 PDF 받기 · ✨ 짧은 요약 · 확인 ${esc(at)}</span></div><ul class="irl">${tgRows(L, code)}</ul>`
+  if (!TGR && !REPS) return "";
+  const d1 = kstDay(1), mkt = mktOf(code), r = REPS?.stocks?.find((s) => s.code === code), ind = DASH.stocks.find((s) => s.code === code)?.industry;
+  const notes = (r?.notes || []).filter((m) => m.d >= d1), noteOf = (d, f) => notes.find((m) => m.d === d && fKey(m.firm) === fKey(f));
+  const by = new Map(), add = (x) => { const k = fKey(x.firm) + x.d; if (!by.has(k)) by.set(k, { ...x, links: [], note: noteOf(x.d, x.firm) }); return by.get(k); };
+  (r?.list || []).filter((x) => x.d >= d1).forEach(add);
+  const tg = tgSort((TGR?.stocks?.[code] || []).filter((x) => x.d >= d1 && x.est_w == null && !x.rev));
+  tg.filter((x) => x.firm).forEach((x) => { const it = add({ d: x.d, hm: x.hm, firm: x.firm, t: x.t, tp: x.tp, tp_prev: x.tp_prev, tp_dir: x.dir }); it.links.push(x); it.tp ??= x.tp; });
+  notes.forEach((m) => { if (!by.has(fKey(m.firm) + m.d)) add({ d: m.d, firm: m.firm, t: m.t, tp: m.tp, tp_prev: m.tp_prev, rating: m.rating }); });
+  // 최신 날짜 먼저 · 같은 날은 사용자 요약(✍️) → 한경 목록(PDF·목표가 계산 방식 있음) → 텔레그램 순
+  const rank = (x) => (x.note ? 0 : x.u ? 1 : 2);
+  const co = [...by.values()].sort((a, b) => b.d.localeCompare(a.d) || rank(a) - rank(b) || (b.hm || "").localeCompare(a.hm || ""));
+  const inds = ind ? (REPS?.industry || []).filter((x) => x.d >= d1 && x.inds.includes(ind)) : [];
+  const web = co.length || inds.length ? [] : tg.filter((x) => !x.firm).slice(0, 5);
+  const rate = (x) => (x.rating_prev ? `<span class="src">${esc(x.rating_prev)} →</span> <b style="color:var(--warn-ink)">${esc(x.rating)}</b>` : esc(x.rating || ""));
+  const coRow = (x) => {
+    const nt = x.note || {}, why = nt.why || [], val = nt.val || x.val;
+    const links = [x.u ? `<a href="${esc(x.u)}" target="_blank" rel="noopener">📄 원문 PDF</a>` : "", ...x.links.map((y) => `<a href="${esc(y.u)}" target="_blank" rel="noopener">${tgLab(y)}</a>`), nt.u ? `<a href="${esc(nt.u)}" target="_blank" rel="noopener">원문</a>` : ""].filter(Boolean);
+    return `<details class="rpd"><summary><span class="src">${mdDay(x.d)}</span> <b>${esc(x.firm)}</b>${x.tp ? ` 🎯 ${tpChg(x, mkt)}` : ""}${x.rating ? ` · ${rate(x)}` : ""}${why.length ? " ✍️" : ""}
+      <div class="src rpt">${esc((x.t || "").replace(/^[^)]*\(\d{6}\)\s*/, ""))}</div></summary><div class="rpb">
+      ${why.length ? `<ul class="irl">${why.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : `<div class="src">요약은 아직 없어요 — 원문에서 확인 (요약을 보내 주시면 여기에 넣어요)</div>`}
+      ${nt.eps ? `<div class="src">📊 ${esc(nt.eps)}</div>` : ""}${val ? `<div>🧮 목표가 계산: <b>${esc(val)}</b></div>` : ""}
+      <div class="src">${links.join(" · ")}</div></div></details>`;
+  };
+  const at = [REPS?.updated_at, TGR?.updated_at, TGR?.api_at].filter(Boolean).map((s) => s.slice(5)).join(" · ");
+  const n_ = Math.min(10, co.length + inds.length);
+  const body = [...co.map(coRow), ...inds.map((x) => `<div class="rpd"><span class="src">${mdDay(x.d)}</span> 🏭 <b>${esc(x.firm)}</b> · <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a> <span class="src">(${esc(ind)} 업종 리포트)</span></div>`)].slice(0, 10).join("");
+  return (n_ ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 리포트 ${n_}개</b> <span class="src">종목 리포트 → 업종 리포트 순 · 눌러서 요약·목표가 계산 · 확인 ${esc(at)}</span></div>${body}`
+    : web.length ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 증권사 리포트 없음</b> <span class="src">대신 🌐 이 종목이 나온 인터넷 글 · 확인 ${esc(at)}</span></div><ul class="irl">${tgRows(web, code)}</ul>`
     : `<div class="src" style="margin-top:10px">📄 오늘·어제 새 리포트 없음 · 확인 ${esc(at)}</div>`) + revHTML(code);
 }
 // 📥 최근 7일 리포트 (리포트 탭 맨 위): 보유·관심·공동 종목, 날짜별 — 링크만 (PDF 는 텔레그램에 있어 사이트 용량을 안 씀, 7일 지나면 저절로 빠짐)

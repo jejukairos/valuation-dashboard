@@ -381,6 +381,8 @@ ul.news li .src, ul.news li .note { display: block; margin-top: 2px; }
 .tipbox { position: fixed; z-index: 9999; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px;
   font-size: 12px; line-height: 1.55; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); pointer-events: none; max-width: 260px; }
 .alrow { border-top: 1px solid var(--border); padding: 5px 0; font-size: 14px; } .alrow summary { cursor: pointer; } .alrow .cbox:empty { display: none; }  /* 📈 차트 탭 정배열 줄 */
+.rpd { border-top: 1px solid var(--border); padding: 6px 0; font-size: 14px; line-height: 1.5; } .rpd summary { cursor: pointer; } .rpd .rpt { margin-left: 1.1em; } .rpd .rpb { padding: 4px 0 2px 1.1em; }  /* 📄 오늘·어제 리포트 줄 */
+.myper { width: 4.2em; font-size: 15px; padding: 3px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink); }  /* ④ 내가 정한 PER 입력칸 */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bchip.down { background: #182a46; color: #8db6f5; } :root:not([data-theme="light"]) .kdn { color: #8db6f5; } :root:not([data-theme="light"]) .sbadge.p { background: #25213f; } }
 :root[data-theme="dark"] .bchip.down { background: #182a46; color: #8db6f5; } :root[data-theme="dark"] .kdn { color: #8db6f5; } :root[data-theme="dark"] .sbadge.p { background: #25213f; }
 .seg.sseg, .seg.scanmk { display: flex; flex-wrap: wrap; } .seg.sseg button { padding: 5px 9px; font-size: 12px; min-height: 30px; }

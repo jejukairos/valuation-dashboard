@@ -102,7 +102,7 @@ def build(cache, cfg):
         dl, man = cache["daol"].get(d) or {}, manual.get(d) or img.get(d) or {}
         if man.get("counts"):
             counts = {nm(b): list(v) for b, v in man["counts"].items()}
-            how = "다올 표 그림 (손으로 옮김)" if d in manual else "다올 표 그림 (Claude 가 옮기고 합계 점검)"
+            how = "표 그림 (손으로 옮김)" if d in manual else "다올 표 그림 (Claude 가 옮기고 합계 점검)"
         elif prev is not None or dl.get("counts"):
             counts = {b: list(v) for b, v in (prev or {}).items()}
             how = "다올 글 품목 수" if len(dl.get("counts") or {}) == 6 else "추정: 전날 표 − 탈락 + 신규 (빠진 날이 있으면 틀릴 수 있어요)"

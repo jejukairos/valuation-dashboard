@@ -48,7 +48,30 @@ def prev_tp(text):
     return (float(m.group(1).replace(",", "")) if m else None), how
 
 
-PDF = {}  # report_idx → 직전 목표가 (cache/reports_pdf.json, 한 번 읽은 PDF 는 다시 안 받음)
+def val_basis(text):
+    """리포트 첫 장 → 목표주가 계산 방식 한 줄 (우리 말로 다시 씀): '12개월 선행 EPS × PER 15배' · 'SOTP' 등. 못 찾으면 ''."""
+    t = re.sub(r"\s+", " ", text or "")
+    pat = re.compile(r"(12\s*개월\s*(?:선행|forward|fwd)|12M\s*(?:Fwd|Forward|F)?|12MF|NTM|(?:20)?\d{2}\s*(?:년|E|F)\s*(?:예상|추정)?)?\s*"
+                     r"(EPS|BPS|EBITDA|지배주주\s*순이익|순이익|주당순이익|주당순자산)[^.。]{0,60}?(?:목표|Target|타깃|적정)?\s*"
+                     r"(P/?E|P/?B|PER|PBR|EV/EBITDA)\s*(?:ratio|멀티플|배수)?\s*(?:을|를|에|는|은)?\s*[×xX]?\s*(\d{1,3}(?:\.\d{1,2})?)", re.I)
+    for m in pat.finditer(t):  # '지금 주가는 PER 12배' 같은 현재 값은 빼고, 목표가에 '적용·Target·산정' 한 것만
+        if not re.search(r"적용|Target|타깃|목표\s*(?:P|배수|멀티플)|산정|산출", t[max(0, m.start() - 80):m.end() + 40], re.I) or not float(m.group(4)):
+            continue
+        when = re.sub(r"12\s*개월\s*(?:선행|forward|fwd)|12M\s*(?:Fwd|Forward|F)?|12MF|NTM", "12개월 선행", re.sub(r"\s+", " ", m.group(1) or "").strip(), flags=re.I)
+        when = re.sub(r"(\d)\s*(년|E|F)\s*", r"\1\2 ", when).strip()
+        what = {"주당순이익": "EPS", "주당순자산": "BPS", "지배주주순이익": "순이익"}.get(re.sub(r"\s+", "", m.group(2)), m.group(2).upper())
+        mul = {"PE": "PER", "P/E": "PER", "PB": "PBR", "P/B": "PBR"}.get(m.group(3).upper(), m.group(3).upper())
+        return f"{(when + ' ') if when else ''}{what} × {mul} {m.group(4)}배"
+    m = re.search(r"(?:목표|Target|타깃)\s*(P/?E|PER|P/?B|PBR|EV/EBITDA)\s*(?:ratio|멀티플|배수)?\s*(?:을|를|는|은|로|:)?\s*[×xX]?\s*(\d{1,3}(?:\.\d{1,2})?)\s*(?:배|x|X)", t, re.I)
+    if m and float(m.group(2)):  # 'Target PER 13배' — 무엇(EPS 몇 년)에 곱했는지는 못 찾음
+        return f"목표 {({'PE': 'PER', 'P/E': 'PER', 'PB': 'PBR', 'P/B': 'PBR'}.get(m.group(1).upper(), m.group(1).upper()))} {m.group(2)}배"
+    m = re.search(r"SOTP|Sum[- ]of[- ]the[- ]parts|DCF|RIM|잔여이익|(?:영업|사업)\s*가치\s*\+", t, re.I)
+    if m and re.search(r"목표\s*주가|적정\s*주가|Target", t[max(0, m.start() - 150):m.end() + 150]):
+        return "DCF(미래 현금 할인) 방식" if m.group(0).upper() == "DCF" else "RIM(잔여이익) 방식" if m.group(0) in ("RIM", "잔여이익") else "SOTP(사업별 가치 합산) 방식"
+    return ""
+
+
+PDF = {}  # report_idx → [직전 목표가, 유지·상향·하향, 목표가 계산 방식] (cache/reports_pdf.json, 한 번 읽은 PDF 는 다시 안 받음)
 
 
 def pdf_prev(url):
@@ -56,7 +79,16 @@ def pdf_prev(url):
 
     import pypdf
     r = HTTP.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=40)
-    return prev_tp(pypdf.PdfReader(io.BytesIO(r.content)).pages[0].extract_text())
+    pages = pypdf.PdfReader(io.BytesIO(r.content)).pages
+    t0 = pages[0].extract_text()
+    t1 = t0 + "\n" + "\n".join(p.extract_text() for p in pages[1:4])  # 계산 방식은 2~4장(밸류에이션 표·본문)에 있는 경우가 많음
+    return [*prev_tp(t0), val_basis(t1)]
+
+
+RATE = {"매수": "BUY", "BUY": "BUY", "STRONGBUY": "BUY+", "적극매수": "BUY+", "OUTPERFORM": "BUY", "OVERWEIGHT": "BUY", "비중확대": "BUY",
+        "중립": "HOLD", "HOLD": "HOLD", "NEUTRAL": "HOLD", "MARKETPERFORM": "HOLD", "TRADINGBUY": "TBUY", "단기매수": "TBUY",
+        "매도": "SELL", "SELL": "SELL", "REDUCE": "SELL", "UNDERPERFORM": "SELL", "비중축소": "SELL", "NOTRATED": "NR", "NR": "NR", "투자의견없음": "NR", "N/A": "NR", "없음": "NR"}
+rate_key = lambda s: RATE.get(re.sub(r"[\s\-_()]", "", (s or "").upper()), re.sub(r"\s", "", (s or "").upper()))
 
 
 def kr(code, days=DAYS, budget=None):
@@ -66,22 +98,63 @@ def kr(code, days=DAYS, budget=None):
                  headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
     r.encoding = "utf-8"
     rows = [x for x in parse_hk(r.text) if f"({code})" in x["t"] or code not in x["t"]][:KEEP]
-    for x in rows:  # 직전 목표가: PDF 첫 장에서 (새 리포트만 받음, 한 번에 budget 개까지)
+    recent = (now - timedelta(days=3)).strftime("%Y-%m-%d")
+    for x in rows:  # 직전 목표가·계산 방식: PDF 첫 두 장에서 (새 리포트만 받음, 한 번에 budget 개까지 · 계산 방식이 없던 옛 기록은 최근 3일 것만 다시)
         k = x["u"].rsplit("=", 1)[-1]
-        if k not in PDF and x.get("tp") and (budget is None or budget[0] > 0):
+        stale = k in PDF and len(PDF[k]) < 3 and x["d"] >= recent
+        if (k not in PDF or stale) and x.get("tp") and (budget is None or budget[0] > 0):
             try:
                 PDF[k] = list(pdf_prev(x["u"]))
             except Exception:  # noqa: BLE001
-                PDF[k] = [None, ""]
+                PDF[k] = [None, "", ""]
             if budget is not None:
                 budget[0] -= 1
             time.sleep(0.5)
         prev, how = (PDF.get(k) or [None, ""])[:2]
+        if len(PDF.get(k) or []) > 2 and PDF[k][2]:
+            x["val"] = PDF[k][2]
         if x.get("tp") and (prev or how == "유지"):
             x["tp_prev"] = x["tp"] if how == "유지" and not prev else prev
         elif how in ("상향", "하향"):
             x["tp_dir"] = how  # 몇 원에서 바뀌었는지는 못 찾았지만 방향은 앎
+    for i, x in enumerate(rows):  # 투자의견이 바뀌었는지: 같은 증권사의 바로 전 리포트와 비교 (Buy → Hold 등)
+        p = next((y for y in rows[i + 1:] if y["firm"] == x["firm"] and rate_key(y.get("rating")) not in ("", "NR")), None)
+        if p and rate_key(x.get("rating")) not in ("", "NR") and rate_key(p["rating"]) != rate_key(x["rating"]):  # '투자의견없음'(업종 글 등)은 바뀜으로 안 셈
+            x["rating_prev"] = p["rating"]
     return rows
+
+
+# 🏭 산업 리포트 → 우리 업종(stocks.yaml industry) 짝짓기: 제목 낱말 + 한경 업종 번호 중 뜻이 분명한 것만
+# shortcut: 제목 낱말로만 짝지음 — 제목에 업종 말이 없으면 놓치거나 엉뚱하게 붙을 수 있음, 틀린 게 자주 보이면 낱말을 고칠 것
+IND_RE = {"화장품": r"화장품|뷰티|Beauty|코스메틱|ODM", "반도체": r"반도체|메모리|HBM|D램|DRAM|낸드|NAND|파운드리|Semi|후공정",
+          "인터넷": r"인터넷|게임|플랫폼|웹툰|포털", "조선": r"조선|LNG선|선박|해운", "조선기자재": r"조선|LNG선|선박|기자재",
+          "자동차": r"자동차|완성차|Auto|전기차|판매량", "자동차부품": r"자동차|완성차|Auto|전기차|부품", "방산": r"방산|방위|국방|Defen[cs]e",
+          "방산·철도": r"방산|방위|국방|철도", "건설·원전": r"건설|원전|원자력|SMR|주택|해외수주", "원자력·전력기기": r"원전|원자력|SMR|전력기기|변압기|전선|케이블",
+          "전력": r"전력|유틸리티|한전|발전", "ESS·부품": r"ESS|배터리|2차전지|이차전지|양극재|LFP", "기판": r"기판|PCB|MLCC|FC-?BGA|CCL",
+          "기판·전자부품": r"기판|PCB|MLCC|FC-?BGA|CCL|전자부품", "OLED 소재": r"OLED|디스플레이", "엔터": r"엔터|K-?pop|케이팝|음반|콘서트|아이돌",
+          "유통": r"유통|리테일|Retail|백화점|편의점|면세", "음식료": r"음식료|F&B|식품|라면|음료|주류", "의료기기": r"의료기기|미용기기|에스테틱|메디컬",
+          "의류": r"의류|패션|OEM|아웃도어|섬유", "증권": r"증권|브로커리지", "지주": r"지주", "항공": r"항공|여객|LCC"}
+IND_CODE = {"029": ["자동차", "자동차부품"], "152": ["조선", "조선기자재"], "153": ["인터넷"]}
+
+
+def industry(days=2):
+    """한경 컨센서스 산업 리포트 (최근 days 일) → [{d, t, firm, who, u, inds}] (inds = 짝지은 우리 업종, 없으면 뺌)."""
+    now = now_kst()
+    r = HTTP.get(f"{HK}/analysis/list", params={"skinType": "industry", "sdate": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
+                                                "edate": now.strftime("%Y-%m-%d"), "report_type": "IN", "pagenum": 200},
+                 headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+    r.encoding = "utf-8"
+    out = []
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", r.text, re.S):
+        a = re.search(r'href="(/analysis/downpdf\?report_idx=\d+)"[^>]*onmouseover[^>]*>(.*?)</a>', row, re.S)
+        if not a:
+            continue
+        td = [unescape(re.sub(r"<[^>]+>", " ", x)).strip() for x in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)] + [""] * 5
+        t, c = re.sub(r"\s+", " ", unescape(a.group(2))).strip(), re.search(r"industry_code=(\w+)", row)
+        inds = sorted({k for k, rx in IND_RE.items() if re.search(rx, t, re.I)} | set(IND_CODE.get(c.group(1) if c else "", [])))
+        if inds:
+            out.append({"d": td[0], "t": t, "who": td[3], "firm": td[4], "u": HK + a.group(1), "inds": inds})
+    return out
 
 
 def collect(todo):
@@ -108,9 +181,14 @@ def collect(todo):
             lst = []
         out.append({"code": code, "name": h["name"], "market": mkt, "group": g, "notes": notes.get(code) or [], "list": lst})
     write_json(CACHE / "reports_pdf.json", PDF)
-    print(f"  리포트: {sum(len(x['list']) for x in out)}건 · 요약 {sum(len(x['notes']) for x in out)}건 · PDF 새로 {150 - budget[0]}개")
+    try:
+        ind = industry()
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("증권사 리포트", f"산업 리포트: {str(e)[:60]}")
+        ind = []
+    print(f"  리포트: {sum(len(x['list']) for x in out)}건 · 요약 {sum(len(x['notes']) for x in out)}건 · PDF 새로 {150 - budget[0]}개 · 산업 {len(ind)}건")
     return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "src": "한국 = 한경 컨센서스 공개 목록 · 미국 = 야후 증권사 의견 변경 · 요약 = config/reports.yaml",
-            "stocks": out}
+            "stocks": out, "industry": ind}
 
 
 if __name__ == "__main__":
@@ -127,6 +205,17 @@ if __name__ == "__main__":
         assert prev_tp("목표주가 1,300,000원(기존 1,600,000원)") == (1600000.0, "") and prev_tp("목표주가 350,000원") == (None, "")
         assert prev_tp("목표주가 (하향) 350,000원\n현재 직전 변동\n목표주가 350,000 460,000 ▼") == (460000.0, "하향")
         assert prev_tp("목표주가(12M) 600,000원(유지)") == (None, "유지") and prev_tp("투자의견 BUY, 목표주가 1,800,000원 유지") == (None, "유지")
+        assert val_basis("목표주가는 12개월 선행 EPS에 목표 PER 15배를 적용해 산출") == "12개월 선행 EPS × PER 15배"
+        assert val_basis("2027년 예상 BPS 에 Target P/B 2.1x 적용") == "2027년 예상 BPS × PBR 2.1배", val_basis("2027년 예상 BPS 에 Target P/B 2.1x 적용")
+        assert val_basis("27E EPS에 Target PER 12.0배") == "27E EPS × PER 12.0배", val_basis("27E EPS에 Target PER 12.0배")
+        assert val_basis("목표주가는 SOTP 방식으로 산정") == "SOTP(사업별 가치 합산) 방식" and val_basis("실적이 좋다") == ""
+        assert val_basis("목표주가는 12M Fwd EPS 에 PER 20.4배를 적용해 산출했다") == "12개월 선행 EPS × PER 20.4배"
+        assert val_basis("목표주가 산정 Table 12M Fwd EPS 20,258 Target P/E ratio × 7.7 Target Price 155,000") == "12개월 선행 EPS × PER 7.7배"
+        assert val_basis("2027년 예상 실적 기준 현 주가는 P/E 11.7배 수준") == ""  # 지금 값 (목표가 계산 아님)
+        assert val_basis("Target PER 13배를 적용") == "목표 PER 13배" and val_basis("Target PER 할인율을 10%에서 20%로") == ""
+        assert val_basis("Valuation 지표 EPS 24,413 BPS 141,812 EV/EBITDA 3.1") == ""  # 값 표
+        assert rate_key("Buy") == rate_key("매수") == rate_key("BUY ") and rate_key("Hold") != rate_key("Buy") and rate_key("Trading Buy") == "TBUY"
+        assert rate_key("투자의견없음") == rate_key("Not Rated") == rate_key("N/A") == "NR" and rate_key(None) == ""
         print("ok")
     elif sys.argv[1:] == ["--all"]:  # 리포트만 따로 갱신 (tg.yml 저녁 매시간) — 본 갱신(main.py)과 같은 종목 목록
         from common import DATA
