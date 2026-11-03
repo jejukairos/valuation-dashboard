@@ -8,6 +8,7 @@ import re
 import sys
 from datetime import timedelta
 
+import numpy as np
 import pandas as pd
 
 from common import DATA, HTTP, load_yaml, now_kst, read_json, write_json
@@ -53,13 +54,13 @@ def kr_ohlcv(code, years=10):
     return df[df["Close"] > 0]
 
 
-def us_ohlcv(tickers, period="10y"):
-    """야후 일봉 (배당·분할 반영 수정주가) — 100개씩 나눠 받음."""
+def us_ohlcv(tickers, period="10y", adj=True):
+    """야후 일봉 (adj=True 배당·분할 반영 수정주가, False = 분할만 반영 — 증권사 차트와 같은 숫자) — 100개씩 나눠 받음."""
     import yfinance as yf
     out = {}
     for i in range(0, len(tickers), 100):
         part = tickers[i:i + 100]
-        df = yf.download(part, period=period, interval="1d", auto_adjust=True, group_by="ticker", threads=True, progress=False)
+        df = yf.download(part, period=period, interval="1d", auto_adjust=adj, group_by="ticker", threads=True, progress=False)
         for t in part:
             try:
                 d = (df[t] if len(part) > 1 else df).dropna(subset=["Close"])
@@ -143,7 +144,124 @@ def board():
     key = lambda c: (not c["idx"], -(c.get("rel3m") if c.get("rel3m") is not None else -999))
     pa = us_ohlcv([t for t, _, _ in AI_INFRA], period="3y")
     ai = [ma200_card(t, name, what, pa[t]["Close"]) for t, name, what in AI_INFRA if t in pa]
-    return {"kr": sorted(kr, key=key), "us": sorted(us, key=key), "ai": [c for c in ai if c]}
+    try:  # 실패해도 그룹판은 저장
+        dr = draw()
+    except Exception as e:  # noqa: BLE001
+        print("  선 그은 차트 실패", str(e)[:80])
+        dr = []
+    return {"kr": sorted(kr, key=key), "us": sorted(us, key=key), "ai": [c for c in ai if c], "draw": dr}
+
+
+# ---------- ✏️ 선 그은 차트: 컵위드핸들 · 200일선 · 채널(지지선·저항선) — 사용자 전달 그림(2026-11-03)처럼, 매번 새 가격으로 다시 계산 ----------
+# (티커, 이름, 봉: d 일봉 200개 / w 주봉 104개, 전달받은 글·그림 메모) — 그림을 또 받으면 여기에 한 줄 추가
+DRAW = [("WMT", "월마트", "d", "11/3 전달 그림: 6~10월에 컵 모양을 그리고 위로 화살표"),
+        ("COST", "코스트코", "d", "11/3 전달 그림: 6~10월에 컵 모양을 그리고 위로 화살표"),
+        ("QQQ", "나스닥100 ETF", "d", "11/3 전달 그림: 200일선에 닿은 자리에 동그라미"),
+        ("SOXX", "반도체 ETF (30종목)", "w", "11/3 전달 글: 반도체는 기술적으로 상승추세(채널)를 벗어나는 중 — 하락추세로 보고, "
+                                         "벗어나기까지 시간이 꽤 걸리며 주도주에서 빠질 가능성이 높다는 개인 의견")]
+
+
+def cup_shape(c, k):
+    """오닐 컵위드핸들 (종가, k = 1주의 봉 수: 일봉 5 · 주봉 1). 앞선 30주 안 25%+ 상승 → 왼쪽 입술 A → 12~40% 바닥 B
+    → 오른쪽 입술 C (A 의 90~105%, A~C 7~65주) → 손잡이 (C 뒤 1~10주, 3~15% 눌림, 컵 위쪽 절반) → C 위 종가 = 돌파.
+    단계 st: up 오른쪽 올라오는 중(깊이 절반 넘게 회복) · lip 오른쪽 입술(손잡이 전) · handle 손잡이 만드는 중 · out 돌파(2주 안)."""
+    from patterns import _piv
+    T = len(c) - 1
+    piv = sorted(_piv(c, 2 * k), key=lambda i: -c[i])  # 높은 고점부터 = 진짜 왼쪽 입술
+    for t in range(T, T - 2 * k - 1, -1):  # 돌파는 2주 전까지 '돌파'
+        for a in piv:
+            H = c[a]
+            if not t - 65 * k <= a <= t - 7 * k or H < 1.25 * c[max(0, a - 30 * k):a + 1].min():
+                continue
+            b = a + 1 + int(c[a + 1:t + 1].argmin())
+            depth = 1 - c[b] / H
+            if not 0.12 <= depth <= 0.40 or t - b < k or c[a + 1:b].max(initial=0) > H:
+                continue
+            C = b + 1 + int(c[b + 1:t].argmax()) if t > b + 1 else t  # 오른쪽 입술 = 바닥 뒤 '어제까지' 가장 높은 종가
+            R, h = c[C], c[C + 1:t]
+            lip = 0.90 * H <= R <= 1.05 * H and 7 * k <= C - a <= 65 * k
+            ok_h = lambda hh: k <= len(hh) <= 10 * k and 0.03 <= 1 - hh.min() / R <= 0.15 and hh.min() >= c[b] + (H - c[b]) / 2
+            mid, st = c[b] + (H - c[b]) / 2, None
+            if c[t] > R and lip and ok_h(h):
+                st = "out"
+            elif t == T and c[t] >= R:  # 오늘이 바닥 뒤 가장 높음 = 손잡이 없음
+                st = "lip" if 0.90 * H <= c[t] <= 1.05 * H else "up" if mid <= c[t] < 0.90 * H else None
+                C, R = t, c[t]
+            elif t == T:
+                if R < 0.90 * H:
+                    st = "up" if c[t] >= mid else None
+                elif lip:
+                    hh = c[C + 1:t + 1]
+                    st = "lip" if len(hh) < k else "handle" if ok_h(hh) else None
+            if st is None or (t < T and not (st == "out" and c[T] > R)):
+                continue
+            return {"st": st, "a": a, "b": b, "c": C, "t": t, "H": H, "R": R, "depth": depth,
+                    "pre": c[a] / c[max(0, a - 30 * k):a + 1].min() - 1, "wk": (C - a) // k, "dip": (1 - c[C:T + 1].min() / R) if C < T else 0.0}
+    return None
+
+
+def channel(h, l, c, k, span):
+    """오르는 채널 (로그 가격): 최근 span 봉에서 13주 넘게 지난 가장 낮은 저가 A → 그 뒤(2주 전까지) 저가들 중 기울기가 가장 낮은 B
+    = 한 번도 깨지지 않은 지지선 A-B. 저항선 = 같은 기울기로 A~B 사이 고가가 가장 높이 닿은 선. 지금 종가가 어디인지 (아래 = 이탈)."""
+    T = len(c) - 1
+    lo0, end = max(0, T + 1 - span), T - 13 * k
+    if end <= lo0 + 4 * k:
+        return None
+    A = lo0 + int(l[lo0:end + 1].argmin())
+    js = np.arange(A + 4 * k, T - 2 * k + 1)
+    if not len(js):
+        return None
+    L, Hh = np.log(l), np.log(h)
+    sl = (L[js] - L[A]) / (js - A)
+    B, s = int(js[sl.argmin()]), float(sl.min())
+    if s <= 0:
+        return None  # 오르는 채널만 (내려가는 선은 📐 주봉 차트 모양에서)
+    base = L[A] + s * (np.arange(T + 1) - A)
+    off = float((Hh[A:B + 1] - base[A:B + 1]).max())
+    if off <= 0:
+        return None
+    lc = np.log(c)
+    st = "below" if lc[T] < base[T] else "above" if lc[T] > base[T] + off else "in"
+    run = 0  # 지금 상태(아래·안·위)가 몇 봉째인지
+    for i in range(T, B, -1):
+        if ("below" if lc[i] < base[i] else "above" if lc[i] > base[i] + off else "in") != st:
+            break
+        run += 1
+    return {"a": A, "b": B, "la": float(L[A]), "s": s, "off": off, "st": st, "run": run,
+            "lo": float(np.exp(base[T])), "up": float(np.exp(base[T] + off)), "was_above": bool((lc[B:T + 1] > base[B:T + 1] + off).any())}
+
+
+def draw():
+    """DRAW 종목마다 캔들 + 이평선 + 컵위드핸들·채널·200일선 계산 (배당 안 깎은 가격 = 증권사 차트와 같은 숫자)."""
+    px = us_ohlcv([t for t, *_ in DRAW], period="3y", adj=False)
+    out = []
+    for sym, name, tf, memo in DRAW:
+        d = px.get(sym)
+        if d is None:
+            continue
+        c = d["Close"]
+        m2 = ma200_card(sym, name, "", c)  # 200일선 위·아래, 며칠째, 이격
+        b = d if tf == "d" else resample(d, "W-FRI")
+        k, n = (5, 200) if tf == "d" else (1, 104)
+        off = max(0, len(b) - n)
+        ch = bars(b, (20, 50, 200) if tf == "d" else (20, 50))
+        ch = {kk: (vv[off:] if isinstance(vv, list) else {m: s[off:] for m, s in vv.items()}) for kk, vv in ch.items()}
+        C, Hi, Lo = (b[x].values.astype(float) for x in ("Close", "High", "Low"))
+        cup, chn = cup_shape(C, k), channel(Hi, Lo, C, k, n)
+        rel = lambda i: i - off
+        if cup and cup["a"] >= off:
+            sm = pd.Series(C).rolling(2 * k + 1, center=True, min_periods=1).mean().values  # 컵 모양 따라 그리는 굵은 선 (가운데 이동평균)
+            cup = {**{x: r_(cup[x], 2) for x in ("H", "R")}, "st": cup["st"], "depth": r_(cup["depth"] * 100, 0), "pre": r_(cup["pre"] * 100, 0),
+                   "wk": cup["wk"], "dip": r_(cup["dip"] * 100, 1), **{x: rel(cup[x]) for x in ("a", "b", "c", "t")},
+                   "path": [r_(v, 2) for v in sm[cup["a"]:]]}
+        else:
+            cup = None
+        if chn:
+            chn = {**chn, "a": rel(chn["a"]), "b": rel(chn["b"]), "lo": r_(chn["lo"], 2), "up": r_(chn["up"], 2)}
+        out.append({"sym": sym, "name": name, "tf": tf, "memo": memo, "ch": ch, "cup": cup, "chn": chn,
+                    "ma200": {k_: m2[k_] for k_ in ("s", "days", "gap", "chg_d")} | {"v": m2["ma"][-1]} if m2 else None,
+                    "last": r_(c.iloc[-1], 2), "date": c.index[-1].strftime("%Y-%m-%d")})
+    return out
 
 
 def ma200_card(sym, name, what, c, n=205):
@@ -427,6 +545,19 @@ if __name__ == "__main__":
         drop = up.copy(); drop.iloc[-3:] = 100  # 마지막 3일 200일선 아래로 → 주황 3일째
         m = ma200_card("X", "x", "x", drop)
         assert m["s"] == "down" and m["days"] == 3 and len(m["c"]) == 205 and ma200_card("X", "x", "x", up)["s"] == "up", m
+        # 컵위드핸들 (주봉): 60→100 오름, 100→75 컵, 98 회복 → 입술 / 손잡이 92 → 101 돌파
+        cupv = list(np.linspace(55, 60, 40)) + list(np.linspace(60, 100, 20)) + list(100 - 25 * np.sin(np.linspace(0, np.pi, 30))[1:])
+        assert cup_shape(np.array(cupv), 1)["st"] == "lip"
+        assert cup_shape(np.array(cupv + [97, 98, 96, 94, 92, 93]), 1)["st"] == "handle"
+        assert cup_shape(np.array(cupv + [97, 98, 96, 94, 92, 93, 101]), 1)["st"] == "out"
+        assert cup_shape(np.array(cupv[:-4]), 1)["st"] == "up"
+        assert cup_shape(np.array(cupv[:-14]), 1) is None  # 깊이 절반도 회복 못 함
+        # 채널: 로그로 일정하게 오르는 지그재그 → 마지막에 아래선 밑으로
+        lv = np.log(100) + 0.01 * np.arange(120) + 0.08 * np.abs(np.sin(np.arange(120) / 4))
+        cc = np.exp(lv); cc[-1] = cc[-1] * 0.85
+        ch_ = channel(cc * 1.01, cc * 0.99, cc, 1, 120)
+        assert ch_ and ch_["a"] == 0 and ch_["st"] == "below" and abs(ch_["s"] - 0.01) < 0.002, ch_
+        assert channel(cc[:-1] * 1.01, cc[:-1] * 0.99, cc[:-1], 1, 120)["st"] == "in"
         print("ok")
     else:
         main()

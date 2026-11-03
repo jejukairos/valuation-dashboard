@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: "40 21 * * 0-4"   # 평일 06:40 KST (미국장 마감 뒤) = 전날 21:40 UTC
     - cron: "10 7 * * 1-5"    # 평일 16:10 KST (한국장 마감 뒤)
+    - cron: "35 13-16 * * 0-4" # 일~목 22:35·23:35·00:35·01:35 KST (사용자가 보는 저녁, 미국장 중) — 그룹판·AI 인프라·선 그은 차트만
   workflow_dispatch:
   push:
     branches: [main]
@@ -34,7 +35,7 @@ jobs:
           KRX_ID: ${{ secrets.KRX_ID || secrets.KRX_JEJUKAIROS21 }}
           KRX_PW: ${{ secrets.KRX_PW }}
           PYTHONIOENCODING: utf-8
-        run: cd collector && python -u board.py
+        run: cd collector && python -u board.py ${{ github.event.schedule == '35 13-16 * * 0-4' && '--board' || '' }}
       - name: 저장
         if: always()
         run: |

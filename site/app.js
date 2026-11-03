@@ -3763,8 +3763,45 @@ function aiHTML(list) {
     <div class="grid g2" style="margin-top:8px">${list.map(card).join("")}</div>
     <div class="note src">${dot("up")} 200일선 위 · ${dot("down")} 200일선 아래 · ${dot("up")}→${dot("down")} 최근 한 달 안에 아래로 내려옴 (동그라미) · 사용자 전달 '주요 AI인프라 상승추세 판단'(10/31) 6종목 · 야후 수정주가 · 기술적 분석은 참고 수단일 뿐이에요 (매수·매도 추천 아님)</div>`;
 }
+// ✏️ 선 그은 차트 (board.json draw ← collector/board.py draw): 오닐 컵위드핸들 · 200일선 · 지지선·저항선 채널 — 갱신 때마다 새 가격으로 다시 계산
+function drawHTML(list, at) {
+  if (!list?.length) return "";
+  const ST = { up: "컵 오른쪽이 올라오는 중", lip: "컵 오른쪽 입술 · 손잡이는 아직", handle: "손잡이 만드는 중", out: "손잡이 고점 돌파" };
+  const ok = (b) => (b ? "✅" : "⬜");
+  const card = (x) => {
+    const fmt = (v) => `$${n(v, 2)}`, wk = x.tf === "w", u = wk ? "주" : "일", p = x.cup, q = x.chn, m = x.ma200, t = x.ch.t, N = t.length;
+    const lines = [];
+    const w50 = wk ? x.ch.ma?.["50"]?.at(-1) : null;  // 주봉은 50주선(≈1년 평균)도
+    if (m) lines.push(`200일선 ${fmt(m.v)} 대비 <b style="color:${m.s === "up" ? "var(--good)" : "var(--warn-ink)"}">${sg(m.gap, 1)}</b> · ${m.s === "up" ? "위" : "아래"} ${m.days}일째${Math.abs(m.gap) <= 3 ? " · <b>200일선 시험 중</b> (±3% 안)" : ""}${w50 ? ` · 50주선 ${fmt(w50)} 대비 ${sg((x.last / w50 - 1) * 100, 1)}` : ""}`);
+    if (p) lines.push(`☕ 컵위드핸들: <b>${ST[p.st]}</b> — ${t[p.a]} 고점 ${fmt(p.H)} → ${p.depth}% 눌린 바닥(${t[p.b]}) → 지금 왼쪽 고점의 ${Math.round((x.last / p.H) * 100)}%`
+      + `<div class="src">오닐 조건: 앞선 상승 +${p.pre}% ${ok(p.pre >= 25)} · 깊이 ${p.depth}% ${ok(p.depth <= 33)}(12~33%) · 기간 ${p.wk}주 ${ok(p.wk >= 7)}(7주+) · 손잡이 ${p.st === "handle" || p.st === "out" ? `${n(p.dip, 1)}% 눌림 ✅` : "⬜ 아직"}</div>`);
+    if (q) lines.push(`📏 채널: <b style="color:${q.st === "below" ? "var(--warn-ink)" : "inherit"}">${q.st === "below" ? "지지선 아래로 이탈" : q.st === "above" ? "저항선 위" : "채널 안"}</b> ${q.run}${u === "주" ? "주" : "일"}째 — 지지선 ${fmt(q.lo)} (${sg((x.last / q.lo - 1) * 100, 1)}) · 저항선 ${fmt(q.up)} (${sg((x.last / q.up - 1) * 100, 1)})`
+      + `<div class="src">${q.a >= 0 ? t[q.a] : ""} 저점과 ${t[q.b]} 저점을 이은 지지선 (그 사이 한 번도 안 깨짐) · 저항선은 같은 기울기${q.was_above && q.st !== "above" ? " · 한때 저항선 위로 올라갔다가 다시 내려옴" : ""}</div>`);
+    const over = (X, Y) => {
+      let g = "";
+      const path = (pts) => pts.map(([i, v], j) => `${j ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+      if (p) g += `<path d="${path(p.path.map((v, j) => [p.a + j, v]))}" transform="translate(0,7)" fill="none" stroke="var(--good)" stroke-width="9" stroke-opacity=".3" stroke-linecap="round" stroke-linejoin="round"/>`;
+      if (q) {
+        const i0 = Math.max(0, q.a), ln = (k) => path(Array.from({ length: N - i0 }, (_, j) => [i0 + j, Math.exp(q.la + q.s * (i0 + j - q.a) + k)]));
+        g += `<path d="${ln(0)}" fill="none" stroke="var(--s7)" stroke-width="2.5" opacity=".8"/><path d="${ln(q.off)}" fill="none" stroke="var(--s7)" stroke-width="2.5" opacity=".8"/>`
+          + [q.a, q.b].filter((i) => i >= 0).map((i) => `<circle cx="${X(i)}" cy="${Y(Math.exp(q.la + q.s * (i - q.a)))}" r="4" fill="var(--s7)"/>`).join("");
+      }
+      if (m && !wk && Math.abs(m.gap) <= 3) g += `<circle cx="${X(N - 1)}" cy="${Y(m.v)}" r="14" fill="none" stroke="var(--good)" stroke-width="3"/>`;
+      return g;
+    };
+    const ref = p ? (p.st === "handle" || p.st === "out" ? { v: p.R, t: "손잡이 고점" } : { v: p.H, t: "컵 왼쪽 고점" }) : null;
+    return `<div class="card" style="padding:8px 10px"><div class="bhd"><b style="font-size:17px">${esc(x.sym)}</b> <span class="src">${esc(x.name)}</span><span class="bchd"><b>${fmt(x.last)}</b> <span class="${kcol(m?.chg_d)}">${sg(m?.chg_d, 1)}</span></span></div>
+      ${lines.map((l) => `<div style="margin-top:4px">${l}</div>`).join("")}
+      <div class="cbox">${candleSVG(x.ch, x.tf, fmt, ref, over)}<div class="src">${wk ? "주봉 2년 · 로그 눈금 · 초록 20주선 · 회색 50주선(≈1년 평균)" : "일봉 약 10개월 · 초록 20일선 · 회색 50일선 · 주황 200일선"}${q ? " · 보라 = 지지선·저항선" : ""}${p ? " · 연두 띠 = 컵 모양" : ""} · ${esc(x.date)} 종가</div></div>
+      ${x.memo ? `<div class="note src">🗣 ${esc(x.memo)}</div>` : ""}</div>`;
+  };
+  return `<h2>✏️ 선 그은 차트 <span class="src">컵위드핸들 · 200일선 · 지지선·저항선 채널 · ${esc(at || "")}</span></h2>
+    <div class="grid g2">${list.map(card).join("")}</div>
+    <div class="kidbox">🐣 <b>컵위드핸들</b>(윌리엄 오닐): 주가가 커피잔처럼 둥글게 내려갔다 올라온 뒤, 손잡이처럼 살짝 쉬었다가 손잡이 고점을 넘는 모양이에요. <b>200일선</b>: 약 10개월 평균 가격 — 위에 있으면 큰 흐름이 위쪽이에요. <b>채널</b>: 바닥끼리 이은 선(지지선)과, 같은 기울기로 꼭대기에 닿는 선(저항선) 사이 길 — 지지선 아래로 내려오면 오르던 길을 벗어난 거예요.</div>
+    <div class="note src">선은 사람이 긋지 않고 갱신 때마다 같은 규칙으로 다시 계산해요 (평일 아침·한국장 마감 뒤 + 일~목 저녁 8시~새벽 2시 매시간) · 야후, 배당 안 깎은 가격 (증권사 차트와 같은 숫자) · 채널은 로그 가격 기준 · 기술적 분석은 참고 수단일 뿐이에요 (매수·매도 추천 아님)</div>`;
+}
 // 캔들 차트 (일봉 2년 · 주봉 5년 · 월봉 10년): 이평선 · RS 선(지수 대비) · 거래량 · 마지막 가격 · 기준선(전일 종가 / 12주 고점)
-function candleSVG(ch, kind, fmt, ref) {
+function candleSVG(ch, kind, fmt, ref, over) {  // over(X, Y, lo, hi) = 위에 덧그릴 선 (가격 칸 밖은 잘림)
   if (!ch?.c?.length) return "";
   const N = ch.c.length, W = 600, x0 = 4, x1 = 540, top = 14, bot = 168, rs0 = 178, rs1 = 206, v0 = 214, v1 = 250, H = 262, logS = kind !== "d";
   const lows = ch.l.filter((v) => v > 0), his = ch.h.filter((v) => v > 0), lo = Math.min(...lows), hi = Math.max(...his);
@@ -3780,7 +3817,7 @@ function candleSVG(ch, kind, fmt, ref) {
     if (bw >= 1.2) g += `<rect x="${X(i) - bw / 2}" y="${Math.min(Y(o), Y(c))}" width="${bw}" height="${Math.max(0.8, Math.abs(Y(o) - Y(c)))}" fill="${col}"/>`;
     g += `<rect x="${X(i) - bw / 2}" y="${v1 - (ch.v[i] / vmax) * (v1 - v0)}" width="${bw}" height="${(ch.v[i] / vmax) * (v1 - v0)}" fill="${col}" opacity=".35"/>`;
   });
-  const maCol = { 50: "var(--ink-2)", 200: "var(--warn)", 10: kind === "m" ? "var(--warn)" : "var(--ink-2)", 30: "var(--warn)", ...AL_COL };
+  const maCol = { 20: "var(--s3)", 50: "var(--ink-2)", 200: "var(--warn)", 10: kind === "m" ? "var(--warn)" : "var(--ink-2)", 30: "var(--warn)", ...AL_COL };
   Object.entries(ch.ma || {}).forEach(([k, a]) => { let d = ""; a.forEach((v, i) => { if (v > 0) d += `${d && a[i - 1] > 0 ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; }); g += `<path d="${d}" fill="none" stroke="${maCol[k] || "var(--ink-2)"}" stroke-width="1.5"/>`; });
   if (ch.rs?.length) {
     const rv = ch.rs.filter((v) => v != null), rl = Math.min(...rv), rh = Math.max(...rv), RY = (v) => rs1 - ((v - rl) / (rh - rl || 1)) * (rs1 - rs0);
@@ -3788,6 +3825,7 @@ function candleSVG(ch, kind, fmt, ref) {
     g += `<path d="${d}" fill="none" stroke="var(--s7)" stroke-width="1.3"/><text x="${x1 + 6}" y="${RY(rv.at(-1)) + 4}" class="qx" style="fill:var(--s7)">RS</text>`;
   }
   if (ref) g += `<line x1="${x0}" x2="${x1}" y1="${Y(ref.v)}" y2="${Y(ref.v)}" stroke="var(--ink-2)" stroke-dasharray="4 3"/><text x="${x1 - 4}" y="${Y(ref.v) - 4}" text-anchor="end" class="qx">${esc(ref.t)} ${fmt(ref.v)}</text>`;
+  if (over) { const cid = "cp" + Math.random().toString(36).slice(2, 8); g += `<clipPath id="${cid}"><rect x="${x0}" y="${top - 6}" width="${x1 - x0 + 20}" height="${bot - top + 12}"/></clipPath><g clip-path="url(#${cid})">${over(X, Y, lo, hi)}</g>`; }
   const maU = kind === "w" ? "주선" : kind === "m" ? "개월선" : "일선";
   g += tipCols(X, (x1 - x0) / N, top, v1, ch.t.map((t, i) => [t, `시가 ${fmt(ch.o[i])} · 고가 ${fmt(ch.h[i])}`, `저가 ${fmt(ch.l[i])} · 종가 ${fmt(ch.c[i])}`,
     ...Object.entries(ch.ma || {}).map(([k, a]) => (a[i] > 0 ? `${k}${maU} ${fmt(a[i])}` : null)), `거래량 ${n(ch.v[i])}`].filter(Boolean).join("\n")));
@@ -3843,7 +3881,7 @@ async function loadAlign() {
   if (!BOARD) { try { BOARD = await (await fetch("data/board.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { BOARD = {}; } }
   if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
   if (!ALIGN) { try { ALIGN = await (await fetch("data/align.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { ALIGN = null; } }
-  $("#chartBody").innerHTML = boardHTML() + scanHTML() + `<h2>📈 주봉 정배열</h2><p class="sub">코스피·코스닥 시가총액 3,000억 이상에서 주봉 이동평균이 4주 &gt; 13주 &gt; 26주 &gt; 52주로 줄 선(정배열) 종목 — 매주 금요일 종가 기준, 평일 아침·장 마감 뒤 갱신. 종목을 누르면 주봉 차트가 열려요. 매수·매도 추천 아님.</p>`
+  $("#chartBody").innerHTML = drawHTML(BOARD.draw, BOARD.updated_at) + boardHTML() + scanHTML() + `<h2>📈 주봉 정배열</h2><p class="sub">코스피·코스닥 시가총액 3,000억 이상에서 주봉 이동평균이 4주 &gt; 13주 &gt; 26주 &gt; 52주로 줄 선(정배열) 종목 — 매주 금요일 종가 기준, 평일 아침·장 마감 뒤 갱신. 종목을 누르면 주봉 차트가 열려요. 매수·매도 추천 아님.</p>`
     + (ALIGN ? alignHTML(ALIGN) : `<div class="empty">⏳ 다음 차트 스캔(평일 아침·장 마감 뒤) 때 채워져요.</div>`);
 }
 function alignHTML(A) {
