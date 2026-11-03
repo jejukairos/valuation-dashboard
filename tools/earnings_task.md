@@ -161,6 +161,9 @@
    - adj_opm: 회사가 '조정 영업이익률'로 말하는 종목(팔란티어)은 새 분기 한 칸.
    - 콜에서 회사·질문이 몰린 핵심 숫자가 바뀌었으면 star·why 를 고친다 (예: 'region:중국', 'prod:아이폰').
    - 매출·이익률·제품별 숫자는 qtr_add(3-2)·segments.yaml(3-1)로 자동이라 여기 적지 않는다.
+3-12. 🆕 상장 준비 회사 (config/keychart.yaml ipo, 화면: ⭐🇺🇸 관심 탭 위 — 지금 앤트로픽):
+   - 새 실적·수정 상장 서류(S-1/A, 424B)가 나오면 그 카드 숫자·top·turn 을 고친다 (분기 매출·영업이익·지난 분기 대비 성장률·컴퓨팅 약속).
+   - 상장해서 주가가 생기면(앤트로픽은 나스닥 'ANT' 예정, 보도) 티커를 야후로 조회 확인 → stocks.yaml watchlist 에 한 줄 넣고 ipo 카드는 지운다.
 4. (tools/ir_live.ps1 이 부른 경우엔 파일 수정까지만 — 확인·올리기는 스크립트가 함)
    YAML 이 읽히는지 확인(python 으로 load) → 커밋 메시지 "<종목> <분기> 실적발표 요약" + 끝에 빈 줄과
    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" → `git pull --rebase; git push`.

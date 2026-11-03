@@ -645,7 +645,7 @@ const CMPW = { group: "sum", ind: "전체", sort: "cap", dir: -1, mkt: "KR" };
 try { Object.assign(CMPW, JSON.parse(localStorage.getItem("cmpw") || "{}")); } catch (_) {}
 const CMP_T = {
   main: { grp: "보유", st: CMP, save: "cmp", mkt: () => MKT, cards: "#stockCards", el: { group: "#cmpGroup", ind: "#cmpInd", table: "#cmpTable", note: "#cmpNote" } },
-  watch: { grp: "관심", st: CMPW, save: "cmpw", mkt: () => CMPW.mkt, cards: "#watchFull", el: { mkt: "#wcmpMkt", group: "#wcmpGroup", ind: "#wcmpInd", table: "#wcmpTable", note: "#wcmpNote" } },
+  watch: { grp: "관심", st: CMPW, save: "cmpw", mkt: () => CMPW.mkt, cards: "#watchFull", el: { group: "#wcmpGroup", ind: "#wcmpInd", table: "#wcmpTable", note: "#wcmpNote" } },  // 시장은 🇰🇷/🇺🇸 관심 탭이 정함
 };
 const inGrp = (s, g) => grp(s) === g || (s.also || []).includes(g);
 function renderCmp(T = CMP_T.main) {
@@ -3849,7 +3849,7 @@ function showView() {
   const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
-  const view = { "#pbr": "pbr", "#watch": "watch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "#pbr": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   $("#earnView").hidden = view !== "earn";
   if (view === "earn") renderEarn();
   $("#chartView").hidden = view !== "chart";
@@ -3873,17 +3873,37 @@ function showView() {
   $("#cardTitle").textContent = MKT === "US" ? "미국 보유종목 신호등" : "한국 보유종목 신호등";
   $("#mainView").hidden = !(view === "main" || view === "us");
   document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.view === view));
-  $("#watchView").hidden = view !== "watch";
+  $("#watchView").hidden = !(view === "watch" || view === "uswatch");
   $("#jointView").hidden = view !== "joint";
   if (view === "market") drawMarketCharts(); // 숨겨진 상태에서 그린 차트는 크기가 0이라 보일 때 다시 그림
   if (view === "pbr") loadPBR();
-  if (view === "watch") { renderGroup("관심", "#watchFull"); renderCmp(CMP_T.watch); jumpBar("#watchFull", "#watchJump"); loadWatch(); }
+  if (view === "watch" || view === "uswatch") renderWatchTab(view === "uswatch" ? "US" : "KR");
   if (view === "joint") renderGroup("공동", "#jointCards");
 }
-// 보유 말고도 보유종목처럼 다 추적하는 묶음 (stocks.yaml 의 watchlist = 관심, joint = 공동자산) — 매력적인 순
-function renderGroup(g, el) {
+// ⭐ 관심 탭도 보유 탭처럼 🇰🇷/🇺🇸 따로 (같은 화면, 시장만 바꿈) — 2027 주도섹터 그림·빠른 판단 표는 한국 종목뿐이라 🇰🇷 에만, 🆕 상장 준비 회사는 🇺🇸 에만
+function renderWatchTab(mk) {
+  CMPW.mkt = mk;
+  $("#watchTitle").textContent = mk === "US" ? "🇺🇸 미국 관심종목" : "🇰🇷 한국 관심종목";
+  $("#watchSectors").hidden = $("#watchQuick").hidden = mk === "US";
+  renderGroup("관심", "#watchFull", mk);
+  renderCmp(CMP_T.watch);
+  jumpBar("#watchFull", "#watchJump");
+  if (mk === "KR") loadWatch();
+  ipoWatch(mk);
+}
+// 🆕 상장 준비 중인 관심 회사 (keychart.yaml ipo — 아직 주가가 없어 신호등·비교표 대신 실적 카드만)
+async function ipoWatch(mk) {
+  $("#ipoWatch").innerHTML = "";
+  if (mk !== "US") return;
+  const L = (await keyLoad()).ipo || [];
+  if (location.hash !== "#uswatch") return;  // 기다리는 사이 다른 탭으로 갔으면 그리지 않음
+  $("#ipoWatch").innerHTML = L.length ? `<h3>🆕 상장 준비 중 <span class="src">아직 주식이 없어 적정주가·비교표는 상장 뒤에 · 공시·보도 숫자로 그림 · 매수·매도 추천 아님</span></h3>
+    ${L.map((c) => `${(c.top || []).length ? `<div class="kidbox" style="margin-top:8px">📌 <b>${esc(c.name || "")} 핵심</b><ul class="irl">${c.top.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${keyCard(c, true)}`).join("")}` : "";
+}
+// 보유 말고도 보유종목처럼 다 추적하는 묶음 (stocks.yaml 의 watchlist = 관심, joint = 공동자산) — 매력적인 순 · mkt 를 주면 그 시장만
+function renderGroup(g, el, mkt) {
   const rank = { green: 0, yellow: 1, red: 2, na: 3 }, mk = (c) => (c.market === "US" ? 1 : 0);
-  const list = DASH.stocks.filter((c) => grp(c) === g || (c.also || []).includes(g)).sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
+  const list = DASH.stocks.filter((c) => (grp(c) === g || (c.also || []).includes(g)) && (!mkt || (c.market === "US" ? "US" : "KR") === mkt)).sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
   $(el).innerHTML = list.map(stockCard).join("") || `<div class="empty">config/stocks.yaml 의 ${g === "공동" ? "joint" : "watchlist"} 에 종목을 넣으면 여기에 보여요.</div>`;
   drawGauges(list);
 }
@@ -4181,6 +4201,8 @@ async function keyLoad() {
 }
 // 그림: 쌓은 막대(bars) · 같은 단위 선(lines) · 위쪽 띠의 % 선(pct). 억원이 1조를 넘으면 조원, 칸이 많으면 연도는 1Q 에만
 function keyChart(ch) {
+  // kind: line → 0 아래(적자)도 그리는 꺾은선 + 칸마다 숫자 (종목 그래프와 같은 모양)
+  if (ch.kind === "line") return kpiChart({ ...ch, s: (ch.lines || []).map((s) => ({ n: s.n, v: Object.fromEntries((ch.q || []).map((q, i) => [q, s.v[i]]).filter(([, v]) => v != null)) })) });
   const L = ch.q || [], N = L.length, W = 320, x0 = 12, bw = (W - 2 * x0) / N, X = (i) => x0 + bw * i + bw / 2;
   const bars = ch.bars || [], lines = ch.lines || [], tot = L.map((_, i) => bars.reduce((a, s) => a + (s.v[i] || 0), 0));
   const all = [...(bars.length ? tot : []), ...lines.flatMap((s) => s.v)].filter((v) => v != null);
