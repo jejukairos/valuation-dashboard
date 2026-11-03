@@ -293,8 +293,29 @@ groups:
       - {name: 미쓰비시중공업, market: JP, code: 7011.T}
       - {name: 중국선박(CSSC), market: CN, code: 600150.SS}
 
+  - name: 🧱 동박적층판(CCL)
+    holdings: ["000150"]
+    main: ["000150"]
+    sort: seg
+    why: "두산 전자BG 와 같은 동박적층판(CCL·프리프레그) 회사 — AI 서버·가속기·메모리 기판의 원판 · 대만·중국이 큼 · 유럽엔 상장 CCL 회사가 없음 (Isola·Dielektra·Krempel 은 비상장) · 파나소닉·큐니티는 CCL 이 큰 부문의 일부라 부문 매출을 빼고 시총 순으로 뒤에 · 두산은 지주사라 시총·PER 에 에너빌리티·밥캣이 섞임"
+    peers:
+      - {name: 두산, market: KR, code: "000150", seg: {n: 전자BG(CCL 등), rev: 18751, cur: KRW, unit: 억, fy: 2025, exp: 63.2}}
+      - {name: 엘리트머티리얼(EMC), market: TW, code: 2383.TW, seg: {n: 회사 전체(CCL·프리프레그 99%), rev: 94.26, cur: TWD, unit: B, fy: 2025}}
+      - {name: 성이과기(生益科技), market: CN, code: 600183.SS, seg: {n: CCL·프리프레그, rev: 17774, cur: CNY, unit: M, fy: 2025}}
+      - {name: 킹보드 라미네이츠(홍콩), market: CN, code: 1888.HK, seg: {n: 적층판+상류 소재(동박·유리섬유), rev: 18366, cur: HKD, unit: M, fy: 2025}}
+      - {name: 레조낙, market: JP, code: 4004.T, seg: {n: 후공정 반도체 소재(CCL+몰딩재·필름), rev: 245.0, cur: JPY, unit: B, fy: 2025}}
+      - {name: 아이텍(ITEQ), market: TW, code: 6213.TW, seg: {n: 회사 전체(CCL·프리프레그), rev: 33.10, cur: TWD, unit: B, fy: 2025}}
+      - {name: 타이완유니온(TUC), market: TW, code: 6274.TWO, seg: {n: 회사 전체(CCL), rev: 30.34, cur: TWD, unit: B, fy: 2025}}
+      - {name: 난야플라스틱, market: TW, code: 1303.TW, seg: {n: CCL 제품 매출, rev: 28.35, cur: TWD, unit: B, fy: 2025}}
+      - {name: 미쓰비시가스화학(BT 기판재), market: JP, code: 4182.T, seg: {n: 정보·첨단소재(BT+기타), rev: 97.5, cur: JPY, unit: B, fy: FY3/26}}
+      - {name: 로저스(고주파 회로소재), market: US, code: ROG, seg: {n: AES(회로소재+세라믹기판·버스바), rev: 445.2, cur: USD, unit: M, fy: 2025}}
+      - {name: 벤텍(영국·독일 공장), market: TW, code: 6672.TW, seg: {n: 회사 전체(CCL·알루미늄기판·프리프레그), rev: 4.26, cur: TWD, unit: B, fy: 2025}}
+      - {name: 파나소닉(메그트론), market: JP, code: 6752.T}
+      - {name: 큐니티(듀폰 전자 분사·연성 CCL), market: US, code: Q}
+
   - name: ⚡ 전력기기·원전
     holdings: ["034020", "000150"]
+    main: ["034020"]  # 두산 화면에선 CCL 그룹을 펼치고 이 그룹은 접기
     peers:
       - {name: 두산에너빌리티, market: KR, code: "034020"}
       - {name: LS ELECTRIC, market: KR, code: "010120"}
