@@ -3,7 +3,7 @@ from common import DATA, REPORT, load_yaml, now_kst, read_json, rnd
 from kr_stock import naver_now, wise_annual
 
 FX_TICKERS = {"USD": "KRW=X", "EUR": "EURKRW=X", "GBP": "GBPKRW=X", "JPY": "JPYKRW=X",
-              "CHF": "CHFKRW=X", "TWD": "TWDKRW=X", "SEK": "SEKKRW=X", "NOK": "NOKKRW=X", "CNY": "CNYKRW=X"}
+              "CHF": "CHFKRW=X", "TWD": "TWDKRW=X", "SEK": "SEKKRW=X", "NOK": "NOKKRW=X", "CNY": "CNYKRW=X", "ILS": "ILSKRW=X"}
 
 
 def fx_rates():
@@ -16,6 +16,14 @@ def fx_rates():
                 out[cur] = float(h.iloc[-1])
         except Exception:  # noqa: BLE001
             pass
+    for cur in FX_TICKERS:  # 원화 직접 환율이 없는 통화(NOK·ILS)는 달러를 거쳐: 원/달러 ÷ (그 통화/달러)
+        if cur not in out and "USD" in out:
+            try:
+                h = yf.Ticker(f"{cur}=X").history(period="5d")["Close"].dropna()
+                if not h.empty:
+                    out[cur] = out["USD"] / float(h.iloc[-1])
+            except Exception:  # noqa: BLE001
+                pass
     return out
 
 
@@ -56,6 +64,8 @@ def yf_row(p, fx):
     opm = i.get("operatingMargins")
     price = i.get("currentPrice") or i.get("regularMarketPrice")
     eps_f = i.get("forwardEps")
+    if cur == "GBp" and price and eps_f and price / eps_f > 200:  # 런던: 주가는 펜스, EPS 는 파운드 (BAE 선행 PER 이 2,165배로 나오던 것)
+        price /= 100
     # 선행 PER 은 지금 가격 ÷ 야후 선행 EPS 로 다시 계산 (야후 forwardPE 는 갱신이 늦을 때가 있음), 적자면 비움
     fwd = price / eps_f if (price and eps_f and eps_f > 0) else (None if (eps_f is not None and eps_f <= 0) else i.get("forwardPE"))
     return {"cap_krw": cap * rate if (cap and rate) else None, "fwd_per": fwd,
@@ -87,11 +97,16 @@ def collect():
             r = cache[code]
             if r is None:
                 continue
+            s = p.get("seg")  # 관련 부문 연 매출 (원문 숫자) → 원화
+            seg_krw = s["rev"] * {"억": 1e8, "M": 1e6, "B": 1e9}.get(s.get("unit"), 1) * fx.get(s.get("cur", "KRW"), 0) if s and s.get("rev") else None
             rows.append({"name": p["name"], "code": code, "market": p.get("market", "KR"),
                          **{k: (rnd(v, 2) if isinstance(v, float) and k != "cap_krw" else v) for k, v in r.items()
-                            if k not in ("name", "code", "market")}})
-        rows.sort(key=lambda x: -(x.get("cap_krw") or 0))
-        groups.append({"name": g["name"], "holdings": [str(h) for h in g.get("holdings", [])], "rows": rows})
+                            if k not in ("name", "code", "market")},
+                         **({"seg": s, "seg_krw": seg_krw} if s else {})})
+        # 사용자 규칙 2026-11-03: 관련 부문 매출 큰 순(sort: seg) — 그 부문이 없는 회사는 뒤에 시가총액 순
+        rows.sort(key=lambda x: (-(x.get("seg_krw") or 0), -(x.get("cap_krw") or 0)) if g.get("sort") == "seg" else -(x.get("cap_krw") or 0))
+        groups.append({"name": g["name"], "holdings": [str(h) for h in g.get("holdings", [])], "rows": rows,
+                       **{k: g[k] for k in ("main", "sort", "why") if k in g}})
         REPORT.success(f"피어 그룹 {g['name']}")
     return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "fx": {k: round(v, 4) for k, v in fx.items()},
             "groups": groups}

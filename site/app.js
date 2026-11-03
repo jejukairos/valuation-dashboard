@@ -3426,7 +3426,7 @@ async function peersBlock(code, noPbr) {
       ${g.rows.map((r) => {
         const eps = (v) => (v == null ? "-" : `<span class="${v < 0 ? "dear" : ""}">${n(v, Math.abs(v) >= 100 ? 0 : 2)}</span>`);
         const per = (v, e) => (e != null && e <= 0 ? '<span class="dear">적자</span>' : v == null ? "-" : n(v, 1) + "x");
-        const sg = r.seg ? `${r.seg_krw ? `<b>${n(r.seg_krw / 1e12, 1)}조</b>` : "-"}<br><span class="src">${esc(r.seg.n)} ${esc(String(r.seg.fy || ""))}</span>` : "-";
+        const sg = r.seg ? `${r.seg_krw ? `<b>${n(r.seg_krw / 1e12, 1)}조</b>` : "-"}<br><span class="src">${esc(r.seg.n)} ${esc(String(r.seg.fy || ""))}${r.seg.exp != null ? ` · 수출 ${n(r.seg.exp, 0)}%` : ""}</span>` : "-";
         return `<tr${r.code === code ? ' class="me"' : ""}><td>${FLAG[r.market] || ""} ${esc(r.name)}${r.stale ? " ⚠" : ""}<br><span class="src">${esc(r.code)}</span></td>${seg ? `<td>${sg}</td>` : ""}
         <td>${r.cap_krw == null ? "N/A" : n(r.cap_krw / 1e12, 1)}</td><td>${eps(r.eps_ttm)}</td><td>${eps(r.eps_12mf)}</td>
         <td>${per(r.per_ttm, r.eps_ttm)}</td><td><b>${per(r.fwd_per, r.eps_12mf)}</b></td><td>${r.opm == null ? "-" : `<span class="${r.opm < 0 ? "dear" : ""}">${n(r.opm, 1)}%</span>`}</td>
