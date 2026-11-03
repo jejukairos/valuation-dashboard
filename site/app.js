@@ -551,15 +551,15 @@ function jumpBar(rootSel, barSel, ph = "🔎 종목 이름 검색 (예: 에이�
 /* ---------- 보유종목 비교표 (구글 시트처럼: 머리글 눌러 정렬, 산업별 보기, 묶음별 칸) ---------- */
 const CMP = { group: "sum", ind: "전체", sort: "cap", dir: -1 };
 try { Object.assign(CMP, JSON.parse(localStorage.getItem("cmp") || "{}")); } catch (_) {}
-function cmpCols() {
-  const ys = (DASH.stocks.find((c) => c.tbl && c.tbl.years) || {}).tbl?.years || ["25", "26E", "27E", "28E"];
+function cmpCols(mk = MKT) {
+  const ys =(DASH.stocks.find((c) => c.tbl && c.tbl.years) || {}).tbl?.years || ["25", "26E", "27E", "28E"];
   const t = (k, i) => (c) => (c.tbl ? (i == null ? c.tbl[k] : (c.tbl[k] || [])[i]) : null);
   const G = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${pct(v, 0, true)}</span>`);
   const P = (d) => (v) => (v == null ? "-" : n(v, d));
   const R = (d) => (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, d)}%</span>`);
   const arrow = (i) => `${ys[i]}→${ys[i + 1]}`;
   // 🇺🇸 탭은 모두 $B: 순현금은 달러 원본(cash_raw), 없으면 원화 값을 수집 때 환율로 되돌림
-  const usd = MKT === "US", Bn = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, 1)}</span>`);
+  const usd = mk === "US", Bn =(v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${n(v, 1)}</span>`);
   const ncUsd = (s, xl) => { const r = s.tbl?.cash_raw, v = s.tbl?.[xl ? "net_cash_xl" : "net_cash"];
     return r ? (r.cash + r.sti - r.debt + (xl ? r.lease : 0)) / 1e9 : v != null && DASH.fx ? v / DASH.fx / 1e9 : null; };
   const c = {
@@ -640,48 +640,71 @@ const CMP_GROUPS_US = [
   ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
   ["all", "전체", null],
 ];
-function renderCmp() {
-  const cols = cmpCols();
-  const GROUPS = MKT === "US" ? CMP_GROUPS_US : CMP_GROUPS;
-  const g = GROUPS.find((x) => x[0] === CMP.group) || GROUPS[0];
+// 같은 비교표를 🇰🇷/🇺🇸 보유 탭과 ⭐ 관심 탭에 (관심은 🇰🇷/🇺🇸 버튼) — 종목 이름을 누르면 아래 그 종목 칸으로, 나머지 칸은 상세 화면
+const CMPW = { group: "sum", ind: "전체", sort: "cap", dir: -1, mkt: "KR" };
+try { Object.assign(CMPW, JSON.parse(localStorage.getItem("cmpw") || "{}")); } catch (_) {}
+const CMP_T = {
+  main: { grp: "보유", st: CMP, save: "cmp", mkt: () => MKT, cards: "#stockCards", el: { group: "#cmpGroup", ind: "#cmpInd", table: "#cmpTable", note: "#cmpNote" } },
+  watch: { grp: "관심", st: CMPW, save: "cmpw", mkt: () => CMPW.mkt, cards: "#watchFull", el: { mkt: "#wcmpMkt", group: "#wcmpGroup", ind: "#wcmpInd", table: "#wcmpTable", note: "#wcmpNote" } },
+};
+const inGrp = (s, g) => grp(s) === g || (s.also || []).includes(g);
+function renderCmp(T = CMP_T.main) {
+  const MK = T.mkt(), S = T.st, cols = cmpCols(MK);
+  if (!$(T.el.table)) return;
+  const GROUPS = MK === "US" ? CMP_GROUPS_US : CMP_GROUPS;
+  const g = GROUPS.find((x) => x[0] === S.group) || GROUPS[0];
   const raw = g[2] || [...new Set(GROUPS.slice(0, -1).flatMap((x) => x[2]))];
   const sepAt = new Set(raw.map((k, i) => (i && raw[i - 1] === "|" ? i - raw.slice(0, i).filter((x) => x === "|").length : -1)));  // 구분선 칸 위치
   const keys = raw.filter((k) => k !== "|");
-  if (!keys.includes(CMP.sort) && CMP.sort !== "name" && CMP.sort !== "ind") CMP.sort = keys[0];
-  const mine = DASH.stocks.filter((s) => grp(s) === "보유" && (s.market === "US" ? "US" : "KR") === MKT);
+  if (!keys.includes(S.sort) && S.sort !== "name" && S.sort !== "ind") S.sort = keys[0];
+  const mine = DASH.stocks.filter((s) => inGrp(s, T.grp) && (s.market === "US" ? "US" : "KR") === MK);
   const inds = ["전체", ...new Set(mine.map((s) => s.industry).filter(Boolean))];
-  if (!inds.includes(CMP.ind)) CMP.ind = "전체";
-  $("#cmpGroup").innerHTML = GROUPS.map(([k, l]) => `<button data-g="${k}" class="${k === g[0] ? "on" : ""}">${l}</button>`).join("");
-  $("#cmpInd").innerHTML = inds.map((x) => `<button data-i="${esc(x)}" class="chip ${x === CMP.ind ? "on" : ""}">${esc(x)}</button>`).join("");
-  let rows = mine.filter((s) => CMP.ind === "전체" || s.industry === CMP.ind);
-  const val = (s) => (CMP.sort === "name" ? s.name : CMP.sort === "ind" ? s.industry || "" : cols[CMP.sort].v(s));
-  const us = (s) => (s.market === "US" ? 1 : 0);
+  if (!inds.includes(S.ind)) S.ind = "전체";
+  if (T.el.mkt) $(T.el.mkt).innerHTML = ["KR", "US"].map((m) => `<button data-m="${m}" class="${m === MK ? "on" : ""}">${m === "US" ? "🇺🇸 미국" : "🇰🇷 한국"} ${DASH.stocks.filter((s) => inGrp(s, T.grp) && (s.market === "US" ? "US" : "KR") === m).length}</button>`).join("");
+  $(T.el.group).innerHTML = GROUPS.map(([k, l]) => `<button data-g="${k}" class="${k === g[0] ? "on" : ""}">${l}</button>`).join("");
+  $(T.el.ind).innerHTML = inds.map((x) => `<button data-i="${esc(x)}" class="chip ${x === S.ind ? "on" : ""}">${esc(x)}</button>`).join("");
+  let rows = mine.filter((s) => S.ind === "전체" || s.industry === S.ind);
+  const val = (s) => (S.sort === "name" ? s.name : S.sort === "ind" ? s.industry || "" : cols[S.sort].v(s));
   rows = rows.sort((a, b) => {
-    if (us(a) !== us(b)) return us(a) - us(b); // 한국 먼저, 미국은 아래에 따로
     const x = val(a), y = val(b);
     if (x == null && y == null) return 0;
     if (x == null) return 1; // 빈 칸은 정렬 방향과 상관없이 맨 아래
     if (y == null) return -1;
-    return (typeof x === "string" ? x.localeCompare(y, "ko") : x - y) * CMP.dir;
+    return (typeof x === "string" ? x.localeCompare(y, "ko") : x - y) * S.dir;
   });
-  const th = (k, h, i) => `<th data-k="${k}" class="${CMP.sort === k ? "on" : ""}${sepAt.has(i) ? " sep" : ""}">${h}${CMP.sort === k ? (CMP.dir > 0 ? " ▲" : " ▼") : ""}</th>`;
-  $("#cmpTable").innerHTML = `<table class="cmp"><thead><tr>${th("name", "종목")}${th("ind", "산업")}${keys.map((k, i) => th(k, cols[k].h, i)).join("")}</tr></thead>
-    <tbody>${rows.map((s) => `<tr data-code="${esc(s.code)}"><td>${esc(s.name)}</td><td class="ind">${esc(s.industry || "")}</td>
+  const th = (k, h, i) => `<th data-k="${k}" class="${S.sort === k ? "on" : ""}${sepAt.has(i) ? " sep" : ""}">${h}${S.sort === k ? (S.dir > 0 ? " ▲" : " ▼") : ""}</th>`;
+  $(T.el.table).innerHTML = `<table class="cmp"><thead><tr>${th("name", "종목")}${th("ind", "산업")}${keys.map((k, i) => th(k, cols[k].h, i)).join("")}</tr></thead>
+    <tbody>${rows.map((s) => `<tr data-code="${esc(s.code)}"><td class="nm" title="아래 ${esc(s.name)} 칸으로 이동">${esc(s.name)} ↓</td><td class="ind">${esc(s.industry || "")}</td>
       ${keys.map((k, i) => `<td${sepAt.has(i) ? ' class="sep"' : ""}>${cols[k].f(cols[k].v(s), s)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  $("#cmpNote").innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · 종목을 누르면 상세 화면 · 3년 연평균 = 25년 실적 → 28년 추정 ·
+  $(T.el.note).innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · <b>종목 이름(↓)을 누르면 아래 그 종목 칸으로</b>, 숫자 칸을 누르면 상세 화면 · 3년 연평균 = 25년 실적 → 28년 추정 ·
     PEG = 12MF PER ÷ EPS 3년 연평균 성장률(%) (1 아래면 성장에 비해 싼 편, 피터 린치 기준) · * = 이익이 크게 출렁이는 업종이라 PER·PEG 가 실제보다 싸 보일 수 있음 ·
     P/FCF = 지금 시가총액 ÷ 그해 잉여현금흐름 (25 = 확정 실적) · PSR = 시가총액 ÷ 올해 예상 매출 · 순현금 = 현금·단기투자 − 총차입금(최근 분기, 야후) · GPM·ROIC·FCF = 야후 연간 실적 ·
-    ${MKT === "US" ? "미국: 추정치는 야후·나스닥 컨센서스(EPS·매출), 나머지는 최근 실적 · 25 PER 은 지금 주가 ÷ 작년 EPS" : "25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준"}`;
-  try { localStorage.setItem("cmp", JSON.stringify(CMP)); } catch (_) {}
+    ${MK === "US" ? "미국: 추정치는 야후·나스닥 컨센서스(EPS·매출), 나머지는 최근 실적 · 25 PER 은 지금 주가 ÷ 작년 EPS" : "25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준"}`;
+  try { localStorage.setItem(T.save, JSON.stringify(S)); } catch (_) {}
 }
-$("#cmpGroup")?.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; CMP.group = b.dataset.g; renderCmp(); });
-$("#cmpInd")?.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; CMP.ind = b.dataset.i; renderCmp(); });
-$("#cmpTable")?.addEventListener("click", (e) => {
-  const h = e.target.closest("th");
-  if (h) { const k = h.dataset.k; CMP.dir = CMP.sort === k ? -CMP.dir : (k === "name" || k === "ind" ? 1 : -1); CMP.sort = k; renderCmp(); return; }
-  const r = e.target.closest("tr[data-code]");
-  if (r) location.hash = `#stock/${r.dataset.code}`;
-});
+// 아래 종목 칸으로 스크롤 + 잠깐 테두리 (jumpBar 와 같은 모양) — 칸이 없으면 false
+function jumpTo(root, code) {
+  const el = $(root)?.querySelector(`[data-jump="${CSS.escape(code)}"]`);
+  if (!el) return false;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  el.classList.add("flash");
+  setTimeout(() => el.classList.remove("flash"), 1600);
+  return true;
+}
+for (const T of Object.values(CMP_T)) {
+  const S = T.st, re = () => renderCmp(T);
+  if (T.el.mkt) $(T.el.mkt)?.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; S.mkt = b.dataset.m; re(); });
+  $(T.el.group)?.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; S.group = b.dataset.g; re(); });
+  $(T.el.ind)?.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; S.ind = b.dataset.i; re(); });
+  $(T.el.table)?.addEventListener("click", (e) => {
+    const h = e.target.closest("th");
+    if (h) { const k = h.dataset.k; S.dir = S.sort === k ? -S.dir : (k === "name" || k === "ind" ? 1 : -1); S.sort = k; re(); return; }
+    const r = e.target.closest("tr[data-code]");
+    if (!r) return;
+    if (e.target.closest("td.nm") && jumpTo(T.cards, r.dataset.code)) return;  // 이름 → 아래 그 종목 칸
+    location.hash = `#stock/${r.dataset.code}`;
+  });
+}
 
 /* ---------- 기업 프로필 (config/profiles.yaml: 한 줄 설명·정성 평가·매출 비중·점유율·IR 자료) ---------- */
 let PROFILES = {};
@@ -1203,7 +1226,7 @@ function renderTop() {
   $("#bigTech").innerHTML = bigTechHTML() + moneyHTML() + dotMapHTML();
 }
 // 📍 보유·관심 종목 지도 (사용자 전달 그림 '28년 Fwd EPS 증가율과 PER' 모양, 2026-11-01) — 카드의 fwd_mult 만으로 계산:
-// PER 로 적정가를 매기는 종목 = 다다음해 EPS 증가율(EPS 비 = PER 비의 역수) × 24개월 선행 PER · PBR 로 매기는 종목 = ROE(= PBR ÷ PER, 12MF) × PBR
+// PER 로 적정가를 매기는 종목 = 다음 1년 EPS 증가율(12MF→24MF, EPS 비 = PER 비의 역수) × 12개월 선행 PER (사용자 2026-11-03, 처음엔 24개월 선행) · PBR 로 매기는 종목 = ROE(= PBR ÷ PER, 12MF) × PBR
 function dotMap(o) {  // o = {id, t, pts: [{x, y, n, own}], fx, fy, xt, yt}
   const W = 340, H = 330, x0 = 30, x1 = W - 8, top = 22, bot = H - 30;
   const md = o.pts.map((p) => p.y).sort((a, b) => a - b)[o.pts.length >> 1], cap = Math.max(o.cap || 40, 2.5 * md);  // 테슬라·두산에너빌리티처럼 너무 멀면 그림 밖 (회귀선에서도 뺌) — 나머지 점이 몰려 이름이 겹치지 않게
@@ -1245,16 +1268,17 @@ function dotMapHTML() {
   const per = [], pbr = [];
   S.forEach((c) => {
     const P = c.fwd_mult.PER || {}, B = c.fwd_mult.PBR || {}, ys = Object.keys(P).filter((k) => /^\d\dE$/.test(k)).sort(), [a, b2, c2] = ys.slice(-3).map((k) => P[k]);
-    if (kinds(c).includes("PER") && b2 > 0 && c2 > 0) {
-      // 24개월 선행 = 12MF 와 같은 비율로 한 해씩 밀어서 섞음 (비율 w 는 12MF PER 에서 거꾸로 구함 → 미국 회계연도 끝도 그대로 반영)
-      let w = a > 0 && P["12MF"] > 0 && a !== b2 ? (1 / P["12MF"] - 1 / b2) / (1 / a - 1 / b2) : NaN;
+    if (kinds(c).includes("PER") && P["12MF"] > 0 && b2 > 0 && c2 > 0) {
+      // 사용자 2026-11-03: 세로 = 12개월 선행 PER · 가로 = 그다음 1년 EPS 증가율 (12MF EPS → 24MF EPS = 12MF PER ÷ 24MF PER − 1)
+      // 24MF = 12MF 와 같은 비율로 한 해씩 밀어서 섞음 (비율 w 는 12MF PER 에서 거꾸로 구함 → 미국 회계연도 끝도 그대로 반영)
+      let w = a > 0 && a !== b2 ? (1 / P["12MF"] - 1 / b2) / (1 / a - 1 / b2) : NaN;
       if (!(w >= 0 && w <= 1)) { const d = new Date(); w = Math.max(0, (12 - d.getMonth() - d.getDate() / 31) / 12); }
-      per.push({ x: (b2 / c2 - 1) * 100, y: 1 / (w / b2 + (1 - w) / c2), n: nm(c), own: c.group === "보유", yl: ys.at(-1) });
+      const p24 = 1 / (w / b2 + (1 - w) / c2);
+      per.push({ x: (P["12MF"] / p24 - 1) * 100, y: P["12MF"], n: nm(c), own: c.group === "보유" });
     }
     if (kinds(c).includes("PBR") && B["12MF"] > 0 && P["12MF"] > 0) pbr.push({ x: (B["12MF"] / P["12MF"]) * 100, y: B["12MF"], n: nm(c), own: c.group === "보유" });
   });
-  const yE = per[0]?.yl || "28E", pE = `${+yE.slice(0, 2) - 1}E`;
-  const card = (m, t, unit, kid, src) => {
+  const card =(m, t, unit, kid, src) => {
     if (!m) return "";
     const top = (arr) => arr.map((p) => `${esc(p.n)} <span class="src">${pct(m.gap(p), 0, true)}</span>`).join(" · ");
     return `<div class="qp"><div class="qt"><b>${esc(t)}</b></div>
@@ -1262,13 +1286,13 @@ function dotMapHTML() {
       ${m.svg}<div class="src">● 보유 · ○ 관심 · 점선 = 이 종목들 평균 관계 · 이름 옆 % = 점선에서 위아래로 떨어진 정도 · 점을 누르면 숫자${m.out.length ? ` · 그림 밖: ${m.out.map((p) => `${esc(p.n)} (${n(p.x, 0)}%, ${n(p.y, 1)}배)`).join(", ")}` : ""}</div>
       <div class="kidbox" style="margin-top:6px">🐣 ${kid}${m.b < 0 ? ` <b>지금 이 종목들은 점선이 거꾸로(오른쪽 아래로) 기울어 있어요</b> — ${unit}이 높은 종목이 오히려 배수가 낮게 거래되는 중이에요.` : ""}</div><div class="note src">${src}</div></div>`;
   };
-  const m1 = per.length >= 3 && dotMap({ id: `dmper${MKT}`, t: "", pts: per, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 0)}배`, xt: `${yE} EPS 증가율`, yt: "24개월 선행 PER" });
+  const m1 = per.length >= 3 && dotMap({ id: `dmper${MKT}`, t: "", pts: per, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 0)}배`, xt: "다음 1년 EPS 증가율", yt: "12개월 선행 PER" });
   const m2 = pbr.length >= 3 && dotMap({ id: `dmpbr${MKT}`, t: "", pts: pbr, cap: 3, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 1)}배`, xt: "ROE (12MF)", yt: "PBR (12MF)" });
   if (!m1 && !m2) return "";
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📍 보유·관심 종목 지도</b> <span class="src">${MKT === "KR" ? "🇰🇷" : "🇺🇸"} 이익 증가율 대비 PER · ROE 대비 PBR · 참고용 (매수·매도 추천 아님)</span></summary>
-    <div class="qgrid">${card(m1, `${pE}→${yE} EPS 증가율 × 24개월 선행 PER`, "EPS 증가율",
+    <div class="qgrid">${card(m1, "다음 1년 EPS 증가율 × 12개월 선행 PER", "EPS 증가율",
       "오른쪽으로 갈수록 이익이 빨리 늘 거라는 예상, 위로 갈수록 주가가 이익에 비해 비싸요. 보통은 빨리 크는 회사일수록 PER 이 높아서 점들이 점선 근처에 모여요. 점선보다 한참 아래면 '성장에 비해 덜 쳐준다', 한참 위면 '성장보다 더 쳐준다'는 뜻이에요 (예상이 틀리면 달라져요).",
-      `PER 로 적정가를 매기는 종목만 · EPS 증가율 = 증권사 컨센서스 ${pE} → ${yE} · 24개월 선행 PER = 1~2년 뒤 12개월 EPS 기준 · PBR 로 매기는 종목(삼성전자·SK하이닉스 등)은 ROE × PBR 그림`)}
+      "PER 로 적정가를 매기는 종목만 · 12개월 선행 PER = 지금 주가 ÷ 앞으로 12개월 EPS (증권사 컨센서스) · EPS 증가율 = 앞으로 12개월 EPS → 그다음 12개월 EPS · PBR 로 매기는 종목(삼성전자·SK하이닉스 등)은 ROE × PBR 그림")}
     ${card(m2, "ROE × PBR (12개월 선행)", "ROE",
       "ROE 는 '내 돈(자본) 100원으로 1년에 얼마 버나', PBR 은 '자본의 몇 배에 사고파나'예요. 돈을 잘 버는(ROE 높은) 회사일수록 PBR 이 높은 게 보통이라 점선 근처에 모여요. 점선보다 아래면 버는 힘에 비해 싸게, 위면 비싸게 거래되는 쪽이에요.",
       "적정가를 BPS × PBR 로 매기는 종목 (현대차·기아처럼 PER·PBR 둘 다 쓰면 양쪽 그림에 다 나옴) · ROE ≈ 12MF PBR ÷ 12MF PER")}</div></details>`;
@@ -3390,17 +3414,20 @@ async function peersBlock(code, noPbr) {
     try { PEERS = await (await fetch("data/peers.json?t=" + encodeURIComponent(DASH.updated_at))).json(); }
     catch (e) { return ""; }
   }
-  const gs = PEERS.groups.filter((g) => g.holdings.includes(code));
+  const gs = peerGroupsFor(code);
   const calls = await peerCallsHTML(code);
   // 미국 빅테크는 PBR 비교가 의미 없어서 PBR 열과 ROE-PBR 산점도를 뺀다
   return gs.map((g, gi) => {
     const warns = g.rows.filter((r) => r.warn && !noPbr).map((r) => `${esc(r.name)}: ${esc(r.warn)}`);
-    return `<h3>동종업계 비교 · ${esc(g.name)}</h3><div class="card">
-      <div class="tbl-wrap"><table class="compact"><thead><tr><th>회사</th><th>시총<br>(조원)</th><th>EPS<br>TTM</th><th>EPS<br>12MF</th><th>PER<br>TTM</th><th>PER<br>12MF</th><th>OPM</th>${noPbr ? "" : "<th>PBR</th>"}<th>ROE</th><th>배당</th></tr></thead><tbody>
+    const seg = g.sort === "seg", open = peerMain(g, code);
+    const cnt = ["US", "EU"].map((m) => `${FLAG[m]} ${g.rows.filter((r) => r.market === m).length}곳`).join(" · ");
+    const body = `${g.why ? `<div class="note src" style="margin-top:0">${esc(g.why)} · ${seg ? "관련 부문 매출 큰 순 (그 부문이 없는 회사는 뒤에 시총 순)" : "시가총액 큰 순"} · ${cnt}</div>` : ""}
+      <div class="tbl-wrap"><table class="compact"><thead><tr><th>회사</th>${seg ? "<th>관련 부문<br>연 매출</th>" : ""}<th>시총<br>(조원)</th><th>EPS<br>TTM</th><th>EPS<br>12MF</th><th>PER<br>TTM</th><th>PER<br>12MF</th><th>OPM</th>${noPbr ? "" : "<th>PBR</th>"}<th>ROE</th><th>배당</th></tr></thead><tbody>
       ${g.rows.map((r) => {
         const eps = (v) => (v == null ? "-" : `<span class="${v < 0 ? "dear" : ""}">${n(v, Math.abs(v) >= 100 ? 0 : 2)}</span>`);
         const per = (v, e) => (e != null && e <= 0 ? '<span class="dear">적자</span>' : v == null ? "-" : n(v, 1) + "x");
-        return `<tr${r.code === code ? ' class="me"' : ""}><td>${FLAG[r.market] || ""} ${esc(r.name)}${r.stale ? " ⚠" : ""}<br><span class="src">${esc(r.code)}</span></td>
+        const sg = r.seg ? `${r.seg_krw ? `<b>${n(r.seg_krw / 1e12, 1)}조</b>` : "-"}<br><span class="src">${esc(r.seg.n)} ${esc(String(r.seg.fy || ""))}</span>` : "-";
+        return `<tr${r.code === code ? ' class="me"' : ""}><td>${FLAG[r.market] || ""} ${esc(r.name)}${r.stale ? " ⚠" : ""}<br><span class="src">${esc(r.code)}</span></td>${seg ? `<td>${sg}</td>` : ""}
         <td>${r.cap_krw == null ? "N/A" : n(r.cap_krw / 1e12, 1)}</td><td>${eps(r.eps_ttm)}</td><td>${eps(r.eps_12mf)}</td>
         <td>${per(r.per_ttm, r.eps_ttm)}</td><td><b>${per(r.fwd_per, r.eps_12mf)}</b></td><td>${r.opm == null ? "-" : `<span class="${r.opm < 0 ? "dear" : ""}">${n(r.opm, 1)}%</span>`}</td>
         ${noPbr ? "" : `<td>${times(r.pbr, 2)}</td>`}<td>${pct(r.roe)}</td><td>${pct(r.div, 2)}</td></tr>`;
@@ -3409,9 +3436,17 @@ async function peersBlock(code, noPbr) {
       ${noPbr ? `<div class="note">미국 빅테크는 PBR 이 의미가 적어서 PBR 비교는 뺐어요.</div>` : `<div class="chart-title">ROE(가로) vs PBR(세로) <span class="src">오른쪽 아래일수록 'ROE 에 비해 PBR 이 낮음'</span></div>
       <div class="chart-box tall"><canvas id="peer-scatter-${gi}"></canvas></div>
       <div id="peer-legend-${gi}"></div>`}
-      <div class="note src">시총은 원화 환산(환율: 달러 ${n(PEERS.fx.USD, 0)} · 유로 ${n(PEERS.fx.EUR, 0)} · 엔 ${n(PEERS.fx.JPY, 2)}원) · 한국: 네이버 증권·와이즈리포트(선행 PER = 12개월 선행), ROE 는 최근 연간 실적 · 해외: 야후 파이낸스(선행 PER = 향후 12개월, ROE = 최근 12개월) · ${esc(PEERS.updated_at)}
-      ${warns.length ? "<br>" + warns.join("<br>") : ""}</div></div>`;
+      <div class="note src">시총은 원화 환산(환율: 달러 ${n(PEERS.fx.USD, 0)} · 유로 ${n(PEERS.fx.EUR, 0)} · 엔 ${n(PEERS.fx.JPY, 2)}원) · 한국: 네이버 증권·와이즈리포트(선행 PER = 12개월 선행), ROE 는 최근 연간 실적 · 해외: 야후 파이낸스(선행 PER = 향후 12개월, ROE = 최근 12개월)${seg ? " · 관련 부문 매출 = 각 회사 연간 보고서의 그 사업부문 숫자를 지금 환율로" : ""} · ${esc(PEERS.updated_at)}
+      ${warns.length ? "<br>" + warns.join("<br>") : ""}</div>`;
+    return open ? `<h3>동종업계 비교 · ${esc(g.name)}</h3><div class="card">${body}</div>`
+      : `<details class="card" style="margin-top:8px"><summary class="chart-title"><b>동종업계 비교 · ${esc(g.name)}</b> <span class="src">눌러서 열기</span></summary>${body}</details>`;
   }).join("") + calls;
+}
+// 그 종목의 비교 그룹: 주력(main)부터 펼치고 나머지는 접음 (main 이 없는 그룹은 holdings 모두 주력)
+const peerMain = (g, code) => !g.main || g.main.includes(code);
+function peerGroupsFor(code) {
+  const gs = (PEERS?.groups || []).filter((g) => g.holdings.includes(code));
+  return [...gs.filter((g) => peerMain(g, code)), ...gs.filter((g) => !peerMain(g, code))];
 }
 // 🎙 경쟁사 컨퍼런스콜 (config/peer_calls.yaml, 사용자 2026-11-03): 시총 큰 순 · 1조 미만 빼기 · 우리가 요약하는 종목은 그 요약을 그대로
 let PCALL = null;
@@ -3454,7 +3489,7 @@ async function peerCallsHTML(code) {
 function drawPeers(code) {
   if (!PEERS) return;
   const C = themeColors();
-  PEERS.groups.filter((g) => g.holdings.includes(code)).forEach((g, gi) => {
+  peerGroupsFor(code).forEach((g, gi) => {
     const cv = document.getElementById(`peer-scatter-${gi}`);
     if (!cv) return;
     const pts = (f) => g.rows.filter((r) => r.roe != null && r.pbr != null && f(r)).map((r) => ({ x: r.roe, y: r.pbr, name: r.name }));
@@ -3842,7 +3877,7 @@ function showView() {
   $("#jointView").hidden = view !== "joint";
   if (view === "market") drawMarketCharts(); // 숨겨진 상태에서 그린 차트는 크기가 0이라 보일 때 다시 그림
   if (view === "pbr") loadPBR();
-  if (view === "watch") { renderGroup("관심", "#watchFull"); loadWatch(); }
+  if (view === "watch") { renderGroup("관심", "#watchFull"); renderCmp(CMP_T.watch); jumpBar("#watchFull", "#watchJump"); loadWatch(); }
   if (view === "joint") renderGroup("공동", "#jointCards");
 }
 // 보유 말고도 보유종목처럼 다 추적하는 묶음 (stocks.yaml 의 watchlist = 관심, joint = 공동자산) — 매력적인 순
