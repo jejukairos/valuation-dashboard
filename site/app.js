@@ -940,17 +940,13 @@ function segStack(ps, col) {
   const tag = up && up[1] >= 1 ? `${cut(up[0], 8)} 비중 +${n(up[1], 0)}%p` : "";
   return `<div class="qp"><div class="qt"><b>부문별 매출 비중 추이</b>${qTag(tag)}</div><svg viewBox="0 0 ${W} 172" role="img" aria-label="부문별 매출 비중 추이">${g}</svg></div>`;
 }
-// 🧩 제품·부문별 매출: 이번 분기 비중(도넛) · 분기별 비중(100% 막대) · 제품별 성장률(YoY 선) — 금액은 config/segments.yaml, 없으면 와이즈리포트 비중
+// 🧩 제품·부문별 매출: 이번 분기 비중(도넛) · 분기별 비중(100% 막대) — 금액은 config/segments.yaml, 없으면 와이즈리포트 비중 (제품별 성장률 선은 ⭐ 성장률 한눈에)
 const segQ = (e) => { const [y, m] = e.split("-"); return +m % 3 ? `${y.slice(2)}.${m}월` : qLabel(e); };  // 비중 추이와 같은 이름, 7월·10월 결산도 순서대로 (25.07월)
 function segBlock(d) {
   const ps = segPeriods(d.seg);
   if (!ps.length) return "";
-  const col = segColors(ps), last = ps.at(-1)[1];
-  const yo = ps.map(([k, , a]) => [k, a, segAgo(ps, k)?.[2]]).filter(([, a, p]) => a && p);  // 1년 전 같은 분기 금액이 있는 분기
-  const top = Object.keys(col).filter((s) => last[s] >= 3).slice(0, 4);  // 비중 3% 넘는 큰 제품 4개까지 (작은 건 성장률이 널뛰어서)
-  const grow = yo.length >= 2 ? kpiChart({ t: "제품·부문별 성장률 (YoY)", u: "%", col: top.map((s) => col[s]),
-    s: top.map((s) => ({ n: s, v: Object.fromEntries(yo.filter(([, a, p]) => p[s] > 0 && a[s] != null).map(([k, a, p]) => [segQ(k), (a[s] / p[s] - 1) * 100])) })) }) : "";
-  return `<h3>🧩 제품·부문별 매출 <span class="src">${esc(d.seg.src || "")}</span></h3><div class="card"><div class="qgrid">${segDonut(ps, col, d.seg)}${ps.length > 1 ? segStack(ps, col) : ""}${grow}</div>
+  const col = segColors(ps);
+  return `<h3>🧩 제품·부문별 매출 <span class="src">${esc(d.seg.src || "")}</span></h3><div class="card"><div class="qgrid">${segDonut(ps, col, d.seg)}${ps.length > 1 ? segStack(ps, col) : ""}</div>
     ${ps.length < 2 ? `<div class="note src">보고서가 나올 때마다 한 칸씩 쌓여 비중 변화가 그려져요</div>` : ""}</div>`;
 }
 // [부문별 매출 →] 매출 → 매출원가 / 매출총이익 → 영업비용(연구개발·판매·관리·기타) / 영업이익
@@ -2472,8 +2468,9 @@ function annualOpmHTML(d) {
 }
 function kpiChart(ch) {
   if (ch.kind === "stack") return kpiStack(ch);
-  const qs = [...new Set(ch.s.flatMap((s) => Object.keys(s.v || {})))].sort();
-  const vals = ch.s.flatMap((s) => Object.values(s.v || {})).filter((v) => v != null);
+  const gd = ch.g;  // 회사 가이던스 {q, lo, hi, si 몇 번째 선}: 맨 끝 칸에 점선 범위
+  const qs = [...new Set([...ch.s.flatMap((s) => Object.keys(s.v || {})), ...(gd ? [gd.q] : [])])].sort();
+  const vals = [...ch.s.flatMap((s) => Object.values(s.v || {})), ...(gd ? [gd.lo, gd.hi] : [])].filter((v) => v != null);
   if (qs.length < 2 || !vals.length) return "";
   const many = ch.s.length > 1, W = 320, x0 = 26, x1 = W - (many ? 62 : 26), top = 28, bot = 138;  // 선이 여러 개면 끝 숫자를 오른쪽에
   const lo0 = Math.min(...vals), hi0 = Math.max(...vals), pad = (hi0 - lo0) * 0.18 || Math.abs(hi0) * 0.2 || 1;
@@ -2484,7 +2481,7 @@ function kpiChart(ch) {
   const ends = [];  // 선이 여러 개면 마지막 값만 글자로 (겹치지 않게 아래로 밀기)
   ch.s.forEach((s, si) => {
     const col = (ch.col || KPI_COL)[si % (ch.col || KPI_COL).length], pts = qs.map((q, i) => [i, s.v?.[q]]).filter(([, v]) => v != null);
-    g += `<path d="${pts.map(([i, v], j) => `${j ? "L" : "M"}${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round"/>`;
+    g += `<path d="${pts.map(([i, v], j) => `${j ? "L" : "M"}${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="${s.star ? 5 : 3}" stroke-linejoin="round"/>`;
     const xy = pts.map(([i, v]) => [X(i), Y(v)]);
     pts.forEach(([i, v], j) => {
       const last = j === pts.length - 1;
@@ -2497,9 +2494,17 @@ function kpiChart(ch) {
   const over = ends.length ? ends[ends.length - 1][1] - (bot - 4) : 0;  // 아래 분기 이름과 겹치면 통째로 위로
   if (over > 0) ends.forEach((e) => { e[1] -= over; });
   ends.forEach(([x, y, v, col]) => { g += `<text x="${x + 8}" y="${y + 4}" text-anchor="start" class="qv b" style="fill:${col};font-size:13px">${kpiF(v, ch.u)}</text>`; });
-  g += tipCols(X, (x1 - x0) / (qs.length - 1), 0, 160, qs.map((q) => [q, ...ch.s.map((s) => (s.v?.[q] == null ? null : `${s.n}: ${kpiF(s.v[q], ch.u)}`))].join("\n")));
-  const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${(ch.col || KPI_COL)[si % (ch.col || KPI_COL).length]}">●</span> ${esc(s.n)}`).join(" · ")}</div>` : "";
-  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}${ch.note ? `<div class="src" style="padding:0 4px 4px;color:var(--warn-ink)">${esc(ch.note)}</div>` : ""}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
+  const rng = gd ? (gd.lo === gd.hi ? kpiF(gd.lo, ch.u) : `${kpiF(gd.lo, "")}~${kpiF(gd.hi, ch.u)}`) : "";
+  if (gd) {  // 마지막 실제 값 → 가이던스 가운데로 점선, 범위는 옅은 막대
+    const gi = qs.indexOf(gd.q), s0 = ch.s[gd.si || 0], col = (ch.col || KPI_COL)[(gd.si || 0) % (ch.col || KPI_COL).length];
+    const lq = qs.slice(0, gi).reverse().find((q) => s0.v?.[q] != null), mid = (gd.lo + gd.hi) / 2;
+    if (lq) g += `<line x1="${X(qs.indexOf(lq))}" y1="${Y(s0.v[lq])}" x2="${X(gi)}" y2="${Y(mid)}" stroke="${col}" stroke-width="2" stroke-dasharray="4 3"/>`;
+    g += `<rect x="${X(gi) - 6}" y="${Y(gd.hi) - 2}" width="12" height="${Math.max(4, Y(gd.lo) - Y(gd.hi) + 4)}" rx="4" fill="${col}" fill-opacity=".22" stroke="${col}" stroke-dasharray="3 2"/>`
+      + `<text x="${X(gi) + 8}" y="${Y(gd.hi) - 8}" text-anchor="end" class="qv b" style="fill:${col}">가이던스 ${rng}</text>`;
+  }
+  g += tipCols(X, (x1 - x0) / (qs.length - 1), 0, 160, qs.map((q) => [q, ...ch.s.map((s) => (s.v?.[q] == null ? null : `${s.n}: ${kpiF(s.v[q], ch.u)}`)), gd && q === gd.q ? `회사 가이던스: ${rng}` : null].filter(Boolean).join("\n")));
+  const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${(ch.col || KPI_COL)[si % (ch.col || KPI_COL).length]}">●</span> ${s.star ? "⭐" : ""}${esc(s.n)}`).join(" · ")}</div>` : "";
+  return `<div class="qp${ch.star ? " star" : ""}"><div class="qt"><b>${ch.star ? "⭐ " : ""}${esc(ch.t)}</b>${ch.tag || ""}</div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}<svg viewBox="0 0 ${W} 160" role="img" aria-label="${esc(ch.t)}">${g}</svg>${leg}${ch.note ? `<div class="src" style="padding:0 4px 4px;color:var(--warn-ink)">${esc(ch.note)}</div>` : ""}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
 // 📏 이익 vs 주가 (지난 최대 10년, collector compute.long_cagr): 숫자 표 → 🐣 무슨 뜻 → 🔭 앞으로 3년 단순 계산 → 📌 읽는 법
 // 오래 보면 주가 상승률 ≈ 이익 성장률 × 값(PER) 변화 — 같은 회사도 비싸게 사면(씨젠 PER 35배) 이익 12배에 주가 4배, 싸게 사면(한미 5~7배) 120배
@@ -2575,13 +2580,124 @@ function yoyOf(rows) {
   return out;
 }
 const last6 = (o) => Object.fromEntries(Object.entries(o).slice(-6));
-// 📈 매출 성장률 (YoY) 자동: kpi.yaml 에 같은 그래프가 없는 종목만 (분기 실적에서 계산)
-function revYoyHTML(d, k) {
-  if (k.charts.some((c) => /^매출 성장률/.test(c.t))) return "";
-  const L = d.longq || {}, v = {};  // 10년 분기 실적 (키 = 달력 분기 '26.3Q') — 없으면 야후 분기 실적
-  for (const q of Object.keys(L).sort()) { const p = L[`${+q.slice(0, 2) - 1}${q.slice(2)}`]; if (p?.rev > 0 && L[q].rev != null) v[q] = rnd1((L[q].rev / p.rev - 1) * 100); }
-  return kpiChart({ t: "매출 성장률 (YoY)", u: "%", s: [{ n: "매출", v: last6(Object.keys(v).length >= 2 ? v : yoyOf(Object.entries(d.qtrs || {}).filter(([, q]) => q.rev).map(([e, q]) => [e, q.rev]))) }],
-    why: "1년 전 같은 분기보다 매출이 얼마나 늘었나 · 분기 실적(DART·SEC·야후·잠정 공시)으로 자동 계산" });
+// ⭐ 성장률 한눈에 (애플·팔란티어 요약 그림처럼): 매출 성장률 · 매출총이익률 · 영업이익률 · 제품별 · 지역별 (+ 고객·부문 비중)
+// 숫자는 자동(10년 분기 실적·segments.yaml) — 별표·가이던스·지역·조정 이익률은 config/growth.yaml, 📍 변곡점·🐣 설명은 여기서 계산
+let GROWTH = null;
+const GROW_RE = /^매출 성장률|지역별 성장률|해외 매출 성장률|국내·해외 매출 성장률/;  // kpi.yaml 의 이 그래프는 🔑 핵심 지표 대신 이 칸에
+const agoQ = (q) => `${String(+q.slice(0, 2) - 1).padStart(2, "0")}${q.slice(2)}`;  // '26.3Q' → '25.3Q'
+function revYoy(d) {  // 10년 분기 실적 (키 = 달력 분기 '26.3Q') — 없으면 야후 분기 실적
+  const L = d.longq || {}, v = {};
+  for (const q of Object.keys(L).sort()) { const p = L[agoQ(q)]; if (p?.rev > 0 && L[q].rev != null) v[q] = rnd1((L[q].rev / p.rev - 1) * 100); }
+  return last6(Object.keys(v).length >= 2 ? v : yoyOf(Object.entries(d.qtrs || {}).filter(([, q]) => q.rev).map(([e, q]) => [e, q.rev])));
+}
+function margin(d, key) {  // 매출총이익률(gp)·영업이익률(op) {분기: %}
+  const L = d.longq || {};
+  return last6(Object.fromEntries(Object.keys(L).sort().filter((q) => L[q].rev > 0 && L[q][key] != null).map((q) => [q, rnd1((L[q][key] / L[q].rev) * 100)])));
+}
+// 📍 변곡점: 오르다 1~2분기 전 꼭대기를 찍고 내려오면 '고점 찍고 둔화', 내리다 바닥에서 오르면 '바닥 찍고 반등', 0 을 넘나들면 '플러스·역성장 전환'
+// 그 밖엔 'n분기 연속 가속·둔화' (th/2 보다 작은 움직임은 제자리로 봄)
+function turnOf(v, th, w, zero) {  // v = {분기: 값}, th = 의미 있는 변화(%p), w = ["가속","둔화"]|["상승","하락"], zero = 0 을 넘나드는 걸 볼지(성장률)
+  const x = Object.values(v).filter((y) => y != null), n = x.length;
+  if (n < 2) return null;
+  const a = x[n - 1], b = x[n - 2], d1 = a - b, o = { a, b, f: b, up: d1 >= 0, pt: false };
+  if (zero && b < 0 && a >= 0) return { ...o, t: "플러스 전환", pt: true };
+  if (zero && b >= 0 && a < 0) return { ...o, t: "역성장 전환", pt: true };
+  if (zero) th = Math.max(th, Math.max(...x.map(Math.abs)) * 0.1);  // 성장률이 100%대면 3%p 흔들림은 잡음
+  const sg = (i) => { const dd = x[i] - x[i - 1]; return Math.abs(dd) < th / 2 ? 0 : Math.sign(dd); };
+  const hist = x.slice(0, -1), ex = d1 < 0 ? Math.max(...hist) : Math.min(...hist), p = hist.lastIndexOf(ex);
+  const into = p >= 1 && (d1 < 0 ? ex > x[p - 1] : ex < x[p - 1]);  // 오르다 찍은 꼭대기(내리다 찍은 바닥)인가
+  if (into && n - 1 - p <= 2 && Math.abs(a - ex) >= th && Math.abs(d1) >= th / 2) return { ...o, f: ex, t: d1 < 0 ? `고점 찍고 ${w[1]}` : "바닥 찍고 반등", pt: true };
+  if (sg(n - 1) === 0) return { ...o, t: a >= Math.max(...x) - th / 2 ? "최고 수준 유지" : a <= Math.min(...x) + th / 2 ? "최저 수준 머묾" : "비슷한 흐름" };
+  let k = 1;
+  while (n - 1 - k >= 1 && sg(n - 1 - k) === sg(n - 1)) k++;
+  return { ...o, t: k >= 2 ? `${k}분기 연속 ${w[d1 > 0 ? 0 : 1]}` : w[d1 > 0 ? 0 : 1] };
+}
+function growTag(t, bad) { return t ? `<span class="qtag${bad ? " bad" : ""}">${esc(t)}</span>` : ""; }
+function guideOf(G, d, key, si = 0) {  // growth.yaml guide → 그래프 끝 점선 범위 {q, lo, hi, si} (연간 가이던스는 글로만)
+  const x = G?.guide;
+  if (!x || !/^\d\d\.\dQ$/.test(x.q || "")) return null;
+  let r = x[key];
+  if (key === "rev_yoy" && !r && x.rev) { const p = d.longq?.[agoQ(x.q)]?.rev; r = p > 0 ? x.rev.map((v) => rnd1((v / p - 1) * 100)) : null; }
+  return r ? { q: x.q, lo: Math.min(...r), hi: Math.max(...r), si } : null;
+}
+function growAllHTML(code, d, k) {
+  const G = GROWTH?.[code] || GROWTH?.[KPI_ALIAS[code]] || {}, st = new Set((G.star || []).map((s) => s.split(":")[0]));
+  const starLine = (kind) => (G.star || []).filter((s) => s.startsWith(kind + ":")).map((s) => s.slice(kind.length + 1));
+  const pts = [], cards = [];  // pts = 📍 변곡점 한 줄씩
+  const pp = (a, b) => `${n(b, 1)}% → ${n(a, 1)}%`;
+  // ① 매출 성장률 — kpi.yaml 에 직접 적은 그래프가 있으면 그것
+  const kRev = k.charts.find((c) => /^매출 성장률/.test(c.t)), rv = kRev ? kRev.s[0]?.v || {} : revYoy(d), rg = guideOf(G, d, "rev_yoy");
+  const rt = turnOf(rv, 2, ["가속", "둔화"], true), last = Object.keys(rv).sort().at(-1);
+  if (rt?.pt) pts.push(`매출 성장률 <b>${esc(rt.t)}</b> (${pp(rt.a, rt.f)})`);
+  const rgT = rg && rt ? ((rg.lo + rg.hi) / 2 < rt.a - 2 ? "성장 둔화 전망" : (rg.lo + rg.hi) / 2 > rt.a + 2 ? "성장 가속 전망" : "비슷한 성장 전망") : null;
+  cards.push(kpiChart({ ...(kRev || {}), t: "매출 성장률 (YoY)", u: "%", s: [{ n: "매출", v: rv }], g: rg, star: st.has("rev"), col: ["var(--s1)"],
+    tag: growTag(rgT || (rt && `성장 ${rt.t}`), /둔화|역성장/.test(rgT || rt?.t || "")),
+    why: kRev?.why || "1년 전 같은 분기보다 매출이 얼마나 늘었나 · 분기 실적으로 자동" }));
+  // ② 매출총이익률 ③ 영업이익률 (회사 '조정' 숫자가 있으면 선 두 개)
+  const mg = (key, t, col, gk, extra) => {
+    const v = margin(d, key), s = [{ n: extra ? "회계 기준" : t, v }, ...(extra ? [{ n: "회사 조정", v: last6(extra) }] : [])];
+    if (Object.keys(v).length < 2) return;
+    const main = extra ? s[1].v : v, tt = turnOf(main, 0.8, ["상승", "하락"]), gd = guideOf(G, d, extra ? "adj_opm" : gk, extra ? 1 : 0);
+    if (tt?.pt) pts.push(`${extra ? "조정 " : ""}${t} <b>${esc(tt.t)}</b> (${pp(tt.a, tt.f)})`);
+    const gT = gd && tt ? ((gd.lo + gd.hi) / 2 < tt.a - 0.8 ? "마진 하락 전망" : (gd.lo + gd.hi) / 2 > tt.a + 0.8 ? "마진 상승 전망" : "마진 유지 전망") : null;
+    cards.push(kpiChart({ t, u: "%", s, g: gd, star: st.has(gk), col: extra ? [col, "var(--s3)"] : [col],
+      tag: growTag(gT || (tt && `마진 ${tt.t}`), /하락/.test(gT || tt?.t || "")),
+      why: key === "gp" ? "100원어치 팔아 재료·생산비를 빼고 남는 돈" : `인건비·광고·연구비까지 빼고 남는 돈${extra ? " · 회사 조정 = 주식 보상 비용 등을 뺀 숫자 (회사가 이걸로 말함)" : ""}` }));
+  };
+  mg("gp", "매출총이익률", "var(--s2)", "gm");
+  mg("op", "영업이익률", "var(--s4)", "opm", G.adj_opm);
+  // ④ 제품·부문별 성장률 (segments.yaml 금액, 비중 3% 넘는 큰 제품 5개까지)
+  const ps = segPeriods(d.seg);
+  if (ps.length) {
+    const col = segColors(ps), lastS = ps.at(-1)[1], sl = starLine("prod");
+    const yo = ps.map(([q, , a]) => [q, a, segAgo(ps, q)?.[2]]).filter(([, a, p]) => a && p);
+    const top = Object.keys(col).filter((s) => lastS[s] >= 3).slice(0, 5);
+    const s = top.map((nm) => ({ n: nm, star: sl.includes(nm), v: Object.fromEntries(yo.filter(([, a, p]) => p[nm] > 0 && a[nm] != null).map(([q, a, p]) => [segQ(q), rnd1((a[nm] / p[nm] - 1) * 100)])) }));
+    if (yo.length >= 2) cards.push(multiCard("제품·부문별 성장률 (YoY)", s, top.map((nm) => col[nm]), st.has("prod"), "부문", pts));
+    // ⑥ 고객·부문 비중 — 1등이 바뀌면 변곡점 ('상업 첫 추월')
+    if (st.has("mix") && ps.length >= 2) {
+      const P = ps.slice(-6), names = Object.keys(col).slice(0, 3), lead = (sh) => Object.keys(sh).sort((a, b) => sh[b] - sh[a])[0];
+      const now = lead(P.at(-1)[1]), was = lead(P.at(-2)[1]), first = !P.slice(0, -1).some(([, sh]) => lead(sh) === now);
+      const tag = now !== was ? `${now} ${first ? "첫" : "다시"} 추월` : `${now} 비중 1위 유지`;
+      if (now !== was) pts.push(`고객·부문 비중 <b>${esc(now)}이 ${esc(was)} 추월</b>${first ? ` (최근 ${P.length}분기 중 처음)` : ""} (${n(P.at(-1)[1][now], 1)}% vs ${n(P.at(-1)[1][was], 1)}%)`);
+      cards.push(kpiChart({ t: "고객·부문 비중", u: "%", col: names.map((nm) => col[nm]), star: true, tag: growTag(tag, false),
+        s: names.map((nm) => ({ n: nm, v: Object.fromEntries(P.map(([q, sh]) => [segQ(q), rnd1(sh[nm] || 0)])) })), why: "매출 100 중 몇이 어디서 나오나" }));
+    }
+  }
+  // ⑤ 지역별 성장률: growth.yaml region → 없으면 kpi.yaml 의 지역·해외 성장률 그래프
+  const kReg = k.charts.find((c) => /지역별 성장률|해외 매출 성장률|국내·해외 매출 성장률/.test(c.t));
+  const reg = G.region ? Object.entries(G.region).map(([nm, v]) => ({ n: nm, v: last6(Object.fromEntries(Object.entries(v).sort())) })) : kReg?.s;
+  if (reg?.length) {
+    const sl = starLine("region");
+    cards.push(multiCard("지역별 매출 성장률 (YoY)", reg.map((s) => ({ ...s, star: sl.includes(s.n) })), null, st.has("region"), "지역", pts, G.region_src || kReg?.why));
+  }
+  if (!cards.some(Boolean)) return "";
+  // 🧭 가이던스 줄 + 🐣 쉬운 설명 (숫자 → 그림 → 🐣)
+  const usd = d.currency === "USD", x = G.guide, gTxt = x ? [x.rev_yoy && `매출 ${pct(x.rev_yoy[0], 0, true)}~${n(x.rev_yoy[1], 0)}%`,
+    x.rev && `매출 ${usd ? `$${n(x.rev[0] / 1e3, 2)}~${n(x.rev[1] / 1e3, 2)}B` : `${kpiF(x.rev[0], "억원")}~${kpiF(x.rev[1], "억원")}`}${rg ? ` (YoY ${pct(rg.lo, 0, true)}~${n(rg.hi, 0)}%)` : ""}`,
+    x.gm && `매출총이익률 ${x.gm.join("~")}%`, x.opm && `영업이익률 ${x.opm.join("~")}%`, x.adj_opm && `조정 영업이익률 ${x.adj_opm.join("~")}%`].filter(Boolean).join(" · ") : "";
+  const gmv = margin(d, "gp"), opv = margin(d, "op"), gl = Object.values(gmv).at(-1), ol = Object.values(opv).at(-1);
+  const kid = [rt && `매출이 1년 전 같은 때보다 ${n(Math.abs(rt.a), 1)}% ${rt.a >= 0 ? "늘었어요" : "줄었어요"}${Math.abs(rt.a - rt.b) >= 1 ? ` — 늘어나는 속도는 ${rt.a > rt.b ? "빨라졌어요" : "느려졌어요"} (${pp(rt.a, rt.b)})` : ""}.`,
+    gl != null && `100원어치 팔면 재료·생산비를 빼고 ${n(gl, 0)}원이 남고${ol != null ? `, 인건비·광고비까지 빼면 ${n(ol, 0)}원이 남아요` : "요"}.`,
+    rgT && `회사는 다음 분기에 ${rgT.replace(" 전망", "")}을 예상했어요 (가이던스).`].filter(Boolean).join(" ");
+  return `<h3>⭐ 성장률 한눈에 <span class="src">${esc(last || "")}까지 · 실적이 나오면 자동으로 이어 그려요 · ⭐ = 이 회사 주가를 가장 움직이는 칸</span></h3><div class="card">
+    ${G.why ? `<div class="note" style="margin-top:0">⭐ <b>이 회사 핵심</b>: ${esc(G.why)}</div>` : ""}
+    <div class="note">📍 <b>변곡점</b>: ${pts.length ? pts.join(" · ") : "이번 분기는 큰 방향 전환 없음 (흐름 그대로)"}</div>
+    ${gTxt ? `<div class="note">🧭 <b>회사 가이던스 (${esc(x.q)})</b>: ${gTxt}${x.note ? ` <span class="src">${esc(x.note)}</span>` : ""} <span class="src">${esc(x.date || "")}${x.src ? ` · <a href="${esc(x.src)}" target="_blank" rel="noopener">원문</a>` : ""}</span></div>` : ""}
+    <div class="qgrid" style="margin-top:8px">${cards.join("")}</div>
+    ${kid ? `<div class="kidbox" style="margin-top:8px">🐣 ${kid}</div>` : ""}</div>`;
+}
+// 선 여러 개 (제품별·지역별 성장률): 꼬리표 = '전 부문 둔화' · 'A·B 역성장' · 별표 선 상태, 꺾인 선은 📍 에
+function multiCard(t, s, col, star, word, pts, why) {
+  col = col || ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s7)", "var(--muted)", "var(--ink-2)"];  // 지역이 7개여도 색이 겹치지 않게
+  const tr =s.map((x) => [x.n, turnOf(x.v || {}, 3, ["가속", "둔화"], true), x.star]).filter(([, r]) => r);
+  if (!tr.length) return kpiChart({ t, u: "%", s, col, star, why });
+  const neg = tr.filter(([, r]) => r.a < 0).map(([nm]) => cut(nm, 6)), dn = tr.filter(([, r]) => !r.up).length;
+  tr.filter(([, r]) => r.pt).forEach(([nm, r]) => pts.push(`${esc(nm)} 성장률 <b>${esc(r.t)}</b> (${n(r.f, 1)}% → ${n(r.a, 1)}%)`));
+  const sr = tr.find(([, , st]) => st);
+  const tag = [dn === tr.length && tr.length > 1 ? `전 ${word} 성장 둔화` : dn === 0 && tr.length > 1 ? `전 ${word} 성장 가속` : sr ? `${cut(sr[0], 6)} ${sr[1].t}` : "",
+    neg.length ? `${neg.join("·")} 역성장` : ""].filter(Boolean).join(" · ");
+  return kpiChart({ t, u: "%", s, col, star, why, tag: growTag(tag, /둔화|역성장/.test(tag)) });
 }
 // 📉 주식 수 증가율 (YoY): 새 주식을 찍으면(증자·주식 보상·전환사채 전환) 이익이 그대로여도 한 주당 몫(EPS)이 줄어요 — 모든 종목
 function dilHTML(d) {
@@ -2613,13 +2729,17 @@ function empHTML(d) {
     why: `${e.src || ""}${e.stale ? " · 이번엔 못 받아 직전 값" : ""} · 날짜 = 회계연도 말(한국은 12월 말·6월 말)`, note,
     kid: "AI 로 같은 일을 더 적은 사람이 하게 되면, 직원 수는 그대로거나 줄어도 매출은 늘어요. 그래서 직원 수와 '1인당 매출'이 같이 오르는지(혹은 직원은 줄고 1인당 매출은 오르는지)가 AI 시대의 핵심 신호예요." });
 }
+async function growthBlock(code, d) {  // kpiBlock 다음에 부름 (KPI 를 씀)
+  if (GROWTH === null) { try { GROWTH = (await (await fetch("data/growth.json?v=" + encodeURIComponent(DASH.updated_at))).json()) || {}; } catch (_) { GROWTH = {}; } }
+  return growAllHTML(code, d, KPI?.[code] || KPI?.[KPI_ALIAS[code]] || { charts: [] });
+}
 async function kpiBlock(code, d) {
   if (KPI === null) { try { KPI = (await (await fetch("data/kpi.json?v=" + encodeURIComponent(DASH.updated_at))).json()) || {}; } catch (_) { KPI = {}; } }
   if (EMP === null) { try { EMP = (await (await fetch("data/employees.json?t=" + Date.now(), { cache: "no-store" })).json()) || {}; } catch (_) { EMP = {}; } }
-  const k = KPI[code] || KPI[KPI_ALIAS[code]] || { charts: [], auto: true };  // kpi.yaml 에 없는 종목도 자동 그림(손익·매출 성장률·현금흐름·주식 수)은 보여 줌
-  const ch = k.charts.map(kpiChart);
-  ch.unshift(comboHTML(d), revYoyHTML(d, k));  // 맨 앞: 분기 매출·영업이익·영업이익률 (+ kpi.yaml 에 없으면 매출 성장률)
-  ch.splice(3, 0, opYoyHTML(d, k), fcfBars(d, k), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 매출 성장률 다음에 영업이익 성장률 · 현금흐름 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
+  const k = KPI[code] || KPI[KPI_ALIAS[code]] || { charts: [], auto: true };  // kpi.yaml 에 없는 종목도 자동 그림(손익·현금흐름·주식 수)은 보여 줌
+  const ch = k.charts.filter((c) => !GROW_RE.test(c.t)).map(kpiChart);  // 매출·지역 성장률은 ⭐ 성장률 한눈에 로
+  ch.unshift(comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률
+  ch.splice(2, 0, opYoyHTML(d, k), fcfBars(d, k), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 그다음 영업이익 성장률 · 현금흐름 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
   if (!ch.some(Boolean)) return "";
   return `<h3>🔑 핵심 지표 <span class="src">${k.auto ? "자동 계산 — 분기 실적·현금흐름·주식 수 (사업부별 숫자는 아직 안 넣음)" : `${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김`}</span></h3><div class="card kpi">
     ${k.key ? `<div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key)}</div>` : ""}
@@ -3373,6 +3493,7 @@ async function openStock(code) {
     const brokerHtml = await brokerBlock(code, d.price, d.currency);
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
+    const growHtml = await growthBlock(code, d);
     const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     try { await gpeGet(); } catch (_) { /* 🌍 글로벌 비교 그림만 빠짐 */ }
@@ -3380,7 +3501,7 @@ async function openStock(code) {
       ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + growHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);

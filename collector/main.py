@@ -968,6 +968,7 @@ def main():
     write_json(DATA / "defense.json", {**(load_yaml("defense.yaml") or {}), "sector": SECTORS.get("방산")})  # 🛡 산업 탭 방산 칸
     write_json(DATA / "keychart.json", load_yaml("keychart.yaml") or {})  # 🔑 키팩터·키차트 (산업 탭 + 종목 상세)
     write_json(DATA / "peer_calls.json", load_yaml("peer_calls.yaml") or {})  # 🎙 경쟁사 컨콜 (종목 상세 동종업계 비교 아래)
+    write_json(DATA / "growth.json", load_yaml("growth.yaml") or {})  # ⭐ 성장률 한눈에: 별표·가이던스·지역별 (종목 상세)
     write_json(DATA / "tourism.json", load_yaml("tourism.yaml") or {})  # 출입국 관광통계 (롯데쇼핑 상세)
     write_json(DATA / "exports.json", load_yaml("exports.yaml") or {})  # 📦 라면·화장품 월별 수출 (산업 탭)
     write_json(DATA / "kpi.json", load_yaml("kpi.yaml") or {})  # 🔑 종목별 핵심 지표 (실적발표·전자공시에서 옮김, 상세 화면)
