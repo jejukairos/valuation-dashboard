@@ -4199,24 +4199,52 @@ async function keyLoad() {
   if (!KEYC) { try { KEYC = await (await fetch("data/keychart.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { KEYC = {}; } }
   return KEYC;
 }
+// 🔁 변화 막대표 (kind: chg): 지표마다 '지금 값' + 1년 전 대비 · 지난 분기 대비를 막대로 (초록 = 늘어남, 빨강 = 줄어듦, 🧭 점선 = 회사 가이던스)
+//   rows [{n, now, ago 1년 전, prev 지난 분기, u 단위, d 소수, pp: true → %p 차이, yoy·qoq 직접 % (값이 없을 때), g: true 가이던스}]
+//   사용자 2026-11-03: "숫자만으론 와닿지 않아 — 작년 동기·전 분기 대비 변화를 그림으로, 가이던스는 그림 안에"
+function chgChart(ch) {
+  const cap = ch.cap || 150, pc = (a, b, pp) => (a == null || b == null ? null : pp ? a - b : b > 0 ? (a / b - 1) * 100 : null);
+  const R = (ch.rows || []).map((r) => ({ ...r, y: r.yoy ?? pc(r.now, r.ago, r.pp), q: r.qoq ?? pc(r.now, r.prev, r.pp) }));
+  const mx = Math.max(1, ...R.flatMap((r) => [r.y, r.q]).filter((v) => v != null).map((v) => Math.min(Math.abs(v), cap)));
+  const bar = (v, r) => (v == null ? `<span class="src">-</span>`
+    : `<span class="cbar"><i style="width:${Math.max(2, (Math.min(Math.abs(v), cap) / mx) * 36)}px;background:${v < 0 ? "var(--bad)" : "var(--good)"}${r.g ? ";opacity:.4;outline:1px dashed var(--ink-2)" : ""}"></i><b style="color:${v < 0 ? "var(--bad-ink)" : "var(--good-ink)"}">${v > 0 ? "+" : ""}${n(v, Math.abs(v) < 10 ? 1 : 0)}${r.pp ? "%p" : "%"}</b></span>`);
+  const val = (r) => (r.now == null ? "" : `${n(r.now, r.d ?? (Math.abs(r.now) < 100 && !Number.isInteger(r.now) ? 1 : 0))}${r.u || ""}`);
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b>${ch.tag || ""}</div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}
+    <div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:12px"><tr><th style="text-align:left"></th><th>지금</th><th style="text-align:left">1년 전보다</th><th style="text-align:left">지난 분기보다</th></tr>
+    ${R.map((r) => `<tr${r.g ? ' style="background:var(--surface-2)"' : ""}><td style="text-align:left">${r.g ? "🧭 " : ""}${esc(r.n)}</td><td style="white-space:nowrap"><b>${esc(val(r))}</b></td><td style="text-align:left">${bar(r.y, r)}</td><td style="text-align:left">${bar(r.q, r)}</td></tr>`).join("")}</table></div>
+    ${ch.note ? `<div class="src" style="padding:4px">${esc(ch.note)}</div>` : ""}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
+}
 // 그림: 쌓은 막대(bars) · 같은 단위 선(lines) · 위쪽 띠의 % 선(pct). 억원이 1조를 넘으면 조원, 칸이 많으면 연도는 1Q 에만
 function keyChart(ch) {
   // kind: line → 0 아래(적자)도 그리는 꺾은선 + 칸마다 숫자 (종목 그래프와 같은 모양)
   if (ch.kind === "line") return kpiChart({ ...ch, s: (ch.lines || []).map((s) => ({ n: s.n, v: Object.fromEntries((ch.q || []).map((q, i) => [q, s.v[i]]).filter(([, v]) => v != null)) })) });
-  const L = ch.q || [], N = L.length, W = 320, x0 = 12, bw = (W - 2 * x0) / N, X = (i) => x0 + bw * i + bw / 2;
-  const bars = ch.bars || [], lines = ch.lines || [], tot = L.map((_, i) => bars.reduce((a, s) => a + (s.v[i] || 0), 0));
+  if (ch.kind === "chg") return chgChart(ch);
+  // side: true → 막대를 쌓지 않고 나란히 (미국 상업 vs 정부처럼 둘이 같이 크는지 보기) · gq [칸 이름] → 그 칸은 회사 가이던스 (옅은 점선 막대) · col → 막대 색
+  const L = ch.q || [], N = L.length, W = 320, x0 = 12, bw = (W - 2 * x0) / N, X = (i) => x0 + bw * i + bw / 2, side = !!ch.side, gq = new Set(ch.gq || []);
+  const bars = ch.bars || [], lines = ch.lines || [], tot = L.map((_, i) => (side ? Math.max(0, ...bars.map((s) => s.v[i] || 0)) : bars.reduce((a, s) => a + (s.v[i] || 0), 0)));
   const all = [...(bars.length ? tot : []), ...lines.flatMap((s) => s.v)].filter((v) => v != null);
   if (N < 2 || !all.length) return "";
   const jo = ch.u === "억원" && Math.max(...all) >= 1e4, dv = jo ? 1e4 : 1, un = jo ? "조원" : ch.u || "", V = (v) => n(v / dv, jo ? 1 : ch.d || 0);  // d = 소수 자리 (DDR5 값 등)
   const top = ch.pct ? 72 : 24, bot = 146, hi = Math.max(...all) * 1.08, Y = (v) => bot - (v / hi) * (bot - top);
-  const BC = ["var(--muted)", "var(--s1)", "var(--s3)", "var(--s4)"];
+  const BC = ch.col || ["var(--muted)", "var(--s1)", "var(--s3)", "var(--s4)"];
   let g = `<line x1="${x0}" x2="${W - x0}" y1="${bot}" y2="${bot}" stroke="var(--axis)"/>`;
   L.forEach((q, i) => {
-    g += `<text x="${X(i)}" y="${bot + 15}" text-anchor="middle" class="qx">${esc(N <= 8 || i === 0 || q.startsWith("1Q") ? q : q.slice(0, 2))}</text>`;
+    const isG = gq.has(q), fill = (c) => (isG ? `fill="${c}" fill-opacity=".22" stroke="${c}" stroke-dasharray="3 2"` : `fill="${c}" opacity=".8"`);
+    g += `<text x="${X(i)}" y="${bot + 15}" text-anchor="middle" class="qx"${isG ? ' style="font-weight:700"' : ""}>${esc(N <= 8 || i === 0 || q.startsWith("1Q") ? q : q.slice(0, 2))}</text>`;
     if (!bars.length) return;
+    if (side) {  // 나란히: 칸마다 막대 여러 개, 숫자는 마지막 두 칸만 (나머지는 위 표·누르면 보기)
+      const w = (bw * 0.76) / bars.length;
+      bars.forEach((s, si) => {
+        const v = s.v[i], x = X(i) - bw * 0.38 + si * w, c = BC[si % BC.length];
+        if (v == null) return;
+        g += `<rect x="${x}" y="${Y(v)}" width="${w - 1}" height="${Math.max(1, bot - Y(v))}" ${fill(c)}/>`;
+        if (i >= N - 2) g += `<text x="${x + w / 2}" y="${Y(v) - 3 - (si % 2) * 10}" text-anchor="${si % 2 ? "start" : "end"}" class="qv b" style="font-size:9px;fill:${c}">${V(v)}</text>`;  // 옆 막대 숫자와 안 겹치게 바깥쪽·위아래로
+      });
+      return;
+    }
     let acc = 0;
-    bars.forEach((s, si) => { const v = s.v[i]; if (!v) return; g += `<rect x="${X(i) - bw * 0.32}" y="${Y(acc + v)}" width="${bw * 0.64}" height="${Math.max(1, Y(acc) - Y(acc + v))}" fill="${BC[si % 4]}" opacity=".8"/>`; acc += v; });
-    g += `<text x="${X(i)}" y="${Y(tot[i]) - 4}" text-anchor="middle" class="qv${i === N - 1 ? " b" : ""}">${V(tot[i])}</text>`;
+    bars.forEach((s, si) => { const v = s.v[i]; if (!v) return; g += `<rect x="${X(i) - bw * 0.32}" y="${Y(acc + v)}" width="${bw * 0.64}" height="${Math.max(1, Y(acc) - Y(acc + v))}" ${fill(BC[si % BC.length])}/>`; acc += v; });
+    g += `<text x="${X(i)}" y="${Y(tot[i]) - 4}" text-anchor="middle" class="qv${i === N - 1 || isG ? " b" : ""}">${V(tot[i])}</text>`;
   });
   const ends = [];  // 선은 끝 숫자만 (겹치면 아래로 밀기)
   lines.forEach((s, si) => {
@@ -4581,7 +4609,7 @@ const tgGet = async () => {
 };
 const tgSort = (L) => [...L].sort((a, b) => (b.d + (b.hm || "")).localeCompare(a.d + (a.hm || "")));
 const kstDay = (k = 0) => new Date(Date.now() + 9 * 36e5 - k * 864e5).toISOString().slice(0, 10);
-const tgLab = (x) => (x.pdf ? "📥 PDF·요약" : x.ch === "ked_epic_ai" ? "✨ 요약" : "🔗 원문");
+const tgLab = (x) => (x.pdf ? "📥 PDF·요약" : x.ch === "ked_epic_ai" ? "✨ 요약" : x.ib ? "🌏 해외 증권사 요약" : "🔗 원문");
 // 목표가: '540,000 → 435,000 하향' (에픽 AI 요약은 이전 목표가도 있음)
 const tgTp = (x, code) => (x.tp ? `${x.tp_prev ? `${tpTxt(x.tp_prev, mktOf(code))} → ` : ""}<b>${tpTxt(x.tp, mktOf(code))}</b>${x.dir
   ? ` <b style="color:${x.dir === "하향" ? "var(--bad-ink)" : x.dir === "상향" ? "var(--good-ink)" : "inherit"}">${esc(x.dir)}</b>` : ""}` : "");
@@ -4653,7 +4681,7 @@ function tgWeekHTML(mkt) {
   const names = Object.fromEntries(DASH.stocks.map((c) => [c.code, c.name])), days = {};
   for (const [code, L] of Object.entries(TGR.stocks || {})) {
     if (!names[code] || mktOf(code) !== mkt) continue;
-    for (const x of L) if (x.d >= kstDay(6) && x.est_w == null && (x.pdf || x.tp || x.ch === "ked_epic_ai")) ((days[x.d] ||= {})[code] ||= []).push(x);
+    for (const x of L) if (x.d >= kstDay(6) && x.est_w == null && (x.pdf || x.tp || x.ib || x.ch === "ked_epic_ai")) ((days[x.d] ||= {})[code] ||= []).push(x);
   }
   const D = Object.keys(days).sort().reverse(), wd = (d) => "일월화수목금토"[new Date(d + "T12:00:00Z").getUTCDay()];
   const RV = Object.keys(TGR.stocks || {}).filter((c) => names[c] && mktOf(c) === mkt).map((c) => [c, revHTML(c)]).filter(([, h]) => h);
@@ -4661,7 +4689,7 @@ function tgWeekHTML(mkt) {
   const ch = (u, t) => `<a href="https://t.me/${u}" target="_blank" rel="noopener">${t}</a>`;
   return `<div class="card" style="margin-bottom:10px">${RV.length ? `<b>📊 이번 주 EPS 리비전 — 보유·관심 종목</b> <span class="src">${ch("maddingStock", "maddingStock")} 주간 글에 이름이 나온 종목만 (TOP 8 밖 '외 N종목'은 이름이 없어요) · 7일 유지</span>
     ${RV.map(([c, h]) => h.replace("📊 <b>주간 EPS 리비전</b>", `<b>${esc(names[c])}</b>`)).join("")}<div style="margin-top:10px"></div>` : ""}<b>📥 최근 7일 리포트 — 보유·관심 종목</b>
-    <div class="src">📥 PDF·요약 = ${ch("DOC_POOL", "DOC_POOL")} (누르면 텔레그램에서 PDF 받기) · ✨ 요약 = ${ch("ked_epic_ai", "에픽 AI")} 리서치 요약 (목표가 올림·내림) · 7일 지나면 목록에서 저절로 빠져요 · 확인 ${esc([TGR.updated_at, TGR.api_at].filter(Boolean).join(" · "))}</div>
+    <div class="src">📥 PDF·요약 = ${ch("DOC_POOL", "DOC_POOL")} (누르면 텔레그램에서 PDF 받기) · ✨ 요약 = ${ch("ked_epic_ai", "에픽 AI")} 리서치 요약 (목표가 올림·내림) · 🌏 = ${ch("bumgore", "bumgore")} 해외 증권사(골드만·JP모건 등) 리포트 요약 · 7일 지나면 목록에서 저절로 빠져요 · 확인 ${esc([TGR.updated_at, TGR.api_at].filter(Boolean).join(" · "))}</div>
     ${D.map((d, i) => {
       const S = Object.entries(days[d]).sort((a, b) => b[1].length - a[1].length), n = S.reduce((a, [, L]) => a + L.length, 0);
       return `<details${i === 0 ? " open" : ""} style="margin-top:6px"><summary><b>${esc(d.slice(5).replace("-", "/"))} (${wd(d)})</b> <span class="src">${S.length}종목 · ${n}개</span></summary>

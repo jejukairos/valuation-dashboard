@@ -17,7 +17,7 @@ from common import DATA, load_yaml, now_kst, write_json  # noqa: E402
 from tg_reports import DAYS, about, parse  # noqa: E402
 
 SECRETS = Path.home() / ".tg-secrets"
-CHANNELS = {"YoungTiger_stock": "KR", "DOC_POOL": "KR", "aethersemiresearch": "US"}  # 사용자 '리포트자료모음' 중 미리보기가 꺼진 3곳
+CHANNELS = {"YoungTiger_stock": "KR", "DOC_POOL": "KR", "aethersemiresearch": "ALL"}  # 사용자 '리포트자료모음' 중 미리보기가 꺼진 3곳 · 에테르 반도체는 한국 종목 해외 리포트도 (사용자 11/3)
 MAX_MSGS = 20000  # 채널당 최대 (7개월이 먼저 끝나면 거기서 멈춤)
 
 
@@ -74,7 +74,7 @@ def main():
         names = [h["name"]] + ([code] if len(code) > 1 else []) + (["구글", "GOOGL"] if code == "GOOG" else [])
         posts = []
         for ch, mk in CHANNELS.items():
-            if (mk == "US") != us:
+            if mk != "ALL" and (mk == "US") != us:
                 continue
             for mid, dt, text, pdf in raw.get(ch, []):
                 if hit(text, names, us) and about(text, names):

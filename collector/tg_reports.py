@@ -12,7 +12,7 @@ from common import DATA, HTTP, load_yaml, now_kst, write_json
 from street import _text
 
 AICA = "aicorporateanalysisdeepdive"  # 기사 요약(원문 링크) + '종목 3Q26 증권사 리포트 종합'(몇 곳·목표가 상향/유지/하향) — 사용자 2026-11-03 크로스체크용
-KR_CH = ["report_figure_by_offset", "ked_epic_ai", "maddingStock", AICA]
+KR_CH = ["report_figure_by_offset", "ked_epic_ai", "maddingStock", AICA, "bumgore", "bornlupin"]  # bumgore·본루팡 = 한국 종목 해외 증권사 리포트 요약 (사용자 2026-11-03)
 INSIDER = "insidertracking"  # 미국 주식 인사이더 — '(티커) Q3 어닝콜 요약'·'실적 요약' (사용자 2026-11-03: 경쟁사 실적·콜은 여기 참고) · 뉴스도 많아 제목에 종목이 있을 때만
 US_CH = ["Fundeasyearnings", "fundeasy_choi", INSIDER]
 # 🎙 경쟁사(미국) 새 실적 요약 알림: peer_calls 의 미국 경쟁사 → 그 회사 이름이 제목에 있고 '실적·어닝·콜' 글
@@ -44,6 +44,12 @@ def search(ch, q, cut):
 
 
 FIRM = r"([가-힣A-Za-z&]+(?:투자증권|증권|자산운용|리서치|Securities))"
+# 해외 증권사(IB): 제목(첫 두 줄)에 이 이름 + 종목 이름이 있으면 그 증권사 리포트 요약 ('메모리 가격 골드만 … (삼성전자 CL…)')
+IB = {"골드만삭스": "골드만삭스", "골드만": "골드만삭스", "제이피모건": "JP모건", "JP모건": "JP모건", "JPM": "JP모건", "모건스탠리": "모건스탠리",
+      "모건 스탠리": "모건스탠리", "씨티": "씨티", "맥쿼리": "맥쿼리", "노무라": "노무라", "UBS": "UBS", "도이치": "도이치", "바클레이즈": "바클레이즈",
+      "BofA": "BofA", "뱅크오브아메리카": "BofA", "메릴린치": "BofA", "CLSA": "CLSA", "HSBC": "HSBC", "번스타인": "번스타인", "제프리스": "제프리스",
+      "다이와": "다이와", "미즈호": "미즈호", "BNP": "BNP파리바"}
+IB_RE = "|".join(sorted(map(re.escape, IB), key=len, reverse=True))
 
 
 def about(text, names):
@@ -77,6 +83,8 @@ def parse(text, names):
         f = next((m.group(1) for m in re.finditer(FIRM, text) if m.group(1) not in names), None)  # 종목이 증권사(키움증권)면 그 이름은 건너뜀
         if f:
             out["firm"] = f
+    if own and "firm" not in out and (m := re.search(IB_RE, " ".join(lines[:2]))):
+        out.update(firm=IB[m.group(0)], ib=True)
     if own and (d := re.search(r"목표\s*주?가\s*(상향|하향|유지)", title)):
         out["dir"] = d.group(1)
     if (r := revision(text, names)):
