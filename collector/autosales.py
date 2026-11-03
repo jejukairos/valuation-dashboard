@@ -83,11 +83,13 @@ def _doc(rcept_no):
 
 def collect():
     db = read_json(CACHE / "autosales.json") or {}
+    fresh = db.get("v") != 2  # v2 (11/3): 늦게 나온 공시가 고친 숫자(전기·전년동기)를 쓰도록 → 한 번 처음부터 다시 읽음
+    db["v"] = 2
     try:
         for code, nm in CARS.items():
             d = db.setdefault(code, {"months": {}, "seen": []})
-            if not d["months"]:
-                d["seen"] = []  # 하나도 못 읽었으면 처음부터 다시 (11/3 첫 실행은 칸 나누기를 잘못해 38건 모두 놓침)
+            if not d["months"] or fresh:
+                d["seen"], d["months"] = [], {}  # 처음부터 다시 (11/3 첫 실행은 칸 나누기를 잘못해 38건 모두 놓침)
             days = 40 if len(d["months"]) > 24 else 365 * 3 + 40  # 처음 한 번은 3년 치
             miss = 0
             for f in sorted(_filings(code, days), key=lambda r: r["rcept_dt"]):
@@ -98,11 +100,11 @@ def collect():
                     miss += 1
                     continue  # 분기 잠정실적 등 다른 공시 — seen 에 안 넣어 읽는 법을 고치면 다시 읽음
                 d["seen"].append(f["rcept_no"])
-                M = d["months"]
+                M = d["months"]  # 공시는 날짜 순으로 읽으니 나중 공시(회사가 고친 값)가 덮어씀 — 예: 현대차 25년 10월 351,753 → 1년 뒤 공시 352,083
                 M[p["ym"]] = {**p["cur"], "src": "공시"}
                 for ym, v in ((_ym_add(p["ym"], -1), p["prev"]), (_ym_add(p["ym"], -12), p["ly"])):
-                    if v.get("tot") and M.get(ym, {}).get("src") != "공시":
-                        M[ym] = {**v, "src": "다음 공시"}
+                    if v.get("tot"):
+                        M[ym] = {**v, "src": "다음 공시(고친 값)"}
                 d["last"] = {"ym": p["ym"], "date": f"{f['rcept_dt'][:4]}-{f['rcept_dt'][4:6]}-{f['rcept_dt'][6:]}", "ytd": p["ytd"], "ytd_ly": p["ytd_ly"],
                              "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={f['rcept_no']}"}
             print(f"  월 판매 {nm}: {len(d['months'])}개월 · 못 읽은 공시 {miss}건")
