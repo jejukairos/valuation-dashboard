@@ -2493,14 +2493,18 @@ function kpiChart(ch) {
   ends.sort((a, b) => a[1] - b[1]).forEach((e, i, a) => { if (i && e[1] - a[i - 1][1] < 14) e[1] = a[i - 1][1] + 14; });
   const over = ends.length ? ends[ends.length - 1][1] - (bot - 4) : 0;  // 아래 분기 이름과 겹치면 통째로 위로
   if (over > 0) ends.forEach((e) => { e[1] -= over; });
-  ends.forEach(([x, y, v, col]) => { g += `<text x="${x + 8}" y="${y + 4}" text-anchor="start" class="qv b" style="fill:${col};font-size:13px">${kpiF(v, ch.u)}</text>`; });
+  ends.forEach(([x, y, v, col]) => {  // 선이 마지막 칸 전에 끝나면(오른쪽에 가이던스 칸) 점 위에
+    g += x < X(qs.length - 1) - 1 ? `<text x="${x}" y="${y - 10}" text-anchor="middle" class="qv b" style="fill:${col};font-size:13px">${kpiF(v, ch.u)}</text>`
+      : `<text x="${x + 8}" y="${y + 4}" text-anchor="start" class="qv b" style="fill:${col};font-size:13px">${kpiF(v, ch.u)}</text>`;
+  });
   const rng = gd ? (gd.lo === gd.hi ? kpiF(gd.lo, ch.u) : `${kpiF(gd.lo, "")}~${kpiF(gd.hi, ch.u)}`) : "";
   if (gd) {  // 마지막 실제 값 → 가이던스 가운데로 점선, 범위는 옅은 막대
     const gi = qs.indexOf(gd.q), s0 = ch.s[gd.si || 0], col = (ch.col || KPI_COL)[(gd.si || 0) % (ch.col || KPI_COL).length];
     const lq = qs.slice(0, gi).reverse().find((q) => s0.v?.[q] != null), mid = (gd.lo + gd.hi) / 2;
     if (lq) g += `<line x1="${X(qs.indexOf(lq))}" y1="${Y(s0.v[lq])}" x2="${X(gi)}" y2="${Y(mid)}" stroke="${col}" stroke-width="2" stroke-dasharray="4 3"/>`;
     g += `<rect x="${X(gi) - 6}" y="${Y(gd.hi) - 2}" width="12" height="${Math.max(4, Y(gd.lo) - Y(gd.hi) + 4)}" rx="4" fill="${col}" fill-opacity=".22" stroke="${col}" stroke-dasharray="3 2"/>`
-      + `<text x="${X(gi) + 8}" y="${Y(gd.hi) - 8}" text-anchor="end" class="qv b" style="fill:${col}">가이던스 ${rng}</text>`;
+      + `<line x1="${X(gi)}" x2="${X(gi)}" y1="17" y2="${Y(gd.hi) - 2}" stroke="${col}" stroke-dasharray="1 2"/>`
+      + `<text x="${X(gi) + 8}" y="13" text-anchor="end" class="qv b" style="fill:${col}">가이던스 ${rng}</text>`;  // 맨 위 빈 줄에 (마지막 값 글자와 안 겹치게)
   }
   g += tipCols(X, (x1 - x0) / (qs.length - 1), 0, 160, qs.map((q) => [q, ...ch.s.map((s) => (s.v?.[q] == null ? null : `${s.n}: ${kpiF(s.v[q], ch.u)}`)), gd && q === gd.q ? `회사 가이던스: ${rng}` : null].filter(Boolean).join("\n")));
   const leg = many ? `<div class="src" style="padding:0 4px 4px">${ch.s.map((s, si) => `<span style="color:${(ch.col || KPI_COL)[si % (ch.col || KPI_COL).length]}">●</span> ${s.star ? "⭐" : ""}${esc(s.n)}`).join(" · ")}</div>` : "";
@@ -2618,6 +2622,7 @@ function guideOf(G, d, key, si = 0) {  // growth.yaml guide → 그래프 끝 �
   if (!x || !/^\d\d\.\dQ$/.test(x.q || "")) return null;
   let r = x[key];
   if (key === "rev_yoy" && !r && x.rev) { const p = d.longq?.[agoQ(x.q)]?.rev; r = p > 0 ? x.rev.map((v) => rnd1((v / p - 1) * 100)) : null; }
+  if (key === "opm" && !r && x.op && x.rev) r = x.op.map((v, i) => rnd1((v / x.rev[i]) * 100));  // 영업이익 금액으로 준 가이던스(아마존) → 이익률로 계산
   return r ? { q: x.q, lo: Math.min(...r), hi: Math.max(...r), si } : null;
 }
 function growAllHTML(code, d, k) {
@@ -2674,16 +2679,19 @@ function growAllHTML(code, d, k) {
   if (!cards.some(Boolean)) return "";
   // 🧭 가이던스 줄 + 🐣 쉬운 설명 (숫자 → 그림 → 🐣)
   const usd = d.currency === "USD", x = G.guide, gTxt = x ? [x.rev_yoy && `매출 ${pct(x.rev_yoy[0], 0, true)}~${n(x.rev_yoy[1], 0)}%`,
-    x.rev && `매출 ${usd ? `$${n(x.rev[0] / 1e3, 2)}~${n(x.rev[1] / 1e3, 2)}B` : `${kpiF(x.rev[0], "억원")}~${kpiF(x.rev[1], "억원")}`}${rg ? ` (YoY ${pct(rg.lo, 0, true)}~${n(rg.hi, 0)}%)` : ""}`,
-    x.gm && `매출총이익률 ${x.gm.join("~")}%`, x.opm && `영업이익률 ${x.opm.join("~")}%`, x.adj_opm && `조정 영업이익률 ${x.adj_opm.join("~")}%`].filter(Boolean).join(" · ") : "";
+    x.rev && `매출 ${usd ? (x.rev[1] < 1e4 ? `$${n(x.rev[0])}~${n(x.rev[1])}M` : `$${n(x.rev[0] / 1e3, 1)}~${n(x.rev[1] / 1e3, 1)}B`) :`${kpiF(x.rev[0], "억원")}~${kpiF(x.rev[1], "억원")}`}${rg ? ` (YoY ${pct(rg.lo, 0, true)}~${n(rg.hi, 0)}%)` : ""}`,
+    x.gm && `매출총이익률 ${[...new Set(x.gm)].join("~")}%`, x.opm && `영업이익률 ${x.opm.join("~")}%`, x.adj_opm && `조정 영업이익률 ${x.adj_opm.join("~")}%`,
+    x.op && `영업이익 ${usd ? `$${n(x.op[0] / 1e3, 1)}~${n(x.op[1] / 1e3, 1)}B` : `${kpiF(x.op[0], "억원")}~${kpiF(x.op[1], "억원")}`}${x.rev ? " (그래프 이익률은 이걸로 계산)" : ""}`,
+    x.affo && `주당 AFFO $${x.affo.join("~")}`].filter(Boolean).join(" · ") || "숫자 가이던스 없음" : "";
   const gmv = margin(d, "gp"), opv = margin(d, "op"), gl = Object.values(gmv).at(-1), ol = Object.values(opv).at(-1);
   const kid = [rt && `매출이 1년 전 같은 때보다 ${n(Math.abs(rt.a), 1)}% ${rt.a >= 0 ? "늘었어요" : "줄었어요"}${Math.abs(rt.a - rt.b) >= 1 ? ` — 늘어나는 속도는 ${rt.a > rt.b ? "빨라졌어요" : "느려졌어요"} (${pp(rt.a, rt.b)})` : ""}.`,
     gl != null && `100원어치 팔면 재료·생산비를 빼고 ${n(gl, 0)}원이 남고${ol != null ? `, 인건비·광고비까지 빼면 ${n(ol, 0)}원이 남아요` : "요"}.`,
     rgT && `회사는 다음 분기에 ${rgT.replace(" 전망", "")}을 예상했어요 (가이던스).`].filter(Boolean).join(" ");
   return `<h3>⭐ 성장률 한눈에 <span class="src">${esc(last || "")}까지 · 실적이 나오면 자동으로 이어 그려요 · ⭐ = 이 회사 주가를 가장 움직이는 칸</span></h3><div class="card">
     ${G.why ? `<div class="note" style="margin-top:0">⭐ <b>이 회사 핵심</b>: ${esc(G.why)}</div>` : ""}
-    <div class="note">📍 <b>변곡점</b>: ${pts.length ? pts.join(" · ") : "이번 분기는 큰 방향 전환 없음 (흐름 그대로)"}</div>
-    ${gTxt ? `<div class="note">🧭 <b>회사 가이던스 (${esc(x.q)})</b>: ${gTxt}${x.note ? ` <span class="src">${esc(x.note)}</span>` : ""} <span class="src">${esc(x.date || "")}${x.src ? ` · <a href="${esc(x.src)}" target="_blank" rel="noopener">원문</a>` : ""}</span></div>` : ""}
+    ${G.once ? `<div class="note" style="color:var(--warn-ink);font-weight:600">⚠ 한 번만 있는 일: ${esc(G.once)}</div>` : ""}
+    <div class="note">📍 <b>변곡점</b>:${pts.length ? pts.slice(0, 6).join(" · ") + (pts.length > 6 ? ` <span class="src">외 ${pts.length - 6}개는 그래프 꼬리표에</span>` : "") : "이번 분기는 큰 방향 전환 없음 (흐름 그대로)"}</div>
+    ${gTxt ? `<div class="note">🧭 <b>회사 가이던스${x.q ? ` (${esc(x.q)})` : ""}</b>:${gTxt}${x.note ? ` <span class="src">${esc(x.note)}</span>` : ""} <span class="src">${esc(x.date || "")}${x.src ? ` · <a href="${esc(x.src)}" target="_blank" rel="noopener">원문</a>` : ""}</span></div>` : ""}
     <div class="qgrid" style="margin-top:8px">${cards.join("")}</div>
     ${kid ? `<div class="kidbox" style="margin-top:8px">🐣 ${kid}</div>` : ""}</div>`;
 }
