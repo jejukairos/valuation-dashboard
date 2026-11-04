@@ -542,6 +542,14 @@ def stock_detail(h, rates_now, fx):
     if s:
         det["seg"] = {"unit": "amt", "src": s.get("src"), "hist": {q: {k: v * (1e6 if mkt == "US" else 1e8) for k, v in m.items()} for q, m in s["quarters"].items()}}
     det["segq"] = seg_quarters(SEGQ.get(code) or SEGQ.get(oc), det["seg"], det["longq"], mkt)
+    ls = det.get("longq_seg")
+    if ls and det["segq"]:  # 삼성전자: 부문 금액이 없는 예전 분기는 10년 치가 있는 DS(반도체) + 나머지 부문으로 (DS 는 부문 사이 거래 포함)
+        p = det["segq"].setdefault("prod", {})
+        for lb, r in ls["q"].items():
+            rev = ((det["longq"] or {}).get(lb) or {}).get("rev")
+            if lb not in p and r.get("rev") and rev and rev > r["rev"]:
+                p[lb] = {ls["name"]: rnd(r["rev"]), "DS 외 부문": rnd(rev - r["rev"])}
+        det["segq"]["prod"] = dict(sorted(p.items()))
     det["card"] = {
         "name": name, "code": code, "market": mkt, "price": price, "industry": h.get("industry"), "tbl": tbl, "dart_check": dart_check,
         "score": checks_score, "us_tpl": us_tpl, "div_check": div_check, "mdd": mdd, "pre": pre,

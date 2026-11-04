@@ -1605,7 +1605,8 @@ function stackChart(t, q, span, usd, lq, src) {
   if (N < 2) return "";
   const M = (v) => (usd ? v / 1e3 : v), fm = usd ? usdB : kqFmt, tot = {};
   L.forEach((k) => Object.entries(q[k]).forEach(([s, v]) => { if (v > 0) tot[s] = (tot[s] || 0) + v; }));
-  const all = Object.keys(tot).filter((s) => s !== "나머지").sort((a, b) => tot[b] - tot[a]), keep = all.length > 7 ? all.slice(0, 6) : all;
+  const lr = q[L.at(-1)], rk = (s) => (lr[s] > 0 ? [1, lr[s]] : [0, tot[s]]);  // 최신 분기에 있는 칸이 먼저(큰 순), 예전에만 있던 칸은 그 뒤
+  const all = Object.keys(tot).filter((s) => s !== "나머지").sort((a, b) => rk(b)[0] - rk(a)[0] || rk(b)[1] - rk(a)[1]), keep = all.length > 7 ? all.slice(0, 6) : all;
   const order = [...keep, ...(all.length > 7 ? ["기타"] : []), ...("나머지" in tot ? ["나머지"] : [])], grp = (s) => (s === "나머지" || keep.includes(s) ? s : "기타");
   const col = (s, i) => (s === "기타" || s === "나머지" ? "var(--muted)" : STK_COL[i]);
   const R = L.map((k) => { const r = {}; Object.entries(q[k]).forEach(([s, v]) => { if (v > 0) r[grp(s)] = (r[grp(s)] || 0) + v; }); return r; });
