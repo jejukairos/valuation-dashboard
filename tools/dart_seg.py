@@ -202,8 +202,10 @@ def report(path):
 
 def quarters(code):
     """보고서들 → {분기 끝 날짜: {"prod": {}, "geo": {}}} (누적 차이) — 12월 결산 기준 (사업보고서 달로 결산월을 정함)."""
-    ix = RAW / "index.json"
-    idx = (json.loads(ix.read_text(encoding="utf-8")).get(code) if ix.exists() else None) or [  # 목록이 없으면(받다 멈춤) 파일 이름 '2026.06_접수번호.zip' 으로
+    ix = {}  # index.json · index_{나눈 번호}.json (서버 여러 대가 나눠 받은 목록)
+    for f in RAW.glob("index*.json"):
+        ix.update({c: v for c, v in json.loads(f.read_text(encoding="utf-8")).items() if v})
+    idx = ix.get(code) or [  # 목록이 없으면(받다 멈춤) 파일 이름 '2026.06_접수번호.zip' 으로
         {"p": f.name[:7], "nm": "", "file": f.name} for f in sorted((RAW / code).glob("*.zip"))]
     fy = next((int(r["p"][5:]) for r in reversed(idx) if "사업보고서" in r["nm"]), 12)
     ytd = {}

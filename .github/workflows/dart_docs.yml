@@ -22,9 +22,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  docs:
+  docs:  # 보고서 하나에 20초 넘게 걸려서 서버 8대가 종목을 나눠 동시에 받음
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,23 +42,37 @@ jobs:
         env:
           DART_KEY: ${{ secrets.DART_KEY }}
           PYTHONIOENCODING: utf-8
-        run: python -u tools/dart_docs.py ${{ inputs.codes }} ${{ github.event_name == 'schedule' && '--days=200' || (inputs.days && format('--days={0}', inputs.days) || '') }}
+        run: python -u tools/dart_docs.py --part=${{ matrix.part }}/8 ${{ inputs.codes }} ${{ github.event_name == 'schedule' && '--days=200' || (inputs.days && format('--days={0}', inputs.days) || '') }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: dart_raw
+          name: dart_raw_${{ matrix.part }}
           path: dart_raw/
           retention-days: 30
           compression-level: 0
-      - name: 🧱 매출실적 표 → 분기 제품군·지역 (새 분기만 이어 붙임)
-        if: github.event_name == 'schedule' || inputs.days != ''
+  parse:  # 최근 보고서만 받은 날(월요일·days 입력)은 표를 읽어 새 분기를 이어 붙이고 저장
+    needs: docs
+    if: always() && (github.event_name == 'schedule' || inputs.days != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dart_raw_*
+          path: cache/dart_raw
+          merge-multiple: true
+      - name: 🧱 매출실적 표 → 분기 제품군·지역
         env:
           PYTHONIOENCODING: utf-8
-        run: |
-          mkdir -p cache && rm -rf cache/dart_raw && mv dart_raw cache/dart_raw
-          cd tools && python -u dart_seg.py
+        run: cd tools && python -u dart_seg.py
       - name: 저장
-        if: github.event_name == 'schedule' || inputs.days != ''
         run: |
           git config user.name "valuation-bot"
           git config user.email "valuation-bot@users.noreply.github.com"

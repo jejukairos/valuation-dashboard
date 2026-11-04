@@ -54,14 +54,17 @@ def reports(cc):
     return [best[p] for p in sorted(best)]
 
 
-def main(codes, days=None):
+def main(codes, days=None, part=None):
     from kr_stock import corp_code
     since = time.strftime("%Y%m%d", time.localtime(time.time() - days * 86400)) if days else "0"  # --days N = 최근 N일 안에 낸 보고서만 (새 분기 이어 붙이기)
     sy = yaml.safe_load(open(ROOT / "config" / "stocks.yaml", encoding="utf-8"))
     if not codes:
         codes = sorted({str(h["code"]) for g in sy.values() if isinstance(g, list) for h in g
                         if isinstance(h, dict) and h.get("market", "KR") == "KR" and not h.get("data_code")})
-    ix = OUT / "index.json"
+    if part:  # --part=i/N : 서버 N대에 나눠 동시에 받음 (보고서 하나에 20초 넘게 걸려서)
+        i, k = map(int, part.split("/"))
+        codes = codes[i::k]
+    ix = OUT / (f"index_{part.split('/')[0]}.json" if part else "index.json")
     idx, n = (json.loads(ix.read_text(encoding="utf-8")) if ix.exists() else {}), 0
     for code in codes:
         try:
@@ -94,4 +97,5 @@ if __name__ == "__main__":
     else:
         a = sys.argv[1:]
         d = next((int(x.split("=")[1]) for x in a if x.startswith("--days=")), None)
-        main([x for x in a if not x.startswith("--")], d)
+        pt = next((x.split("=")[1] for x in a if x.startswith("--part=")), None)
+        main([x for x in a if not x.startswith("--")], d, pt)
