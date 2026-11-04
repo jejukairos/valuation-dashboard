@@ -1582,7 +1582,8 @@ function longHTML(d, span = 40) {
   const usd = c.currency === "USD", ks = all.slice(-span), s = longSeries(q, ks, usd), fm = usd ? usdB : kqFmt;
   const ch = [
     lineChart({ t: "매출 · 영업이익", labels: ks, s: [{ n: "매출", v: s.rev, col: "var(--s1)" }, { n: "영업이익", v: s.op, col: "var(--warn)", right: true, lab: "below" }], fl: fm, fr: fm, zero: true }),
-    lineChart({ t: "매출 성장률 (YoY)", labels: ks, s: [{ n: "YoY", v: s.yoy, col: "var(--s1)" }], fl: fPct }),
+    stackChart("🧱 제품군별 매출", d.segq?.prod, span, usd, q, d.segq?.src_prod), stackChart("🌍 지역별 매출", d.segq?.geo, span, usd, q, d.segq?.src_geo),
+    lineChart({ t: "매출 성장률 (YoY)", labels: ks, s: [{ n: "YoY", v: s.yoy, col: "var(--s1)", bar: true }], fl: fPct }),
     lineChart({ t: "영업이익률 (OPM)", labels: ks, s: [{ n: "OPM", v: s.opm, col: "var(--good)" }], fl: fPct }),
     s.gpm.filter((v) => v != null).length >= 4 ? lineChart({ t: "매출총이익률 (GPM)", labels: ks, s: [{ n: "GPM", v: s.gpm, col: "var(--s3)" }], fl: fPct }) : "",
   ];
@@ -1595,6 +1596,37 @@ function longHTML(d, span = 40) {
   return `<div class="lnbox" data-code="${esc(c.code)}"><div class="chart-title" style="margin-top:14px"><b>📈 10년 실적 추이</b> <span class="src">${esc(all[0])}~${esc(all.at(-1))} · 분기 · ${usd ? "SEC·야후 (달러)" : "DART 분기보고서 · 최신 분기는 잠정실적 (원)"}</span></div>
     ${acctHTML(c.code, false)}<div class="seg lseg" style="margin-top:6px">${LONG_TABS.map(([m, l]) => `<button data-ln="${m}" class="${m === span ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="qgrid" style="margin-top:6px">${ch.join("")}</div>${all.length < 20 ? `<div class="note src">예전 분기는 갱신 때마다 조금씩 채워져요 (지금 ${all.length}개 분기)</div>` : ""}</div>`;
+}
+// 🧱 분기 매출을 제품군·지역으로 쌓은 막대 (사용자 11/4, 샤크닌자·무인양품 그림처럼) — d.segq ← collector/segq.py·segments.yaml
+// 색 = 보이는 기간 합이 큰 순 (7개 넘으면 6개 + 기타) · 범례 = 최신 분기 비중과 1년 전 대비 · 꼬리표 = 가장 빨리 크는 칸
+const STK_COL = ["var(--s1)", "var(--bad)", "var(--s3)", "var(--s4)", "var(--s7)", "var(--s2)"];
+function stackChart(t, q, span, usd, lq, src) {
+  const L = Object.keys(q || {}).sort().slice(-span), N = L.length;
+  if (N < 2) return "";
+  const M = (v) => (usd ? v / 1e3 : v), fm = usd ? usdB : kqFmt, tot = {};
+  L.forEach((k) => Object.entries(q[k]).forEach(([s, v]) => { if (v > 0) tot[s] = (tot[s] || 0) + v; }));
+  const all = Object.keys(tot).filter((s) => s !== "나머지").sort((a, b) => tot[b] - tot[a]), keep = all.length > 7 ? all.slice(0, 6) : all;
+  const order = [...keep, ...(all.length > 7 ? ["기타"] : []), ...("나머지" in tot ? ["나머지"] : [])], grp = (s) => (s === "나머지" || keep.includes(s) ? s : "기타");
+  const col = (s, i) => (s === "기타" || s === "나머지" ? "var(--muted)" : STK_COL[i]);
+  const R = L.map((k) => { const r = {}; Object.entries(q[k]).forEach(([s, v]) => { if (v > 0) r[grp(s)] = (r[grp(s)] || 0) + v; }); return r; });
+  const sum = (r) => Object.values(r).reduce((a, v) => a + v, 0), hi = Math.max(...R.map(sum)) * 1.06 || 1;
+  const W = 340, x0 = 40, x1 = W - 10, top = 14, bot = 128, X = (i) => x0 + ((x1 - x0) * (i + 0.5)) / N, bw = Math.max(1.5, Math.min(26, ((x1 - x0) / N) * 0.72));
+  let g = "";
+  [0, 0.5, 1].forEach((f) => { const y = bot - f * (bot - top); g += `<line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${y + 3}" text-anchor="end" class="qx">${esc(fm(M(f * hi)))}</text>`; });
+  R.forEach((r, i) => {
+    let y = bot;
+    order.forEach((s, j) => { if (!r[s]) return; const h = (r[s] / hi) * (bot - top); y -= h; g += `<rect x="${X(i) - bw / 2}" y="${y}" width="${bw}" height="${h}" fill="${col(s, j)}"/>`; });
+    const tk = shortQ(i, L); if (tk) g += `<text x="${X(i)}" y="${bot + 13}" text-anchor="middle" class="qx">${esc(tk)}</text>`;
+  });
+  const shr = (r, s) => (sum(r) ? (r[s] / sum(r)) * 100 : 0), last = R.at(-1), ai = L.indexOf(qAgo(L.at(-1))), ago = ai >= 0 ? R[ai] : null;
+  const yoy = (s) => (ago?.[s] > 0 && last[s] ? (last[s] / ago[s] - 1) * 100 : null);
+  g += tipCols(X, (x1 - x0) / N, 0, 146, L.map((k, i) => [k, ...order.filter((s) => R[i][s]).map((s) => `${s}: ${fm(M(R[i][s]))} (${n(shr(R[i], s), 0)}%)`), `합: ${fm(M(sum(R[i])))}`].join("\n")));
+  const fast = order.filter((s) => s !== "기타" && s !== "나머지" && shr(last, s) >= 5 && yoy(s) != null).sort((a, b) => yoy(b) - yoy(a))[0];
+  const tag = fast ? `<span class="qtag">${esc(cut(fast, 9))} ${yoy(fast) >= 0 ? "+" : ""}${n(yoy(fast), 0)}% 가장 빠름</span>` : "";
+  const rev = lq?.[L.at(-1)]?.rev, over = rev ? (sum(last) / rev - 1) * 100 : 0;
+  const leg = order.filter((s) => last[s]).map((s) => { const j = order.indexOf(s), y = yoy(s); return `<span style="color:${col(s, j)}">■</span> ${esc(s)} <b>${n(shr(last, s), 0)}%</b>${y != null ? ` <span${y < 0 ? ' style="color:var(--bad-ink)"' : ""}>(${y >= 0 ? "+" : ""}${n(y, 0)}%)</span>` : ""}`; }).join(" · ");
+  return `<div class="qp"><div class="qt"><b>${esc(t)}</b>${tag}</div><div class="src">${esc(L[0])}~${esc(L.at(-1))} 분기 · 범례 = ${esc(L.at(-1))} 비중 (1년 전 대비)${over > 5 ? ` · 부문 합이 매출보다 ${n(over, 0)}% 많아요 (부문끼리 사고판 내부 거래 포함)` : ""}${"나머지" in tot ? " · 나머지 = 회사가 이 표에서 안 나눈 매출" : ""}${src ? ` · 출처 ${esc(src)}` : ""}</div>
+    <svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(t)}">${g}</svg><div class="src" style="padding:0 4px 4px">${leg}</div></div>`;
 }
 document.addEventListener("click", (e) => {
   const b = e.target.closest(".lnbox .lseg button"); if (!b) return;
