@@ -4277,8 +4277,44 @@ async function loadAlign() {
   if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
   if (!ALIGN) { try { ALIGN = await (await fetch("data/align.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { ALIGN = null; } }
   $("#chartBody").innerHTML = drawHTML(BOARD.draw, BOARD.updated_at) + boardHTML() + scanHTML() + `<h2 data-jump="align" data-jname="📈 주봉 정배열">📈 주봉 정배열</h2><p class="sub">코스피·코스닥 시가총액 3,000억 이상에서 주봉 이동평균이 4주 &gt; 13주 &gt; 26주 &gt; 52주로 줄 선(정배열) 종목 — 매주 금요일 종가 기준, 평일 아침·장 마감 뒤 갱신. 종목을 누르면 주봉 차트가 열려요. 매수·매도 추천 아님.</p>`
-    + (ALIGN ? alignHTML(ALIGN) : `<div class="empty">⏳ 다음 차트 스캔(평일 아침·장 마감 뒤) 때 채워져요.</div>`);
+    + (ALIGN ? alignHTML(ALIGN) : `<div class="empty">⏳ 다음 차트 스캔(평일 아침·장 마감 뒤) 때 채워져요.</div>`) + pbHTML();
   chartJump();
+}
+// 📚 돌파 vs 눌림목 (사용자 11/4: 블로그 '요약하는 고잉' 글을 차트 탭 맨 아래에) — 글의 그림은 같은 모양으로 다시 그리고, 지금 그 자리에 있는 종목을 붙임
+const PB_Z = [[35, 625], [175, 460], [232, 538], [348, 392], [407, 495], [512, 312], [583, 440], [683, 227], [754, 365], [848, 138], [910, 292]];  // 계단처럼 오르는 지그재그 (홀수 번째 = 고점)
+function pbSVG(kind) {
+  const Z = PB_Z;
+  let g = "", o = "";
+  Z.slice(1).forEach((b, i) => { g += `<line x1="${Z[i][0]}" y1="${Z[i][1]}" x2="${b[0]}" y2="${b[1]}" stroke="${b[1] < Z[i][1] ? "var(--bad)" : "var(--s1)"}" stroke-width="9" stroke-linecap="round"/>`; });
+  for (let i = 1; i < 9; i += 2) {
+    const [pk, tr, nx] = [Z[i], Z[i + 1], Z[i + 2]], cx = tr[0] + ((nx[0] - tr[0]) * (tr[1] - pk[1])) / (tr[1] - nx[1]);  // 다음 오름선이 이 고점 높이를 넘는 x
+    g += `<line x1="${pk[0] - 110}" x2="${cx + 60}" y1="${pk[1]}" y2="${pk[1]}" stroke="var(--bad)" stroke-width="5" stroke-dasharray="1 10" stroke-linecap="round"/>`;
+    const [x, y] = kind === "b" ? [cx, pk[1]] : [pk[0] + (tr[0] - pk[0]) * 0.65, pk[1] + (tr[1] - pk[1]) * 0.65];
+    o += `<circle cx="${x}" cy="${y}" r="22" fill="none" stroke="var(--good)" stroke-width="7"/>`;
+  }
+  return `<svg viewBox="20 110 910 530" role="img" aria-label="${kind === "b" ? "전고점을 넘는 곳에 표시한 돌파 자리" : "오른 뒤 내려오는 구간에 표시한 눌림목 자리"}">${g}${o}</svg>`;
+}
+function pbHTML() {
+  const has = (k) => (DASH?.stocks || []).filter((c) => c.pat?.some((s) => s.k === k)).map((c) => `<a href="#stock/${esc(c.code)}">${esc(c.name)}</a>`).join(" · ") || "지금은 없음";
+  const s2 = (ALIGN?.stage?.sec || []).filter((s) => s.st === 2).map((s) => esc(s.name)).join(" · ") || "지금은 없음";
+  const rows = [["언제 들어가나", "오르던 주가가 전고점(빨간 점선)을 뚫고 올라가는 순간", "한 번 오른 뒤 잠깐 내려오는 구간(파란 선)"],
+    ["좋은 점", "전고점에서 팔려던 물량이 이미 소화돼 오름세가 이어질 때가 많아요 · 들어가자마자 움직이는 경우가 많아요 · 상승장에서 힘을 써요", "되도록 싸게 산다는 원칙에 맞아요 · 평균 가격이 잘 잡히면 오래 들고 있기 편해요"],
+    ["아쉬운 점", "뚫는 척하다 다시 내려오는 가짜 돌파(휩쏘)가 잦아요 · 이미 오른 뒤 따라가는 모양이라 손절선이 멀어요 · 돌파하자마자 꺾이면 대응이 어려워요", "어느 정도 물릴 각오가 필요하고 바로 안 움직여요 · 잠깐 쉬는 건지 진짜 하락(떨어지는 칼날)인지 아무도 몰라요 · 정말 센 주도주는 이런 눌림을 잘 안 줘요"]];
+  return `<h2 data-jump="study" data-jname="📚 돌파 vs 눌림목">📚 차트 공부 — 돌파 매매 vs 눌림목 매매 <span class="src">블로그 '요약하는 고잉' 글 요약 · 그림은 같은 모양으로 다시 그림 · 11/4</span></h2>
+    <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th></th><th style="text-align:left">🚀 돌파 매매</th><th style="text-align:left">🧪 눌림목 매매</th></tr></thead><tbody>
+      ${rows.map(([a, b, c]) => `<tr><td style="text-align:left;white-space:nowrap"><b>${a}</b></td><td style="text-align:left;white-space:normal">${b}</td><td style="text-align:left;white-space:normal">${c}</td></tr>`).join("")}</tbody></table></div>
+    <div class="grid g2" style="margin-top:8px">
+      <div class="card"><div class="chart-title"><b>🚀 돌파 자리</b></div>${pbSVG("b")}<div class="src">초록 ○ = 오르는 선이 전고점 점선을 넘는 곳</div></div>
+      <div class="card"><div class="chart-title"><b>🧪 눌림목 자리</b></div>${pbSVG("p")}<div class="src">초록 ○ = 오른 뒤 내려오는 파란 선 위</div></div></div>
+    <div class="src">빨강 = 오르는 구간 · 파랑 = 내리는 구간 · 빨간 점선 = 전고점 · 초록 ○ = 들어가는 자리</div>
+    <div class="kidbox" style="margin-top:6px">🐣 계단을 오르는 공을 떠올려 봐요. <b>돌파</b>는 공이 계단 턱(점선)을 넘는 순간 따라가요 — 빨리 움직이지만 턱에 걸려 다시 굴러떨어지는 헛걸음이 잦아요. <b>눌림목</b>은 한 칸 오른 공이 살짝 굴러 내려왔을 때 따라가요 — 싸게 타지만 한참 기다려야 하고, 그대로 계단 밑까지 굴러갈 수도 있어요.</div>
+    <div class="note src">🗣 글쓴이 결론: 어느 쪽이 늘 옳은 게 아니라 <b>시장 분위기(장세)</b>가 중요해서 둘을 섞어 써요 · 글쓴이는 평소엔 눌림목을 주로 하고, 그달 뚜렷한 주도 업종에서는 돌파를 해요 · 돌파로 잘 안 되면 눌림 쪽으로 바꿔 보고, 눌림이 몸에 익어야 돌파도 된다는 생각 · 화면을 자주 못 보는 직장인에게는 눌림 쪽이 편하다는 의견</div>
+    <div class="card" style="margin-top:8px"><b>📍 지금 이 사이트에서 두 자리 찾기</b> <span class="src">보유·관심·공동 종목 · 주봉 종가 기준</span><ul class="irl">
+      <li>🚀 <b>전고점 돌파</b> (13주 넘게 못 넘던 큰 고점을 주봉 종가로 넘음): ${has("brk")}</li>
+      <li>🧪 <b>전고점 지지 시험</b> (넘었던 전고점까지 다시 내려옴 = 눌림목 자리): ${has("test")}</li>
+      <li>🪜 <b>주도 업종 후보</b> (와인스타인 2단계 업종): ${s2} · 🔭 차트 스캔 칸은 돌파 쪽 조건(30주선·12주 고점·10개월선 돌파, 갭 상승)이에요</li></ul>
+      <div class="src">📚 와인스타인 책도 두 자리를 같이 다뤄요 — 1단계 → 2단계로 넘어가며 저항선을 거래량과 함께 뚫는 돌파가 첫 자리, 돌파한 뒤 그 선 근처로 되돌아오는 눌림이 두 번째 자리예요.</div></div>
+    <div class="note src">공부용 요약이에요 · 모양이 맞아도 실패가 많아요 · 매수·매도 추천이 아니에요</div>`;
 }
 // 차트 탭 맨 위 바로가기 (사용자 11/4: 키워드를 누르면 그 칸으로) — 칸 제목의 data-jump 를 모음
 const chartJump = () => jumpBar("#chartBody", "#chartJump", "🔎 칸 이름 검색 (예: 4단계) → Enter");
