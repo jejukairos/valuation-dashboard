@@ -158,7 +158,13 @@ DRAW = [("WMT", "월마트", "d", "11/3 전달 그림: 6~10월에 컵 모양을 
         ("COST", "코스트코", "d", "11/3 전달 그림: 6~10월에 컵 모양을 그리고 위로 화살표"),
         ("QQQ", "나스닥100 ETF", "d", "11/3 전달 그림: 200일선에 닿은 자리에 동그라미"),
         ("SOXX", "반도체 ETF (30종목)", "w", "11/3 전달 글: 반도체는 기술적으로 상승추세(채널)를 벗어나는 중 — 하락추세로 보고, "
-                                         "벗어나기까지 시간이 꽤 걸리며 주도주에서 빠질 가능성이 높다는 개인 의견")]
+                                         "벗어나기까지 시간이 꽤 걸리며 주도주에서 빠질 가능성이 높다는 개인 의견"),
+        # 5번째 칸 = 옵션: ma 이평선 (한국식 5·20·60·120일) · kr 원화 아닌 지수 포인트 → 이평선 배열(역배열)·거래량 지지대·갭 상승도 계산
+        ("^KS11", "코스피", "d", "11/4 전달 글(오크트리 블로그 '26.10월 코스피 기술적 분석'): 5·20·60·120일선이 모두 위에 있는 역배열 — "
+                               "6개월(120일) 안에 산 사람이 모두 손실 중이라 반등 때마다 '본전' 매물이 나와 저항이 겹겹이, 이 약세 심리는 짧은 게 아니라 오래 쌓인 것. "
+                               "바로 아래엔 2~4월 큰 거래량으로 만든 강한 지지대 — 버티면 안심이지만 깨지면 하락 힘이 셀 수 있어 민감하게 볼 구간. "
+                               "저항은 갭 상승으로 뚫는 게 가장 좋다(본전 매물이 덜 나옴)는 개인 의견",
+         {"ma": (5, 20, 60, 120), "kr": True})]
 
 
 def cup_shape(c, k):
@@ -231,11 +237,41 @@ def channel(h, l, c, k, span):
             "lo": float(np.exp(base[T])), "up": float(np.exp(base[T] + off)), "was_above": bool((lc[B:T + 1] > base[B:T + 1] + off).any())}
 
 
+def ma_align(c, ns):
+    """이평선 배열 (ns 짧은 것부터): 정배열 = 짧은 선이 위 (5 > 20 > 60 > 120) · 역배열 = 긴 선이 위 · 그 밖 = 섞임.
+    그 상태가 며칠째(run)인지 + 종가가 모든 선 아래(below_all)인지 (사용자 전달 글 11/4: '모든 이평선을 위에 깔고 있는 역배열')."""
+    m = pd.concat([c.rolling(n).mean() for n in ns], axis=1).dropna()
+    if m.empty:
+        return None
+    st = ["정배열" if all(a > b for a, b in zip(r, r[1:])) else "역배열" if all(a < b for a, b in zip(r, r[1:])) else "섞임" for r in m.values]
+    run = 1
+    while run < len(st) and st[-1 - run] == st[-1]:
+        run += 1
+    last = m.iloc[-1]
+    return {"st": st[-1], "run": run, "v": {str(n): r_(last.iloc[i], 2) for i, n in enumerate(ns)}, "below_all": bool(c.iloc[-1] < last.min())}
+
+
+def vol_shelf(h, l, c, v, n=250, bins=40):
+    """거래량 지지대: 최근 n 봉의 (고+저+종)/3 을 가격 칸 bins 개로 나눠 거래량을 더함 → 지금 종가 아래에서 거래량이 가장 많이 쌓인 칸.
+    많이 사고판 가격일수록 지지가 강하다는 생각 (사용자 전달 글 11/4: '많은 거래량으로 이루어진 강한 지지대')."""
+    h, l, c, v = h[-n:], l[-n:], c[-n:], np.nan_to_num(v[-n:])
+    if v.sum() <= 0:
+        return None
+    edges = np.linspace(l.min(), h.max(), bins + 1)
+    vol = np.bincount(np.clip(np.digitize((h + l + c) / 3, edges) - 1, 0, bins - 1), weights=v, minlength=bins)
+    below = [i for i in range(bins) if edges[i + 1] <= c[-1]]
+    if not below:
+        return None
+    i = max(below, key=lambda j: vol[j])
+    return {"lo": r_(edges[i], 2), "hi": r_(edges[i + 1], 2), "share": r_(vol[i] / vol.sum() * 100, 1), "n": n}
+
+
 def draw():
     """DRAW 종목마다 캔들 + 이평선 + 컵위드핸들·채널·200일선 계산 (배당 안 깎은 가격 = 증권사 차트와 같은 숫자)."""
-    px = us_ohlcv([t for t, *_ in DRAW], period="3y", adj=False)
+    px = us_ohlcv([t for t, *_ in DRAW], period="3y", adj=False)  # 여러 티커라야 받힘 (한 개면 열 이름이 달라 빠짐)
     out = []
-    for sym, name, tf, memo in DRAW:
+    for sym, name, tf, memo, *opt in DRAW:
+        o = opt[0] if opt else {}
         d = px.get(sym)
         if d is None:
             continue
@@ -244,7 +280,7 @@ def draw():
         b = d if tf == "d" else resample(d, "W-FRI")
         k, n = (5, 200) if tf == "d" else (1, 104)
         off = max(0, len(b) - n)
-        ch = bars(b, (20, 50, 200) if tf == "d" else (20, 50))
+        ch = bars(b, o.get("ma") or ((20, 50, 200) if tf == "d" else (20, 50)))
         ch = {kk: (vv[off:] if isinstance(vv, list) else {m: s[off:] for m, s in vv.items()}) for kk, vv in ch.items()}
         C, Hi, Lo = (b[x].values.astype(float) for x in ("Close", "High", "Low"))
         cup, chn = cup_shape(C, k), channel(Hi, Lo, C, k, n)
@@ -258,9 +294,15 @@ def draw():
             cup = None
         if chn:
             chn = {**chn, "a": rel(chn["a"]), "b": rel(chn["b"]), "lo": r_(chn["lo"], 2), "up": r_(chn["up"], 2)}
-        out.append({"sym": sym, "name": name, "tf": tf, "memo": memo, "ch": ch, "cup": cup, "chn": chn,
-                    "ma200": {k_: m2[k_] for k_ in ("s", "days", "gap", "chg_d")} | {"v": m2["ma"][-1]} if m2 else None,
-                    "last": r_(c.iloc[-1], 2), "date": c.index[-1].strftime("%Y-%m-%d")})
+        x = {"sym": sym, "name": name, "tf": tf, "memo": memo, "ch": ch, "cup": cup, "chn": chn,
+             "ma200": {k_: m2[k_] for k_ in ("s", "days", "gap", "chg_d")} | {"v": m2["ma"][-1]} if m2 else None,
+             "last": r_(c.iloc[-1], 2), "date": c.index[-1].strftime("%Y-%m-%d")}
+        if o.get("ma"):  # 한국식 이평선 카드: 배열 · 거래량 지지대 · 최근 10봉 안 갭 상승 (오늘 저가 > 어제 고가)
+            Op, V = b["Open"].values.astype(float), b["Volume"].values.astype(float)
+            g = next((i for i in range(len(C) - 1, len(C) - 11, -1) if Lo[i] > Hi[i - 1]), None)
+            x |= {"kr": bool(o.get("kr")), "align": ma_align(b["Close"], o["ma"]), "vs": vol_shelf(Hi, Lo, C, V),
+                  "gap": {"i": rel(g), "pct": r_((Op[g] / C[g - 1] - 1) * 100, 1)} if g is not None else None}
+        out.append(x)
     return out
 
 
@@ -558,6 +600,13 @@ if __name__ == "__main__":
         ch_ = channel(cc * 1.01, cc * 0.99, cc, 1, 120)
         assert ch_ and ch_["a"] == 0 and ch_["st"] == "below" and abs(ch_["s"] - 0.01) < 0.002, ch_
         assert channel(cc[:-1] * 1.01, cc[:-1] * 0.99, cc[:-1], 1, 120)["st"] == "in"
+        # 이평선 배열: 계속 내리면 역배열 + 종가가 모든 선 아래 · 계속 오르면 정배열
+        al = ma_align(-up + 500, (5, 20, 60, 120))
+        assert al["st"] == "역배열" and al["below_all"] and al["run"] > 200 and ma_align(up, (5, 20, 60, 120))["st"] == "정배열", al
+        # 거래량 지지대: 90 근처에서 거래량이 몰렸고 지금 100 → 지지대는 90 이 든 칸
+        pv = np.array([90.0] * 50 + [110.0] * 50 + [100.0]); vv = np.array([10.0] * 50 + [1.0] * 51)
+        vs = vol_shelf(pv + 0.5, pv - 0.5, pv, vv, n=101, bins=20)
+        assert vs and vs["lo"] <= 90 <= vs["hi"] and vs["hi"] <= 100 and vs["share"] > 80, vs
         print("ok")
     else:
         main()

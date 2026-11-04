@@ -4056,8 +4056,14 @@ function drawHTML(list, at) {
   const ST = { up: "컵 오른쪽이 올라오는 중", lip: "컵 오른쪽 입술 · 손잡이는 아직", handle: "손잡이 만드는 중", out: "손잡이 고점 돌파" };
   const ok = (b) => (b ? "✅" : "⬜");
   const card = (x) => {
-    const fmt = (v) => `$${n(v, 2)}`, wk = x.tf === "w", u = wk ? "주" : "일", p = x.cup, q = x.chn, m = x.ma200, t = x.ch.t, N = t.length;
-    const lines = [];
+    const fmt = (v) => (x.kr ? n(v, 2) : `$${n(v, 2)}`), wk = x.tf === "w", u = wk ? "주" : "일", p = x.cup, q = x.chn, m = x.ma200, t = x.ch.t, N = t.length;
+    const lines = [], al = x.align, vs = x.vs;
+    // 한국식 이평선 카드 (코스피, 사용자 전달 글 11/4): 이평선 배열 · 거래량 지지대 · 갭 상승
+    if (al) { const ks = Object.keys(al.v); lines.push(`📉 이평선 ${ks.join("·")}일: <b style="color:${al.st === "역배열" ? "var(--warn-ink)" : al.st === "정배열" ? "var(--good)" : "inherit"}">${al.st}</b> ${al.run}일째${al.below_all ? " · <b>종가가 모든 이평선 아래</b>" : ""}`
+      + `<div class="src">${ks.map((k) => `${k}일 ${fmt(al.v[k])} (${sg((x.last / al.v[k] - 1) * 100, 1)})`).join(" · ")} — 괄호 = 지금 종가가 그 선보다 얼마나 위·아래</div>`); }
+    if (vs) lines.push(`🧱 거래량 지지대: <b>${fmt(vs.lo)} ~ ${fmt(vs.hi)}</b> (지금 대비 ${sg((vs.hi / x.last - 1) * 100, 1)}) — 최근 ${vs.n}일 거래량의 ${n(vs.share, 0)}% 가 이 가격대`
+      + `<div class="src">지금 가격 아래에서 거래량이 가장 많이 쌓인 가격 칸 · 많이 사고판 가격일수록 받침이 강하지만, 깨지면 떨어지는 힘도 커요</div>`);
+    if (x.gap) lines.push(`⤴ ${t[x.gap.i]} 갭 상승 (시가 ${sg(x.gap.pct, 1)}, 하루 종일 전날 고가 위) — 본전 매물을 건너뛰는 오름`);
     const w50 = wk ? x.ch.ma?.["50"]?.at(-1) : null;  // 주봉은 50주선(≈1년 평균)도
     if (m) lines.push(`200일선 ${fmt(m.v)} 대비 <b style="color:${m.s === "up" ? "var(--good)" : "var(--warn-ink)"}">${sg(m.gap, 1)}</b> · ${m.s === "up" ? "위" : "아래"} ${m.days}일째${Math.abs(m.gap) <= 3 ? " · <b>200일선 시험 중</b> (±3% 안)" : ""}${w50 ? ` · 50주선 ${fmt(w50)} 대비 ${sg((x.last / w50 - 1) * 100, 1)}` : ""}`);
     if (p) lines.push(`☕ 컵위드핸들: <b>${ST[p.st]}</b> — ${t[p.a]} 고점 ${fmt(p.H)} → ${p.depth}% 눌린 바닥(${t[p.b]}) → 지금 왼쪽 고점의 ${Math.round((x.last / p.H) * 100)}%`
@@ -4074,17 +4080,18 @@ function drawHTML(list, at) {
           + [q.a, q.b].filter((i) => i >= 0).map((i) => `<circle cx="${X(i)}" cy="${Y(Math.exp(q.la + q.s * (i - q.a)))}" r="4" fill="var(--s7)"/>`).join("");
       }
       if (m && !wk && Math.abs(m.gap) <= 3) g += `<circle cx="${X(N - 1)}" cy="${Y(m.v)}" r="14" fill="none" stroke="var(--good)" stroke-width="3"/>`;
+      if (vs) g += `<rect x="${X(0)}" y="${Y(vs.hi)}" width="${X(N - 1) - X(0)}" height="${Math.max(2, Y(vs.lo) - Y(vs.hi))}" fill="var(--bad)" fill-opacity=".12"/><line x1="${X(0)}" x2="${X(N - 1)}" y1="${Y(vs.lo)}" y2="${Y(vs.lo)}" stroke="var(--bad)" stroke-width="2"/>`;
       return g;
     };
     const ref = p ? (p.st === "handle" || p.st === "out" ? { v: p.R, t: "손잡이 고점" } : { v: p.H, t: "컵 왼쪽 고점" }) : null;
-    return `<div class="card" style="padding:8px 10px"><div class="bhd"><b style="font-size:17px">${esc(x.sym)}</b> <span class="src">${esc(x.name)}</span><span class="bchd"><b>${fmt(x.last)}</b> <span class="${kcol(m?.chg_d)}">${sg(m?.chg_d, 1)}</span></span></div>
+    return `<div class="card" style="padding:8px 10px"><div class="bhd"><b style="font-size:17px">${esc(x.kr ? x.name : x.sym)}</b> <span class="src">${esc(x.kr ? "지수 · 포인트" : x.name)}</span><span class="bchd"><b>${fmt(x.last)}</b> <span class="${kcol(m?.chg_d)}">${sg(m?.chg_d, 1)}</span></span></div>
       ${lines.map((l) => `<div style="margin-top:4px">${l}</div>`).join("")}
-      <div class="cbox">${candleSVG(x.ch, x.tf, fmt, ref, over)}<div class="src">${wk ? "주봉 2년 · 로그 눈금 · 초록 20주선 · 회색 50주선(≈1년 평균)" : "일봉 약 10개월 · 초록 20일선 · 회색 50일선 · 주황 200일선"}${q ? " · 보라 = 지지선·저항선" : ""}${p ? " · 연두 띠 = 컵 모양" : ""} · ${esc(x.date)} 종가</div></div>
+      <div class="cbox">${candleSVG(x.ch, x.tf, fmt, ref, over)}<div class="src">${wk ? "주봉 2년 · 로그 눈금 · 초록 20주선 · 회색 50주선(≈1년 평균)" : al ? "일봉 약 10개월 · 파랑 5일 · 초록 20일 · 주황 60일 · 빨강 120일선" : "일봉 약 10개월 · 초록 20일선 · 회색 50일선 · 주황 200일선"}${vs ? " · 빨간 띠 = 거래량 지지대" : ""}${q ? " · 보라 = 지지선·저항선" : ""}${p ? " · 연두 띠 = 컵 모양" : ""} · ${esc(x.date)} 종가</div></div>
       ${x.memo ? `<div class="note src">🗣 ${esc(x.memo)}</div>` : ""}</div>`;
   };
-  return `<h2>✏️ 선 그은 차트 <span class="src">컵위드핸들 · 200일선 · 지지선·저항선 채널 · ${esc(at || "")}</span></h2>
+  return `<h2>✏️ 선 그은 차트 <span class="src">컵위드핸들 · 200일선 · 지지선·저항선 채널 · 역배열·거래량 지지대 · ${esc(at || "")}</span></h2>
     <div class="grid g2">${list.map(card).join("")}</div>
-    <div class="kidbox">🐣 <b>컵위드핸들</b>(윌리엄 오닐): 주가가 커피잔처럼 둥글게 내려갔다 올라온 뒤, 손잡이처럼 살짝 쉬었다가 손잡이 고점을 넘는 모양이에요. <b>200일선</b>: 약 10개월 평균 가격 — 위에 있으면 큰 흐름이 위쪽이에요. <b>채널</b>: 바닥끼리 이은 선(지지선)과, 같은 기울기로 꼭대기에 닿는 선(저항선) 사이 길 — 지지선 아래로 내려오면 오르던 길을 벗어난 거예요.</div>
+    <div class="kidbox">🐣 <b>컵위드핸들</b>(윌리엄 오닐): 주가가 커피잔처럼 둥글게 내려갔다 올라온 뒤, 손잡이처럼 살짝 쉬었다가 손잡이 고점을 넘는 모양이에요. <b>200일선</b>: 약 10개월 평균 가격 — 위에 있으면 큰 흐름이 위쪽이에요. <b>채널</b>: 바닥끼리 이은 선(지지선)과, 같은 기울기로 꼭대기에 닿는 선(저항선) 사이 길 — 지지선 아래로 내려오면 오르던 길을 벗어난 거예요. <b>역배열</b>: 이평선은 그 기간에 산 사람들의 평균 가격(평단)이에요. 긴 선(120일)이 맨 위·짧은 선(5일)이 맨 아래로 줄 서면, 6개월 안에 산 사람이 모두 손해 중이라 오를 때마다 '본전이면 팔자'는 물량이 겹겹이 나와요. <b>거래량 지지대</b>: 많이 사고판 가격대라 받침이 강해요 — 대신 깨지면 떨어지는 힘도 커요.</div>
     <div class="note src">선은 사람이 긋지 않고 갱신 때마다 같은 규칙으로 다시 계산해요 (평일 아침·한국장 마감 뒤 + 일~목 저녁 8시~새벽 2시 매시간) · 야후, 배당 안 깎은 가격 (증권사 차트와 같은 숫자) · 채널은 로그 가격 기준 · 기술적 분석은 참고 수단일 뿐이에요 (매수·매도 추천 아님)</div>`;
 }
 // 캔들 차트 (일봉 2년 · 주봉 5년 · 월봉 10년): 이평선 · RS 선(지수 대비) · 거래량 · 마지막 가격 · 기준선(전일 종가 / 12주 고점)
@@ -4104,7 +4111,7 @@ function candleSVG(ch, kind, fmt, ref, over) {  // over(X, Y, lo, hi) = 위에 �
     if (bw >= 1.2) g += `<rect x="${X(i) - bw / 2}" y="${Math.min(Y(o), Y(c))}" width="${bw}" height="${Math.max(0.8, Math.abs(Y(o) - Y(c)))}" fill="${col}"/>`;
     g += `<rect x="${X(i) - bw / 2}" y="${v1 - (ch.v[i] / vmax) * (v1 - v0)}" width="${bw}" height="${(ch.v[i] / vmax) * (v1 - v0)}" fill="${col}" opacity=".35"/>`;
   });
-  const maCol = { 20: "var(--s3)", 50: "var(--ink-2)", 200: "var(--warn)", 10: kind === "m" ? "var(--warn)" : "var(--ink-2)", 30: "var(--warn)", ...AL_COL };
+  const maCol = { 5: "var(--s1)", 20: "var(--s3)", 50: "var(--ink-2)", 60: "var(--warn)", 120: "var(--bad)", 200: "var(--warn)", 10: kind === "m" ? "var(--warn)" : "var(--ink-2)", 30: "var(--warn)", ...AL_COL };
   Object.entries(ch.ma || {}).forEach(([k, a]) => { let d = ""; a.forEach((v, i) => { if (v > 0) d += `${d && a[i - 1] > 0 ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; }); g += `<path d="${d}" fill="none" stroke="${maCol[k] || "var(--ink-2)"}" stroke-width="1.5"/>`; });
   if (ch.rs?.length) {
     const rv = ch.rs.filter((v) => v != null), rl = Math.min(...rv), rh = Math.max(...rv), RY = (v) => rs1 - ((v - rl) / (rh - rl || 1)) * (rs1 - rs0);
