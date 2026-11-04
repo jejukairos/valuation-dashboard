@@ -46,5 +46,5 @@ jobs:
           git add cache/wics.json cache/etf_hold.json 2>/dev/null || true  # 🪜 4단계 업종(WICS)·그룹판 ETF 구성 캐시
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "시장 그룹판·차트 스캔 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
-          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done
+          for i in 1 2 3 4 5; do git push && exit 0; sleep $((i * 10)); git pull --rebase -X theirs -q || exit 1; done  # GitHub 500 같은 잠깐 오류는 조금 쉬었다 다시
           exit 1

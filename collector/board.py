@@ -167,6 +167,7 @@ def etf_info():
     if old.get("etf") and (age < 1 or (age < 7 and not miss)):
         return old["etf"]
     out = {}
+    nmap = {c: nm for c, nm, *_ in kr_universe(n=5000)}  # 종목 이름 (pykrx get_market_ticker_name 은 가끔 None 을 돌려줌)
     for code, _, yt in KR_BOARD:
         if yt:
             continue
@@ -186,8 +187,11 @@ def etf_info():
             tot = float(df[col].sum())
 
             def nm(t):
+                if t in nmap:
+                    return nmap[t]
                 try:
-                    return str(stock.get_market_ticker_name(t))
+                    v = stock.get_market_ticker_name(t)
+                    return v if isinstance(v, str) and v else t
                 except Exception:  # noqa: BLE001
                     return t
             x["top"] = [{"c": t, "n": nm(t), "w": r_(float(v) / tot * 100 if col == "금액" else float(v), 1)}
