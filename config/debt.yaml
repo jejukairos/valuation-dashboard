@@ -20,6 +20,10 @@ ORCL:
   - date: "2026-10-21"
     text: "연초 회사채 200~250억$ (올해 더 안 낸다고 함) · 7월 S&P 등급 BBB− (투기등급 바로 위) · 27년 빚+주식 약 400억$ 계획 · 5년 CDS 343bp 사상 최고"
     url: https://www.kucoin.com/news/flash/meta-and-oracle-face-bond-market-scrutiny-amid-ai-spending-surge
+AMD:
+  - date: "2026-11-03"
+    text: "8월 선순위 채권 47.5억$ → 총부채 32.3억 → 70.8억$ (분기 +119%) · 현금·단기투자 157.8억$ 로 순현금 87.0억$ (지난 분기 98.9억$) · 3분기 현금흐름표: 빚 발행 47.3억$, 갚은 돈 8.8억$"
+    url: https://www.sec.gov/Archives/edgar/data/0000002488/000000248826000188/q32026991.htm
 AMZN:
   - date: "2026-10-28"
     text: "올해 전 세계 채권 발행 기업 1위 (정부까지 넣어도 독일·EU·이탈리아 다음 4위, 프랑스 정부보다 많음 · 블룸버그 집계) · 기업 2위는 알파벳"
