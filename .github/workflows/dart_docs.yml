@@ -1,0 +1,36 @@
+name: 한국 정기보고서 원문 받기 (DART)
+
+on:
+  workflow_dispatch:
+    inputs:
+      codes:
+        description: "종목코드 (빈칸 = 한국 종목 전부)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 분기·반기·사업보고서 원문 (2015년~)
+        env:
+          DART_KEY: ${{ secrets.DART_KEY }}
+          PYTHONIOENCODING: utf-8
+        run: python -u tools/dart_docs.py ${{ inputs.codes }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dart_raw
+          path: dart_raw/
+          retention-days: 30
+          compression-level: 0

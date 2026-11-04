@@ -4,3 +4,5 @@ __pycache__/
 *.tmp
 .env
 transcripts/
+cache/sec_raw/
+cache/dart_raw/
