@@ -124,8 +124,8 @@ groups:
       - {name: 인피니언, market: EU, code: IFX.DE}
 
   - name: 🧠 반도체 · AI 칩·파운드리
-    holdings: [NVDA, INTC, "005930", "000660", "005935", MU]
-    main: [NVDA, INTC]
+    holdings: [NVDA, INTC, AMD, "005930", "000660", "005935", MU]
+    main: [NVDA, INTC, AMD]
     why: AI 가속기·CPU·파운드리 회사 (HBM 을 사 가는 쪽)
     peers:
       - {name: 엔비디아, market: US, code: NVDA}

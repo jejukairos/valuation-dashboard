@@ -223,6 +223,8 @@ watchlist:
   - {name: 오라클, market: US, code: ORCL, industry: 소프트웨어, methods: [PER]}
   # 🧩 파운드리·패키지 기판 수요 (삼성전기 기판 키팩터 확인용)
   - {name: 인텔, market: US, code: INTC, industry: 반도체, methods: [PER]}
+  # 🧠 AI 칩 — 데이터센터 GPU(인스팅트)·CPU(EPYC), 엔비디아·인텔 경쟁 (2026-11-04 사용자)
+  - {name: AMD, market: US, code: AMD, industry: 반도체, methods: [PER]}
 
 # ---------- 공동자산 — 🤝 공동자산 탭 ----------
 # 형식은 holdings 와 같아요 (예: - {name: 삼성전자, market: KR, code: "005930", industry: 반도체, methods: [PBR, PER], fair_methods: [PBR]})
