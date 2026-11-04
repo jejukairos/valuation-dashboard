@@ -733,6 +733,8 @@ def seg_quarters(raw, seg, longq, mkt, long=None):
     out = {}
     for k in ("prod", "geo"):
         sa, lg = conv((raw or {}).get(k) or {}), conv((long or {}).get(k) or {})
+        if len(lg) >= 8 and not sa and k == "prod":
+            sa = ko  # 한국: 보고서(DART)보다 먼저 나온 최신 분기는 segments.yaml(IR 자료) 금액으로 — 칸 이름이 다 맞을 때만
         if len(lg) >= 8:
             nm, q = _match(sa, lg), dict(lg)
             q.update({lb: {nm[x]: v for x, v in r.items()} for lb, r in sa.items() if lb > max(lg) and r and all(x in nm for x in r)})

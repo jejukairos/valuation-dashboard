@@ -54,13 +54,15 @@ def reports(cc):
     return [best[p] for p in sorted(best)]
 
 
-def main(codes):
+def main(codes, days=None):
     from kr_stock import corp_code
+    since = time.strftime("%Y%m%d", time.localtime(time.time() - days * 86400)) if days else "0"  # --days N = 최근 N일 안에 낸 보고서만 (새 분기 이어 붙이기)
     sy = yaml.safe_load(open(ROOT / "config" / "stocks.yaml", encoding="utf-8"))
     if not codes:
         codes = sorted({str(h["code"]) for g in sy.values() if isinstance(g, list) for h in g
                         if isinstance(h, dict) and h.get("market", "KR") == "KR" and not h.get("data_code")})
-    idx, n = {}, 0
+    ix = OUT / "index.json"
+    idx, n = (json.loads(ix.read_text(encoding="utf-8")) if ix.exists() else {}), 0
     for code in codes:
         try:
             rs = reports(corp_code(code))
@@ -69,8 +71,8 @@ def main(codes):
             continue
         d = OUT / code
         d.mkdir(parents=True, exist_ok=True)
-        idx[code] = []
-        for r in rs:
+        idx[code] = [x for x in idx.get(code, []) if x["dt"] < since]  # 예전에 받아 둔 목록은 그대로
+        for r in (x for x in rs if x["rcept_dt"] >= since):
             f = d / f"{period(r['report_nm'])}_{r['rcept_no']}.zip"
             if not f.exists():
                 z = call("document.xml", rcept_no=r["rcept_no"]).content
@@ -81,7 +83,7 @@ def main(codes):
                 n += 1
             idx[code].append({"p": period(r["report_nm"]), "nm": r["report_nm"].strip(), "rcept": r["rcept_no"], "dt": r["rcept_dt"], "file": f.name})
         print(f"  {code}: 보고서 {len(idx[code])}개 ({idx[code][0]['p'] if idx[code] else '-'} ~ {idx[code][-1]['p'] if idx[code] else '-'})", flush=True)
-    (OUT / "index.json").write_text(json.dumps(idx, ensure_ascii=False, indent=1), encoding="utf-8")
+        ix.write_text(json.dumps(idx, ensure_ascii=False, indent=1), encoding="utf-8")  # 종목마다 저장 (중간에 멈춰도 목록이 남게)
     print(f"새로 받은 원문 {n}개 · 저장 {OUT}")
 
 
@@ -90,4 +92,6 @@ if __name__ == "__main__":
         assert period("[기재정정]분기보고서 (2025.09)") == "2025.09" and period("사업보고서 (2024.12)") == "2024.12"
         print("ok")
     else:
-        main(sys.argv[1:])
+        a = sys.argv[1:]
+        d = next((int(x.split("=")[1]) for x in a if x.startswith("--days=")), None)
+        main([x for x in a if not x.startswith("--")], d)

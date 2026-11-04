@@ -7,26 +7,38 @@ on:
         description: "종목코드 (빈칸 = 한국 종목 전부)"
         required: false
         default: ""
+      days:
+        description: "최근 며칠 안에 낸 보고서만 (빈칸 = 2015년부터 전부)"
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 22 * * 0"  # 월요일 07:00 KST — 최근 200일 보고서만 받아 새 분기를 🧱 쌓은 막대에 이어 붙임
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: dart_docs
+  cancel-in-progress: false
 
 jobs:
   docs:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: 분기·반기·사업보고서 원문 (2015년~)
+      - name: 분기·반기·사업보고서 원문
         env:
           DART_KEY: ${{ secrets.DART_KEY }}
           PYTHONIOENCODING: utf-8
-        run: python -u tools/dart_docs.py ${{ inputs.codes }}
+        run: python -u tools/dart_docs.py ${{ inputs.codes }} ${{ github.event_name == 'schedule' && '--days=200' || (inputs.days && format('--days={0}', inputs.days) || '') }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -34,3 +46,20 @@ jobs:
           path: dart_raw/
           retention-days: 30
           compression-level: 0
+      - name: 🧱 매출실적 표 → 분기 제품군·지역 (새 분기만 이어 붙임)
+        if: github.event_name == 'schedule' || inputs.days != ''
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          mkdir -p cache && rm -rf cache/dart_raw && mv dart_raw cache/dart_raw
+          cd tools && python -u dart_seg.py
+      - name: 저장
+        if: github.event_name == 'schedule' || inputs.days != ''
+        run: |
+          git config user.name "valuation-bot"
+          git config user.email "valuation-bot@users.noreply.github.com"
+          git add cache/dart_seg.json
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "한국 분기 제품군·지역 매출 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          for i in 1 2 3 4 5; do git push && exit 0; sleep $((i * 10)); git pull --rebase -X theirs -q || exit 1; done
+          exit 1
