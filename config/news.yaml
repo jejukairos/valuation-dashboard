@@ -108,6 +108,9 @@ AMD:
   issues:
     - {d: "10/30", t: "3분기 잠정: 매출 4,181억(예상 -1%) · 영업이익 879억(예상 +13%, 1년 전 244억의 3.6배) · 순이익 544억(예상 -18%) — 영업이익 5분기 연속 증가", u: "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261030800778"}
 "071970": {own: [HD현대마린엔진, STX중공업], rivals: [한화엔진, WinGD], en: [HD Hyundai Marine Engine]}
+"373220": {own: [LG에너지솔루션, LG엔솔], rivals: [CATL, BYD, 삼성SDI, SK온, 파나소닉], en: [LG Energy Solution]}
+"006400": {own: [삼성SDI], rivals: [CATL, LG에너지솔루션, SK온], en: [Samsung SDI]}
+"096770": {own: [SK이노베이션, SK온], rivals: [CATL, LG에너지솔루션, 에쓰오일], en: [SK Innovation, SK On]}
 
 # ---------- 공동자산 (보유·관심에 없는 종목만 — 나머지는 위 검색어를 같이 써요) ----------
 PLTR: {own: [팔란티어], rivals: [스노우플레이크, 데이터브릭스, C3.ai], en: [Palantir]}

@@ -210,6 +210,10 @@ watchlist:
   - {name: 삼성전기, market: KR, code: "009150", industry: 기판·전자부품, methods: [PER]}
   - {name: 대덕전자, market: KR, code: "353200", industry: 기판, methods: [PER]}
   - {name: HD현대마린엔진, market: KR, code: "071970", industry: 조선기자재, methods: [PER]}
+  # 🔋 2차전지 — 27년 코스피 업종 순이익 증가율 1위 (하나증권 표) · 2026-11-04 사용자: "2차전지가 힌트, 계속 트래킹" · 적자·이익 들쭉날쭉이라 PBR 로 적정가
+  - {name: LG에너지솔루션, market: KR, code: "373220", industry: 2차전지, methods: [PBR, PER], fair_methods: [PBR]}
+  - {name: 삼성SDI, market: KR, code: "006400", industry: 2차전지, methods: [PBR, PER], fair_methods: [PBR]}
+  - {name: SK이노베이션, market: KR, code: "096770", industry: 정유·2차전지, methods: [PBR, PER], fair_methods: [PBR]}
   # M7 빅테크 — 보유·공동자산에 있는 종목은 한 번만 계산하고 ⭐ 관심 탭에도 같이 보여요
   - {name: 애플, market: US, code: AAPL, industry: 하드웨어, methods: [PER]}
   - {name: 마이크로소프트, market: US, code: MSFT, industry: 소프트웨어, methods: [PER]}

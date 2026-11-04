@@ -483,6 +483,8 @@ function stockCard(c) {
     pills.push(`<span class="pill ${x.chg < 0 ? "red" : "green"}">👥 ${esc(x.name.replace("공단", ""))} 지분 ${x.chg < 0 ? "▼" : "▲"}${n(Math.abs(x.chg), 2)}%p (${esc(x.date.slice(5))})</span>`);
   }
   if ((c.checks || []).some((x) => x.warn)) pills.push(`<span class="pill yellow">⚠ 출처 간 EPS 차이 큼</span>`);
+  const ac = accelOf(c), aw = ac && accVerd(ac.v[1], ac.v[2]);  // 🚀 내년 이익 증가율이 올해보다 높아지나 (accelHTML 과 같은 잣대)
+  if (aw === 1 || aw === -1) pills.push(`<span class="pill ${aw === 1 ? "green" : "yellow"}">${ACC_E[aw + 1]} ${ac.b} 증가율 ${esc(ac.ys[1])} ${accVal(ac.v[1])} → ${esc(ac.ys[2])} ${accVal(ac.v[2])}</span>`);
   const newPosts = (c.us_tpl?.street?.posts || []).filter((p) => p.new).length;
   if (newPosts) pills.push(`<span class="pill green">🆕 채널 새 글 ${newPosts}개</span>`);
   if (c.dart_check?.warn) pills.push(`<span class="pill yellow">⚠ DART 공시와 숫자 차이</span>`);
@@ -1244,7 +1246,8 @@ const mktOf = (code) => (/^\d/.test(String(code || "")) ? "KR" : "US");
 function renderTop() {
   $("#estAlert").innerHTML = saAlertHTML() + estAlertHTML();
   $("#patAlert").innerHTML = patAlertHTML();
-  $("#bigTech").innerHTML = bigTechHTML() + moneyHTML() + dotMapHTML();
+  $("#bigTech").innerHTML = bigTechHTML() + moneyHTML() + accelHTML((DASH?.stocks || []).filter((c) => grp(c) === "보유" && (c.market === "US" ? "US" : "KR") === MKT)) + dotMapHTML();
+  accSecFill();
 }
 // 📍 보유·관심 종목 지도 (사용자 전달 그림 '28년 Fwd EPS 증가율과 PER' 모양, 2026-11-01) — 카드의 fwd_mult 만으로 계산:
 // PER 로 적정가를 매기는 종목 = 다음 1년 EPS 증가율(12MF→24MF, EPS 비 = PER 비의 역수) × 12개월 선행 PER (사용자 2026-11-03, 처음엔 24개월 선행) · PBR 로 매기는 종목 = ROE(= PBR ÷ PER, 12MF) × PBR
@@ -1317,6 +1320,55 @@ function dotMapHTML() {
     ${card(m2, "ROE × PBR (12개월 선행)", "ROE",
       "ROE 는 '내 돈(자본) 100원으로 1년에 얼마 버나', PBR 은 '자본의 몇 배에 사고파나'예요. 돈을 잘 버는(ROE 높은) 회사일수록 PBR 이 높은 게 보통이라 점선 근처에 모여요. 점선보다 아래면 버는 힘에 비해 싸게, 위면 비싸게 거래되는 쪽이에요.",
       "적정가를 BPS × PBR 로 매기는 종목 (현대차·기아처럼 PER·PBR 둘 다 쓰면 양쪽 그림에 다 나옴) · ROE ≈ 12MF PBR ÷ 12MF PER")}</div></details>`;
+}
+// 🚀 이익 증가율이 1년 전보다 높아지나 (사용자 2026-11-04, 하나증권: 코스피는 이익 '증가율 변화'에 민감 — 2011·2016년 순이익은 2년 연속 사상 최대였지만
+//    증가율은 꺾였고, 그때 증가율이 전년보다 높아진 업종이 주도) — EPS 증가율(scen.growth: 마지막 실적 연도 + E 두 해), 없으면 영업이익(tbl.op_g, E 두 해만)
+function accelOf(c) {
+  const g = c.scen?.growth, ys = g?.years || [], i = ys.findLastIndex((y) => !/E$/.test(y));
+  if (i >= 0 && ys[i + 2]) {
+    const e = g.eps || [];
+    return { b: "EPS", ys: ys.slice(i, i + 3), v: [0, 1, 2].map((k) => (e[i + k] <= 0 ? "적자" : e[i + k - 1] <= 0 ? "흑전" : g.yoy[i + k])) };
+  }
+  const t = c.tbl || {};
+  return (t.op_g || []).some((x) => x != null) ? { b: "영업이익", ys: (t.years || []).slice(0, 3), v: [null, t.op_g[0], t.op_g[1]] } : null;
+}
+// 1 = 증가율 높아짐(+5%p 넘게 · 흑자 전환 · 흑전 다음 해 플러스), -1 = 낮아짐, 0 = 비슷, null = 못 셈 (하나증권 표와 같은 잣대: 흑전 → 플러스면 상승)
+const accVerd = (a, b) => (b === "흑전" ? 1 : typeof b !== "number" ? null : a === "흑전" ? (b > 0 ? 1 : -1) : typeof a !== "number" ? null : b - a >= 5 ? 1 : b - a <= -5 ? -1 : 0);
+const ACC_E = ["🐢", "↔", "🚀"];
+const accVal = (v) => (v == null ? "-" : typeof v === "number" ? pct(v, 0, true) : v === "흑전" ? "흑자 전환" : v);
+function accelHTML(list) {
+  const rows = list.filter((c) => !/우$/.test(c.name)).map((c) => ({ c, a: accelOf(c) })).filter((x) => x.a);  // 우선주는 보통주와 같아서 뺌
+  if (rows.length < 2) return "";
+  const dif = ({ v }) => (typeof v[1] === "number" && typeof v[2] === "number" ? Math.round(v[2] - v[1]) : null);
+  const key = ({ a }) => dif(a) ?? (accVerd(a.v[1], a.v[2]) === 1 ? 1e3 : -1e9);
+  rows.sort((x, y) => key(y) - key(x));
+  const ups = rows.filter((x) => accVerd(x.a.v[1], x.a.v[2]) === 1), kr = list.some((c) => c.market !== "US");
+  const td = (v, w) => `<td class="${typeof v === "number" && v < 0 ? "dear" : ""}">${accVal(v)}${w == null ? "" : " " + ACC_E[w + 1]}</td>`;
+  const body = rows.map(({ c, a }) => {
+    const d = dif(a), w = accVerd(a.v[1], a.v[2]);
+    return `<tr><td style="text-align:left;white-space:normal"><a href="#stock/${esc(c.code)}">${esc(c.name.replace("디펜스앤에어로스페이스", " D&A"))}</a>${a.b === "영업이익" ? "*" : ""}${a.ys.join() !== "25,26E,27E" ? ` <span class="src">${esc(a.ys.join("→"))}</span>` : ""}</td>`
+      + `${td(a.v[0])}${td(a.v[1], accVerd(a.v[0], a.v[1]))}${td(a.v[2], w)}<td><b style="color:var(${w === 1 ? "--good" : w === -1 ? "--bad" : "--muted"})">${d == null ? (w === 1 ? "🚀" : "-") : (d > 0 ? "+" : "") + n(d || 0, 0) + "%p"}</b></td></tr>`;
+  }).join("");
+  return `<details class="card" open style="margin-bottom:12px" onclick="event.stopPropagation()"><summary class="chart-title"><b>🚀 이익 증가율이 1년 전보다 높아지나</b> <span class="src">EPS 증가율 · 내년이 올해보다 많이 높아지는 순 · 참고용 (매수·매도 추천 아님)</span></summary>
+    ${ups.length ? `<div class="note">📈 내년 증가율이 올해보다 높아지는 종목 <b>${ups.length}곳</b>: ${ups.map((x) => esc(x.c.name)).join(" · ")}</div>` : ""}
+    <div class="tbl-wrap"><table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">종목</th><th>작년</th><th>올해E</th><th>내년E</th><th>내년−올해</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="kidbox" style="margin-top:6px">🐣 이익이 '얼마나 많은지'보다 '늘어나는 속도가 빨라지는지'를 봐요. 2011년·2016년에 코스피 이익은 2년 연속 사상 최대였지만 늘어나는 속도는 느려졌고, 그때 시장을 이끈 건 속도가 1년 전보다 빨라진 업종이었어요 (하나증권). 🚀 = 1년 전보다 증가율이 5%p 넘게 높아짐 · 🐢 = 5%p 넘게 낮아짐 · ↔ = 비슷.</div>
+    <div class="note src">EPS = 증권사 컨센서스 (한국 에프앤가이드·네이버, 미국 야후·나스닥·Finviz 평균) · 작년 = 마지막 실적 연도 (미국은 회계연도라 이름 옆에 연도) · * = EPS 증가율이 없어 영업이익 증가율 (올해·내년만) · 흑자 전환은 증가율 대신 글자로</div>
+    ${kr ? `<div class="accSec"></div>` : ""}</details>`;
+}
+// 🏭 코스피 업종별 순이익 증가율 (keychart.yaml eps_g — 증권사 표를 숫자로 옮김) · 우리 종목이 어느 업종인지 같이
+function accSecFill() {
+  keyLoad().then((k) => {
+    const e = k.eps_g, nm = Object.fromEntries((DASH?.stocks || []).map((c) => [c.code, c.name]));
+    if (!e?.rows?.length) return;
+    const html = `<details class="fvt"><summary class="chart-title" style="margin-top:8px">🏭 ${esc(e.t)} <span class="src">${esc(e.src)} · 눌러서 열기</span></summary>
+      ${e.top ? `<div class="note">📌 ${esc(e.top)}</div>` : ""}
+      <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th style="text-align:left">업종 <span class="src">시총 비중 · 우리 종목</span></th><th>26E</th><th>27E</th><th>27E 증가율</th></tr></thead><tbody>
+      ${e.rows.map(([s, w, a, b, up, cs]) => `<tr><td style="text-align:left"><b>${esc(s)}</b> <span class="src">${w == null ? "" : n(w, 1) + "%"}</span>${(cs || []).length ? `<br><span class="src">${cs.map((c) => esc(nm[c] || c)).join(" · ")}</span>` : ""}</td>`
+        + `<td>${accVal(a)}</td><td>${accVal(b)}</td><td><b style="color:var(${up ? "--good" : "--bad"})">${up ? "🚀 상승" : "🐢 하락"}</b></td></tr>`).join("")}</tbody></table></div>
+      ${e.note ? `<div class="note src">${esc(e.note)}</div>` : ""}</details>`;
+    document.querySelectorAll(".accSec").forEach((el) => { el.innerHTML = html; });
+  });
 }
 // 🧾 실적 탭 (예전엔 보유 탭 맨 위): 쉬운 요약 · 실적 발표(최근 3일) · 실적발표·컨콜 일정 — 🇰🇷/🇺🇸 버튼
 let EARN_MKT = "KR";
@@ -3926,6 +3978,8 @@ function renderGroup(g, el, mkt) {
   const rank = { green: 0, yellow: 1, red: 2, na: 3 }, mk = (c) => (c.market === "US" ? 1 : 0);
   const list = DASH.stocks.filter((c) => (grp(c) === g || (c.also || []).includes(g)) && (!mkt || (c.market === "US" ? "US" : "KR") === mkt)).sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
   $(el).innerHTML = list.map(stockCard).join("") || `<div class="empty">config/stocks.yaml 의 ${g === "공동" ? "joint" : "watchlist"} 에 종목을 넣으면 여기에 보여요.</div>`;
+  const ax = $({ "#watchFull": "#watchAccel", "#jointCards": "#jointAccel" }[el] || "#none");  // 🚀 이익 증가율 가속 표
+  if (ax) { ax.innerHTML = accelHTML(list); accSecFill(); }
   drawGauges(list);
 }
 

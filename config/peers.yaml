@@ -414,3 +414,19 @@ groups:
       - {name: 뷰노, market: KR, code: "338220"}
       - {name: 아이리듬(웨어러블 심전도), market: US, code: IRTC}
       - {name: 필립스, market: EU, code: PHIA.AS}
+
+  # ---------- 🔋 2차전지 (2026-11-04 사용자: LG엔솔·삼성SDI·SK이노 관심 추적) ----------
+  - name: 🔋 2차전지 · 배터리 셀·소재
+    holdings: ["373220", "006400", "096770"]
+    why: 전기차·ESS 배터리 셀 한국 3사(SK온은 SK이노베이션 안) + 양극재 2곳 + 중국·일본 셀 회사 · 미국·유럽엔 큰 상장 셀 회사가 없어 미국 ESS(테슬라 에너지·플루언스)
+    peers:
+      - {name: LG에너지솔루션, market: KR, code: "373220"}
+      - {name: 삼성SDI, market: KR, code: "006400"}
+      - {name: SK이노베이션, market: KR, code: "096770"}
+      - {name: 에코프로비엠, market: KR, code: "247540"}
+      - {name: 포스코퓨처엠, market: KR, code: "003670"}
+      - {name: CATL, market: CN, code: 300750.SZ}
+      - {name: BYD, market: CN, code: 1211.HK}
+      - {name: 파나소닉, market: JP, code: 6752.T}
+      - {name: 테슬라, market: US, code: TSLA}
+      - {name: 플루언스 에너지, market: US, code: FLNC}
