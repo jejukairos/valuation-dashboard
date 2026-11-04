@@ -1,4 +1,4 @@
-﻿name: (임시) DART 부문 자료 시험
+name: (임시) DART 부문 자료 시험
 
 on:
   workflow_dispatch:
@@ -20,4 +20,4 @@ jobs:
       - env:
           DART_KEY: ${{ secrets.DART_KEY }}
           PYTHONIOENCODING: utf-8
-        run: python -u tools/dart_seg_probe.py 005930 003230
+        run: python -u tools/dart_seg_probe.py 005930 003230 012450
