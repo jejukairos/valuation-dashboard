@@ -15,13 +15,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "collector"))
 from kr_stock import corp_code  # noqa: E402
 
 AX = ("SegmentsAxis", "GeographicalAreasAxis", "ProductsAndServicesAxis")
-RC = {"분기보고서": None, "반기보고서": "11012", "사업보고서": "11011"}
 
 
 def reports(cc):
     out, page = [], 1
     while page < 6:
-        j = requests.get(f"{API}/list.json", params={"crtfc_key": KEY, "corp_code": cc, "bgn_de": "20150101", "pblntf_ty": "A",
+        j = requests.get(f"{API}/list.json", params={"crtfc_key": KEY, "corp_code": cc, "bgn_de": "20230101", "pblntf_ty": "A",
                                                      "page_count": 100, "page_no": page}, timeout=30).json()
         out += j.get("list") or []
         if page >= int(j.get("total_page") or 1):
@@ -38,60 +37,44 @@ def rcode(nm):
     return "11013" if re.search(r"\.0[345]\)", nm) else "11014"
 
 
-def probe(rcept, nm):
+def probe(rcept, nm, show):
     r = requests.get(f"{API}/fnlttXbrl.xml", params={"crtfc_key": KEY, "rcept_no": rcept, "reprt_code": rcode(nm)}, timeout=120)
     try:
         z = zipfile.ZipFile(io.BytesIO(r.content))
     except zipfile.BadZipFile:
-        print("   zip 아님:", r.content[:200])
+        print("   zip 아님")
         return
     inst = [n for n in z.namelist() if n.endswith(".xbrl")]
-    print("   파일", len(z.namelist()), "instance", inst[:2], "lab", [n for n in z.namelist() if "lab" in n][:3])
-    if not inst:
-        return
     t = z.read(inst[0]).decode("utf-8", "ignore")
     print("   facts≈", t.count("contextRef="), "| 축", {a: t.count(a) for a in AX})
-    # 축 붙은 context → 멤버
-    ctx = {}
-    for m in re.finditer(r'<xbrli:context id="([^"]+)">(.*?)</xbrli:context>', t, re.S):
-        body = m.group(2)
-        dims = re.findall(r'dimension="[^":]*:?([^"]+)">([^<]+)<', body)
-        st = re.search(r"<xbrli:startDate>([^<]+)", body)
-        en = re.search(r"<xbrli:endDate>([^<]+)", body)
-        if dims and st and en:
-            ctx[m.group(1)] = (tuple(dims), st.group(1), en.group(1))
-    hits = Counter()
-    ex = []
-    for m in re.finditer(r'<([\w-]+:\w*Revenue\w*)[^>]*contextRef="([^"]+)"[^>]*>([-\d.]+)<', t):
-        c = ctx.get(m.group(2))
-        if not c or len(c[0]) != 1 or not any(a in c[0][0][0] for a in AX):
-            continue
-        hits[(m.group(1), c[0][0][0])] += 1
-        if len(ex) < 12:
-            ex.append((m.group(1).split(":")[1], c[0][0][1].split(":")[-1][:40], c[1], c[2], m.group(3)))
-    print("   매출×축", dict(hits.most_common(6)))
-    for e in ex:
-        print("     ", e)
-    # 한글 이름표
-    lab = [n for n in z.namelist() if "lab-ko" in n or n.endswith("_lab.xml")]
-    if lab:
-        lt = z.read(lab[0]).decode("utf-8", "ignore")
-        mem = re.findall(r'xlink:label="lab_([^"]*Member[^"]*)"[^>]*>([^<]+)<', lt)[:8]
-        print("   이름표 예", mem)
+    if not show or not any(t.count(a) for a in AX):
+        return
+    i = t.find("SegmentsAxis") if "SegmentsAxis" in t else t.find("GeographicalAreasAxis")
+    print("   context 예:", re.sub(r"\s+", " ", t[max(0, i - 400):i + 500]))
+    ids = set()
+    for m in re.finditer(r'<(?:\w+:)?context id="([^"]+)">(.*?)</(?:\w+:)?context>', t, re.S):
+        if any(a in m.group(2) for a in AX):
+            ids.add(m.group(1))
+    names = Counter()
+    for m in re.finditer(r'<([\w-]+:[\w]+)\s[^>]*contextRef="([^"]+)"', t):
+        if m.group(2) in ids:
+            names[m.group(1)] += 1
+    print("   축 붙은 항목 이름", names.most_common(10))
+    k = next((nm for nm, _ in names.most_common() if "Revenue" in nm), None)
+    if k:
+        j = t.find(f"<{k} ")
+        for m in list(re.finditer(rf'<{re.escape(k)}\s[^>]*contextRef="([^"]+)"[^>]*>([^<]+)<', t))[:3]:
+            cid = m.group(1)
+            cm = re.search(rf'<(?:\w+:)?context id="{re.escape(cid)}">(.*?)</(?:\w+:)?context>', t, re.S)
+            print("     ", k, m.group(2), "|", re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", cm.group(1)) if cm else "")[:200])
 
 
 for code in sys.argv[1:]:
-    cc = corp_code(code)
-    rs = reports(cc)
-    print("==", code, "정기보고서", len(rs), "개", rs[-1]["rcept_dt"] if rs else "", "~", rs[0]["rcept_dt"] if rs else "")
-    pick = rs[:1]
-    for y in ("2023", "2021", "2019", "2016"):
-        x = next((r for r in rs if r["rcept_dt"].startswith(y) and "분기" in r["report_nm"]), None)
-        if x:
-            pick.append(x)
-    for x in pick:
-        print("  •", x["rcept_dt"], x["report_nm"].strip(), x["rcept_no"])
+    rs = reports(corp_code(code))
+    print("==", code, len(rs))
+    for x in rs[:10]:
+        print("  •", x["rcept_dt"], x["report_nm"].strip())
         try:
-            probe(x["rcept_no"], x["report_nm"])
+            probe(x["rcept_no"], x["report_nm"], x is rs[0])
         except Exception as e:  # noqa: BLE001
             print("   오류", str(e)[:150])
