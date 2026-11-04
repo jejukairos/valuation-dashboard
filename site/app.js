@@ -1642,7 +1642,9 @@ function stackChart(t, q, span, usd, lq, src) {
   const fast = order.filter((s) => s !== "기타" && s !== "나머지" && shr(last, s) >= 5 && yoy(s) != null).sort((a, b) => yoy(b) - yoy(a))[0];
   const tag = fast ? `<span class="qtag">${esc(cut(fast, 9))} ${yoy(fast) >= 0 ? "+" : ""}${n(yoy(fast), 0)}% 가장 빠름</span>` : "";
   const rev = lq?.[L.at(-1)]?.rev, over = rev ? (sum(last) / rev - 1) * 100 : 0;
-  const leg = order.filter((s) => last[s]).map((s) => { const j = order.indexOf(s), y = yoy(s); return `<span style="color:${col(s, j)}">■</span> ${esc(s)} <b>${n(shr(last, s), 0)}%</b>${y != null ? ` <span${y < 0 ? ' style="color:var(--bad-ink)"' : ""}>(${y >= 0 ? "+" : ""}${n(y, 0)}%)</span>` : ""}`; }).join(" · ");
+  const leg = order.map((s) => { const j = order.indexOf(s), y = yoy(s);  // 최신 분기에 없는 칸(부문을 새로 나누기 전)도 색을 알 수 있게 '예전 칸'으로
+    return last[s] ? `<span style="color:${col(s, j)}">■</span> ${esc(s)} <b>${n(shr(last, s), 0)}%</b>${y != null ? ` <span${y < 0 ? ' style="color:var(--bad-ink)"' : ""}>(${y >= 0 ? "+" : ""}${n(y, 0)}%)</span>` : ""}`
+      : `<span style="color:${col(s, j)}">■</span> <span style="opacity:.75">${esc(s)} (예전 칸)</span>`; }).join(" · ");
   return `<div class="qp"><div class="qt"><b>${esc(t)}</b>${tag}</div><div class="src">${esc(L[0])}~${esc(L.at(-1))} 분기 · 범례 = ${esc(L.at(-1))} 비중 (1년 전 대비)${over > 5 ? ` · 부문 합이 매출보다 ${n(over, 0)}% 많아요 (부문끼리 사고판 내부 거래 포함)` : ""}${"나머지" in tot ? " · 나머지 = 회사가 이 표에서 안 나눈 매출" : ""}${src ? ` · 출처 ${esc(src)}` : ""}</div>
     <svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(t)}">${g}</svg><div class="src" style="padding:0 4px 4px">${leg}</div></div>`;
 }

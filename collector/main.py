@@ -688,7 +688,10 @@ def long_q(mkt, dq, kqd, qtrs, sec=None):
     return dict(sorted((k, v) for k, v in out.items() if v.get("rev"))) or None
 
 
-GEO_KO = {"Americas": "미주", "Europe": "유럽", "Greater China": "중화권", "Japan": "일본", "Rest of Asia Pacific": "그 밖 아시아·태평양",
+GEO_KO = {"Non-US": "그 밖 해외", "Other Countries": "그 밖 나라", "All Other Countries Not Separately Disclosed": "그 밖 나라", "China Including Hong Kong": "중국(홍콩 포함)",
+          "Rest Of World": "그 밖 지역", "Other Asia Pacific": "그 밖 아시아·태평양", "United Kingdom": "영국", "France": "프랑스", "Germany": "독일", "Canada": "캐나다",
+          "Netherlands": "네덜란드", "Norway": "노르웨이", "Asia": "아시아", "EMEA": "유럽·중동·아프리카", "Amazon Web Services": "AWS (지역 아님)",
+          "Americas": "미주", "Europe": "유럽", "Greater China": "중화권", "Japan": "일본", "Rest of Asia Pacific": "그 밖 아시아·태평양",
           "United States": "미국", "China": "중국", "Taiwan": "대만", "Singapore": "싱가포르", "Other": "그 밖 지역", "International": "해외",
           "North America": "북미", "Asia Pacific": "아시아·태평양", "Europe, Middle East, and Africa": "유럽·중동·아프리카",
           "US and Canada": "미국·캐나다", "Rest of World": "그 밖 지역", "Other Americas": "그 밖 미주", "Hedging Gains": "환헤지 이익"}
@@ -740,7 +743,8 @@ def seg_quarters(raw, seg, longq, mkt, long=None):
         if not q:
             continue
         out["src_" + k] = src
-        names = dict(GEO_KO) if k == "geo" else _match(q, ko) if q is not ko else {}
+        geo = {a.lower(): b for a, b in GEO_KO.items()}  # SEC 나라 이름은 'UNITED STATES' 처럼 대문자라 대소문자 무시
+        names = {x: geo[x.lower()] for r in q.values() for x in r if x.lower() in geo} if k == "geo" else _match(q, ko) if q is not ko else {}
         rows = {}
         for lb, r in q.items():
             row = {}

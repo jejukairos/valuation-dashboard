@@ -93,26 +93,29 @@ def labels(xml):
 
 
 def facts(xml):
-    """축 하나만 붙은 매출 {(축, 멤버, 시작, 끝): 값}."""
+    """축 하나만 붙은 매출 {(축, 멤버, 시작, 끝): 값} + 축 없는 전체 매출 {(시작, 끝): 값}.
+    2025년부터(ASU 2023-07) 부문 숫자에 붙는 '연결 항목 = 영업부문' 축과 '집중도 구분' 축은 없는 것으로 봄."""
     root = ET.fromstring(xml)
-    ctx = {}
+    ctx, tctx = {}, {}
     for c in root.iter(XI + "context"):
-        ms = list(c.iter(XD + "explicitMember"))
+        ms = [(m.get("dimension").split(":")[-1], (m.text or "").strip()) for m in c.iter(XD + "explicitMember")]
         st, en = c.find(f".//{XI}startDate"), c.find(f".//{XI}endDate")
-        if len(ms) != 1 or st is None or en is None:
+        if st is None or en is None:
             continue
-        ax, m = ms[0].get("dimension").split(":")[-1], (ms[0].text or "").strip()
-        if ax in AXES and not SKIP.search(m):
-            ctx[c.get("id")] = (AXES[ax], m, st.text.strip(), en.text.strip())
-    out = {}
+        if not ms and not list(c.iter(XD + "typedMember")):
+            tctx[c.get("id")] = (st.text.strip(), en.text.strip())
+        ms = [x for x in ms if not (x[0] == "ConsolidationItemsAxis" and x[1].endswith("OperatingSegmentsMember")) and x[0] != "ConcentrationRiskByTypeAxis"]
+        if len(ms) == 1 and ms[0][0] in AXES and not SKIP.search(ms[0][1]):
+            ctx[c.get("id")] = (AXES[ms[0][0]], ms[0][1], st.text.strip(), en.text.strip())
+    out, tot = {}, {}
     for el in root:
-        c, nm = ctx.get(el.get("contextRef")), el.tag.split("}")[-1]
-        if c and nm in REV and el.text and re.fullmatch(r"-?\d+(\.\d+)?", el.text.strip()):
-            p = REV.index(nm)
-            if c not in out or p < out[c][0]:
-                out[c] = (p, float(el.text))
-    return {k: v for k, (_, v) in out.items()}
-
+        cid, nm = el.get("contextRef"), el.tag.split("}")[-1]
+        if nm not in REV or not el.text or not re.fullmatch(r"-?\d+(\.\d+)?", el.text.strip()):
+            continue
+        for box, k in ((out, ctx.get(cid)), (tot, tctx.get(cid))):
+            if k and (k not in box or REV.index(nm) < box[k][0]):
+                box[k] = (REV.index(nm), float(el.text))
+    return {k: v for k, (_, v) in out.items()}, {k: v for k, (_, v) in tot.items()}
 
 def quarterly(vals):
     """{(멤버, 시작, 끝): 값} → {끝: {멤버: 3개월 값}} — 4분기 = 연간 − 같은 해 9개월 (없으면 − 그 해 3개 분기 합)."""
@@ -124,10 +127,9 @@ def quarterly(vals):
         if 350 <= days(s, e) <= 380 and m not in q.get(e, {}):
             nine = next((v9 for (m9, s9, e9), v9 in vals.items() if m9 == m and s9 == s and 260 <= days(s9, e9) <= 285), None)
             three = [r[m] for ee, r in q.items() if s < ee < e and m in r]
-            if nine is not None:
-                q[e][m] = v - nine
-            elif len(three) == 3:
-                q[e][m] = v - sum(three)
+            q4 = v - nine if nine is not None else v - sum(three) if len(three) == 3 else None
+            if q4 is not None and (q4 >= 0 or v < 0):  # 연간은 플러스인데 4분기가 마이너스 = 10-Q·10-K 부문이 서로 달라서 생긴 틀린 값
+                q[e][m] = q4
     par = parents(q)
     return {e: {m: v for m, v in r.items() if m not in par} for e, r in sorted(q.items())}
 
@@ -145,38 +147,74 @@ def parents(q):
                                if abs(sum(r[x] for x in c) - r[m]) <= r[m] * 0.003})
     return {m for m, L in hit.items() if any(sum(s in x for x in L) >= max(2, len(L) / 2) for s in set().union(*L))}
 
+def fit(q, tot):
+    """칸 합이 그 분기 전체 매출보다 3% 넘게 크면(나라·지역, 합계·세부가 겹쳐 두 번 셈) 합이 매출과 0.5% 안으로 맞는 칸 묶음만 남김.
+    여러 묶음이 맞으면 최신 분기 칸과 많이 겹치는 것 → 칸이 많은 것. 맞는 묶음이 없으면(부문끼리 사고판 매출 포함) 그대로."""
+    latest = set(q[max(q)]) if q else set()
+    out = {}
+    for e, r in q.items():
+        T, pos = tot.get(e), [m for m in r if r[m] > 0]
+        if T and T > 0 and sum(r[m] for m in pos) > T * 1.03 and len(pos) <= 14:
+            ok = [c for k in range(len(pos), 1, -1) for c in combinations(pos, k) if abs(sum(r[x] for x in c) - T) <= T * 0.005]
+            if ok:
+                r = {m: r[m] for m in max(ok, key=lambda c: (len(set(c) & latest), len(c)))}
+            else:  # 맞는 묶음이 없으면(세부 칸 일부만 나옴) 이 분기에서 다른 칸 합과 같은 합계 칸만 빼 봄 — 매출에 더 가까워질 때만
+                par = {m for m in pos if any(abs(sum(r[x] for x in c) - r[m]) <= r[m] * 0.003
+                                             for k in range(2, 6) for c in combinations([x for x in pos if x != m and r[x] < r[m]], k))}
+                if par and abs(sum(r[m] for m in pos if m not in par) - T) < abs(sum(r[m] for m in pos) - T):
+                    r = {m: v for m, v in r.items() if m not in par}
+        out[e] = r
+    return out
+
+
+def unify(q):
+    """같은 분기에 같이 나온 적 없고 이름이 거의 같은 칸(오타 'Sevices'·표기만 바뀐 것)은 최근 이름 하나로."""
+    from difflib import SequenceMatcher
+    when = defaultdict(set)
+    for e, r in q.items():
+        for m in r:
+            when[m].add(e)
+    names, alias = sorted(when, key=lambda m: max(when[m]), reverse=True), {}
+    for i, a in enumerate(names):
+        if a in alias:
+            continue
+        for b in names[i + 1:]:
+            if b not in alias and not when[a] & when[b] and SequenceMatcher(None, a.lower(), b.lower()).ratio() >= 0.85:
+                alias[b] = a
+                when[a] |= when[b]
+    return {e: {alias.get(m, m): v for m, v in r.items()} for e, r in q.items()}
+
 def pretty(m, lab):
-    """멤버 이름표: 보고서 이름표 → 없으면 'IPhoneMember' 를 띄어 씀."""
-    k = m.replace(":", "_")
-    if lab.get(k):
-        return lab[k]
-    s = re.sub(r"Member$", "", m.split(":")[-1])
-    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s)
+    """멤버 이름표: 보고서 이름표 → 없으면 'IPhoneMember' 를 띄어 씀. 끝의 'Operating Segment'·'Segment' 는 뗌 (해마다 붙었다 안 붙었다 해서)."""
+    s = lab.get(m.replace(":", "_")) or re.sub(r"(?<=[a-z])(?=[A-Z])", " ", re.sub(r"Member$", "", m.split(":")[-1]))
+    return re.sub(r"\s+(Operating\s+|Reportable\s+)?Segments?$", "", s, flags=re.I) or s
 
 
 def ticker(t, cik):
-    vals, lab, n = defaultdict(dict), {}, 0
+    vals, tots, lab, n = defaultdict(dict), {}, {}, 0
     for rd, form, acc in filings(cik):
         try:
             xi, xl = download(t, cik, acc)
-            f = facts(xi)
+            f, tt = facts(xi)
         except Exception as e:  # noqa: BLE001 - 한 보고서가 깨져도 나머지는 계속
             print(f"    ⚠ {t} {rd} {form}: {str(e)[:80]}")
             continue
         lab.update(labels(xl))  # 최신 보고서 이름표가 덮어씀
         for (ax, m, s, e), v in f.items():
             vals[ax][(m, s, e)] = v  # 같은 기간은 나중 보고서 숫자 (정정·재분류 반영)
+        tots.update({("전체", s, e): v for (s, e), v in tt.items()})
         n += 1
-    qs = {ax: quarterly(v) for ax, v in vals.items()}
+    tq = {e: r["전체"] for e, r in quarterly(tots).items()}
+    qs = {ax: fit(quarterly(v), tq) for ax, v in vals.items()}
     many = lambda ax: sum(len(r) >= 2 for r in qs.get(ax, {}).values())
     seg_geo = qs.get("seg") and sum(bool(GEO.search(pretty(m, lab))) for r in qs["seg"].values() for m in r) > 0.6 * sum(len(r) for r in qs["seg"].values())
-    geo_ax = "geo" if many("geo") >= 8 else "seg" if seg_geo and many("seg") >= 8 else None
+    geo_ax = max([a for a in ("geo", "seg") if many(a) >= 8 and (a == "geo" or seg_geo)], key=many, default=None)  # 지역 축과 지역 같은 부문 중 분기가 많은 쪽
     prod_ax = "prod" if many("prod") >= 8 else "seg" if many("seg") >= 8 and geo_ax != "seg" else None
     name = lambda r: {pretty(m, lab): v for m, v in r.items()}
     out = {"filings": n}
     for k, ax in (("prod", prod_ax), ("geo", geo_ax)):
         if ax:
-            out[k] = {e: name(r) for e, r in qs[ax].items() if len(r) >= 2}
+            out[k] = unify({e: name(r) for e, r in qs[ax].items() if len(r) >= 2})
             out["src_" + k] = f"SEC 10-Q·10-K XBRL ({ {'prod': '제품·서비스', 'seg': '사업부문', 'geo': '지역'}[ax]} 축)"
     return out
 
@@ -215,6 +253,7 @@ if __name__ == "__main__":
         assert q["2025-12-31"] == {"A": 15, "B": 2} and q["2025-03-31"] == {"A": 10, "B": 2}, q
         two = {"q1": {"제품": 100, "아이폰": 60, "맥": 25, "아이패드": 15, "서비스": 40}, "q2": {"제품": 110, "아이폰": 70, "맥": 24, "아이패드": 16, "서비스": 45}}
         assert parents(two) == {"제품"}, parents(two)  # 서비스(40) = 맥+아이패드 는 1분기만 우연 → 안 뺌
+        assert pretty("pltr:CommercialOperatingSegmentMember", {}) == "Commercial" and fit({"e": {"DC": 89, "H": 49, "AI": 40}}, {"e": 96}) == {"e": {"H": 49, "AI": 40}}
         assert pretty("aapl:IPhoneMember", {}) == "IPhone" and pretty("aapl:MacMember", {"aapl_MacMember": "Mac"}) == "Mac"
         assert SKIP.search("us-gaap:IntersegmentEliminationMember") and not SKIP.search("aapl:IPhoneMember")
         print("ok")
