@@ -1,0 +1,23 @@
+name: (임시) DART 부문 자료 시험
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - env:
+          DART_KEY: ${{ secrets.DART_KEY }}
+          PYTHONIOENCODING: utf-8
+        run: python -u tools/dart_seg_probe.py 005930 003230 012450 278470 458870
