@@ -57,11 +57,14 @@ def probe(rcept, nm, show):
     except zipfile.BadZipFile:
         print("   zip 아님")
         return
-    root = ET.fromstring(z.read(next(n for n in z.namelist() if n.endswith(".xbrl"))))
+    raw = z.read(next(n for n in z.namelist() if n.endswith(".xbrl")))
+    print("   축 글자 수", {a: raw.count(a.encode()) for a in AX}, "| dims 예", re.findall(rb"<xbrldi:\w+Member dimension=\"[^\"]+\">[^<]+<", raw)[:3])
+    root = ET.fromstring(raw)
     ctx = {}
     for c in root.iter(XI + "context"):
         dims = [(m.get("dimension").split(":")[-1], (m.text or "").strip()) for m in c.iter(XD + "explicitMember")]
         st, en = c.find(f".//{XI}startDate"), c.find(f".//{XI}endDate")
+        dims = [x for x in dims if x[0] != "ConsolidatedAndSeparateFinancialStatementsAxis"]  # 연결·별도 축은 모든 숫자에 붙음
         if len(dims) == 1 and dims[0][0] in AX and st is not None and en is not None:
             ctx[c.get("id")] = (dims[0][0], dims[0][1], st.text.strip(), en.text.strip())
     rows, names = [], Counter()
