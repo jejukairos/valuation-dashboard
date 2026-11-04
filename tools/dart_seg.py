@@ -12,6 +12,7 @@ import re
 import sys
 import zipfile
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,11 +21,12 @@ OUT = ROOT / "cache" / "dart_seg.json"
 TOT = re.compile(r"^(합\s*계|총\s*계|소\s*계|계|합계\s*\(.*\)|매출\s*합계|총\s*매출액?)$")
 DROP = re.compile(r"에누리|내부\s*거래|내부매출|연결\s*조정|조정|제거|차감|할인|consolidat", re.I)
 EXP, DOM = re.compile(r"^(수\s*출|해\s*외|수출\s*\(.*\))$"), re.compile(r"^(내\s*수|국\s*내|내수\s*\(.*\))$")
-GEO = re.compile(r"국내|내수|수출|해외|미주|미국|북미|남미|중남미|유럽|구주|중국|아시아|일본|중동|아프리카|오세아니아|인도|베트남|대만|기타\s*지역|CIS|러시아|캐나다|호주|동남아")
+GEO = re.compile(r"국내|내수|수출|해외|미주|미국|북미|북중미|KUS|남미|중남미|유럽|구주|중국|아시아|일본|중동|아프리카|오세아니아|인도|베트남|대만|기타\s*지역|CIS|러시아|캐나다|호주|동남아")
 PER = re.compile(r"제\s*\d+\s*기|당\s*(분|반)?기|20\d\d\s*년")
 TYPE = re.compile(r"^(제품|상품|용역|제\s*ㆍ?\s*상품.*|제품\s*및\s*상품|상품\s*및\s*제품|기타매출|기타\s*수익|매출유형|서비스)$")
 
 
+@lru_cache(maxsize=60)  # 매출실적 표·영업부문 주석 두 번 읽을 때 다시 안 풀게
 def doc_text(path):
     z = zipfile.ZipFile(path)
     b = z.read(max(z.namelist(), key=lambda x: z.getinfo(x).file_size))
@@ -144,7 +146,7 @@ def classify(rows):
     cols = []
     for j in range(depth):  # 지역 칸·매출유형 칸이 아닌 열 중 이름이 가장 다양하고 짧은 열
         vals = [l[min(j, len(l) - 1)] for l, _ in leaf]
-        if sum(bool(EXP.match(x) or DOM.match(x) or TYPE.match(x.replace(" ", ""))) for x in vals) >= len(vals) / 2:  # 수출·내수 칸, 제품·상품 칸
+        if sum(bool(EXP.match(x) or DOM.match(x) or TYPE.match(x.replace(" ", "")) or re.search(r"(제품|상품|용역)\s*[/,·ㆍ및]|[/,·ㆍ및(]\s*(제품|상품)", x)) for x in vals) >= len(vals) / 2:  # 수출·내수 칸, 제품·상품 칸 ('제품/상품'·'유압 (상품/제품)')
             continue
         cols.append((len(set(vals)), -sum(map(len, vals)) / len(vals), j))
     if not cols:
@@ -177,9 +179,123 @@ def geo_table(rows):
     return dict(out)
 
 
-def report(path):
-    """보고서 하나 → (제품군, 지역, 합계, 내부거래 포함 표인지) — 원 단위. 못 읽으면 None."""
+def note_tables(t):
+    """연결재무제표 주석의 영업부문 칸 (새 양식 = '영업부문 (연결)' 제목, 예전 양식 = 주석 본문의 '영업부문' 글자 뒤 4만 자)."""
+    secs = sections(t)
+    body = "".join(b for ti, b in secs if re.search(r"영업\s*부문|부문\s*정보|부문별\s*정보", ti) and not re.search(r"^\d+-\d+\.|별도|재무제표$", ti) and "(연결)" in ti or re.search(r"영업\s*부문.*연결", ti))
+    if not body:
+        note = "".join(b for ti, b in secs if re.search(r"연결\s*재무제표\s*주석", ti))
+        i = next((m.start() for m in re.finditer(r"영업\s*부문", note) if m.start() > 2000), -1)
+        body = note[i:i + 40000] if i >= 0 else ""
+    out, u = [], None
+    for blk in re.split(r"(<TABLE\b.*?</TABLE>)", body, flags=re.S):
+        if not blk.startswith("<TABLE"):
+            u = unit(clean(blk)) or u
+            continue
+        g = grid(blk)
+        uu = unit(" ".join(" ".join(r) for r in g[:2]))
+        if uu and len(g) <= 2:
+            u = uu
+            continue
+        out.append((uu or u, g))
+    return out
+
+
+SKIPC = re.compile(r"제거|조정|내부|연결\s*조정|consol", re.I)
+GSUM = re.compile(r"^(합\s*계|총\s*계|계|연결\s*(합계|금액|후\s*금액)?|연결\s*후\s*(금액|합계)|기업\s*전체\s*총계(\s*합계)?|부문의\s*합계(\s*합계)?|.*\s합계)$")
+
+
+def parse_note(g):
+    """주석 표 → ({칸: 값}, 합계) — 매출 줄(순매출·외부 매출 먼저)의 칸별 값, 칸 이름은 머리 여러 줄 중 맨 아래 글자."""
+    pick = None
+    for pat in (r"순\s*매출|외부\s*(고객)?.*(수익|매출)|외부매출", r"^(수익\s*\(매출액\)|매출액|영업수익|수익|매출)$"):
+        pick = next((i for i, r in enumerate(g) if r and re.search(pat, r[0].replace(" ", "") if "^" in pat else r[0]) and sum(num(c) is not None for c in r[1:]) >= 2), None)
+        if pick is not None:
+            break
+    if pick is None or pick == 0:
+        return None
+    head, row, out, tot = g[:pick], g[pick], {}, None
+    for j in range(1, len(row)):
+        path = []
+        for hr in head:
+            c = hr[j] if j < len(hr) else ""
+            if c and (not path or path[-1] != c) and num(c) is None and not unit(c) and not PER.fullmatch(c):
+                path.append(c)
+        v = num(row[j])
+        if v is None or not path:
+            continue
+        leaf = path[-1]
+        if GSUM.match(leaf.strip()):
+            tot = v
+            continue
+        if any(SKIPC.search(x) for x in path[1:]) or SKIPC.search(leaf):
+            continue
+        nm = f"{path[-2]} {leaf}" if len(path) >= 2 and re.fullmatch(r"[A-Z0-9 ]{2,6}|.*이외", leaf) else leaf  # 'KUS' → '북중미 KUS'
+        nm = re.sub(r"본사\s*소재지\s*(국가)?", "국내", nm)
+        out[nm] = out.get(nm, 0) + v
+    return (out, tot) if len(out) >= 2 else None
+
+
+def parse_note_t(g):
+    """2025년부터 쓰는 세로 양식 (지역·부문이 줄, 매출이 칸 — XBRL 표를 그대로 펼친 모양) → ({칸: 값}, 합계).
+    줄 이름에 '… 합계'(부문 사이 거래를 뺀 순매출)가 있는 줄을 쓰고, '영업부문'(총매출)·'제거·조정' 줄은 뺌."""
+    h = c = None
+    for i in range(min(3, len(g))):
+        c = next((j for j, x in enumerate(g[i]) if re.search(r"수익\s*\(매출액\)|순\s*매출|^매출액$|영업수익", x)), None)
+        if c:
+            h = i
+            break
+    if h is None:
+        return None
+    rows = []
+    for r in g[h + 1:]:
+        v = num(r[c]) if len(r) > c else None
+        lab = []
+        for x in r[:c]:
+            if x and (not lab or lab[-1] != x):
+                lab.append(x)
+        if v is not None and lab:
+            rows.append((lab, v))
+    net = [x for x in rows if any(re.search(r"합계", l) for l in x[0][1:])]
+    out, tot = {}, None
+    for lab, v in net or [x for x in rows if not any(SKIPC.search(l) for l in x[0])]:
+        core = [l for l in lab if not re.search(r"^지역$|^부문$|기업\s*전체|영업\s*부문|조정|제거|합계$", l)]
+        if not core:
+            tot = v
+            continue
+        leaf = core[-1]
+        nm = f"{core[-2]} {leaf}" if len(core) >= 2 and re.fullmatch(r"[A-Z0-9 ]{2,6}|.*이외", leaf) else leaf
+        nm = re.sub(r"본사\s*소재지\s*(국가)?", "국내", nm)
+        if nm == "외국":  # '외국' 묶음 줄 (아래 나라·지역 줄과 겹침)
+            continue
+        out[nm] = out.get(nm, 0) + v
+    return (out, tot) if len(out) >= 2 else None
+
+
+def report_note(t):
+    """영업부문 주석 → (제품군, 지역, 합계) — 칸 이름이 대부분 지역이면 지역으로."""
+    prod = geo = tot = None
+    for u, g in note_tables(t):
+        x = (parse_note(g) or parse_note_t(g)) if u else None
+        if not x:
+            continue
+        vals, tt = {k: v * u for k, v in x[0].items()}, (x[1] * u if x[1] is not None else None)
+        isgeo = sum(bool(GEO.search(k) or k in ("국내",)) for k in vals) >= 0.6 * len(vals)
+        if isgeo and geo is None:
+            geo, tot = vals, tot or tt
+        elif not isgeo and prod is None:
+            prod, tot = vals, tot or tt
+        if prod is not None and geo is not None:
+            break
+    return (prod or {}, geo or {}, tot, False) if (prod or geo) else None
+
+
+def report(path, src="A"):
+    """보고서 하나 → (제품군, 지역, 합계, 내부거래 포함 표인지) — 원 단위. 못 읽으면 None.
+    src A = 사업의 내용 '매출실적' 표, B = 연결 주석 '영업부문' 표 (A 가 연결 전체와 안 맞는 회사용: 기아 등)."""
     t = doc_text(path)
+    if src == "B":
+        return report_note(t)
     tabs = sales_tables(t)
     prod = geo = tot = None
     inner = bool(re.search(r"내부\s*거래(를|가)?\s*포함", t[:400000]))
@@ -193,14 +309,16 @@ def report(path):
             if c and len(c[0]) >= 2:
                 prod, geo, tot = c
                 continue
-        if prod is not None and not geo or (prod is not None and geo and set(geo) == {"국내", "해외(수출)"}):
+            if c and tot is None:  # 부문이 하나뿐인 표(SK하이닉스 '반도체 부문')는 합계만
+                tot = c[2]
+        if not geo or set(geo) == {"국내", "해외(수출)"}:  # 지역 이름 표가 있으면 수출·내수 대신
             gt = geo_table(rows)
-            if gt and len(gt) >= 2:
+            if gt and len(gt) >= 2 and not (tot and abs(sum(gt.values()) / tot - 1) > 0.1):  # 지역 합이 매출 표 합계와 10% 넘게 다르면 다른 표(해외 법인 등)
                 geo = gt
-    return (prod, geo or {}, tot, inner) if prod else None
+    return (prod or {}, geo or {}, tot, inner) if (prod or geo) else None
 
 
-def quarters(code):
+def quarters(code, src="A"):
     """보고서들 → {분기 끝 날짜: {"prod": {}, "geo": {}}} (누적 차이) — 12월 결산 기준 (사업보고서 달로 결산월을 정함)."""
     ix = {}  # index.json · index_{나눈 번호}.json (서버 여러 대가 나눠 받은 목록)
     for f in RAW.glob("index*.json"):
@@ -217,7 +335,7 @@ def quarters(code):
         k = (m - fy) % 12 // 3 or 4  # 결산 뒤 몇 번째 분기
         fyear = y if m <= fy else y + 1
         try:
-            x = report(f)
+            x = report(f, src)
         except Exception as e:  # noqa: BLE001
             print(f"    ⚠ {code} {r['p']}: {str(e)[:80]}")
             continue
@@ -237,28 +355,31 @@ def quarters(code):
                 q[kind] = dict(cur)
             elif set(cur) == set(old):  # 이름이 같은 칸끼리만 뺌
                 q[kind] = {n: cur[n] - old[n] for n in cur}
-        if q.get("prod"):
+        if q.get("prod") or q.get("geo"):
             out[end] = {**q, "tot": (tot - (prev[1][2] or 0)) if tot and prev and prev[1][2] else tot if not prev else None, "inner": inner}
     return out
 
 
 def check(code, q):
-    """DART 분기 매출(longq, 억원)과 맞는 분기만."""
+    """DART 분기 매출(longq, 억원)과 맞는 분기만 — 제품군·지역 따로 맞춰 봄."""
     p = ROOT / "site" / "data" / "stocks" / f"{code}.json"
     lq = (json.loads(p.read_text(encoding="utf-8")).get("longq") or {}) if p.exists() else {}
-    keep, bad = {}, []
+    keep, bad = {"prod": {}, "geo": {}}, []
     for end, r in q.items():
         y, m = int(end[:4]), int(end[5:7])
-        lb = f"{(y if m > 1 else y - 1) % 100:02d}.{(m - 1) // 3 + 1 if m % 3 == 0 else (m + 1) // 3}Q"
+        lb = f"{y % 100:02d}.{(m - 1) // 3 + 1}Q"
         rev = (lq.get(lb) or {}).get("rev")
-        s = sum(v for v in r["prod"].values() if v > 0) / 1e8
         lim = 0.25 if r["inner"] else 0.12
-        if rev and rev > 0 and abs(s / rev - 1) <= lim and min(r["prod"].values()) > -0.05 * rev * 1e8:
-            keep[end] = r
-        else:
-            bad.append(f"{lb}({s:,.0f}/{rev or 0:,.0f})")
+        for kind in ("prod", "geo"):
+            part = r.get(kind)
+            if not part:
+                continue
+            s = sum(v for v in part.values() if v > 0) / 1e8
+            if rev and rev > 0 and abs(s / rev - 1) <= lim and min(part.values()) > -0.05 * rev * 1e8:
+                keep[kind][end] = part
+            elif kind == "prod" or not r.get("prod"):
+                bad.append(f"{lb}({s:,.0f}/{rev or 0:,.0f})")
     return keep, bad
-
 
 def tidy(q):
     """해마다 조금씩 다른 표기('소스,조미소재'·'소스· 조미소재'·'기 타'·'국내 (내수)')를 같은 칸으로 — 이름은 최신 표기."""
@@ -285,24 +406,37 @@ def tidy(q):
     return out
 
 
+SRC = {"A": {"prod": "DART 분기·반기·사업보고서 '매출실적' 표 (누적 차이로 분기)", "geo": "DART 보고서 '매출실적' 표 (수출·내수 또는 지역별)"},
+       "B": {"prod": "DART 연결재무제표 주석 '영업부문' (누적 차이로 분기)", "geo": "DART 연결재무제표 주석 '영업부문' 지역별"}}
+
+
 def main(codes):
     saved = json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else {}
     for code in codes or sorted(d.name for d in RAW.iterdir() if d.is_dir()):
-        q, bad = check(code, quarters(code))
-        old = saved.get(code) or {}
-        if len(q) < 4 and not (old and q):  # 처음엔 4분기 넘게 맞아야, 이미 있으면 새 분기만 이어 붙임 (서버는 최근 보고서만 받음)
-            print(f"  ✗ {code}: 맞는 분기 {len(q)}개 (안 맞음 {len(bad)}: {' '.join(bad[:6])})")
+        best, bads = {"prod": ({}, "A"), "geo": ({}, "A")}, []
+        for src in ("A", "B"):  # 매출실적 표 → 안 맞는 분기가 많으면 영업부문 주석도
+            ok, bad = check(code, quarters(code, src))
+            for kind in ("prod", "geo"):
+                if len(ok[kind]) > len(best[kind][0]):
+                    best[kind] = (ok[kind], src)
+            bads += bad
+            if len(ok["prod"]) >= 16 and len(ok["geo"]) >= 16:
+                break
+        old, new = saved.get(code) or {}, {}
+        for kind in ("prod", "geo"):
+            q, src = best[kind]
+            if len(q) >= 4 or (old.get(kind) and q):  # 처음엔 4분기 넘게 맞아야, 이미 있으면 새 분기만 이어 붙임 (서버는 최근 보고서만 받음)
+                new[kind], new["src_" + kind] = tidy({**(old.get(kind) or {}), **q}), SRC[src][kind]
+            elif old.get(kind):
+                new[kind], new["src_" + kind] = old[kind], old.get("src_" + kind)
+        if not new:
+            print(f"  ✗ {code}: 맞는 분기 없음 (안 맞음 {len(bads)}: {' '.join(bads[:5])})")
             continue
-        prod = tidy({**(old.get("prod") or {}), **{e: r["prod"] for e, r in q.items()}})
-        geo = {**(old.get("geo") or {}), **{e: r["geo"] for e, r in q.items() if r.get("geo")}}
-        has_geo = len(geo) >= 4
-        saved[code] = {"prod": prod, "src_prod": "DART 분기·반기·사업보고서 '매출실적' 표 (누적 차이로 분기)",
-                       **({"geo": tidy(geo), "src_geo": "DART 보고서 '매출실적' 표 (수출·내수 또는 지역별)"} if has_geo else {})}
-        ks = sorted(q)
-        print(f"  {code}: {len(q)}분기 ({ks[0]} ~ {ks[-1]}) · 지역 {'있음' if has_geo else '없음'} · 안 맞음 {len(bad)} {' '.join(bad[:4])}")
+        saved[code] = new
+        say = lambda k: f"{len(new[k])}분기 {min(new[k])[:7]}~{max(new[k])[:7]} ({best[k][1]})" if new.get(k) else "없음"
+        print(f"  {code}: 제품군 {say('prod')} · 지역 {say('geo')}")
     OUT.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
     print("저장:", OUT)
-
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["--test"]:

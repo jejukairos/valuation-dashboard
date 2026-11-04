@@ -1622,10 +1622,14 @@ function stackChart(t, q, span, usd, lq, src) {
   if (N < 2) return "";
   const M = (v) => (usd ? v / 1e3 : v), fm = usd ? usdB : kqFmt, tot = {};
   L.forEach((k) => Object.entries(q[k]).forEach(([s, v]) => { if (v > 0) tot[s] = (tot[s] || 0) + v; }));
-  const lr = q[L.at(-1)], rk = (s) => (lr[s] > 0 ? [1, lr[s]] : [0, tot[s]]);  // 최신 분기에 있는 칸이 먼저(큰 순), 예전에만 있던 칸은 그 뒤
-  const all = Object.keys(tot).filter((s) => s !== "나머지").sort((a, b) => rk(b)[0] - rk(a)[0] || rk(b)[1] - rk(a)[1]), keep = all.length > 7 ? all.slice(0, 6) : all;
-  const order = [...keep, ...(all.length > 7 ? ["기타"] : []), ...("나머지" in tot ? ["나머지"] : [])], grp = (s) => (s === "나머지" || keep.includes(s) ? s : "기타");
-  const col = (s, i) => (s === "기타" || s === "나머지" ? "var(--muted)" : STK_COL[i]);
+  // 지금 칸(최신 분기에 있는 칸, 큰 순) 6개까지 진한 색 · 예전 칸(부문을 새로 나누기 전) 6개까지 같은 색을 연하게 · 나머지는 '그 밖' (회사 칸 '기타'와 안 겹치게)
+  const lr = q[L.at(-1)], byTot = (a, b) => tot[b] - tot[a];
+  const now = Object.keys(tot).filter((s) => lr[s] > 0 && s !== "나머지").sort((a, b) => lr[b] - lr[a]), was = Object.keys(tot).filter((s) => !(lr[s] > 0) && s !== "나머지").sort(byTot);
+  const keepN = now.length > 7 ? now.slice(0, 6) : now, keepW = was.length > 7 ? was.slice(0, 6) : was, keep = [...keepN, ...keepW];
+  const more = now.length + was.length > keep.length, order = [...keep, ...(more ? ["그 밖"] : []), ...("나머지" in tot ? ["나머지"] : [])];
+  const grp = (s) => (s === "나머지" || keep.includes(s) ? s : "그 밖");
+  const col = (s) => (s === "그 밖" || s === "나머지" ? "var(--muted)" : STK_COL[(keepN.includes(s) ? keepN.indexOf(s) : keepW.indexOf(s)) % STK_COL.length]);
+  const op = (s) => (keepW.includes(s) ? 0.45 : 1);
   const R = L.map((k) => { const r = {}; Object.entries(q[k]).forEach(([s, v]) => { if (v > 0) r[grp(s)] = (r[grp(s)] || 0) + v; }); return r; });
   const sum = (r) => Object.values(r).reduce((a, v) => a + v, 0), hi = Math.max(...R.map(sum)) * 1.06 || 1;
   const W = 340, x0 = 40, x1 = W - 10, top = 14, bot = 128, X = (i) => x0 + ((x1 - x0) * (i + 0.5)) / N, bw = Math.max(1.5, Math.min(26, ((x1 - x0) / N) * 0.72));
@@ -1633,18 +1637,18 @@ function stackChart(t, q, span, usd, lq, src) {
   [0, 0.5, 1].forEach((f) => { const y = bot - f * (bot - top); g += `<line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${y + 3}" text-anchor="end" class="qx">${esc(fm(M(f * hi)))}</text>`; });
   R.forEach((r, i) => {
     let y = bot;
-    order.forEach((s, j) => { if (!r[s]) return; const h = (r[s] / hi) * (bot - top); y -= h; g += `<rect x="${X(i) - bw / 2}" y="${y}" width="${bw}" height="${h}" fill="${col(s, j)}"/>`; });
+    order.forEach((s) => { if (!r[s]) return; const h = (r[s] / hi) * (bot - top); y -= h; g += `<rect x="${X(i) - bw / 2}" y="${y}" width="${bw}" height="${h}" fill="${col(s)}" fill-opacity="${op(s)}"/>`; });
     const tk = shortQ(i, L); if (tk) g += `<text x="${X(i)}" y="${bot + 13}" text-anchor="middle" class="qx">${esc(tk)}</text>`;
   });
   const shr = (r, s) => (sum(r) ? (r[s] / sum(r)) * 100 : 0), last = R.at(-1), ai = L.indexOf(qAgo(L.at(-1))), ago = ai >= 0 ? R[ai] : null;
   const yoy = (s) => (ago?.[s] > 0 && last[s] ? (last[s] / ago[s] - 1) * 100 : null);
   g += tipCols(X, (x1 - x0) / N, 0, 146, L.map((k, i) => [k, ...order.filter((s) => R[i][s]).map((s) => `${s}: ${fm(M(R[i][s]))} (${n(shr(R[i], s), 0)}%)`), `합: ${fm(M(sum(R[i])))}`].join("\n")));
-  const fast = order.filter((s) => s !== "기타" && s !== "나머지" && shr(last, s) >= 5 && yoy(s) != null).sort((a, b) => yoy(b) - yoy(a))[0];
+  const fast = order.filter((s) => s !== "그 밖" && s !== "나머지" && shr(last, s) >= 5 && yoy(s) != null).sort((a, b) => yoy(b) - yoy(a))[0];
   const tag = fast ? `<span class="qtag">${esc(cut(fast, 9))} ${yoy(fast) >= 0 ? "+" : ""}${n(yoy(fast), 0)}% 가장 빠름</span>` : "";
   const rev = lq?.[L.at(-1)]?.rev, over = rev ? (sum(last) / rev - 1) * 100 : 0;
-  const leg = order.map((s) => { const j = order.indexOf(s), y = yoy(s);  // 최신 분기에 없는 칸(부문을 새로 나누기 전)도 색을 알 수 있게 '예전 칸'으로
-    return last[s] ? `<span style="color:${col(s, j)}">■</span> ${esc(s)} <b>${n(shr(last, s), 0)}%</b>${y != null ? ` <span${y < 0 ? ' style="color:var(--bad-ink)"' : ""}>(${y >= 0 ? "+" : ""}${n(y, 0)}%)</span>` : ""}`
-      : `<span style="color:${col(s, j)}">■</span> <span style="opacity:.75">${esc(s)} (예전 칸)</span>`; }).join(" · ");
+  const leg = order.map((s) => { const y = yoy(s);  // 최신 분기에 없는 칸(부문을 새로 나누기 전)도 색을 알 수 있게 '예전 칸'으로
+    return last[s] ? `<span style="color:${col(s)}">■</span> ${esc(s)} <b>${n(shr(last, s), 0)}%</b>${y != null ? ` <span${y < 0 ? ' style="color:var(--bad-ink)"' : ""}>(${y >= 0 ? "+" : ""}${n(y, 0)}%)</span>` : ""}`
+      : `<span style="color:${col(s)};opacity:${op(s)}">■</span> <span style="opacity:.75">${esc(s)} (예전 칸)</span>`; }).join(" · ");
   return `<div class="qp"><div class="qt"><b>${esc(t)}</b>${tag}</div><div class="src">${esc(L[0])}~${esc(L.at(-1))} 분기 · 범례 = ${esc(L.at(-1))} 비중 (1년 전 대비)${over > 5 ? ` · 부문 합이 매출보다 ${n(over, 0)}% 많아요 (부문끼리 사고판 내부 거래 포함)` : ""}${"나머지" in tot ? " · 나머지 = 회사가 이 표에서 안 나눈 매출" : ""}${src ? ` · 출처 ${esc(src)}` : ""}</div>
     <svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(t)}">${g}</svg><div class="src" style="padding:0 4px 4px">${leg}</div></div>`;
 }
