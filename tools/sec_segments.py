@@ -51,7 +51,7 @@ def filings(cik):
     """10-Q·10-K (정정 보고서 빼고) [(기간 끝, 양식, 접수번호)] 2014년~."""
     j = get(f"https://data.sec.gov/submissions/CIK{cik:010d}.json").json()
     pages = [j["filings"]["recent"]]
-    if min(pages[0]["reportDate"] or ["9999"]) > "2014-01-01":  # 최근 1,000건 안에 2014년이 없으면 예전 목록도
+    if min([d for d in pages[0]["filingDate"] if d] or ["9999"]) > "2014-03-01":  # 최근 1,000건 안에 2014년이 없으면 예전 목록도 (내부자 거래 공시가 많은 큰 회사)
         pages += [get(f"https://data.sec.gov/submissions/{f['name']}").json() for f in j["filings"].get("files", [])]
     return sorted({(rd, f, a) for p in pages for f, a, rd in zip(p["form"], p["accessionNumber"], p["reportDate"])
                    if f in ("10-Q", "10-K") and rd and rd >= "2014-01-01"})

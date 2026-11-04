@@ -1130,10 +1130,10 @@ function kqBars(title, qs, f, est, color, cur, opt = {}) {  // opt.tag = 제목 
       return;
     }
     if (q.est) { g += bar(cx, bw * 0.5, q[f], "var(--axis)") + lab(cx, ly(q[f]), q[f], "qv", "var(--muted)"); return; }
-    if (last && ev != null) {  // 예상(회색) vs 실적(색) 막대 나란히 — 두 숫자 모두 높은 막대 위에 위아래로 (위 = 예상 회색, 아래 = 실적 색) → 막대·숫자끼리 안 겹침
-      const yt = Math.min(ly(ev), ly(q[f]));
+    if (last && ev != null) {  // 예상(회색) vs 실적(색) 막대 나란히 — 숫자도 각 막대 위 왼쪽·오른쪽으로 (사용자 11/5: 위아래로 쌓지 말고, 그림을 살짝 가려도 됨)
       g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--axis)") + bar(cx + bw * 0.21, bw * 0.38, q[f], color)
-        + lab(cx, yt - 13, ev, "qv", "var(--muted)") + lab(cx, yt, q[f], "qv b", color);
+        + lab(cx - 1, ly(ev), ev, "qv", "var(--muted)").replace('text-anchor="middle"', 'text-anchor="end"')
+        + lab(cx + 1, ly(q[f]), q[f], "qv b", color).replace('text-anchor="middle"', 'text-anchor="start"');
     } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? (q[f] < 0 ? "var(--bad)" : color) : null);
   });
   g += tipCols((i) => x0 + bw * i + bw / 2, bw, 0, 172, qs.map((q, i) => `${q.q}${q.est ? " (예상 E)" : ""}\n${title}: ${q[f] == null ? "-" : SV(q[f]) + unit}${i === li && ev != null ? `\n예상(컨센서스): ${SV(ev)}${unit}` : ""}`));
@@ -1324,6 +1324,9 @@ function dotMapHTML() {
 // 🚀 이익 증가율이 1년 전보다 높아지나 (사용자 2026-11-04, 하나증권: 코스피는 이익 '증가율 변화'에 민감 — 2011·2016년 순이익은 2년 연속 사상 최대였지만
 //    증가율은 꺾였고, 그때 증가율이 전년보다 높아진 업종이 주도) — EPS 증가율(scen.growth: 마지막 실적 연도 + E 두 해), 없으면 영업이익(tbl.op_g, E 두 해만)
 function accelOf(c) {
+  const t0 = c.tbl || {};
+  if (mktOf(c.code) === "KR" && (t0.op_g || []).some((x) => x != null))  // 한국은 영업이익 증가율 (사용자 11/5) — 작년 = 분기보고서 영업이익 합 (card.op_last), 올해·내년 = 컨센서스
+    return { b: "영업이익", ys: (t0.years || []).slice(0, 3), v: [c.op_last ?? null, t0.op_g[0], t0.op_g[1]] };
   const g = c.scen?.growth, ys = g?.years || [], i = ys.findLastIndex((y) => !/E$/.test(y));
   if (i >= 0 && ys[i + 2]) {
     const e = g.eps || [];
@@ -1346,14 +1349,14 @@ function accelHTML(list) {
   const td = (v, w) => `<td class="${typeof v === "number" && v < 0 ? "dear" : ""}">${accVal(v)}${w == null ? "" : " " + ACC_E[w + 1]}</td>`;
   const body = rows.map(({ c, a }) => {
     const d = dif(a), w = accVerd(a.v[1], a.v[2]);
-    return `<tr><td style="text-align:left;white-space:normal"><a href="#stock/${esc(c.code)}">${esc(c.name.replace("디펜스앤에어로스페이스", " D&A"))}</a>${a.b === "영업이익" ? "*" : ""}${a.ys.join() !== "25,26E,27E" ? ` <span class="src">${esc(a.ys.join("→"))}</span>` : ""}</td>`
+    return `<tr><td style="text-align:left;white-space:normal"><a href="#stock/${esc(c.code)}">${esc(c.name.replace("디펜스앤에어로스페이스", " D&A"))}</a>${a.b === "영업이익" && mktOf(c.code) !== "KR" ? "*" : ""}${a.ys.join() !== "25,26E,27E" ? ` <span class="src">${esc(a.ys.join("→"))}</span>` : ""}</td>`
       + `${td(a.v[0])}${td(a.v[1], accVerd(a.v[0], a.v[1]))}${td(a.v[2], w)}<td><b style="color:var(${w === 1 ? "--good" : w === -1 ? "--bad" : "--muted"})">${d == null ? (w === 1 ? "🚀" : "-") : (d > 0 ? "+" : "") + n(d || 0, 0) + "%p"}</b></td></tr>`;
   }).join("");
-  return `<details class="card" open style="margin-bottom:12px" onclick="event.stopPropagation()"><summary class="chart-title"><b>🚀 이익 증가율이 1년 전보다 높아지나</b> <span class="src">EPS 증가율 · 내년이 올해보다 많이 높아지는 순 · 참고용 (매수·매도 추천 아님)</span></summary>
+  return `<details class="card" open style="margin-bottom:12px" onclick="event.stopPropagation()"><summary class="chart-title"><b>🚀 이익 증가율이 1년 전보다 높아지나</b> <span class="src">${kr && list.some((c) => c.market === "US") ? "한국 = 영업이익 · 미국 = EPS" : kr ? "영업이익" : "EPS"} 증가율 · 내년이 올해보다 많이 높아지는 순 · 참고용 (매수·매도 추천 아님)</span></summary>
     ${ups.length ? `<div class="note">📈 내년 증가율이 올해보다 높아지는 종목 <b>${ups.length}곳</b>: ${ups.map((x) => esc(x.c.name)).join(" · ")}</div>` : ""}
     <div class="tbl-wrap"><table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">종목</th><th>작년</th><th>올해E</th><th>내년E</th><th>내년−올해</th></tr></thead><tbody>${body}</tbody></table></div>
     <div class="kidbox" style="margin-top:6px">🐣 이익이 '얼마나 많은지'보다 '늘어나는 속도가 빨라지는지'를 봐요. 2011년·2016년에 코스피 이익은 2년 연속 사상 최대였지만 늘어나는 속도는 느려졌고, 그때 시장을 이끈 건 속도가 1년 전보다 빨라진 업종이었어요 (하나증권). 🚀 = 1년 전보다 증가율이 5%p 넘게 높아짐 · 🐢 = 5%p 넘게 낮아짐 · ↔ = 비슷.</div>
-    <div class="note src">EPS = 증권사 컨센서스 (한국 에프앤가이드·네이버, 미국 야후·나스닥·Finviz 평균) · 작년 = 마지막 실적 연도 (미국은 회계연도라 이름 옆에 연도) · * = EPS 증가율이 없어 영업이익 증가율 (올해·내년만) · 흑자 전환은 증가율 대신 글자로</div>
+    <div class="note src">${kr ? "한국 = 영업이익 증가율 (올해·내년 = 에프앤가이드 컨센서스 · 작년 = 분기보고서 영업이익 4개 분기 합) · " : ""}미국 = EPS 증가율 (야후·나스닥·Finviz 평균, 회계연도라 이름 옆에 연도) · * = EPS 증가율이 없어 영업이익 증가율 (올해·내년만) · 흑자 전환은 증가율 대신 글자로</div>
     ${kr ? `<div class="accSec"></div>` : ""}</details>`;
 }
 // 🏭 코스피 업종별 순이익 증가율 (keychart.yaml eps_g — 증권사 표를 숫자로 옮김) · 우리 종목이 어느 업종인지 같이
@@ -1375,7 +1378,7 @@ let EARN_MKT = "KR";
 function renderEarn() {
   const keep = MKT;
   MKT = EARN_MKT;  // 아래 함수들은 MKT 로 시장을 고름
-  const h = easyNewsHTML() + kqNewsHTML() + irCalHTML();
+  const h = kqNewsHTML() + irCalHTML();  // 사용자 11/5: 제일 최신 발표가 맨 위 — 쉬운 요약은 그 회사 카드 안·날짜순 목록 안으로
   MKT = keep;
   $("#earnBody").innerHTML = `<div class="seg earnmk" style="margin-bottom:8px">${[["KR", "🇰🇷 한국"], ["US", "🇺🇸 미국"]].map(([k, l]) => `<button data-mk="${k}" class="${k === EARN_MKT ? "on" : ""}">${l}</button>`).join("")}</div>`
     + `<div id="earnJump"></div><div id="earnList">${h || `<div class="empty">최근 3일 안에 나온 ${EARN_MKT === "US" ? "미국" : "한국"} 종목 실적이 없어요.</div>`}</div>`;
@@ -1383,23 +1386,37 @@ function renderEarn() {
 }
 document.addEventListener("click", (e) => { const b = e.target.closest(".earnmk button"); if (b) { EARN_MKT = b.dataset.mk; renderEarn(); } });
 function kqNewsHTML() {
-  // 최근 발표일 먼저 (같은 날이면 보유 → 관심 순서 그대로)
-  const list = DASH.stocks.filter((c) => c.kq_brief && mktOf(c.code) === MKT).sort((a, b) => (b.kq_brief.date || "").localeCompare(a.kq_brief.date || ""));
+  // 최신 날짜 먼저 (사용자 11/5) — 실적 카드 · 쉬운 요약만 있는 회사 · 공시·전망 변화(events.yaml)를 한 목록에서 (같은 날이면 실적 카드 → 보유 → 관심 순서 그대로)
+  const cut = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10), nm = (c) => DASH.stocks.find((s) => s.code === c)?.name;
+  const easyOf = (code) => { const l = EARNINGS[code]?.[0]; return l?.easy?.length && l.date >= cut ? l : null; };
+  const kid = (e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">🐣 쉬운 요약 · ${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
+      <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`;
+  const list = DASH.stocks.filter((c) => c.kq_brief && mktOf(c.code) === MKT);
   const wait = DASH.stocks.filter((c) => !c.kq_brief && c.kq_wait && mktOf(c.code) === MKT);
-  if (!list.length && !wait.length) return "";
-  const waitHtml = wait.length ? `<div class="note">⏳ 잠정실적 공시는 났고 숫자를 읽는 중 (다음 갱신 때 반영): ${wait.map((c) => `<a href="#stock/${esc(c.code)}">${esc(c.name)}</a> ${esc(c.kq_wait || "")}`).join(" · ")}</div>` : "";
-  return `<h2>🧾 실적 발표 <span class="src">최근 3일 · 회색 = 발표 전 예상(컨센서스), 색 = 실적</span></h2>${waitHtml}<div class="grid">${list.map((c) => {
-    const k = c.kq_brief;
+  const rows = list.map((c) => {
+    const k = c.kq_brief, ez = easyOf(c.code);
     const head = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:18px;color:var(--s1)">${esc(c.name)} (${esc(c.code)})</b>
       <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${capTxt(c)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
-    return `<div class="card" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">${head}
+    return { date: k.date || "", html: `<div class="card" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">${head}
       <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${k.cur === "USD" ? "발표" : "공시"}</a>` : ""}</div>
+      ${ez ? kid({ date: ez.date, title: `${ez.quarter} 실적발표`, easy: ez.easy, sum: true }) : ""}
       ${priceBox(c)}
       ${kqTable(k)}
       ${moodHTML(c)}
       ${kqBox(k, c.code)}
-    </div>`;
-  }).join("")}</div>`;
+    </div>` };
+  });
+  const shown = new Set(list.map((c) => c.code));
+  Object.entries(EARNINGS).forEach(([code, l]) => {  // 실적 카드는 없는데 쉬운 요약은 있는 회사
+    const ez = easyOf(code);
+    if (ez && !shown.has(code) && mktOf(code) === MKT) rows.push({ date: ez.date, html: `<div class="card" data-jump="${esc(code)}" data-jname="${esc(nm(code) || code)}">${kid({ date: ez.date, code, title: `${ez.quarter} 실적발표`, easy: ez.easy, sum: true })}</div>` });
+  });
+  (EVENTS || []).filter((e) => e.date >= cut && e.easy?.length && (!(e.market || e.code) || (e.market || mktOf(e.code)) === MKT))  // 종목·시장이 없는 이벤트(업종 전체)는 두 탭 모두
+    .forEach((e) => rows.push({ date: e.date, html: `<div class="card"${e.code ? ` data-jump="${esc(e.code)}" data-jname="${esc(nm(e.code) || e.code)}"` : ""}>${kid(e)}</div>` }));
+  if (!rows.length && !wait.length) return "";
+  rows.sort((a, b) => b.date.localeCompare(a.date));
+  const waitHtml = wait.length ? `<div class="note">⏳ 잠정실적 공시는 났고 숫자를 읽는 중 (다음 갱신 때 반영): ${wait.map((c) => `<a href="#stock/${esc(c.code)}">${esc(c.name)}</a> ${esc(c.kq_wait || "")}`).join(" · ")}</div>` : "";
+  return `<h2>🧾 실적 발표 <span class="src">최근 3일 · 최신 발표 먼저 · 🐣 = 쉬운 요약 · 회색 = 발표 전 예상(컨센서스), 색 = 실적</span></h2>${waitHtml}<div class="grid">${rows.map((r) => r.html).join("")}</div>`;
 }
 // ⚠ 회계 기준 바뀜 메모 (keychart.yaml acct) — 이익률을 1년 전·다른 회사와 맞댈 때 꼭 볼 것. full = 🧾 최신 분기 실적 안, 아니면 그림 위 한 줄
 function acctHTML(code, full = true) {
@@ -1887,20 +1904,8 @@ function irCalHTML() {
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">보유·관심·공동 · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
     <ul class="irl">${items.map((e) => `<li>${irWhen(e)} <a href="#stock/${esc(e.code)}">${esc(e.name)}</a>${gl[e.group] || ""} · ${esc(e.title || "")}${e.live ? " · 🔴 라이브" : ""}${e.segc ? ` · <a href="#stock/${esc(e.code)}">🎯 ${esc(e.segc)} 부문 예상</a>` : ""}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${e.script_url ? ` · <a href="${esc(e.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</li>`).join("")}</ul></details>`;
 }
-// 🐣 오늘의 쉬운 요약 (첫 화면): 최근 3일 실적발표 요약의 easy + config/events.yaml (공시·촉매·전망 변화) — 바쁠 때 이것만 읽어도 되게
+// 🐣 쉬운 요약 (최근 3일 실적발표 easy + config/events.yaml 공시·촉매·전망 변화) — 11/5 부터 🧾 실적 발표 목록 안에 날짜순으로 (kqNewsHTML)
 let EVENTS = [];
-function easyNewsHTML() {
-  const cut = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10), nm = (c) => DASH.stocks.find((s) => s.code === c)?.name;
-  const items = [
-    ...Object.entries(EARNINGS).flatMap(([code, l]) => (l[0]?.easy?.length && l[0].date >= cut ? [{ date: l[0].date, code, title: `${l[0].quarter} 실적발표`, easy: l[0].easy, sum: true }] : [])),
-    ...(EVENTS || []).filter((e) => e.date >= cut && e.easy?.length),
-  ].filter((e) => !(e.market || e.code) || (e.market || mktOf(e.code)) === MKT)  // 종목·시장이 없는 이벤트(업종 전체)는 두 탭 모두
-    .sort((a, b) => b.date.localeCompare(a.date));
-  if (!items.length) return "";
-  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>🐣 오늘의 쉬운 요약</b> <span class="src">최근 3일 · 실적발표·공시·증권사 전망 변화 · 핵심만 쉬운 말로</span></summary>
-    ${items.map((e) => `<div class="kidbox"${e.code ? ` data-jump="${esc(e.code)}" data-jname="${esc(nm(e.code) || e.code)}"` : ""}><b>${e.code ?`<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
-      <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
-}
 // 🧾 일회성 점검 (earnings.yaml once): 발표 이익 → 한 번만 있는 이익(+)·비용(−) → 빼면 실질 — 예상 상회·하회가 일회성 때문인지
 function onceHTML(o) {
   if (!o) return "";
@@ -1991,7 +1996,7 @@ function moodHTML(c) {
   const sig = [
     r3 == null ? null : [r3 >= 15 ? 1 : r3 <= -10 ? -1 : 0, `최근 3개월 주가 ${pct(r3, 0, true)}`],
     bp == null ? null : [bp >= 80 ? 1 : bp <= 20 ? -1 : 0, `PER 10년 밴드 ${n(bp, 0)}% 위치${bp >= 80 ? " (비싼 편)" : bp <= 20 ? " (싼 편)" : ""}`],
-    rv == null ? null : [rv >= 5 ? 1 : rv <= -5 ? -1 : 0, `내년 EPS 예상치 90일 새 ${pct(rv, 1, true)}`],
+    rv == null ? null : [rv >= 5 ? 1 : rv <= -5 ? -1 : 0, `증권사가 본 내년 이익(EPS)이 3달 전보다 ${n(Math.abs(rv), 1)}% ${rv >= 0 ? "올라감" : "내려감"}`],  // 사용자 11/5: '90일 새 -4.4%' 가 무슨 말인지 모르겠다
   ].filter(Boolean);
   if (!sig.length) return "";
   const s = sig.reduce((a, [v]) => a + v, 0), t = s >= 2 ? "🔥 높음" : s <= -2 ? "🧊 낮음" : "🙂 보통";
@@ -3643,7 +3648,7 @@ async function openStock(code) {
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
     const growHtml = await growthBlock(code, d);
-    const issueHtml = (await issuesBlock(code)) + (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));
+    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     try { await gpeGet(); } catch (_) { /* 🌍 글로벌 비교 그림만 빠짐 */ }
     const EXP_CODE = { "003230": ["ramen", "🍜 라면 수출"], "278470": ["cosmetics", "💄 화장품 수출"], "483650": ["cosmetics", "💄 화장품 수출"], "034020": ["power", "⚡ 전력기기 수출 (변압기·GIS·케이블)"],
@@ -3955,7 +3960,8 @@ function showView() {
   const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
-  const view = { "#pbr": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  // 처음 열면 🧾 실적 탭 (사용자 11/5) — 🇰🇷 보유는 #kr
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   $("#earnView").hidden = view !== "earn";
   if (view === "earn") renderEarn();
   $("#chartView").hidden = view !== "chart";
@@ -5008,19 +5014,6 @@ async function filingsBlock(code) {
   const cap = DASH.stocks.find((x) => x.code === code)?.market_cap;
   return `<h3>📢 중요 공시 <span class="src">${esc(FILINGS.rule || "")} · ${esc(FILINGS.updated_at || "")}</span></h3><div class="card">
     <ul class="irl">${rows.map((r) => `<li><span class="src">${esc(r.d)}</span> <span class="qtag${r.lv === "bad" ? " bad" : r.lv === "good" ? "" : " muted"}">${esc(r.k)}</span> ${esc(r.t)}${r.x ? ` — <b>${esc(r.x)}</b>` : ""}${cap && r.amt && /공급계약|시설/.test(r.k) ? ` <span class="src">시총 대비 ${n((r.amt / cap) * 100, 1)}%</span>` : ""}${r.why ? ` <span class="src">· ${esc(r.why)}</span>` : ""}${r.u ? ` <a href="${esc(r.u)}" target="_blank" rel="noopener">공시</a>` : ""}</li>`).join("")}</ul></div>`;
-}
-// 📰 핵심 이슈 (종목 상세, 실적발표 아래): news.yaml issues 짧은 이슈 + 📌 고정 기사 + 최근 기사 3개 → 뉴스 탭으로
-async function issuesBlock(code) {
-  let r;
-  try { r = (await newsGet()).stocks.find((x) => x.code === code); } catch (_) { return ""; }
-  if (!r) return "";
-  const own = (r.own || []).slice(0, 3), iss = r.issues || [];
-  if (!iss.length && !r.pins.length && !own.length) return "";
-  return `<h3>📰 핵심 이슈 <span class="src"><a href="#news/${esc(code)}">뉴스 탭에서 전체 보기 →</a></span></h3><div class="card">
-    ${iss.length ? `<ul class="irl">${iss.map((x) => `<li>${x.d ? `<span class="src">${esc(x.d)}</span> ` : ""}${esc(x.t || x)}${x.u ? ` <a href="${esc(x.u)}" target="_blank" rel="noopener">기사</a>` : ""}</li>`).join("")}</ul>` : ""}
-    ${r.pins.length ? `<ul class="news">${r.pins.slice(0, 3).map((p) => `<li>📌 <a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t)}</a>${p.memo ? ` <span class="src">${esc(p.memo)}</span>` : ""}</li>`).join("")}</ul>` : ""}
-    ${own.length ? `<div class="news-h">최근 기사</div>${newsList(own)}` : ""}
-    <div class="note"><a href="#news/${esc(code)}">📰 뉴스 탭에서 ${esc(r.name)} 기사·경쟁사·외신 전체 보기 →</a></div></div>`;
 }
 async function loadNews() {
   try { await newsGet(); }

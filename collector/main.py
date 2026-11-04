@@ -29,6 +29,7 @@ QTRS = read_json(CACHE / "quarters.json") or {}  # 분기 실적 (야후는 최�
 SEGS = read_json(CACHE / "segments.json") or {}  # 한국 '주요제품 매출구성'(%)을 보고서 시점별로 쌓음 → 부문 비중 추이
 SEG_US = load_yaml("segments.yaml") or {}  # 분기 제품·부문별 매출 (공식 실적 자료를 보고 직접 적음, 미국 + 한국 보유종목)
 SEGQ = read_json(CACHE / "segq.json") or {}  # 🧱 분기 제품군·지역 매출을 쌓아 둔 것 (collector/segq.py — 미국 stockanalysis)
+SEGL = {**(read_json(CACHE / "sec_seg.json") or {}), **(read_json(CACHE / "dart_seg.json") or {})}  # 🧱 10년: 미국 10-Q·10-K (tools/sec_segments.py) · 한국 DART 보고서
 KPI_CFG = load_yaml("kpi.yaml") or {}  # 🔑 핵심 지표 (fcf_add = 야후에 아직 없는 최신 분기 FCF, 보도자료)
 NOTES = load_yaml("notes.yaml") or {}  # 적정주가 칸 메모 (증권사 의견, 28E 칸 등)
 SEGC = load_yaml("seg_cons.yaml") or {}  # 🎯 사업부문별 컨센서스 vs 실적
@@ -541,7 +542,7 @@ def stock_detail(h, rates_now, fx):
     s = SEG_US.get(code) or SEG_US.get(fcode)  # 회사 실적 자료를 보고 직접 적은 분기 금액이 있으면 그걸 씀 (미국 백만 달러, 한국 억원)
     if s:
         det["seg"] = {"unit": "amt", "src": s.get("src"), "hist": {q: {k: v * (1e6 if mkt == "US" else 1e8) for k, v in m.items()} for q, m in s["quarters"].items()}}
-    det["segq"] = seg_quarters(SEGQ.get(code) or SEGQ.get(oc), det["seg"], det["longq"], mkt)
+    det["segq"] = seg_quarters(SEGQ.get(code) or SEGQ.get(oc), det["seg"], det["longq"], mkt, SEGL.get(code) or SEGL.get(oc))
     ls = det.get("longq_seg")
     if ls and det["segq"]:  # 삼성전자: 부문 금액이 없는 예전 분기는 10년 치가 있는 DS(반도체) + 나머지 부문으로 (DS 는 부문 사이 거래 포함)
         p = det["segq"].setdefault("prod", {})
@@ -614,6 +615,8 @@ def stock_detail(h, rates_now, fx):
     det["card"]["sa_div"] = ((SOMONG.get(code) or {}).get("my") or {}).get("sa_div")  # 배당주 점검 (시킹알파 숫자를 직접 적은 것)
     det["card"]["notes"] = NOTES.get(code)
     det["segc"] = SEGC.get(code)
+    if mkt == "KR":  # 🚀 이익 증가율 표 '작년' 칸 = 마지막 실적 연도 영업이익 증가율 (사용자 11/5: 한국은 영업이익 기준)
+        det["card"]["op_last"] = op_last_g(det["longq"], (tbl or {}).get("years"))
     k = det.get("kq") or {}  # 카드 꼬리표: 새 분기 실적을 발표한 지 3일 안이거나, 잠정실적 공시가 나고 숫자 반영을 기다리는 중
     det["card"]["kq_date"] = k.get("date")  # 마지막 실적 발표일 → 📬 시킹알파 값 다시 볼 때 (화면 saDue)
     if k.get("date") and (now_kst().date() - pd.Timestamp(k["date"]).date()).days <= 3:
@@ -691,40 +694,64 @@ GEO_KO = {"Americas": "미주", "Europe": "유럽", "Greater China": "중화권"
           "US and Canada": "미국·캐나다", "Rest of World": "그 밖 지역", "Other Americas": "그 밖 미주", "Hedging Gains": "환헤지 이익"}
 
 
-def seg_quarters(raw, seg, longq, mkt):
+def op_last_g(longq, years):
+    """마지막 실적 연도('25') 영업이익 증가율 = 그해 분기 4개 합 ÷ 1년 전 4개 합 (억원, DART 분기보고서). 적자는 '적자', 적자→흑자는 '흑전'."""
+    y = next((str(x) for x in years or [] if not str(x).endswith("E")), None)
+    if not y or not y.isdigit() or not longq:
+        return None
+    tot = lambda yy: (lambda v: sum(v) if len(v) == 4 else None)([r["op"] for k, r in longq.items() if k.startswith(yy + ".") and r.get("op") is not None])
+    cur, prev = tot(y), tot(f"{int(y) - 1:02d}")
+    if cur is None or prev is None:
+        return None
+    return "적자" if cur <= 0 else "흑전" if prev <= 0 else rnd((cur / prev - 1) * 100, 1)
+
+
+def _match(src, dst):
+    """src 칸 이름 → dst 칸 이름: 겹치는 분기 2개 이상에서 모두 1.5% 안으로 같아야 같은 칸 (우연히 한 분기만 비슷한 건 안 바꿈)."""
+    names, used = {}, set()
+    for nm in sorted({x for r in src.values() for x in r}):
+        for kn in sorted({x for r in dst.values() for x in r} - used):
+            pairs = [(r[nm], dst[lb][kn]) for lb, r in src.items() if r.get(nm) and kn in (dst.get(lb) or {})]
+            if len(pairs) >= 2 and all(abs(b / a - 1) < 0.015 for a, b in pairs):
+                names[nm] = kn
+                used.add(kn)
+                break
+    return names
+
+
+def seg_quarters(raw, seg, longq, mkt, long=None):
     """🧱 분기 매출 쌓은 막대 {"prod"|"geo": {'26.3Q': {이름: 백만 달러|억원}}} (10년 실적 추이와 같은 분기 이름·단위).
-    제품군 = cache/segq.json, 없으면 segments.yaml 분기 금액(🧩 칸과 같은 숫자). 영어 이름은 같은 분기 금액이 1.5% 안으로 같은
-    segments.yaml 한글 이름으로 바꿈. 합이 매출보다 3% 넘게 모자라면(아마존 지역 = AWS 빠짐) 모자란 만큼 '나머지' 칸."""
+    긴 자료(long = 미국 SEC 10-Q·10-K XBRL · 한국 DART 보고서, 8분기 이상)가 바탕 → 그 뒤 최신 분기는 stockanalysis(raw) 에서
+    칸 이름이 모두 맞을 때만 이어 붙임. 긴 자료가 없으면 stockanalysis → 그것도 없으면 segments.yaml 분기 금액(🧩 칸과 같은 숫자).
+    영어 이름은 segments.yaml 한글 이름과 금액이 맞으면 한글로, 지역은 GEO_KO. 합이 매출보다 3% 넘게 모자라면 '나머지' 칸."""
     div = 1e6 if mkt == "US" else 1e8
     conv = lambda m: {_klabel(e): {nm: v / div for nm, v in r.items() if v is not None} for e, r in sorted(m.items())}
     ko = conv(seg["hist"]) if seg and seg.get("unit") == "amt" else {}
     out = {}
     for k in ("prod", "geo"):
-        q = conv((raw or {}).get(k) or {}) or (ko if k == "prod" else {})
+        sa, lg = conv((raw or {}).get(k) or {}), conv((long or {}).get(k) or {})
+        if len(lg) >= 8:
+            nm, q = _match(sa, lg), dict(lg)
+            q.update({lb: {nm[x]: v for x, v in r.items()} for lb, r in sa.items() if lb > max(lg) and r and all(x in nm for x in r)})
+            src = long["src_" + k] + (" + 최근 분기 stockanalysis" if max(q) > max(lg) else "")
+        else:
+            q = sa or (ko if k == "prod" else {})
+            src = "stockanalysis.com (TipRanks · 회사 실적 자료)" if sa else (seg or {}).get("src")
         if not q:
             continue
-        out["src_" + k] = (raw or {}).get("src_" + k) or ("stockanalysis.com (TipRanks · 회사 실적 자료)" if (raw or {}).get(k) else seg.get("src"))
-        names, used = dict(GEO_KO) if k == "geo" else {}, set()
-        if k == "prod" and q is not ko:  # 겹치는 분기 2개 이상에서 모두 1.5% 안으로 같아야 같은 칸 (우연히 한 분기만 비슷한 건 안 바꿈)
-            for nm in sorted({x for r in q.values() for x in r}):
-                for kn in sorted({x for r in ko.values() for x in r} - used):
-                    pairs = [(r[nm], ko[lb][kn]) for lb, r in q.items() if r.get(nm) and kn in (ko.get(lb) or {})]
-                    if len(pairs) >= 2 and all(abs(b / a - 1) < 0.015 for a, b in pairs):
-                        names[nm] = kn
-                        used.add(kn)
-                        break
+        out["src_" + k] = src
+        names = dict(GEO_KO) if k == "geo" else _match(q, ko) if q is not ko else {}
         rows = {}
         for lb, r in q.items():
             row = {}
-            for nm, v in r.items():  # 이름이 겹치면 더함 (덮어쓰면 매출이 사라짐)
-                row[names.get(nm, nm)] = rnd(row.get(names.get(nm, nm), 0) + v)
+            for x, v in r.items():  # 이름이 겹치면 더함 (덮어쓰면 매출이 사라짐)
+                row[names.get(x, x)] = rnd(row.get(names.get(x, x), 0) + v)
             rev, tot = (longq or {}).get(lb, {}).get("rev"), sum(v for v in row.values() if v > 0)
             if rev and tot < rev * 0.97:
                 row["나머지"] = rnd(rev - tot)
             rows[lb] = row
         out[k] = rows
     return out or None
-
 
 def op_yoy(code, mkt, kqd, qtrs, manual=None, n=5, dq=None):
     """📈 영업이익 성장률 (YoY) {'26.3Q': %} 최근 n 분기 — 국내는 이걸로 PER 을 정함.
