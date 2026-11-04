@@ -4007,23 +4007,108 @@ function chipHTML(k, ch) {
   const ar = ch.s === "up" ? "▲" : ch.s === "down" ? "▼" : ch.a ? "▲" : "▼";
   return `<span class="bchip ${ch.s}${ch.ch ? " chg" : ""}" title="${ch.s === "up" ? "이평 위·이평 상승" : ch.s === "down" ? "이평 아래·이평 하락" : "엇갈림"}${ch.ch ? " (오늘 바뀜)" : ""}">${k}${ar}</span>`;
 }
+// 🪜 와인스타인 4단계 판 (align.json stage ← collector/board.py stage) — 사용자 11/4: 스탠 와인스타인 『주식투자 최적의 타이밍을 잡는 법』 + 전달 그림 '한국 종목 단계 분포'
+const STG = { 1: ["1단계", "바닥", "var(--muted)"], 2: ["2단계", "상승", "var(--bad)"], 3: ["3단계", "천장", "var(--warn)"], 4: ["4단계", "하락", "var(--s1)"] };
+const stgTag = (s, run) => (STG[s] ? `<span class="sbadge" style="background:none;border:1.5px solid ${STG[s][2]};color:${STG[s][2]}">${STG[s][0]} ${STG[s][1]}${run ? ` · ${run}주째` : ""}</span>` : "");
+const eun = (w) => ((w.charCodeAt(w.length - 1) - 0xac00) % 28 ? "은" : "는"), iga = (w) => ((w.charCodeAt(w.length - 1) - 0xac00) % 28 ? "이" : "가");
+function stageSpark(c) {  // 2년 주봉 (검정) + 30주선 (주황) + 주마다 단계 배경색
+  const W = 300, H = 112, x0 = 4, x1 = 258, top = 12, bot = 90, N = c.c.length;
+  const vals = [...c.c, ...c.ma].filter((v) => v != null), lo = Math.min(...vals), hi = Math.max(...vals);
+  const X = (i) => x0 + ((x1 - x0) * i) / (N - 1), Y = (v) => bot - ((v - lo) / (hi - lo || 1)) * (bot - top), bw = (x1 - x0) / (N - 1);
+  let g = "";
+  c.s.forEach((s, i) => { if (STG[s]) g += `<rect x="${(X(i) - bw / 2).toFixed(1)}" y="${top}" width="${(bw + 0.4).toFixed(1)}" height="${bot - top}" fill="${STG[s][2]}" fill-opacity=".14"/>`; });
+  c.t.forEach((d, i) => { if (i && d.slice(0, 5) !== c.t[i - 1].slice(0, 5) && /\.(01|07)$/.test(d.slice(0, 5))) g += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle" class="qx">${d.slice(0, 5)}</text>`; });
+  const path = (a) => a.map((v, i) => (v == null ? "" : `${i && a[i - 1] != null ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`)).join("");
+  g += `<path d="${path(c.ma)}" fill="none" stroke="var(--warn)" stroke-width="1.6"/><path d="${path(c.c)}" fill="none" stroke="var(--ink)" stroke-width="1.6"/>`;
+  g += `<text x="${x1 + 3}" y="${Y(c.c[N - 1]) + 4}" class="qv b">${sg(c.chg_2y)}</text>`;
+  if (c.peak_2y != null && c.peak_2y > (c.chg_2y ?? 0) + 8) g += `<text x="${x1 + 3}" y="${top + 2}" class="qx">${sg(c.peak_2y)}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.name)} 2년 주봉·30주선·단계">${g}</svg>`;
+}
+function stageDist(S) {  // 주마다 판정 대상 종목의 단계 비율 (아래부터 2 → 1 → 3 → 4, 가운데 점선 = 50%)
+  const W = 600, H = 182, x0 = 4, x1 = 510, top = 8, bot = 156, T = S.t, N = T.length;
+  const X = (i) => x0 + ((x1 - x0) * i) / (N - 1), Y = (p) => bot - (p / 100) * (bot - top);
+  let g = "", base = Array(N).fill(0);
+  const labs = [];
+  [2, 1, 3, 4].forEach((k) => {
+    const v = (S.dist[`s${k}`] || []).map((x) => x ?? 0), up = base.map((b, i) => b + v[i]);
+    const pts = [...up.map((u, i) => `${X(i).toFixed(1)},${Y(u).toFixed(1)}`), ...base.map((b, i) => `${X(i).toFixed(1)},${Y(b).toFixed(1)}`).reverse()];
+    g += `<polygon points="${pts.join(" ")}" fill="${STG[k][2]}" fill-opacity=".5"/>`;
+    labs.push({ y: Y((base[N - 1] + up[N - 1]) / 2) + 4, t: `${STG[k][0]} ${n(v[N - 1], 0)}%`, col: STG[k][2] });
+    base = up;
+  });
+  labs.forEach((l, i) => { if (i && l.y > labs[i - 1].y - 12) l.y = labs[i - 1].y - 12; });  // 아래부터 쌓으며 글자가 안 겹치게
+  g += labs.map((l) => `<text x="${x1 + 5}" y="${l.y.toFixed(1)}" class="qx" style="fill:${l.col};font-weight:700">${l.t}</text>`).join("");
+  g += `<line x1="${x0}" x2="${x1}" y1="${Y(50)}" y2="${Y(50)}" stroke="var(--ink)" stroke-dasharray="4 3" opacity=".55"/>`;
+  T.forEach((d, i) => { if (i && d.slice(0, 5) !== T[i - 1].slice(0, 5) && /\.(01|07)$/.test(d.slice(0, 5))) g += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle" class="qx">${d.slice(0, 5)}</text>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="한국 종목 단계 분포 2년">${g}</svg>`;
+}
+function stageHTML(S, date) {
+  if (!S?.sec?.length) return "";
+  const secs = S.sec, D = S.dist, L = (S.t || []).length - 1, ago = Math.max(0, L - 4);
+  const by = (k) => secs.filter((s) => s.st === k), nm = (a) => a.map((s) => s.name.split("·")[0]).join("·");
+  const parts = [2, 1, 3, 4].map((k) => { const a = by(k); return !a.length ? (k === 2 ? "2단계는 없고" : "") : `${STG[k][0]} ${a.length}개${k !== 4 ? `(${nm(a)})` : ""}`; }).filter(Boolean);
+  const chg = secs.filter((s) => s.prev && s.prev !== s.st);
+  const pj = parts.join(", "), lc = pj.replace(/\)$/, "").slice(-1);
+  const sum = `${S.idx.map((x) => `${x.name}${eun(x.name)} ${STG[x.st]?.[0] || "-"} ${x.run}주째(30주선 ${sg(x.gap, 0)})`).join(", ")}예요. 업종 ${secs.length}개 가운데 ${pj}${(lc.charCodeAt(0) - 0xac00) % 28 ? "이에요" : "예요"}.`
+    + (chg.length ? ` 이번 주 ${chg.map((s) => `${s.name}${iga(s.name)} ${s.prev}→${s.st}단계`).join(", ")}로 바뀌었어요.` : "")
+    + ` 종목 중 2단계 비중은 4주 전 ${n(D.s2[ago], 0)}% → ${n(D.s2[L], 0)}%, 4단계는 ${n(D.s4[ago], 0)}% → ${n(D.s4[L], 0)}%예요.`;
+  const mem = (s) => `<details class="binfo" style="margin-top:4px"><summary class="src">ⓘ 구성 종목 ${s.n}개 · 어떤 업종을 묶었나</summary>
+    <div class="src">${s.mem.slice(0, 40).map(([m, , st]) => `<span style="color:${STG[st]?.[2] || "inherit"}">●</span>${esc(m)}`).join(" · ")}${s.mem.length > 40 ? ` 외 ${s.mem.length - 40}개` : ""}</div>
+    <div class="src" style="margin-top:4px">● 색 = 그 종목의 지금 단계 · 시가총액 큰 순 · 묶은 WICS 업종: ${(s.wics || []).map(esc).join(" · ")} · 이 업종 지수 = 위 종목들을 시가총액 크기만큼 섞음</div></details>`;
+  const card = (c, idx) => `<div class="bcard"${idx ? ' style="border:2px solid var(--ink)"' : ""}><div class="bhd"><b>${esc(c.name)}</b><span class="${kcol(c.chg_w)} bchd">${sg(c.chg_w, 1)}</span></div>
+    <div style="margin:2px 0">${stgTag(c.st, c.run)}${c.prev && c.prev !== c.st ? ` <span class="src">이번 주 ${c.prev}→${c.st}</span>` : ""}</div>${stageSpark(c)}
+    <div class="src bft">${c.n ? `${c.n}종목 · ` : ""}30주선 대비 ${sg(c.gap, 0)} · 1개월 ${sg(c.r1m)}${c.rel3m != null ? ` · 3개월 상대 ${sg(c.rel3m, 0, "%p")}` : ""}${c.p2 != null ? ` · 종목 2단계 ${n(c.p2, 0)}%·4단계 ${n(c.p4, 0)}%` : ""}</div>${c.mem ? mem(c) : ""}</div>`;
+  const rows = [[1, "바닥 (기초 다지기)", "오래 내린 뒤 30주선이 평평해지고, 주가가 선 위아래를 오가요", "아직 방향이 없어 기다리는 구간", "4단계 다음에 30주선이 평평하거나(4주 사이 ±1% 안) 주가와 선 방향이 엇갈림"],
+    [2, "상승", "주가가 바닥 범위와 30주선 위로 올라서고, 선도 오르기 시작해요", "책에서 '사는 구간'으로 봐요 — 거래량이 같이 늘며 올라서면 더 믿을 만하다고 해요", "주가 > 30주선 그리고 30주선이 4주 전보다 +1% 넘게 오름"],
+    [3, "천장", "많이 오른 뒤 30주선이 평평해지고, 주가가 선 위아래로 크게 흔들려요", "새로 사지 않고 번 것을 지키는 구간", "2단계 다음에 1단계와 같은 '애매한' 상태 (선이 평평하거나 방향이 엇갈림)"],
+    [4, "하락", "주가가 30주선 아래로 내려가고, 선도 꺾여 내려가요", "책에서 '갖고 있지 말라'는 구간 — 싸 보여도 더 내릴 수 있다고 해요", "주가 < 30주선 그리고 30주선이 4주 전보다 -1% 넘게 내림"]];
+  const how = `<details class="fvt"><summary class="chart-title" style="margin-top:8px">🔎 어떻게 나누나 — 책 내용 · 우리 계산 규칙 (눌러서 열기)</summary>
+    <div class="kidbox" style="margin-top:6px">🐣 주가는 계절처럼 한 바퀴를 돌아요. 스탠 와인스타인은 <b>30주(약 7개월) 평균 가격선</b>을 기준으로 그 한 바퀴를 4단계로 나눴어요 — 땅을 다지고(1) · 오르고(2) · 꼭대기에서 흔들리고(3) · 내려가요(4). 그리고 다시 1단계로 돌아와요.</div>
+    <div class="tbl-wrap"><table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">단계</th><th style="text-align:left">모양</th><th style="text-align:left">책에서 보는 법</th><th style="text-align:left">우리 계산 규칙</th></tr></thead><tbody>
+      ${rows.map(([k, a, b, c2, d]) => `<tr><td style="text-align:left;white-space:nowrap"><b style="color:${STG[k][2]}">${k} ${a}</b></td><td style="text-align:left;white-space:normal">${b}</td><td style="text-align:left;white-space:normal">${c2}</td><td style="text-align:left;white-space:normal">${d}</td></tr>`).join("")}</tbody></table></div>
+    <ul class="irl" style="margin-top:6px">
+      <li>📅 주봉 = 금요일 종가 (끝난 주만) · 30주선 = 최근 30주 종가 평균 · 평일 아침·장 마감 뒤 다시 계산${date ? ` · 지금 ${esc(date)} 주 기준` : ""}</li>
+      <li>🧮 처음 판정: 확실한 2·4단계가 나오기 전엔 30주선이 26주 전보다 높으면 3, 낮으면 1 · 그 뒤로는 '바로 전 확실한 단계'를 기억해서 2 다음 애매함 = 3, 4 다음 애매함 = 1</li>
+      <li>👥 판정 대상 = 코스피·코스닥 보통주 중 그 주 시가총액 3,000억 이상 ${n(S.n)}종목 (리츠·인프라 펀드 빼고 — 📈 주봉 정배열과 같은 종목들)</li>
+      <li>🏭 업종 = FnGuide WICS 업종(와이즈리포트)을 ${secs.length}개로 묶음 (3종목 미만 묶음은 뺌) · 업종 지수 = 그 업종 종목을 시가총액 크기만큼 섞어 매주 수익률을 이어 붙인 값 · 카드의 ⓘ 에 묶은 종목·업종</li>
+      <li>📊 분포 그림 = 주마다 판정 대상 중 각 단계 종목 비율 · 빨강(2단계)이 두꺼울수록 오르는 종목이 많은 시장, 파랑(4단계)이 두꺼울수록 내리는 종목이 많은 시장</li>
+      <li>🔢 카드 숫자: 30주선 대비 = 업종 지수 ÷ 30주선 − 1 · 1개월 = 4주 수익률 · 3개월 상대 = 13주 수익률 − 코스피 13주 수익률 · 종목 2단계·4단계 = 그 업종 종목 중 지금 2·4단계 비율 · 배경색 = 그 주의 업종 단계 · 코스피·코스닥 = 야후 지수 주봉</li>
+      <li>⚠ 한계: 지금 시총 3,000억 이상인 종목으로만 과거를 계산해서 예전에 컸다가 작아진 종목은 빠져요 (생존 편향) · 책은 저항선·거래량·상대강도까지 눈으로 보지만 여기선 30주선 규칙만 기계적으로 써요 · 참고용 (매수·매도 추천 아님)</li></ul>
+    <div class="note src">📚 스탠 와인스타인 『주식투자 최적의 타이밍을 잡는 법』(원서 Secrets for Profiting in Bull and Bear Markets) · 🗣 11/3 전달 글 (주식하는하루키 블로그): 사이클 주식(조선·방산·유행 타는 소비재)이나 한 번 크게 오른 주식에 잘 맞는 방법 · 지금 한국 업종 대부분(약 80%)이 3~4단계, 1~2단계는 20% 정도 · 다시 1~2단계로 가려면 매출·영업이익이 빨라지거나 앞으로의 기대가 올라가야 하는데 그런 업종이 아직 잘 안 보인다는 개인 의견 → 🚀 '이익 증가율이 1년 전보다 높아지나' 표(보유·관심 탭)와 같이 보기</div></details>`;
+  return `<h3 data-jump="stage" data-jname="🪜 4단계 (한국)">🪜 와인스타인 4단계 — 한국 업종·종목 <span class="src">2년 주봉 · 30주선 · ${esc(date || "")} 주</span></h3>
+    <div class="kidbox">${esc(sum)}</div>
+    <div class="card" style="margin-top:8px;padding:8px 10px"><div class="chart-title"><b>한국 종목 단계 분포 · 2년 주봉</b></div>
+      <div class="src">판정 대상 ${n(S.n)}종목 · 2단계 ${n(D.s2[L], 0)}% (4주 전 ${n(D.s2[ago], 0)}%) · 4단계 ${n(D.s4[L], 0)}% (4주 전 ${n(D.s4[ago], 0)}%) · 가운데 점선 = 50% · 빨강(2단계)이 두꺼울수록 사기 좋은 시장, 파랑(4단계)이 두꺼울수록 피할 시장 (책의 시각)</div>${stageDist(S)}</div>
+    <div class="bgrid" style="margin-top:8px">${S.idx.map((x) => card(x, true)).join("")}${secs.map((s) => card(s)).join("")}</div>${how}`;
+}
 function boardHTML() {
   const B = BOARD;
   if (!B?.kr && !B?.us) return "";
+  // ⓘ 무엇을 따라가나 (사용자 11/4): ETF 이름·기초지수 설명·상위 10 구성 종목 + 이 카드 숫자의 출처 (board.py etf_info, 7일마다)
+  const info = (c, kr) => {
+    const e = (B.etf || {})[c.sym] || {}, top = e.top || [];
+    const what = kr && c.idx ? `${c.sym === "KOSPI" ? "유가증권시장(코스피)" : "코스닥시장"}에 상장된 종목 전체를 시가총액 크기만큼 섞은 지수예요 (큰 회사일수록 많이 반영).`
+      : kr ? `${esc(e.n || `${c.sym} ETF`)}${e.by ? ` · ${esc(e.by)}` : ""}${e.aum ? ` · 순자산 ${esc(e.aum)}원` : ""}<br>${esc(e.desc || "")}` : `${esc(c.sym)} ETF — 아래 종목들을 이 비중대로 담아요.`;
+    const list = top.length ? `<div class="src" style="margin-top:4px"><b>담은 종목 상위 ${top.length}</b>${e.cnt ? ` (전체 ${e.cnt}종목)` : ""}: ${top.map((t) => `${esc(t.n)} ${t.w == null ? "" : n(t.w, 1) + "%"}`).join(" · ")}</div>`
+      : !c.idx || !kr ? `<div class="src" style="margin-top:4px">${kr ? "구성 종목 목록은 다음 갱신(KRX 자료) 때 채워져요." : "보유 종목 목록이 없는 ETF예요 (금·은·원유·코인처럼 실물·선물을 담음)."}</div>` : "";
+    const src = kr && c.idx ? `가격 = 야후 ${c.sym === "KOSPI" ? "^KS11" : "^KQ11"} 지수` : kr ? `가격 = 네이버 ETF 일봉 (시장 가격) · 구성 = KRX 납입자산구성내역(PDF)` : `가격 = 야후 수정주가 · 구성 = 야후 상위 10 보유`;
+    return `<details class="binfo" style="margin-top:4px"><summary class="src">ⓘ 무엇을 따라가나 · 구성 종목</summary><div class="src">${what}</div>${list}
+      <div class="src" style="margin-top:4px">📏 ${src} · 칩: 일 = 50일선 · 주 = 30주선 · 월 = 10개월선 (선 위·선 오름 = ▲) · 2년 그림 = 주봉 종가와 30주선${c.idx ? "" : ` · 3개월 상대 = 이 ETF 3개월 수익률 − ${kr ? "코스피" : "S&P500(SPY)"} 3개월 수익률`}</div></details>`;
+  };
   const card = (c, kr) => {
     const chg = Object.values(c.chips || {}).some((x) => x?.ch);
     return `<div class="bcard${c.idx ? " idx" : ""}${chg ? " bchg" : ""}"><div class="bhd"><b>${esc(c.name)}</b> <span class="src">${esc(c.idx ? "" : kr ? `${c.sym} ETF` : c.sym)}</span><span class="${kcol(c.chg_d)} bchd">${sg(c.chg_d, 1)}</span></div>
       ${boardSpark(c)}
       <div class="bchips">${chipHTML("일", c.chips?.d)}${chipHTML("주", c.chips?.w)}${chipHTML("월", c.chips?.m)}</div>
-      <div class="src bft">1주 <b class="${kcol(c.r1w)}">${sg(c.r1w, 1)}</b> · 올해 <b class="${kcol(c.ytd)}">${sg(c.ytd, 1)}</b> · 1개월 ${sg(c.r1m)} · ${c.idx ? `52주 고점 대비 ${sg(c.dd52)}` : `3개월 상대 ${sg(c.rel3m, 0, "%p")}`}</div></div>`;
+      <div class="src bft">1주 <b class="${kcol(c.r1w)}">${sg(c.r1w, 1)}</b> · 올해 <b class="${kcol(c.ytd)}">${sg(c.ytd, 1)}</b> · 1개월 ${sg(c.r1m)} · ${c.idx ? `52주 고점 대비 ${sg(c.dd52)}` : `3개월 상대 ${sg(c.rel3m, 0, "%p")}`}</div>${info(c, kr)}</div>`;
   };
   // 지수는 정해진 순서로 맨 앞 (코스피·코스닥 / S&P500·나스닥100·러셀2000·동일가중), 업종은 3개월 상대 강도 센 순서
   const IO = ["KOSPI", "KOSDAQ", "SPY", "QQQ", "IWM", "RSP"], r3 = (c) => c.rel3m ?? -999;
   const order = (list) => [...list.filter((c) => c.idx).sort((a, b) => IO.indexOf(a.sym) - IO.indexOf(b.sym)), ...list.filter((c) => !c.idx).sort((a, b) => r3(b) - r3(a))];
-  const sec = (t, list, kr) => (list?.length ? `<h3>${t}</h3><div class="bgrid">${order(list).map((c) => card(c, kr)).join("")}</div>` : "");
-  return `<h2>🗺 시장 그룹판 <span class="src">일·주·월 추세 · 2년 주봉 종가와 30주선 · ${esc(B.updated_at || "")}</span></h2>
-    <div class="note src">칩: <span class="bchip up">일▲</span> 이평 위·이평 상승 · <span class="bchip down">주▼</span> 이평 아래·이평 하락 · <span class="bchip mix">월▲</span> 엇갈림 · <span class="bchip up chg">일▲</span> 오늘 바뀜 · 일 = 50일선, 주 = 30주선, 월 = 10개월선 · 업종은 3개월 상대수익률(지수 대비) 순 · 주황 테두리 = 오늘 칩이 바뀐 곳</div>
-    ${sec("🇰🇷 한국 — 업종은 KRX 업종지수(구성종목 시총 가중)를 따라가는 ETF", B.kr, true)}${sec("🇺🇸 미국 — 지수·섹터·산업 ETF", B.us, false)}${aiHTML(B.ai)}`;
+  const sec = (t, list, kr, jn) => (list?.length ? `<h3 data-jump="${jn}" data-jname="${jn}">${t}</h3><div class="bgrid">${order(list).map((c) => card(c, kr)).join("")}</div>` : "");
+  return `<h2 data-jump="board" data-jname="🗺 시장 그룹판">🗺 시장 그룹판 <span class="src">일·주·월 추세 · 2년 주봉 종가와 30주선 · ${esc(B.updated_at || "")}</span></h2>
+    <div class="note src">칩: <span class="bchip up">일▲</span> 이평 위·이평 상승 · <span class="bchip down">주▼</span> 이평 아래·이평 하락 · <span class="bchip mix">월▲</span> 엇갈림 · <span class="bchip up chg">일▲</span> 오늘 바뀜 · 일 = 50일선, 주 = 30주선, 월 = 10개월선 · 업종은 3개월 상대수익률(지수 대비) 순 · 주황 테두리 = 오늘 칩이 바뀐 곳 · 카드의 ⓘ 를 누르면 무엇을 따라가는지·구성 종목</div>
+    ${sec("🇰🇷 한국 — 업종은 KRX 업종지수(구성종목 시총 가중)를 따라가는 ETF", B.kr, true, "🇰🇷 한국 업종")}${stageHTML(ALIGN?.stage, ALIGN?.date)}${sec("🇺🇸 미국 — 지수·섹터·산업 ETF", B.us, false, "🇺🇸 미국 업종")}${aiHTML(B.ai)}`;
 }
 // 🤖 주요 AI 인프라 상승추세 판단: 일봉 종가(검정) + 200일선(파랑) · 🟢 200일선 위 · 🟠 아래로 내려옴 (한 달 안에 바뀌면 🟢→🟠)
 function aiHTML(list) {
@@ -4045,17 +4130,25 @@ function aiHTML(list) {
       <div class="src">$${n(c.c[L], 2)} <span class="${kcol(c.chg_d)}">${sg(c.chg_d, 1)}</span> · 200일선 $${n(c.ma[L], 2)} 대비 <b style="color:${c.s === "up" ? "var(--good)" : "var(--warn-ink)"}">${sg(c.gap, 1)}</b> · ${c.s === "up" ? "위" : "아래"} ${c.days}일째</div></div>`;
   };
   const down = list.filter((c) => c.s === "down");
-  return `<h3>🤖 주요 AI 인프라 상승추세 판단 <span class="src">일봉 약 10개월 · 검정 = 종가 · <span style="color:var(--s1)">━</span> 200일선</span></h3>
+  return `<h3 data-jump="ai" data-jname="🤖 AI 인프라 200일선">🤖 주요 AI 인프라 상승추세 판단 <span class="src">일봉 약 10개월 · 검정 = 종가 · <span style="color:var(--s1)">━</span> 200일선</span></h3>
     <div class="kidbox">🐣 200일선은 지난 200일(약 10개월) 평균 가격이에요. 주가가 이 선 위에 있으면 큰 흐름이 올라가는 중(🟢), 아래로 내려오면 큰 흐름이 꺾일 수 있다는 경고(🟠)예요. 지금 6곳 중 <b>${down.length}곳</b>${down.length ? `(${down.map((c) => esc(c.name)).join("·")})` : ""}이 200일선 아래예요.</div>
     <div class="grid g2" style="margin-top:8px">${list.map(card).join("")}</div>
     <div class="note src">${dot("up")} 200일선 위 · ${dot("down")} 200일선 아래 · ${dot("up")}→${dot("down")} 최근 한 달 안에 아래로 내려옴 (동그라미) · 사용자 전달 '주요 AI인프라 상승추세 판단'(10/31) 6종목 · 야후 수정주가 · 기술적 분석은 참고 수단일 뿐이에요 (매수·매도 추천 아님)</div>`;
 }
 // ✏️ 선 그은 차트 (board.json draw ← collector/board.py draw): 오닐 컵위드핸들 · 200일선 · 지지선·저항선 채널 — 갱신 때마다 새 가격으로 다시 계산
+const DRAWBOX = [];  // 카드마다 (봉) => 차트 HTML
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".dtfseg [data-dtf]"); if (!b) return;
+  const seg = b.closest(".dtfseg"), i = seg.dataset.di, box = document.querySelector(`.cbox[data-di="${i}"]`);
+  if (!box || !DRAWBOX[i]) return;
+  seg.querySelectorAll("[data-dtf]").forEach((x) => x.classList.toggle("on", x === b));
+  box.innerHTML = DRAWBOX[i](b.dataset.dtf);
+});
 function drawHTML(list, at) {
   if (!list?.length) return "";
   const ST = { up: "컵 오른쪽이 올라오는 중", lip: "컵 오른쪽 입술 · 손잡이는 아직", handle: "손잡이 만드는 중", out: "손잡이 고점 돌파" };
   const ok = (b) => (b ? "✅" : "⬜");
-  const card = (x) => {
+  const card = (x, i) => {
     const fmt = (v) => (x.kr ? n(v, 2) : `$${n(v, 2)}`), wk = x.tf === "w", u = wk ? "주" : "일", p = x.cup, q = x.chn, m = x.ma200, t = x.ch.t, N = t.length;
     const lines = [], al = x.align, vs = x.vs;
     // 한국식 이평선 카드 (코스피, 사용자 전달 글 11/4): 이평선 배열 · 거래량 지지대 · 갭 상승
@@ -4084,12 +4177,18 @@ function drawHTML(list, at) {
       return g;
     };
     const ref = p ? (p.st === "handle" || p.st === "out" ? { v: p.R, t: "손잡이 고점" } : { v: p.H, t: "컵 왼쪽 고점" }) : null;
+    // 📅 일봉·주봉·월봉·연봉 (사용자 11/4) — 기본 봉엔 계산한 선까지, 다른 봉은 캔들 + 이평선만 (board.py draw tfs)
+    const TFN = { d: "일봉", w: "주봉", m: "월봉", y: "연봉" };
+    const cap = (tf) => (tf === x.tf ? `${wk ? "주봉 2년 · 로그 눈금 · 초록 20주선 · 회색 50주선(≈1년 평균)" : al ? "일봉 약 10개월 · 파랑 5일 · 초록 20일 · 주황 60일 · 빨강 120일선" : "일봉 약 10개월 · 초록 20일선 · 회색 50일선 · 주황 200일선"}${vs ? " · 빨간 띠 = 거래량 지지대" : ""}${q ? " · 보라 = 지지선·저항선" : ""}${p ? " · 연두 띠 = 컵 모양" : ""}`
+      : `${{ d: "일봉 약 10개월", w: "주봉 2년 · 로그 눈금", m: "월봉 10년 · 로그 눈금", y: "연봉 (올해 봉은 진행 중) · 로그 눈금" }[tf]} · 이평선 ${Object.keys(x.tfs[tf]?.ma || {}).join("·")}${{ d: "일", w: "주", m: "개월", y: "년" }[tf]}${tf === "w" ? " (30주선 = 와인스타인 기준선)" : ""} · 계산한 선은 ${TFN[x.tf]}에서만`);
+    DRAWBOX[i] = (tf) => (tf === x.tf || x.tfs?.[tf] ? `${tf === x.tf ? candleSVG(x.ch, x.tf, fmt, ref, over) : candleSVG(x.tfs[tf], tf, fmt)}<div class="src">${cap(tf)} · ${esc(x.date)} 종가</div>` : "");
+    const tfBtn = `<div class="seg dtfseg" data-di="${i}" style="margin-top:6px">${["d", "w", "m", "y"].filter((k) => k === x.tf || x.tfs?.[k]).map((k) => `<button data-dtf="${k}" class="${k === x.tf ? "on" : ""}">${TFN[k]}</button>`).join("")}</div>`;
     return `<div class="card" style="padding:8px 10px"><div class="bhd"><b style="font-size:17px">${esc(x.kr ? x.name : x.sym)}</b> <span class="src">${esc(x.kr ? "지수 · 포인트" : x.name)}</span><span class="bchd"><b>${fmt(x.last)}</b> <span class="${kcol(m?.chg_d)}">${sg(m?.chg_d, 1)}</span></span></div>
       ${lines.map((l) => `<div style="margin-top:4px">${l}</div>`).join("")}
-      <div class="cbox">${candleSVG(x.ch, x.tf, fmt, ref, over)}<div class="src">${wk ? "주봉 2년 · 로그 눈금 · 초록 20주선 · 회색 50주선(≈1년 평균)" : al ? "일봉 약 10개월 · 파랑 5일 · 초록 20일 · 주황 60일 · 빨강 120일선" : "일봉 약 10개월 · 초록 20일선 · 회색 50일선 · 주황 200일선"}${vs ? " · 빨간 띠 = 거래량 지지대" : ""}${q ? " · 보라 = 지지선·저항선" : ""}${p ? " · 연두 띠 = 컵 모양" : ""} · ${esc(x.date)} 종가</div></div>
+      ${tfBtn}<div class="cbox" data-di="${i}">${DRAWBOX[i](x.tf)}</div>
       ${x.memo ? `<div class="note src">🗣 ${esc(x.memo)}</div>` : ""}</div>`;
   };
-  return `<h2>✏️ 선 그은 차트 <span class="src">컵위드핸들 · 200일선 · 지지선·저항선 채널 · 역배열·거래량 지지대 · ${esc(at || "")}</span></h2>
+  return `<h2 data-jump="draw" data-jname="✏️ 선 그은 차트">✏️ 선 그은 차트 <span class="src">컵위드핸들 · 200일선 · 지지선·저항선 채널 · 역배열·거래량 지지대 · 일·주·월·연봉 · ${esc(at || "")}</span></h2>
     <div class="grid g2">${list.map(card).join("")}</div>
     <div class="kidbox">🐣 <b>컵위드핸들</b>(윌리엄 오닐): 주가가 커피잔처럼 둥글게 내려갔다 올라온 뒤, 손잡이처럼 살짝 쉬었다가 손잡이 고점을 넘는 모양이에요. <b>200일선</b>: 약 10개월 평균 가격 — 위에 있으면 큰 흐름이 위쪽이에요. <b>채널</b>: 바닥끼리 이은 선(지지선)과, 같은 기울기로 꼭대기에 닿는 선(저항선) 사이 길 — 지지선 아래로 내려오면 오르던 길을 벗어난 거예요. <b>역배열</b>: 이평선은 그 기간에 산 사람들의 평균 가격(평단)이에요. 긴 선(120일)이 맨 위·짧은 선(5일)이 맨 아래로 줄 서면, 6개월 안에 산 사람이 모두 손해 중이라 오를 때마다 '본전이면 팔자'는 물량이 겹겹이 나와요. <b>거래량 지지대</b>: 많이 사고판 가격대라 받침이 강해요 — 대신 깨지면 떨어지는 힘도 커요.</div>
     <div class="note src">선은 사람이 긋지 않고 갱신 때마다 같은 규칙으로 다시 계산해요 (평일 아침·한국장 마감 뒤 + 일~목 저녁 8시~새벽 2시 매시간) · 야후, 배당 안 깎은 가격 (증권사 차트와 같은 숫자) · 채널은 로그 가격 기준 · 기술적 분석은 참고 수단일 뿐이에요 (매수·매도 추천 아님)</div>`;
@@ -4102,7 +4201,9 @@ function candleSVG(ch, kind, fmt, ref, over) {  // over(X, Y, lo, hi) = 위에 �
   const f = (v) => (logS ? Math.log(v) : v), Y = (v) => bot - ((f(v) - f(lo)) / (f(hi) - f(lo) || 1)) * (bot - top);
   const X = (i) => x0 + ((x1 - x0) * (i + 0.5)) / N, bw = Math.max(0.6, ((x1 - x0) / N) * 0.7);
   let g = "";
-  ch.t.forEach((t, i) => { const y = t.slice(0, 2), m = t.slice(3, 5); if (i && t.slice(0, 5) !== ch.t[i - 1].slice(0, 5) && (kind === "d" ? ["01", "07"].includes(m) : m === "01")) g += `<line x1="${X(i)}" x2="${X(i)}" y1="${top}" y2="${v1}" stroke="var(--grid)" stroke-dasharray="2 3"/><text x="${X(i)}" y="${H - 1}" text-anchor="middle" class="qx">${kind === "d" ? `${y}.${m}` : `20${y}`}</text>`; });
+  // shortcut: 두 자리 연도라 70~99 = 19xx 로 봄 (2070년 넘으면 날짜를 네 자리로)
+  const Y4 = (y) => `${+y >= 70 ? 19 : 20}${y}`;
+  ch.t.forEach((t, i) => { const y = t.slice(0, 2), m = t.slice(3, 5); if (i && t.slice(0, 5) !== ch.t[i - 1].slice(0, 5) && (kind === "d" ? ["01", "07"].includes(m) : kind === "y" ? +y % 5 === 0 : m === "01")) g += `<line x1="${X(i)}" x2="${X(i)}" y1="${top}" y2="${v1}" stroke="var(--grid)" stroke-dasharray="2 3"/><text x="${X(i)}" y="${H - 1}" text-anchor="middle" class="qx">${kind === "d" ? `${y}.${m}` : Y4(y)}</text>`; });
   const vmax = Math.max(...ch.v) || 1;
   ch.c.forEach((c, i) => {
     const o = ch.o[i], h = ch.h[i], l = ch.l[i]; if (!(c > 0 && o > 0)) return;
@@ -4151,7 +4252,7 @@ function scanCard(c, kind, mk, tf) {
 }
 document.addEventListener("click", (e) => {
   const b = e.target.closest(".scard .sseg button"); if (b) { const el = b.closest(".scard"), [c, kind, mk] = SCAN_MAP[el.dataset.sk]; el.outerHTML = scanCard(c, kind, mk, b.dataset.tf); return; }
-  const m = e.target.closest(".scanmk button"); if (m) { SCAN_MKT = m.dataset.mk; $("#scanBox").outerHTML = scanHTML(); }
+  const m = e.target.closest(".scanmk button"); if (m) { SCAN_MKT = m.dataset.mk; $("#scanBox").outerHTML = scanHTML(); chartJump(); }
 });
 function scanHTML() {
   const S = SCAN?.[SCAN_MKT];
@@ -4163,7 +4264,7 @@ function scanHTML() {
       ${x.cards.length ? `<div class="grid g2">${x.cards.map((c) => scanCard(c, k, SCAN_MKT, SCAN_KIND[k][2])).join("")}</div>` : `<div class="note src">오늘은 조건에 걸린 종목이 없어요.</div>`}
       ${x.more?.length ? `<details class="fvt"><summary class="chart-title">▶ 그 밖에 ${x.more.length}개</summary><div class="src">${x.more.map((m) => `${esc(m.name)} (RS ${m.rs})`).join(" · ")}</div></details>` : ""}`;
   }).join("");
-  return `<div id="scanBox"><h2>🔭 차트 스캔 <span class="src">${SCAN_MKT === "kr" ? "한국 시가총액 상위" : "미국 S&P500"} ${S?.universe || 0}종목 · ${esc(SCAN.updated_at || "")}</span></h2>
+  return `<div id="scanBox"><h2 data-jump="scan" data-jname="🔭 차트 스캔">🔭 차트 스캔 <span class="src">${SCAN_MKT === "kr" ? "한국 시가총액 상위" : "미국 S&P500"} ${S?.universe || 0}종목 · ${esc(SCAN.updated_at || "")}</span></h2>
     <div class="seg scanmk" style="margin-bottom:8px"><button data-mk="kr" class="${SCAN_MKT === "kr" ? "on" : ""}">🇰🇷 한국</button><button data-mk="us" class="${SCAN_MKT === "us" ? "on" : ""}">🇺🇸 미국</button></div>
     <div class="note src">펀더멘털로 고른 종목을 차트로 확인하는 용도예요 (아이디어 찾기 · 매수/매도 추천 아님). RS = 지수 대비 1년 강도 순위 1~99 (3개월 40% + 6·9·12개월 20%씩)</div>${kinds}</div>`;
 }
@@ -4175,9 +4276,12 @@ async function loadAlign() {
   if (!BOARD) { try { BOARD = await (await fetch("data/board.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { BOARD = {}; } }
   if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
   if (!ALIGN) { try { ALIGN = await (await fetch("data/align.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { ALIGN = null; } }
-  $("#chartBody").innerHTML = drawHTML(BOARD.draw, BOARD.updated_at) + boardHTML() + scanHTML() + `<h2>📈 주봉 정배열</h2><p class="sub">코스피·코스닥 시가총액 3,000억 이상에서 주봉 이동평균이 4주 &gt; 13주 &gt; 26주 &gt; 52주로 줄 선(정배열) 종목 — 매주 금요일 종가 기준, 평일 아침·장 마감 뒤 갱신. 종목을 누르면 주봉 차트가 열려요. 매수·매도 추천 아님.</p>`
+  $("#chartBody").innerHTML = drawHTML(BOARD.draw, BOARD.updated_at) + boardHTML() + scanHTML() + `<h2 data-jump="align" data-jname="📈 주봉 정배열">📈 주봉 정배열</h2><p class="sub">코스피·코스닥 시가총액 3,000억 이상에서 주봉 이동평균이 4주 &gt; 13주 &gt; 26주 &gt; 52주로 줄 선(정배열) 종목 — 매주 금요일 종가 기준, 평일 아침·장 마감 뒤 갱신. 종목을 누르면 주봉 차트가 열려요. 매수·매도 추천 아님.</p>`
     + (ALIGN ? alignHTML(ALIGN) : `<div class="empty">⏳ 다음 차트 스캔(평일 아침·장 마감 뒤) 때 채워져요.</div>`);
+  chartJump();
 }
+// 차트 탭 맨 위 바로가기 (사용자 11/4: 키워드를 누르면 그 칸으로) — 칸 제목의 data-jump 를 모음
+const chartJump = () => jumpBar("#chartBody", "#chartJump", "🔎 칸 이름 검색 (예: 4단계) → Enter");
 function alignHTML(A) {
   const eok = (v) => `${n(v / 1e8, 0)}억`, WHY = { cap: "시총 3,000억 넘음", align: "정배열 새로" }, WHYO = { cap: "시총 3,000억 아래로", align: "정배열 깨짐" };
   // 한 줄 = 누르면 주봉 차트가 열리는 details (차트는 열 때 그림)

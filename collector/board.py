@@ -11,7 +11,7 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 
-from common import DATA, HTTP, load_yaml, now_kst, read_json, write_json
+from common import CACHE, DATA, HTTP, load_yaml, now_kst, read_json, write_json
 
 KR_BOARD = [("KOSPI", "코스피", "^KS11"), ("KOSDAQ", "코스닥", "^KQ11"),
             ("091160", "반도체", None), ("266370", "IT", None), ("305720", "2차전지", None), ("091180", "자동차", None),
@@ -149,7 +149,62 @@ def board():
     except Exception as e:  # noqa: BLE001
         print("  선 그은 차트 실패", str(e)[:80])
         dr = []
-    return {"kr": sorted(kr, key=key), "us": sorted(us, key=key), "ai": [c for c in ai if c], "draw": dr}
+    try:
+        etf = etf_info()
+    except Exception as e:  # noqa: BLE001
+        print("  ETF 구성 실패", str(e)[:80])
+        etf = {}
+    return {"kr": sorted(kr, key=key), "us": sorted(us, key=key), "ai": [c for c in ai if c], "draw": dr, "etf": etf}
+
+
+def etf_info():
+    """🗺 그룹판 카드를 누르면 보이는 '무엇을 따라가나' (사용자 11/4): 한국 ETF = 네이버(이름·운용사·기초지수 설명) + KRX 납입자산구성(PDF, pykrx) 상위 10
+    · 미국 ETF = 야후 상위 10 보유 종목. 구성은 자주 안 바뀌어서 7일에 한 번 (한국 구성을 못 받았으면 하루 뒤 다시) — cache/etf_hold.json."""
+    f, today = CACHE / "etf_hold.json", now_kst().strftime("%Y-%m-%d")
+    old = read_json(f, {}) or {}
+    age = (pd.Timestamp(today) - pd.Timestamp(old["d"])).days if old.get("d") else 99
+    miss = any(not (old.get("etf", {}).get(c) or {}).get("top") for c, _, yt in KR_BOARD if not yt)
+    if old.get("etf") and (age < 1 or (age < 7 and not miss)):
+        return old["etf"]
+    out = {}
+    for code, _, yt in KR_BOARD:
+        if yt:
+            continue
+        x = {}
+        try:
+            j = HTTP.get(f"https://m.stock.naver.com/api/stock/{code}/integration", timeout=15).json()
+            k = j.get("etfKeyIndicator") or {}
+            sents = re.split(r"(?<=다\.)\s+", re.sub(r"\s+", " ", j.get("description") or "").strip())
+            x = {"n": j.get("stockName"), "by": k.get("issuerName"), "aum": k.get("marketValue"), "desc": " ".join(sents[:2])[:320]}
+        except Exception as e:  # noqa: BLE001
+            print("  ETF 설명 실패", code, str(e)[:50])
+        try:
+            from pykrx import stock
+            df = stock.get_etf_portfolio_deposit_file(code)
+            df = df[[bool(re.fullmatch(r"\d{6}", str(i))) for i in df.index]]  # 현금·선물 등은 빼고 주식만
+            col = "비중" if "비중" in df and df["비중"].sum() > 0 else "금액"
+            tot = float(df[col].sum())
+
+            def nm(t):
+                try:
+                    return str(stock.get_market_ticker_name(t))
+                except Exception:  # noqa: BLE001
+                    return t
+            x["top"] = [{"c": t, "n": nm(t), "w": r_(float(v) / tot * 100 if col == "금액" else float(v), 1)}
+                        for t, v in df[col].sort_values(ascending=False).head(10).items()]
+            x["cnt"] = len(df)
+        except Exception as e:  # noqa: BLE001
+            print("  ETF 구성(PDF) 실패", code, str(e)[:60])
+        out[code] = x
+    import yfinance as yf
+    for t, _ in US_BOARD:
+        try:
+            th = yf.Ticker(t).funds_data.top_holdings
+            out[t] = {"top": [{"c": s, "n": r["Name"], "w": r_(float(r["Holding Percent"]) * 100, 1)} for s, r in th.head(10).iterrows()]}
+        except Exception:  # noqa: BLE001 — 금·은·원유·코인 ETF 는 보유 종목이 없음
+            out[t] = {}
+    write_json(f, {"d": today, "etf": out})
+    return out
 
 
 # ---------- ✏️ 선 그은 차트: 컵위드핸들 · 200일선 · 채널(지지선·저항선) — 사용자 전달 그림(2026-11-03)처럼, 매번 새 가격으로 다시 계산 ----------
@@ -268,13 +323,14 @@ def vol_shelf(h, l, c, v, n=250, bins=40):
 
 def draw():
     """DRAW 종목마다 캔들 + 이평선 + 컵위드핸들·채널·200일선 계산 (배당 안 깎은 가격 = 증권사 차트와 같은 숫자)."""
-    px = us_ohlcv([t for t, *_ in DRAW], period="3y", adj=False)  # 여러 티커라야 받힘 (한 개면 열 이름이 달라 빠짐)
+    px = us_ohlcv([t for t, *_ in DRAW], period="max", adj=False)  # 여러 티커라야 받힘 (한 개면 열 이름이 달라 빠짐) · 월봉·연봉 때문에 처음부터
     out = []
     for sym, name, tf, memo, *opt in DRAW:
         o = opt[0] if opt else {}
-        d = px.get(sym)
-        if d is None:
+        full = px.get(sym)
+        if full is None:
             continue
+        d = full[full.index >= full.index[-1] - pd.DateOffset(years=3)]  # 선(컵·채널·지지대) 계산은 예전처럼 최근 3년으로
         c = d["Close"]
         m2 = ma200_card(sym, name, "", c)  # 200일선 위·아래, 며칠째, 이격
         b = d if tf == "d" else resample(d, "W-FRI")
@@ -302,8 +358,17 @@ def draw():
             g = next((i for i in range(len(C) - 1, len(C) - 11, -1) if Lo[i] > Hi[i - 1]), None)
             x |= {"kr": bool(o.get("kr")), "align": ma_align(b["Close"], o["ma"]), "vs": vol_shelf(Hi, Lo, C, V),
                   "gap": {"i": rel(g), "pct": r_((Op[g] / C[g - 1] - 1) * 100, 1)} if g is not None else None}
+        # 📅 일봉·주봉·월봉·연봉 버튼 (사용자 11/4) — 기본 봉(tf)은 위 ch, 나머지는 캔들 + 이평선만 (이평선은 전체 기간으로 계산한 뒤 자름)
+        TF = {"d": (d, 200, o.get("ma") or (20, 50, 200)), "w": (resample(full, "W-FRI"), 104, (10, 30)),
+              "m": (resample(full, "ME"), 120, (10, 20)), "y": (resample(full, "YE"), 60, (5,))}
+        x["tfs"] = {k_: tail(bars(b_, ma_), n_) for k_, (b_, n_, ma_) in TF.items() if k_ != tf}
         out.append(x)
     return out
+
+
+def tail(b, n):
+    """bars() 결과를 끝에서 n 봉만."""
+    return {k: (v[-n:] if isinstance(v, list) else {m: s[-n:] for m, s in v.items()} if isinstance(v, dict) else v) for k, v in b.items()}
 
 
 def ma200_card(sym, name, what, c, n=205):
@@ -506,6 +571,156 @@ def align_flags(close):
     return (m[0] > m[1]) & (m[1] > m[2]) & (m[2] > m[3])
 
 
+# ---------- 🪜 와인스타인 4단계 (사용자 11/4: 스탠 와인스타인 『주식투자 최적의 타이밍을 잡는 법』 + 전달 그림 '한국 종목 단계 분포') ----------
+STAGE_MA, STAGE_LB, STAGE_TH = 30, 4, 1.0  # 30주선 · 4주 전과 비교 · ±1% 넘게 움직여야 '오름/내림' (그 안이면 평평)
+# FnGuide WICS 업종 → 20개 묶음 (없는 이름은 '기타' — 로그에 찍어 두고 나중에 넣기)
+STAGE_GROUP = {
+    "반도체": ["반도체와반도체장비"],
+    "IT하드웨어·전자부품": ["전자장비와기기", "디스플레이장비및부품", "디스플레이패널", "전자제품", "컴퓨터와주변기기", "핸드셋", "통신장비", "사무용전자제품"],
+    "2차전지·전기장비": ["전기제품", "전기장비"],
+    "인터넷·소프트웨어": ["양방향미디어와서비스", "소프트웨어", "IT서비스"],
+    "미디어·엔터·게임": ["방송과엔터테인먼트", "게임엔터테인먼트", "광고", "출판", "미디어"],
+    "통신": ["무선통신서비스", "다각화된통신서비스"],
+    "자동차": ["자동차", "자동차부품"],
+    "조선": ["조선"],
+    "방산·우주": ["우주항공과국방"],
+    "기계·산업재": ["기계", "복합기업", "상업서비스와공급품", "무역회사와판매업체"],
+    "건설·건자재": ["건설", "건축자재", "건축제품"],
+    "화학·소재": ["화학", "포장재", "종이와목재"],
+    "철강·비철금속": ["철강", "비철금속", "금속과광물"],
+    "에너지·유틸리티": ["석유와가스", "에너지장비및서비스", "전기유틸리티", "가스유틸리티", "복합유틸리티"],
+    "운송": ["해운사", "항공사", "도로와철도운송", "운송인프라", "항공화물운송과물류"],
+    "금융": ["은행", "증권", "생명보험", "손해보험", "창업투자", "기타금융", "카드", "부동산"],
+    "바이오·헬스케어": ["제약", "생물공학", "건강관리장비와용품", "건강관리업체및서비스", "건강관리기술", "생명과학도구및서비스"],
+    "화장품·의류·생활용품": ["화장품", "섬유,의류,신발,호화품", "가정용품", "가정용기기와용품", "레저용장비와제품", "가구"],
+    "음식료": ["식품", "음료", "담배"],
+    "유통": ["백화점과일반상점", "인터넷과카탈로그소매", "판매업체", "전문소매", "식품과기본식료품소매"],
+    "레저·교육·서비스": ["호텔,레스토랑,레저", "교육서비스", "다각화된소비자서비스"],
+}
+W2G = {w: g for g, ws in STAGE_GROUP.items() for w in ws}
+
+
+def stage_series(close):
+    """주봉 종가 → 주마다 단계 1~4 (30주선이 생기기 전 = None). 와인스타인 4단계를 기계적으로:
+    2 = 종가 > 30주선 & 30주선이 4주 전보다 +1% 넘게 오름 · 4 = 종가 < 30주선 & 30주선이 -1% 넘게 내림
+    · 그 밖(30주선이 평평하거나 종가와 선 방향이 엇갈림) = 바로 전 확실한 단계가 2 면 3(천장권), 4 면 1(바닥권)
+    · 처음(확실한 단계 전)엔 30주선이 26주 전보다 높으면 3, 아니면 1."""
+    ma = close.rolling(STAGE_MA).mean()
+    sl, m26 = (ma / ma.shift(STAGE_LB) - 1) * 100, ma.shift(26)
+    out, last = [], None
+    for c, m, s, m0 in zip(close.values, ma.values, sl.values, m26.values):
+        if m != m or s != s:
+            out.append(None)
+            continue
+        if c > m and s > STAGE_TH:
+            st = last = 2
+        elif c < m and s < -STAGE_TH:
+            st = last = 4
+        else:
+            st = 3 if last == 2 else 1 if last == 4 else (3 if m0 == m0 and m > m0 else 1)
+        out.append(st)
+    return pd.Series(out, index=close.index, dtype="object")
+
+
+def run_len(s):
+    """끝에서부터 같은 값이 몇 번 이어졌나."""
+    v, k = list(s), 1
+    while k < len(v) and v[-1 - k] == v[-1]:
+        k += 1
+    return k
+
+
+def cap_index(closes, caps):
+    """구성 종목 시총 가중 지수 (처음 = 100): 주마다 '지난주 시총 비중 × 이번 주 수익률'을 더해 이어 붙임.
+    지난주 시총 = 지금 시총 × 지난주 종가 ÷ 지금 종가 (그 사이 주식 수는 그대로라고 봄)."""
+    C = pd.concat(closes, axis=1).sort_index()
+    last = C.ffill().iloc[-1]
+    w = C.mul(pd.Series(caps)[C.columns] / last, axis=1).shift(1)
+    r = C / C.shift(1) - 1
+    ok = r.notna() & w.notna()
+    tot = w.where(ok, 0).sum(axis=1)
+    ret = (r.where(ok, 0) * w.where(ok, 0)).sum(axis=1) / tot.where(tot > 0)
+    return 100 * (1 + ret.fillna(0)).cumprod()
+
+
+def wics_map(codes):
+    """종목 → FnGuide WICS 업종 (와이즈리포트 기업 개요 — 업종은 잘 안 바뀌어 한 번 받으면 cache/wics.json 에 둠)."""
+    from concurrent.futures import ThreadPoolExecutor
+    from kr_stock import WISE
+    f = CACHE / "wics.json"
+    m = read_json(f, {}) or {}
+    need = [c for c in codes if c not in m]
+
+    def get(c):
+        try:
+            w = re.search(r"WICS\s*:\s*([^<]+)", HTTP.get(f"{WISE}/c1010001.aspx?cmp_cd={c}", timeout=20).text)
+            return c, w.group(1).strip() if w else ""
+        except Exception:  # noqa: BLE001
+            return c, None  # 실패는 저장 안 함 → 다음에 다시
+    with ThreadPoolExecutor(6) as ex:
+        for c, w in ex.map(get, need):
+            if w is not None:
+                m[c] = w
+    if need:
+        write_json(f, m)
+        print(f"  WICS 업종 새로 {len(need)}종목")
+    return m
+
+
+def stage_card(name, close, bench=None, n=104):
+    """업종·지수 카드: 단계·며칠째 · 30주선 대비 · 1개월(4주) · 3개월(13주) 상대 · 2년 선(지수·30주선·주마다 단계)."""
+    st, ma = stage_series(close), close.rolling(STAGE_MA).mean()
+    ret = lambda s, k: (s.iloc[-1] / s.iloc[-1 - k] - 1) * 100 if len(s) > k else None
+    w2 = close.iloc[-n:]
+    out = {"name": name, "st": st.iloc[-1], "run": run_len(st.dropna()), "prev": st.iloc[-2] if len(st) > 1 else None,
+           "gap": r_((close.iloc[-1] / ma.iloc[-1] - 1) * 100, 1), "chg_w": r_(ret(close, 1), 1), "r1m": r_(ret(close, 4), 0),
+           "chg_2y": r_((w2.iloc[-1] / w2.iloc[0] - 1) * 100, 0), "peak_2y": r_((w2.max() / w2.iloc[0] - 1) * 100, 0),
+           "t": [d.strftime("%y.%m.%d") for d in w2.index], "c": [r_(v, 2) for v in w2], "ma": [r_(v, 2) for v in ma.iloc[-n:]], "s": list(st.iloc[-n:])}
+    if bench is not None and ret(close, 13) is not None and ret(bench, 13) is not None:
+        out["rel3m"] = r_(ret(close, 13) - ret(bench, 13), 0)
+    return out
+
+
+def stage(ws, caps, names, fri):
+    """🪜 한국 종목·업종 단계 판: ws = {코드: 주봉}, caps = {코드: 지금 시총}. 업종 = WICS 를 20개로 묶은 시총 가중 지수."""
+    import yfinance as yf
+    idx = {}
+    for t, nm in (("^KS11", "코스피"), ("^KQ11", "코스닥")):
+        h = yf.Ticker(t).history(period="3y")
+        h.index = h.index.tz_localize(None)
+        idx[nm] = resample(h[["Open", "High", "Low", "Close", "Volume"]], "W-FRI")["Close"].loc[lambda s: s.index <= fri + timedelta(days=1)]
+    ks = idx["코스피"]
+    wics = wics_map(list(ws))
+    S = {c: stage_series(w["Close"]) for c, w in ws.items()}
+    D = pd.DataFrame(S).sort_index().iloc[-104:]  # 주 × 종목 단계
+    cnt = D.notna().sum(axis=1)
+    dist = {f"s{k}": [r_(v, 1) for v in ((D == k).sum(axis=1) / cnt * 100)] for k in (1, 2, 3, 4)}
+    groups, unk = {}, {}
+    for c in ws:
+        g = W2G.get(wics.get(c) or "", "기타")
+        if g == "기타":
+            unk[wics.get(c) or "(없음)"] = unk.get(wics.get(c) or "(없음)", 0) + 1
+        groups.setdefault(g, []).append(c)
+    secs = []
+    for g, cs in groups.items():
+        if len(cs) < 3:  # 3종목 미만 묶음은 지수가 한두 종목에 끌려가서 뺌
+            continue
+        card = stage_card(g, cap_index({c: ws[c]["Close"] for c in cs}, {c: caps[c] for c in cs}), ks)
+        now = [S[c].iloc[-1] for c in cs if len(S[c]) and S[c].iloc[-1] is not None]
+        mem = sorted(cs, key=lambda c: -caps[c])
+        secs.append({**card, "n": len(cs), "p2": r_(sum(x == 2 for x in now) / len(now) * 100, 0) if now else None,
+                     "p4": r_(sum(x == 4 for x in now) / len(now) * 100, 0) if now else None,
+                     "wics": sorted({wics.get(c) or "" for c in cs} - {""}),
+                     "mem": [[names[c], c, S[c].iloc[-1], r_(caps[c] / 1e8, 0)] for c in mem]})
+    order = {2: 0, 1: 1, 3: 2, 4: 3}
+    secs.sort(key=lambda s: (order.get(s["st"], 9), -(s.get("rel3m") if s.get("rel3m") is not None else -999)))
+    if unk:
+        print("  WICS 묶음 밖(기타):", unk)
+    return {"n": len(ws), "t": [d.strftime("%y.%m.%d") for d in D.index], "dist": dist,
+            "idx": [stage_card(nm, s, ks if nm != "코스피" else None) for nm, s in idx.items()], "sec": secs, "unk": unk,
+            "rule": {"ma": STAGE_MA, "lb": STAGE_LB, "th": STAGE_TH}}
+
+
 def align():
     """끝난 주(금요일 장 마감 뒤) 기준 정배열 + 그 주 시총 3,000억 이상 → 통과·신규·이탈(이유)·연속 주 수 + 주봉 차트.
     지난주 시총 = 지금 시총 × (지난주 종가 ÷ 지금 종가) — 시총이 3,000억을 넘나들어도 신규·이탈로 잡혀요 (텔레그램과 같음)."""
@@ -547,9 +762,15 @@ def align():
     keep = {r["code"] for r in pas + out}
     cut = lambda b: {kk: (vv[-104:] if isinstance(vv, list) else {n: s[-104:] for n, s in vv.items()}) for kk, vv in b.items()}  # 2년
     pick = lambda r: {k: r[k] for k in ("code", "name", "sec", "cap", "streak", "chg", "why") if k in r}
-    return {"date": date, "rule": "MA4>13>26>52", "min_cap": ALIGN_CAP, "universe": sum(1 for r in rows if r["cap"] >= ALIGN_CAP),
+    big = [r for r in rows if r["cap"] >= ALIGN_CAP]  # 🪜 4단계 판정 대상 = 정배열과 같은 '시총 3,000억 이상'
+    try:
+        stg = stage({r["code"]: charts_[r["code"]] for r in big}, {r["code"]: r["cap"] for r in big}, {r["code"]: r["name"] for r in big}, fri)
+    except Exception as e:  # noqa: BLE001 — 실패해도 정배열은 저장
+        print("  4단계 판 실패:", str(e)[:200])
+        stg = None
+    return {"date": date, "rule": "MA4>13>26>52", "min_cap": ALIGN_CAP, "universe": len(big),
             "pass": [pick(r) for r in pas], "new": [pick(r) for r in new], "out": [pick(r) for r in out],
-            "charts": {c: cut(bars(charts_[c], ALIGN_MA)) for c in keep}}
+            "charts": {c: cut(bars(charts_[c], ALIGN_MA)) for c in keep}, "stage": stg}
 
 
 def main():
@@ -607,6 +828,16 @@ if __name__ == "__main__":
         pv = np.array([90.0] * 50 + [110.0] * 50 + [100.0]); vv = np.array([10.0] * 50 + [1.0] * 51)
         vs = vol_shelf(pv + 0.5, pv - 0.5, pv, vv, n=101, bins=20)
         assert vs and vs["lo"] <= 90 <= vs["hi"] and vs["hi"] <= 100 and vs["share"] > 80, vs
+        # 4단계: 계속 오름 → 2 · 오른 뒤 평평 → 3 · 계속 내림 → 4 · 내린 뒤 평평 → 1
+        wi = pd.date_range("2023-01-06", periods=120, freq="W-FRI")
+        rise = pd.Series(np.linspace(100, 200, 120), index=wi)
+        top = pd.Series(list(np.linspace(100, 200, 70)) + [200 + (3 if i % 2 else -3) for i in range(50)], index=wi)
+        assert stage_series(rise).iloc[-1] == 2 and stage_series(top).iloc[-1] == 3
+        assert stage_series(-rise + 300).iloc[-1] == 4 and stage_series(-top + 300).iloc[-1] == 1
+        assert stage_series(rise).iloc[:29].isna().all() and run_len([1, 2, 2, 2]) == 3
+        # 시총 가중 지수: 큰 종목(+10%)·작은 종목(-10%) 이 3:1 이면 한 주 +5%
+        ci = cap_index({"a": pd.Series([100.0, 110.0], index=wi[:2]), "b": pd.Series([100.0, 90.0], index=wi[:2])}, {"a": 330.0, "b": 90.0})
+        assert abs(ci.iloc[-1] - 105) < 1e-6, ci
         print("ok")
     else:
         main()
