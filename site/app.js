@@ -21,6 +21,27 @@ function n(v, d = 0) {
   return Number(v).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 function won(v) { return v == null ? "N/A" : n(v) + "원"; }
+// 💱 사용자 2026-11-04: 엔·달러·유로 등 외화 금액 옆에 (약 ○원) — 화면에 글자가 붙을 때마다 자동으로 (오늘 환율 = peers.json fx)
+// shortcut: '억·조·만' 붙은 금액만 바꿈 (주가 '10,880엔' 같은 맨 숫자·'1조 7,306억엔' 앞쪽 조는 안 바뀜), 필요하면 숫자 규칙 넓히기
+let FXR = null;
+const FXCUR = { 대만달러: "TWD", 홍콩달러: "HKD", 스위스프랑: "CHF", 달러: "USD", $: "USD", 엔: "JPY", 유로: "EUR", "€": "EUR", 파운드: "GBP", "£": "GBP", 위안: "CNY" };
+const FXMAG = { 조: 1e12, 천억: 1e11, 억: 1e8, 천만: 1e7, 만: 1e4 };
+const FXRE = /(\d[\d,]*(?:\.\d+)?)\s?(조|천억|억|천만|만)\s?(대만달러|홍콩달러|스위스프랑|달러|유로|파운드|위안|엔(?!비|진|터)|\$|€|£)(?!\s?\(약?\s?[\d.,]+\s?[조억만]?원)/g;
+const wonize = (s) => s.replace(FXRE, (m, v, mag, u) => {
+  const w = parseFloat(v.replace(/,/g, "")) * FXMAG[mag] * (FXR?.[FXCUR[u]] || NaN);
+  return !(w > 0) ? m : `${m} (약 ${w >= 1e12 ? n(w / 1e12, w >= 1e14 ? 0 : 1) + "조" : w >= 1e8 ? n(w / 1e8) + "억" : n(w / 1e4) + "만"}원)`;
+});
+const FXHIT = new RegExp(FXRE.source);  // test 용 (g 없는 판 — lastIndex 꼬임 방지)
+function wonDOM(root) {
+  if (!FXR || !root) return;
+  const fix = (t) => { if (FXHIT.test(t.nodeValue) && !t.parentElement?.closest("svg,script,style,textarea,option")) t.nodeValue = wonize(t.nodeValue); };
+  if (root.nodeType === 3) return fix(root);
+  if (root.nodeType !== 1) return;
+  const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), ts = [];
+  while (tw.nextNode()) ts.push(tw.currentNode);
+  ts.forEach(fix);
+}
+new MutationObserver((ms) => { if (FXR) ms.forEach((m) => m.addedNodes.forEach(wonDOM)); }).observe(document.documentElement, { childList: true, subtree: true });
 function money(v, cur) { return v == null ? "N/A" : cur === "USD" ? "$" + n(v, 2) : n(v) + "원"; }
 function bigWon(v) {
   if (v == null) return "N/A";
@@ -4894,6 +4915,7 @@ function renderAll() {
   ["네이버 증권", "와이즈리포트", "OpenDART"].forEach((x) => srcs.add(x));
   $("#footer").innerHTML = `<p><b>투자 판단 참고용</b>이에요. 매수·매도 추천이 아니며, 숫자는 출처의 사정으로 틀리거나 늦을 수 있어요.</p>
     <p>데이터 출처: ${[...srcs].map(esc).join(" · ")}</p>
+    <p>💱 외화 금액 옆 괄호 (약 ○원) = 오늘 환율로 바꾼 대략의 원화 (그때 환율 아님)</p>
     <p>마지막 갱신: ${esc(DASH.updated_at)} KST · 갱신 시각: 전체 = 평일 07:30, 18:30 · 리포트·텔레그램·뉴스 = 매일 07:30, 17:30 + 일~목 19:30~01:30 매시간</p>`;
 }
 
@@ -4914,6 +4936,8 @@ async function load() {
   }
   renderAll();
   route();
+  // 💱 환율 받고 나서 이미 그려진 글자도 한 번 바꿈 (그 뒤는 MutationObserver 가 자동)
+  fetch("data/peers.json?t=" + encodeURIComponent(DASH.updated_at)).then((r) => r.json()).then((j) => { PEERS ??= j; FXR = j?.fx || null; wonDOM(document.body); }).catch(() => {});
 }
 
 for (const id of ["#stockCards", "#watchFull", "#jointCards"]) $(id).addEventListener("click", (e) => {
