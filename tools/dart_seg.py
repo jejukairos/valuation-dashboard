@@ -272,6 +272,13 @@ def parse_note_t(g):
     return (out, tot) if len(out) >= 2 else None
 
 
+def bad_names(d):
+    """제품군으로 쓰면 안 되는 칸: 재무 항목('매출액'·'영업이익' — 표를 잘못 읽은 것)이나 대부분 지역 이름(→ 지역으로 써야 함)."""
+    ks = list(d)
+    return any(re.match(r"^(매출액|영업이익|영업손익|당기순이익|순이익|매출총이익|자산|부채|자본|감가상각)", k.replace(" ", "")) for k in ks) \
+        or sum(bool(GEO.search(k)) for k in ks) >= 0.6 * len(ks)
+
+
 def report_note(t):
     """영업부문 주석 → (제품군, 지역, 합계) — 칸 이름이 대부분 지역이면 지역으로."""
     prod = geo = tot = None
@@ -283,7 +290,7 @@ def report_note(t):
         isgeo = sum(bool(GEO.search(k) or k in ("국내",)) for k in vals) >= 0.6 * len(vals)
         if isgeo and geo is None:
             geo, tot = vals, tot or tt
-        elif not isgeo and prod is None:
+        elif not isgeo and prod is None and not bad_names(vals):
             prod, tot = vals, tot or tt
         if prod is not None and geo is not None:
             break
@@ -306,7 +313,7 @@ def report(path, src="A"):
         rows = [(l, v * u) for l, v in rows]
         if prod is None:
             c = classify(rows)
-            if c and len(c[0]) >= 2:
+            if c and len(c[0]) >= 2 and not bad_names(c[0]):
                 prod, geo, tot = c
                 continue
             if c and tot is None:  # 부문이 하나뿐인 표(SK하이닉스 '반도체 부문')는 합계만
