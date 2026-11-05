@@ -222,7 +222,7 @@ function scenHTML(c) {
     ${tabs}
     ${regLine}
     <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}${partRows(s.parts)}${perAlt("tight")}${multHTML(s)}</div>
-    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}${partRows(bparts)}${perAlt("easy")}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${s.sector?.easy && (s.parts || []).some((p) => /업종/.test(p.src || "")) ? `업종 PER ${s.sector.easy.map((x) => n(x, 1)).join(" · ")}배 (sectors.yaml easy)` : "기준 PER × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)"}</div></div>` : ""}
+    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}${partRows(bparts)}${perAlt("easy")}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${bparts.map((p) => `${p.kind} ${[p.mult.bear, p.mult.base, p.mult.bull].map((x) => n(x, p.kind === "PBR" ? 2 : 1)).join(" · ")}배`).join(" + ")} <span>(성장률 방식 = 기준 PER × 1.5 · 1.75 · 2, 업종·내가 정한 배수는 그 강세장 배수)</span></div></div>` : ""}
     ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}${c.notes?.y2?.length ? ` · 🗒 메모 ${c.notes.y2.length}` : ""}</span></summary>${scenBoxes(s.y2, s.y2.parts)}${notesHTML(c.notes?.y2, c, s.y2)}</details>` : ""}
     ${c.notes?.memo?.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🗒 증권사 메모 <span class="src">${c.notes.memo.length}개</span></summary>${notesHTML(c.notes.memo, c)}</details>` : ""}
     ${floorHTML(c)}

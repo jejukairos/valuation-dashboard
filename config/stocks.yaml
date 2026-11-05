@@ -51,7 +51,9 @@ holdings:
     code: "012450"
     sector: 방산
     industry: 방산
-    methods: [PER]
+    methods: [PER, PBR]   # PBR 은 참고로 같이 (밴드·BPS × PBR 표·🧱 바닥·🏷 업종 PBR) — 사용자 2026-11-06
+    fair_methods: [PER]   # 적정주가는 아래 내가 정한 PER 로만
+    fixed_per: {tight: [10, 15, 20], easy: [15, 20, 25]}   # 사용자 2026-11-06: 하방 10 · 적정 15 · 상방 20, 🐂 강세장 15 · 20 · 25 (방산 업종 11·20·30 대신)
     avg_price:
     quantity:
 

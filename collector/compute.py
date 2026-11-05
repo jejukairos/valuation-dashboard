@@ -290,7 +290,7 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None, keep=Fals
         if grow:
             pass  # 성장률 방식은 기준 PER × 1 · 1.25 · 1.5 그대로 (반올림 때문에 다시 곱하지 않게)
         elif keep and m["base"] != m["bear"] * GROWTH_MULT["base"]:
-            how += " — 배수 그대로 (사용자 지정)"
+            how += "" if "사용자" in how else " — 배수 그대로 (사용자 지정)"
         elif m["base"] != m["bear"] * GROWTH_MULT["base"]:  # 사용자 원칙(2026-11-01): 모든 방법 Base = 하방 × 1.25, Bull = 하방 × 1.5 (강세장 칸은 그대로)
             m = {k: m["bear"] * f for k, f in GROWTH_MULT.items()}
             how += f" → 하방 {m['bear']:g}배 × 1 · 1.25 · 1.5"
