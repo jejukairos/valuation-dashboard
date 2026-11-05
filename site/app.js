@@ -1243,7 +1243,8 @@ const mktOf = (code) => (/^\d/.test(String(code || "")) ? "KR" : "US");
 function renderTop() {
   $("#estAlert").innerHTML = saAlertHTML() + estAlertHTML();
   $("#patAlert").innerHTML = patAlertHTML();
-  $("#bigTech").innerHTML = bigTechHTML() + moneyHTML() + accelHTML((DASH?.stocks || []).filter((c) => grp(c) === "보유" && (c.market === "US" ? "US" : "KR") === MKT)) + dotMapHTML();
+  const own = (DASH?.stocks || []).filter((c) => grp(c) === "보유" && (c.market === "US" ? "US" : "KR") === MKT);
+  $("#bigTech").innerHTML = bigTechHTML() + moneyHTML() + accelHTML(own) + dotMapHTML(own, "보유", MKT);
   accSecFill();
 }
 // 📍 보유·관심 종목 지도 (사용자 전달 그림 '28년 Fwd EPS 증가율과 PER' 모양, 2026-11-01) — 카드의 fwd_mult 만으로 계산:
@@ -1282,8 +1283,8 @@ function dotMap(o) {  // o = {id, t, pts: [{x, y, n, own}], fx, fy, xt, yt}
   const gap = (p) => (p.y / fit(p.x) - 1) * 100, rk = inn.filter((p) => fit(p.x) > 0).sort((p, q) => gap(p) - gap(q));
   return { svg: `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.t)}">${g}</svg>`, rk, gap, out, b };
 }
-function dotMapHTML() {
-  const S = (DASH?.stocks || []).filter((c) => c.market === MKT && ["보유", "관심"].includes(c.group) && c.fwd_mult);
+function dotMapHTML(list, g, mk) {  // 사용자 11/6: 탭마다 그 탭 종목만 (보유 = 그 시장 보유 · 관심 = 그 시장 관심 · 공동 = 공동자산 전체)
+  const S = (list || []).filter((c) => c.fwd_mult), key = { 보유: "own", 관심: "watch", 공동: "joint" }[g] + (mk || "");
   if (!S.length) return "";
   const kinds = (c) => (c.scen?.parts || []).map((p) => p.kind), nm = (c) => c.name.replace("디펜스앤에어로스페이스", "디펜스");
   const per = [], pbr = [];
@@ -1295,22 +1296,22 @@ function dotMapHTML() {
       let w = a > 0 && a !== b2 ? (1 / P["12MF"] - 1 / b2) / (1 / a - 1 / b2) : NaN;
       if (!(w >= 0 && w <= 1)) { const d = new Date(); w = Math.max(0, (12 - d.getMonth() - d.getDate() / 31) / 12); }
       const p24 = 1 / (w / b2 + (1 - w) / c2);
-      per.push({ x: (P["12MF"] / p24 - 1) * 100, y: P["12MF"], n: nm(c), own: c.group === "보유" });
+      per.push({ x: (P["12MF"] / p24 - 1) * 100, y: P["12MF"], n: nm(c), own: 1 });
     }
-    if (kinds(c).includes("PBR") && B["12MF"] > 0 && P["12MF"] > 0) pbr.push({ x: (B["12MF"] / P["12MF"]) * 100, y: B["12MF"], n: nm(c), own: c.group === "보유" });
+    if (kinds(c).includes("PBR") && B["12MF"] > 0 && P["12MF"] > 0) pbr.push({ x: (B["12MF"] / P["12MF"]) * 100, y: B["12MF"], n: nm(c), own: 1 });
   });
   const card =(m, t, unit, kid, src) => {
     if (!m) return "";
     const top = (arr) => arr.map((p) => `${esc(p.n)} <span class="src">${pct(m.gap(p), 0, true)}</span>`).join(" · ");
     return `<div class="qp"><div class="qt"><b>${esc(t)}</b></div>
       <div class="src" style="margin:2px 0 4px">선보다 아래 (같은 ${unit}에 비해 배수 낮음): ${top(m.rk.slice(0, 3))}<br>선보다 위 (배수 높음): ${top(m.rk.slice(-3).reverse())}</div>
-      ${m.svg}<div class="src">● 보유 · ○ 관심 · 점선 = 이 종목들 평균 관계 · 이름 옆 % = 점선에서 위아래로 떨어진 정도 · 점을 누르면 숫자${m.out.length ? ` · 그림 밖: ${m.out.map((p) => `${esc(p.n)} (${n(p.x, 0)}%, ${n(p.y, 1)}배)`).join(", ")}` : ""}</div>
+      ${m.svg}<div class="src">● ${g === "공동" ? "공동자산" : g} 종목 · 점선 = 이 종목들 평균 관계 · 이름 옆 % = 점선에서 위아래로 떨어진 정도 · 점을 누르면 숫자${m.out.length ? ` · 그림 밖: ${m.out.map((p) => `${esc(p.n)} (${n(p.x, 0)}%, ${n(p.y, 1)}배)`).join(", ")}` : ""}</div>
       <div class="kidbox" style="margin-top:6px">🐣 ${kid}${m.b < 0 ? ` <b>지금 이 종목들은 점선이 거꾸로(오른쪽 아래로) 기울어 있어요</b> — ${unit}이 높은 종목이 오히려 배수가 낮게 거래되는 중이에요.` : ""}</div><div class="note src">${src}</div></div>`;
   };
-  const m1 = per.length >= 3 && dotMap({ id: `dmper${MKT}`, t: "", pts: per, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 0)}배`, xt: "다음 1년 EPS 증가율", yt: "12개월 선행 PER" });
-  const m2 = pbr.length >= 3 && dotMap({ id: `dmpbr${MKT}`, t: "", pts: pbr, cap: 3, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 1)}배`, xt: "ROE (12MF)", yt: "PBR (12MF)" });
+  const m1 = per.length >= 3 && dotMap({ id: `dmper${key}`, t: "", pts: per, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 0)}배`, xt: "다음 1년 EPS 증가율", yt: "12개월 선행 PER" });
+  const m2 = pbr.length >= 3 && dotMap({ id: `dmpbr${key}`, t: "", pts: pbr, cap: 3, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 1)}배`, xt: "ROE (12MF)", yt: "PBR (12MF)" });
   if (!m1 && !m2) return "";
-  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📍 보유·관심 종목 지도</b> <span class="src">${MKT === "KR" ? "🇰🇷" : "🇺🇸"} 이익 증가율 대비 PER · ROE 대비 PBR · 참고용 (매수·매도 추천 아님)</span></summary>
+  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📍 ${g === "공동" ? "공동자산" : g} 종목 지도</b> <span class="src">${{ KR: "🇰🇷 ", US: "🇺🇸 " }[mk] || ""}이익 증가율 대비 PER · ROE 대비 PBR · 참고용 (매수·매도 추천 아님)</span></summary>
     <div class="qgrid">${card(m1, "다음 1년 EPS 증가율 × 12개월 선행 PER", "EPS 증가율",
       "오른쪽으로 갈수록 이익이 빨리 늘 거라는 예상, 위로 갈수록 주가가 이익에 비해 비싸요. 보통은 빨리 크는 회사일수록 PER 이 높아서 점들이 점선 근처에 모여요. 점선보다 한참 아래면 '성장에 비해 덜 쳐준다', 한참 위면 '성장보다 더 쳐준다'는 뜻이에요 (예상이 틀리면 달라져요).",
       "PER 로 적정가를 매기는 종목만 · 12개월 선행 PER = 지금 주가 ÷ 앞으로 12개월 EPS (증권사 컨센서스) · EPS 증가율 = 앞으로 12개월 EPS → 그다음 12개월 EPS · PBR 로 매기는 종목(삼성전자·SK하이닉스 등)은 ROE × PBR 그림")}
@@ -4038,7 +4039,7 @@ function renderGroup(g, el, mkt) {
   const list = DASH.stocks.filter((c) => (grp(c) === g || (c.also || []).includes(g)) && (!mkt || (c.market === "US" ? "US" : "KR") === mkt)).sort((a, b) => mk(a) - mk(b) || (rank[a.verdict] ?? 3) - (rank[b.verdict] ?? 3) || (a.gap ?? 9) - (b.gap ?? 9));
   $(el).innerHTML = list.map(stockCard).join("") || `<div class="empty">config/stocks.yaml 의 ${g === "공동" ? "joint" : "watchlist"} 에 종목을 넣으면 여기에 보여요.</div>`;
   const ax = $({ "#watchFull": "#watchAccel", "#jointCards": "#jointAccel" }[el] || "#none");  // 📐 주봉 차트 모양 + 🚀 이익 증가율 가속 표 (보유 탭과 같은 칸, 11/5)
-  if (ax) { ax.innerHTML = patAlertHTML(list) + accelHTML(list); accSecFill(); }
+  if (ax) { ax.innerHTML = patAlertHTML(list) + accelHTML(list) + dotMapHTML(list, g, mkt); accSecFill(); }
   drawGauges(list);
   liGet().then(() => { const s = liStat(LI); if (s) LI_CODES.forEach((c) => $(el).querySelector(`.card.stock[data-code="${c}"] .pills`)?.insertAdjacentHTML("afterbegin", liPill(s))); });  // 🪨 셀 회사 카드에 리튬 한 줄
 }
