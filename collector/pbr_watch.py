@@ -1,5 +1,6 @@
 """PBR 계산기: 연도별 추정 BPS × PBR 배수 = 가격, 지금 가격에서 몇 % 내리면 PBR 몇 배인지."""
 from common import DATA, REPORT, load_yaml, now_kst, read_json, rnd
+from compute import fwd12
 from kr_stock import naver_now, wise_annual
 
 
@@ -34,6 +35,9 @@ def item(cfg, base):
     lab = lambda y: f"{str(y)[2:]}E"  # noqa: E731
     price = now["price"]
     bps = {lab(y): w.get(y, {}).get("bps") for y in ys}
+    # 12MF = 앞으로 12개월 BPS (증권사 'PBR 밴드 바닥 1.2배' 같은 말이 이 기준) — 올해·내년 사이에 끼움
+    f = fwd12(w, "bps")
+    bps = dict(list(bps.items())[:1] + [("12MF", round(f) if f else None)] + list(bps.items())[1:])
     actual = [y for y, r in w.items() if not r.get("estimate") and r.get("bps")]
     last_y = max(actual) if actual else None
     mults = cfg.get("multiples") or []

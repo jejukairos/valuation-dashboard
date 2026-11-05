@@ -3946,20 +3946,22 @@ function pbrCard(it, base, i) {
   }
   const band = it.band10 ? `<div class="note">10년 PBR 밴드: ${it.band10.min != null ? `가장 낮았던 때 ${it.band10.min} · ` : ""}하단 ${it.band10.low} · 평균 ${it.band10.avg} · 상단 ${it.band10.high}${it.band10.max != null ? ` · 가장 높았던 때 ${it.band10.max}` : ""}배 · 지금 위치 <b>${n(it.band10.pos, 0)}%</b> <span class="src">(직전 연도 실적 기준)</span></div>` : "";
   // 📏 내 기준선 (사용자 11/5: 삼성전자 0.7배 = 저평가, 1배 = 매력적) — 연도마다 지금 PBR 이 어느 자리인지
-  const ms = [...(it.marks || [])].sort((a, b) => a[0] - b[0]), mk = (m) => ms.find(([v]) => v === m)?.[1];
+  // + 11/5 증권사 시각 바닥 1.2배(삼성)·1.0배(하이닉스) — marks 세 번째 칸 = 누구 기준인지, 같은 배수는 이름을 합쳐 보여 줌
+  const ms = [...(it.marks || [])].sort((a, b) => a[0] - b[0]), mk = (m) => ms.filter(([v]) => v === m).map(([, t]) => t).join(" · ");
   const where = (p) => {
     const z = ms.find(([v]) => p <= v), dn = ms.filter(([v]) => v < p).at(-1);
-    return [z && `<b>${esc(z[1])}</b> 자리`, dn && `${dn[0]}배(${esc(dn[1])})까지 ${pct((dn[0] / p - 1) * 100, 0, true)}`].filter(Boolean).join(" · ");
+    return [z && `${z[0]}배(<b>${esc(mk(z[0]))}</b>) 아래`, dn && `${dn[0]}배(${esc(mk(dn[0]))})까지 ${pct((dn[0] / p - 1) * 100, 0, true)}`].filter(Boolean).join(" · ");
   };
-  const marks = ms.length ? `<div class="kidbox" style="margin-top:8px">📏 <b>내 기준선</b> — ${ms.map(([v, t]) => `${v}배 = ${esc(t)}`).join(" · ")}
-    <ul class="irl">${ys.filter((y) => it.pbr[y]).map((y) => `<li>${esc(y)} <b>${it.pbr[y].toFixed(2)}배</b> — ${where(it.pbr[y])}</li>`).join("")}</ul></div>` : "";
+  const who = {}; ms.forEach(([v, t, s = ""]) => (who[s] ||= []).push(`${v}배 ${esc(t)}`));
+  const marks = ms.length ? `<div class="kidbox" style="margin-top:8px">📏 <b>기준선</b><ul class="irl">${Object.entries(who).map(([s, a]) => `<li>${a.join(" · ")}${s ? ` <span class="src">${esc(s)}</span>` : ""}</li>`).join("")}</ul>
+    <b>지금은</b><ul class="irl">${ys.filter((y) => it.pbr[y]).map((y) => `<li>${esc(y)} <b>${it.pbr[y].toFixed(2)}배</b> — ${where(it.pbr[y])}</li>`).join("")}</ul></div>` : "";
   return `<div class="card">
     <div class="stock"><div class="row1"><span class="name">${esc(it.name)}</span><span class="price">${won(it.price)}</span></div></div>
     <div class="sub">${esc(it.date)} 기준 ${it.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""} · 최근 실적(${it.bps_last.year}) BPS ${n(it.bps_last.bps)} → PBR ${times(it.bps_last.pbr, 2)}</div>
-    <div class="tbl-wrap"><table><thead><tr><th>구분</th>${ys.map((y) => `<th class="${cls(y)}">${y}</th>`).join("")}</tr></thead><tbody>
+    <div class="tbl-wrap"><table><thead><tr><th>구분</th>${ys.map((y) => `<th class="${cls(y)}">${y}${y === "12MF" ? '<br><span class="src">앞 12개월</span>' : ""}</th>`).join("")}</tr></thead><tbody>
       <tr><td>BPS</td>${ys.map((y) => `<td class="${cls(y)}">${n(it.bps[y])}</td>`).join("")}</tr>
       <tr><td>현재 PBR</td>${ys.map((y) => `<td class="${cls(y)}">${pbrCell(it.pbr[y])}</td>`).join("")}</tr>
-      ${it.rows.map((r) => `<tr><td>PBR ${mfmt(r.mult)}${mk(r.mult) ? `<br><b>${esc(mk(r.mult))}</b>` : ""}</td>${ys.map((y) => `<td class="${cls(y)} ${r.chg[y] != null && Math.abs(r.chg[y]) < 10 ? "hot" : ""}">${r.prices[y] == null ? "N/A" : n(r.prices[y])}<br><span class="src">${pct(r.chg[y], 0, true)}</span></td>`).join("")}</tr>`).join("")}
+      ${it.rows.map((r) => `<tr><td>PBR ${mfmt(r.mult)}${mk(r.mult) ? `<br><b style="white-space:normal">${esc(mk(r.mult))}</b>` : ""}</td>${ys.map((y) => `<td class="${cls(y)} ${r.chg[y] != null && Math.abs(r.chg[y]) < 10 ? "hot" : ""}">${r.prices[y] == null ? "N/A" : n(r.prices[y])}<br><span class="src">${pct(r.chg[y], 0, true)}</span></td>`).join("")}</tr>`).join("")}
     </tbody></table></div>
     ${it.auto_multiples ? `<div class="note">배수는 10년 PBR 밴드의 하단·평균·상단을 자동으로 넣었어요.</div>` : ""}
     ${sum.length ? `<ul class="summary">${sum.map((s) => `<li>${s}</li>`).join("")}</ul>` : ""}
