@@ -235,14 +235,17 @@ def stock_detail(h, rates_now, fx):
         ltg = cg[0] if cg else None
         adj = [cg or (None, "")]
     # 한국 = 컨센서스 3년 영업이익 성장률, 미국 = 시킹알파 3~5년 EPS 성장률(적어 둔 종목)을 늘 씀
-    pg = C.growth_fair(hist, adj, force_adj=mkt == "KR" or bool(mkt == "US" and sa)) if ("PER" in fm and "PER" in bands) else None
+    pp = (bands.get("PER") or {}).get("periods", {})
+    low = (pp.get("10y") or pp.get("all") or {}).get("low")  # 역사적 저점권 PER (10년 밴드 하위 10%) = 성장률 방식 하방 (사용자 11/6)
+    pg = C.growth_fair(hist, adj, force_adj=mkt == "KR" or bool(mkt == "US" and sa), low=low) if ("PER" in fm and "PER" in bands) else None
     sec_name = h.get("sector") if h.get("fair_mode") == "sector" else None  # 업종 배수는 fair_mode: sector 로 고른 종목만
     sec = dict(SECTORS[sec_name], name=sec_name) if sec_name in SECTORS else None
     if pg:
         pg["label"] = ("3년 영업이익 성장률" if mkt == "KR" and "영업이익" in pg["src"] else
                        "시킹알파 3~5년 EPS 성장률" if "시킹알파" in pg["src"] else "EPS 성장률")
         # 성장률이 너무 세서 하방이 지금 가격보다 50% 넘게 높으면 → 업종 PER, 없으면 이 종목 PER 밴드
-        hi = C.too_high(pg["mult"], C.fwd12(hist, "eps"), price, bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"))
+        # 성장률 × 1 로 잡은 값이 너무 센지 (11/6 부터 적정주가 칸 — 하방은 10년 저점 PER)
+        hi = C.too_high({"bear": pg["g"]}, C.fwd12(hist, "eps"), price, bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"))
         if hi:
             pg["raw"], pg["how"] = dict(pg["mult"]), hi[1]
             pg["mult"] = {k: rnd(v, 1) for k, v in hi[0].items()}
@@ -258,14 +261,15 @@ def stock_detail(h, rates_now, fx):
         other = pg["adj"] if pg["g"] == pg["median"] else pg["median"]
         e12 = C.fwd12(hist, "eps")
         if other and other > 0 and e12 and e12 > 0 and fm == ["PER"] and max(other, pg["g"]) / min(other, pg["g"]) >= 2:
-            scen["alt"] = {"g": rnd(other, 1), **{k: rnd(e12 * other * f, 2) for k, f in C.GROWTH_MULT.items()}}
+            scen["alt"] = {"g": rnd(other, 1), **{k: rnd(e12 * f, 2) for k, f in C.growth_mult(other, low).items()}}
         # 내 엑셀의 성장률 방법들을 나란히: ① 기본값 ② 보정값 ③ Finviz (④ 내가 정한 PER 은 화면에서 somong.yaml 값으로)
         ways = [("기본값", pg["median"], f"{pg['window']} EPS 성장률 중앙값"), ("보정값", adj[0][0], adj[0][1] or "컨센서스 없음")]
         if mkt == "US":
             ways.append(("Finviz", fv5, "Finviz EPS next 5Y"))
         scen["ways"] = [{"name": nm, "g": rnd(g, 1), "src": s, "used": bool(g) and rnd(g, 1) == pg["g"],
-                         **({k: rnd(e12 * g * f, 2) for k, f in C.GROWTH_MULT.items()} if g and g > 0 and e12 and e12 > 0 else {})}
-                        for nm, g, s in ways]  # 성장률 15% → PER 15배 (숫자 그대로)
+                         **({k: rnd(e12 * f, 2) for k, f in C.growth_mult(g, low).items()} if g and g > 0 and e12 and e12 > 0 else {})}
+                        for nm, g, s in ways]  # 성장률 15% → PER 15배 (숫자 그대로) · 하방 = 10년 저점 PER
+        scen["low"] = rnd(low, 1) if low else None
         scen["e12"] = rnd(e12, 2) if e12 else None
         if mkt == "US":
             scen["ltg_cmp"] = ltg_cmp

@@ -130,7 +130,7 @@ def fwd12(hist, key):
 
 def cons_growth(hist, y0, key="eps"):
     """컨센서스(증권사 추정 합산) 앞으로 3년 성장률 (key = eps 또는 op 영업이익): 작년 실적→올해E→… 중 마지막 3구간 (29E 까지 있으면 26→27→28→29).
-    연평균(CAGR)을 쓰되, 한 해가 튀면(역성장, 또는 가장 큰 해가 가장 작은 해의 3배 이상) 해마다 성장률의 중앙값."""
+    해마다 성장률의 단순 평균 (사용자 2026-11-06: '-5% +20% +21% 면 36 ÷ 3' — 예전엔 튀는 해가 있으면 중앙값이었음)."""
     e = {y: (hist.get(y) or {}).get(key) for y in range(y0 - 1, y0 + 5)}
     ys = [y0 - 1]
     while e.get(ys[-1] + 1) and hist[ys[-1] + 1].get("estimate"):
@@ -141,24 +141,28 @@ def cons_growth(hist, y0, key="eps"):
     lab = lambda y: ylabel(y) if hist[y].get("estimate") else str(y)[2:]  # noqa: E731
     steps = [(f"{lab(a)}→{lab(b)}", (e[b] / e[a] - 1) * 100) for a, b in zip(ys, ys[1:])]
     vals = [v for _, v in steps]
-    cagr = ((e[ys[-1]] / e[ys[0]]) ** (1 / (len(ys) - 1)) - 1) * 100 if e[ys[-1]] > 0 else None
-    odd = cagr is None or min(vals) <= 0 or max(vals) / min(vals) >= 3
-    g = statistics.median(vals) if odd else cagr
+    g = sum(vals) / len(vals)
     txt = " · ".join(f"{k} {v:+.0f}%" for k, v in steps)
-    how = f"해마다 성장률이 들쭉날쭉해 중앙값 {g:.1f}%" if odd else f"연평균 {g:.1f}%"
+    how = f"평균 ({' '.join(f'{v:+.1f}' for v in vals).lstrip('+')}) ÷ {len(vals)} = {g:.1f}%"
     return g, f"컨센서스 {'영업이익' if key == 'op' else 'EPS'} {txt} → {how}"
 
 
-# 성장률 방식 적정 PER = 성장률 × (하방, 적정, 최대) — 사용자 2026-10-31: 상방 × 2 는 너무 커서 × 1 · 1.25 · 1.5 (모든 종목)
+# 업종·밴드 PER 배수 = 하방 × 1 · 1.25 · 1.5 (사용자 2026-11-01 원칙 — 성장률 방식은 아래 growth_mult)
 GROWTH_MULT = {"bear": 1, "base": 1.25, "bull": 1.5}
 
 
-def growth_fair(hist, adj_candidates=(), force_adj=False):
+def growth_mult(g, low=None):
+    """성장률 방식 적정 PER (사용자 2026-11-06): 하방 = 역사적 저점권 PER (10년 PER 밴드 하위 10%), Base = 성장률 × 1, 상방 = × 1.5
+    (지금 시장 13 ~ 19.5배 · 강세장 칸은 × 1.5 ~ × 2 = 19.5 ~ 26배). 저점 PER 이 성장률보다 높거나 밴드가 없으면 하방 = 성장률 × 1."""
+    return {"bear": min(low, g) if low and low > 0 else g, "base": g, "bull": g * 1.5}
+
+
+def growth_fair(hist, adj_candidates=(), force_adj=False, low=None):
     """내 엑셀 '소몽의 적정주가 템플릿' 방식의 적정 PER.
     평균성장률 = 21년~올해(E) EPS 전년 대비 성장률의 중앙값 (코로나·기저효과·금리 급등기 튀는 해의 영향을 줄임).
     역성장한 해가 있거나 성장률이 50% 를 넘으면(이익 변동이 너무 큼) 보정값(앞으로 3~5년 연평균 성장률 추정) 사용.
     force_adj: 보정값이 있으면 늘 보정값 (한국 = 컨센서스 3년 영업이익 성장률).
-    적정 PER: Bear(하방) = 성장률 × 1, Base(적정주가) = × 1.25, Bull(최대) = × 1.5 (GROWTH_MULT) — 강세장 칸은 × 1.5 · 1.75 · 2."""
+    적정 PER: growth_mult — Bear(하방) = 10년 저점 PER(low), Base = 성장률 × 1, Bull(상방) = × 1.5 · 강세장 칸은 × 1.5 · 1.75 · 2."""
     y = now_kst().year
     years = list(range(y - 6, y + 3))
     eps = {yy: (hist.get(yy) or {}).get("eps") for yy in years}
@@ -188,7 +192,7 @@ def growth_fair(hist, adj_candidates=(), force_adj=False):
     else:
         return None
     return {"g": rnd(g, 1), "src": src, "median": rnd(med, 1), "adj": rnd(adj_v, 1), "adj_src": adj_src,
-            "mult": {k: rnd(g * f, 1) for k, f in GROWTH_MULT.items()},
+            "mult": {k: rnd(v, 1) for k, v in growth_mult(g, low).items()}, "low": rnd(low, 1) if low else None,
             "years": [ylabel(yy) if (hist.get(yy) or {}).get("estimate") else str(yy)[2:] for yy in years],
             "eps": [eps[yy] for yy in years], "yoy": [None] + [rnd(yoy.get(yy), 1) for yy in years[1:]],
             "window": f"{str(y - 5)[2:]}~{str(y)[2:]}E"}
@@ -228,7 +232,7 @@ def too_high(m, e12, price, band, sector=None, sec_name=None):
     if not (e12 and e12 > 0 and price and (over or e12 * m["bear"] > price * 1.5)):
         return None
     why = (f"성장률 PER {m['bear']:g}배가 {cap:g}배를 넘어 의미가 없어서" if over else
-           f"성장률 PER {m['bear']:g}배로 잡은 하방이 지금 가격보다 {(e12 * m['bear'] / price - 1) * 100:.0f}% 높아서")
+           f"성장률 PER {m['bear']:g}배로 잡은 값이 지금 가격보다 {(e12 * m['bear'] / price - 1) * 100:.0f}% 높아서")
     if sector and str(sector.get("kind", "PER")).upper() == "PER":
         t = sector.get("tight")  # 긴축·약세장 보수 배수 [하방, 적정, 상방] (sectors.yaml) — 없으면 바닥 · 보통 · 최고
         if t:
@@ -255,7 +259,9 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None, keep=Fals
         if kind == "PER" and per_growth:
             m = dict(per_growth["mult"])
             src = per_growth.get("part_src") or f"성장률 {per_growth['g']:g}%"
-            how = per_growth.get("how") or f"{per_growth.get('label') or '성장률'} {per_growth['g']:g}% × " + " · ".join(f"{f:g}" for f in GROWTH_MULT.values())
+            lo = per_growth.get("low")
+            how = per_growth.get("how") or (f"하방 = {'10년 저점 PER ' + format(lo, 'g') + '배' if lo and lo <= per_growth['g'] else '성장률 × 1' + (f' (10년 저점 PER {lo:g}배가 성장률보다 높음)' if lo else '')}"
+                                             f" · 적정 = {per_growth.get('label') or '성장률'} {per_growth['g']:g}% × 1 · 상방 = × 1.5")
         elif sector and sector.get("kind", "PER").upper() == kind:
             t = sector.get("tight") if kind == "PER" else None
             m = dict(zip(("bear", "base", "bull"), t)) if t else {k: sector[k] for k in ("bear", "base", "bull")}
@@ -278,7 +284,9 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None, keep=Fals
         bm = ({"lo": ez[0], "hi": ez[-1]} if ez else
               {"lo": per_growth["g"] * 1.5, "hi": per_growth["g"] * 2} if grow else
               {"lo": m["base"], "hi": m["base"] * 2} if kind == "PER" else {"lo": m["base"], "hi": m["bull"]})
-        if keep and m["base"] != m["bear"] * GROWTH_MULT["base"]:
+        if grow:
+            pass  # 성장률 방식은 growth_mult 그대로 (저점 PER · × 1 · × 1.5)
+        elif keep and m["base"] != m["bear"] * GROWTH_MULT["base"]:
             how += " — 이 종목은 배수 그대로 (사용자 지정 2026-11-02)"
         elif m["base"] != m["bear"] * GROWTH_MULT["base"]:  # 사용자 원칙(2026-11-01): 모든 방법 Base = 하방 × 1.25, Bull = 하방 × 1.5 (강세장 칸은 그대로)
             m = {k: m["bear"] * f for k, f in GROWTH_MULT.items()}
@@ -524,8 +532,17 @@ if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% �
     h = {y: {"eps": 1000}, y + 1: {"eps": 1000}}
     s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 20, "mult": {"bear": 10, "base": 20, "bull": 30}, "part_src": "화장품 브랜드 업종 PER"})
     assert s["bull_mkt"] == {"lo": 20000, "mid": 27500, "hi": 35000} and s["parts"][0]["capped"]["from"] == {"bm_hi": 40}, s
-    s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 25, "mult": {"bear": 25, "base": 37.5, "bull": 50}})
-    assert (s["bear"], s["base"], s["bull"]) == (25000, 31250, 35000) and s["bull_mkt"] == {"lo": 35000, "mid": 35000, "hi": 35000}, s
+    # 성장률 방식 (11/6): 하방 = 10년 저점 PER · 적정 = 성장률 × 1 · 상방 × 1.5 → 13% · 저점 10배 = 10 · 13 · 19.5, 강세장 19.5 ~ 26
+    assert growth_mult(13, 10) == {"bear": 10, "base": 13, "bull": 19.5} and growth_mult(12, 16)["bear"] == 12 and growth_mult(13)["bear"] == 13
+    s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 13, "low": 10, "mult": growth_mult(13, 10)})
+    assert (s["bear"], s["base"], s["bull"]) == (10000, 13000, 19500) and s["bull_mkt"] == {"lo": 19500, "mid": 22750, "hi": 26000}, s
+    assert "10년 저점 PER 10배" in s["parts"][0]["how"], s
+    s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 25, "mult": growth_mult(25, 8)})
+    assert (s["bear"], s["base"], s["bull"]) == (8000, 25000, 35000) and s["bull_mkt"] == {"lo": 35000, "mid": 35000, "hi": 35000}, s
+    # 컨센서스 성장률 = 해마다 성장률 평균: 영업이익 100 → 99 → 108 → 136 (-1% · +9% · +26%) → 약 11.4%
+    hc = {y - 1: {"op": 100}, y: {"op": 99, "estimate": 1}, y + 1: {"op": 108, "estimate": 1}, y + 2: {"op": 136, "estimate": 1}}
+    cg = cons_growth(hc, y, "op")
+    assert abs(cg[0] - (-1 + 100 * (108 / 99 - 1) + 100 * (136 / 108 - 1)) / 3) < 1e-9 and "÷ 3" in cg[1], cg
     # 업종에 tight·easy 를 적으면 (화장품 브랜드): 긴축 10 · 15 · 20, 강세장 15 · 22.5 · 30
     sec2 = {**sec, "tight": [10, 15, 20], "easy": [15, 22.5, 30]}
     t2 = too_high(m, 1000, 15000, band, sec2, "화장품 브랜드")
