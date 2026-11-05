@@ -270,8 +270,12 @@ function floorHTML(c) {
   if (sec?.tight) out.push(`<div class="note">📏 적정주가에 쓰는 배수 (사용자 원칙): 🔴 긴축·약세장 <b>${sec.tight.map((x) => n(x, 1)).join(" · ")}배</b> · 🐂 강세장 <b>${(sec.easy || []).map((x) => n(x, 1)).join(" · ")}배</b> <span class="src">— 하락장엔 지금 PER 근처에서 보수적으로, 금리 인하·수급이 들어올 때 넓힘</span></div>`);
   (sec?.notes || []).forEach((x) => out.push(`<div class="note src">📝 ${esc(x.date)} ${esc(x.source)}: ${esc(x.text)}</div>`));
   if (ind && (ind.per || ind.peer_med)) out.push(`<div class="note src">🏭 네이버 업종 PER${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 최근 4분기 ${ind.per == null ? "-" : n(ind.per, 1) + "배"}${ind.peer_med ? ` · 같은 업종 ${ind.peers.length}곳 중앙값 <b>${n(ind.peer_med, 1)}배</b> (${ind.peers.filter((p) => p.per).map((p) => `${esc(p.name)} ${n(p.per, 1)}${p.fwd ? "" : "*"}`).join(" · ")})` : ""}${ind.peers.some((p) => p.per && !p.fwd) ? " <span>* 추정치 없어 현재 PER</span>" : ""}</div>`);
+  // 🏭 업종 PBR (사용자 11/6: PBR 로 매기는 종목은 업종 PBR 도) — 네이버 같은 업종 회사들의 PBR (지난 결산 BPS 기준)
+  const pbrK = (c.methods || []).includes("PBR");
+  if (ind?.pbr_med) out[pbrK ? "unshift" : "push"](`<div class="note${pbrK ? "" : " src"}">🏭 업종 PBR${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 같은 업종 ${ind.peers.filter((p) => p.pbr > 0).length}곳 중앙값 <b>${n(ind.pbr_med, 2)}배</b>${ind.pbr_own ? ` · ${esc(c.name)} ${n(ind.pbr_own, 2)}배 (${pct((ind.pbr_own / ind.pbr_med - 1) * 100, 0, true)})` : ""}
+    <span class="src">(${ind.peers.filter((p) => p.pbr > 0).map((p) => `${esc(p.name)} ${n(p.pbr, 2)}`).join(" · ")}) · 모두 지난 결산 BPS 기준이라 위 12MF PBR 과 숫자가 달라요</span></div>`);
   if (s.rerating) out.push(`<div class="note src">🔁 리레이팅: ${esc(s.rerating)}</div>`);
-  return warn + (out.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🏷 업종 PER · 리레이팅 메모</summary>${out.join("")}</details>` : "");
+  return warn + (out.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🏷 업종 ${pbrK ? "PBR·PER" : "PER"} · 리레이팅 메모${pbrK && ind?.pbr_med ? ` <span class="src">업종 PBR ${n(ind.pbr_med, 2)}배</span>` : ""}</summary>${out.join("")}</details>` : "");
 }
 // 성장률 방식 (내 엑셀 '소몽의 적정주가 템플릿'): 기준 PER = 성장률 · 업종 중앙값 · 업종 바닥 중 가장 낮은 값 × 1 · 1.25 · 1.5 (사용자 11/6)
 function growthHTML(c) {
@@ -515,6 +519,7 @@ function stockCard(c) {
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>`}
     ${divSaHTML(c)}
+    ${pbrFloorBox(c)}
     ${prefBox(c)}
     <div class="tgday" data-code="${esc(c.code)}" onclick="event.stopPropagation()">${tgDayHTML(c.code)}</div>
     ${tipranksHTML(c)}
@@ -582,6 +587,45 @@ function prefGapHTML(p, q) {
         <li>좁아질 때: 배당 매력이 커지거나(금리 하락기) 자사주 소각·주주환원 기대가 우선주에도 퍼질 때 (20년 11월 10% 밑, 21년 6월 8.3%)</li>
         <li>21년 8.3% → 23년 14.2% → 24년 17.4% → 25년 18.5% 로 점점 넓어지는 흐름이었어요</li></ul>
       <div class="note src">출처: <a href="https://www.hankyung.com/article/2026062585451" target="_blank" rel="noopener">한국경제 26.6.25</a> · <a href="https://www.ajunews.com/view/20260614115554102" target="_blank" rel="noopener">아주경제 26.6.14</a> · <a href="https://mobile.newsis.com/view/NISX20260605_0003657504" target="_blank" rel="noopener">뉴시스 26.6.5</a> · <a href="https://newstomato.com/ReadNews.aspx?no=1008443" target="_blank" rel="noopener">뉴스토마토 20.11</a> · 사이트 계산은 주간 종가라 기사 숫자와 조금 달라요 · 참고용 (매수·매도 추천 아님)</div></details>`;
+}
+// 🧱 PBR 바닥 기록 (사용자 11/6: 삼성전자 PBR 이 어디까지 떨어져서 지지했나, 닫아 둠) — PBR 로 매기는 종목 모두, 열 때 stocks/{코드}.json 주간 PBR 로 계산
+const pbrFloorBox = (c) => ((c.methods || []).includes("PBR") && c.market !== "US" ? `<details class="fvt pbrfloor" data-code="${esc(c.code)}" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🧱 PBR 바닥 기록 <span class="src">어디까지 떨어져서 버텼나 · 눌러서 열기</span></summary><div class="pfb src">불러오는 중…</div></details>` : "");
+document.addEventListener("toggle", async (e) => {
+  const el = e.target;
+  if (!el.classList?.contains("pbrfloor") || !el.open || el.dataset.done) return;
+  el.dataset.done = 1;
+  try {
+    const v = encodeURIComponent(DASH.updated_at), d = await (await fetch(`data/stocks/${el.dataset.code}.json?v=${v}`)).json();
+    if (!PBR) { try { PBR = await (await fetch("data/pbr_watch.json?v=" + v)).json(); } catch (_) { /* 들은 기준 줄만 빠짐 */ } }
+    el.querySelector(".pfb").outerHTML = pbrFloorHTML(d, DASH.stocks.find((x) => x.code === el.dataset.code) || {});
+  } catch (_) { el.querySelector(".pfb").textContent = "자료를 못 불러왔어요"; }
+}, true);
+function pbrFloors(m, W = 26) {  // 좌우 26주(반년) 안에서 가장 낮고, 그 뒤 반년 안에 15% 넘게 오른 주 = 지지한 바닥 (최근 13주는 아직 확정 아님)
+  const out = [];
+  for (let i = 0; i < m.length - 13; i++) {
+    if (!(m[i] > 0)) continue;
+    const win = m.slice(Math.max(0, i - W), i + W + 1).filter((x) => x > 0);
+    if (m[i] > Math.min(...win) || out.some((j) => i - j <= W)) continue;
+    if (Math.max(...m.slice(i, i + W + 1).filter((x) => x > 0)) >= m[i] * 1.15) out.push(i);
+  }
+  return out;
+}
+function pbrFloorHTML(d, c) {
+  const b = d.bands?.PBR;
+  if (!b?.mult?.length) return `<div class="src">PBR 밴드 자료가 없어요</div>`;
+  const m = b.mult, p = b.price, ds = b.dates, L = m.length - 1, fl = pbrFloors(m);
+  if (!fl.length) return `<div class="src">뚜렷한 바닥을 못 찾았어요</div>`;
+  const chg = (i, w) => (p[Math.min(L, i + w)] && i + w <= L ? pct((p[i + w] / p[i] - 1) * 100, 0, true) : "-");
+  const vals = fl.map((i) => m[i]).sort((a, z) => a - z), mid = vals[vals.length >> 1], f12 = (c.fwd_mult?.PBR || {})["12MF"];
+  const rows = fl.map((i) => `<tr><td style="text-align:left">${esc(ds[i].slice(0, 7))}</td><td><b>${n(m[i], 2)}배</b></td><td>${n(p[i])}</td><td>${chg(i, 26)}</td><td>${chg(i, 52)}</td></tr>`).join("");
+  const mk = (PBR?.items || []).find((x) => x.code === d.code)?.marks || [];
+  const heard = mk.filter((x) => /바닥/.test(x[1])).map((x) => `${n(x[0], 1)}배 ${esc(x[1])}`).join(" · ");
+  const basis = b.basis === "forward" ? "주가 ÷ 그때 기준 1년 뒤 BPS (아직 안 나온 해는 추정치)" : "주가 ÷ 그때 이미 발표된 BPS";
+  return `<div class="note" style="margin-top:4px">지금 이 기준 PBR <b>${n(m[L], 2)}배</b> · 지난 바닥들 가운데 값 <b>${n(mid, 2)}배</b> (지금보다 ${pct((mid / m[L] - 1) * 100, 0, true)}) · 바닥 범위 ${n(vals[0], 2)} ~ ${n(vals.at(-1), 2)}배</div>
+    ${heard ? `<div class="note">🗣 들은 기준 (12MF): ${heard} · 지금 12MF PBR <b>${f12 ? n(f12, 2) + "배" : "-"}</b>${f12 ? mk.filter((x) => /바닥/.test(x[1])).map((x) => ` · ${n(x[0], 1)}배까지 ${pct((x[0] / f12 - 1) * 100, 0, true)}`).join("") : ""} <span class="src">(🧮 PBR 탭 기준선)</span></div>` : ""}
+    <div class="tbl-wrap"><table class="compact" style="width:100%;margin-top:4px"><thead><tr><th style="text-align:left">바닥</th><th>PBR</th><th>그때 주가</th><th>6개월 뒤</th><th>1년 뒤</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="kidbox" style="margin-top:6px">🐣 PBR 은 '회사 순자산의 몇 배에 거래되나'예요. 과거에 비슷한 PBR 에서 여러 번 하락이 멈추고 다시 올랐다면, 그 근처를 '바닥권'으로 봐요. 다만 이익이 크게 줄거나(적자) 업황이 나빠지면 바닥이 더 내려가기도 해요.</div>
+    <div class="note src">PBR = ${basis} · 주간 · ${esc(ds[0].slice(0, 4))}년~ · 바닥 = 앞뒤 반년 중 가장 낮고, 그 뒤 반년 안에 PBR 이 15% 넘게 다시 오른 주 · 12MF PBR(카드 위 숫자)과는 기준이 달라 숫자가 달라요 · 참고용 (매수·매도 추천 아님)</div>`;
 }
 // ② 지난 10년 밴드 위치 (사용자 11/6: 주가 그림 아래로 · 무슨 PER 인지 눌러서 근거) — collector main.py band_info
 function bandPosHTML(c, pos) {
@@ -5150,9 +5194,10 @@ function tgDayHTML(code) {
   notes.forEach((m) => { if (!by.has(fKey(m.firm) + m.d)) add({ d: m.d, firm: m.firm, t: m.t, tp: m.tp, tp_prev: m.tp_prev, rating: m.rating }); });
   // 최신 날짜 먼저 · 같은 날은 사용자 요약(✍️) → 한경 목록(PDF·목표가 계산 방식 있음) → 텔레그램 순
   const rank = (x) => (x.note ? 0 : x.u ? 1 : 2);
-  const co = [...by.values()].sort((a, b) => b.d.localeCompare(a.d) || rank(a) - rank(b) || (b.hm || "").localeCompare(a.hm || ""));
-  const inds = ind ? (REPS?.industry || []).filter((x) => x.d >= d1 && x.inds.includes(ind)) : [];
-  const web = co.length || inds.length ? [] : tg.filter((x) => !x.firm).slice(0, 5);
+  // 사용자 11/6: 기업 리포트만 — 시황·전략·산업분석 글, 업종 리포트(📑 리포트 탭 🏭 산업 칩에 있음), 인터넷 글 대체 목록은 뺌
+  const MACRO = /시황|전략|산업\s*분석|Daily|데일리|모닝|마감|매크로|경제|채권|이슈\s*점검/i;
+  const co = [...by.values()].filter((x) => !MACRO.test(x.t || "")).sort((a, b) => b.d.localeCompare(a.d) || rank(a) - rank(b) || (b.hm || "").localeCompare(a.hm || ""));
+  const inds = [], web = [];
   const rate = (x) => (x.rating_prev ? `<span class="src">${esc(x.rating_prev)} →</span> <b style="color:var(--warn-ink)">${esc(x.rating)}</b>` : esc(x.rating || ""));
   const coRow = (x) => {
     const nt = x.note || {}, why = nt.why || [], val = nt.val || x.val;
@@ -5176,9 +5221,9 @@ function tgDayHTML(code) {
   }
   const n_ = Math.min(10, co.length + inds.length);
   const body = [...co.map(coRow), ...inds.map((x) => `<div class="rpd"><span class="src">${mdDay(x.d)}</span> 🏭 <b>${esc(x.firm)}</b> · <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a> <span class="src">(${esc(ind)} 업종 리포트)</span></div>`)].slice(0, 10).join("");
-  return (n_ ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 리포트 ${n_}개</b> <span class="src">종목 리포트 → 업종 리포트 순 · 눌러서 요약·목표가 계산 · 확인 ${esc(at)}</span></div>${body}`
+  return (n_ ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 기업 리포트 ${n_}개</b> <span class="src">시황·전략·업종 글은 뺌 · 눌러서 요약·목표가 계산 · 확인 ${esc(at)}</span></div>${body}`
     : web.length ? `<div class="chart-title" style="margin-top:12px"><b>📄 오늘·어제 증권사 리포트 없음</b> <span class="src">대신 🌐 이 종목이 나온 인터넷 글 · 확인 ${esc(at)}</span></div><ul class="irl">${tgRows(web, code)}</ul>`
-    : `<div class="src" style="margin-top:10px">📄 오늘·어제 새 리포트 없음 · 확인 ${esc(at)}</div>`) + sumLine + revHTML(code);
+    : `<div class="src" style="margin-top:10px">📄 오늘·어제 새 기업 리포트 없음 · 확인 ${esc(at)}</div>`) + sumLine + revHTML(code);
 }
 // 📥 최근 7일 리포트 (리포트 탭 맨 위): 보유·관심·공동 종목, 날짜별 — 링크만 (PDF 는 텔레그램에 있어 사이트 용량을 안 씀, 7일 지나면 저절로 빠짐)
 function tgWeekHTML(mkt) {

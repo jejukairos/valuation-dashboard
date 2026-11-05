@@ -88,16 +88,21 @@ def sector_per(code):
     m = re.search(r"업종PER\s*<b[^>]*>\s*([-\d.,]+)", t)
     w = re.search(r"WICS\s*:\s*([^<]+)", t)
     peers = []
-    for p in (HTTP.get(f"https://m.stock.naver.com/api/stock/{code}/integration").json().get("industryCompareInfo") or [])[:6]:
+    me = HTTP.get(f"https://m.stock.naver.com/api/stock/{code}/integration").json()
+    for p in (me.get("industryCompareInfo") or [])[:6]:
         try:
             info = {x["code"]: x["value"] for x in HTTP.get(f"https://m.stock.naver.com/api/stock/{p['itemCode']}/integration").json().get("totalInfos", [])}
         except Exception:  # noqa: BLE001
             continue
         f, c = num(info.get("cnsPer")), num(info.get("per"))
-        peers.append({"name": p.get("stockName"), "per": f or c, "fwd": bool(f)})
+        peers.append({"name": p.get("stockName"), "per": f or c, "fwd": bool(f), "pbr": num(info.get("pbr"))})
     vals = [p["per"] for p in peers if p["per"] and p["per"] > 0]
     med = round(statistics.median(vals), 2) if vals else None
-    return {"wics": w.group(1).strip() if w else None, "per": num(m.group(1)) if m else None, "peers": peers, "peer_med": med}
+    # 업종 PBR (사용자 11/6): 같은 업종 회사들의 PBR 중앙값 (네이버 = 지난 결산 BPS 기준) + 이 종목 같은 기준 PBR
+    pv = [p["pbr"] for p in peers if p.get("pbr") and p["pbr"] > 0]
+    own = {x["code"]: x["value"] for x in me.get("totalInfos", [])}
+    return {"wics": w.group(1).strip() if w else None, "per": num(m.group(1)) if m else None, "peers": peers, "peer_med": med,
+            "pbr_med": round(statistics.median(pv), 2) if pv else None, "pbr_own": num(own.get("pbr"))}
 
 
 def product_mix(code):
