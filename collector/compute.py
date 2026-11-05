@@ -289,6 +289,8 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None, keep=Fals
               {"lo": m["base"], "hi": m["base"] * 2} if kind == "PER" else {"lo": m["base"], "hi": m["bull"]})
         if grow:
             pass  # 성장률 방식은 기준 PER × 1 · 1.25 · 1.5 그대로 (반올림 때문에 다시 곱하지 않게)
+        elif kind == "PBR":
+            pass  # 사용자 11/6: PBR 은 × 1 · 1.25 · 1.5 로 바꾸지 않고 10년 밴드 하단(하위 10%) · 평균 · 상단(상위 10%) 그대로
         elif keep and m["base"] != m["bear"] * GROWTH_MULT["base"]:
             how += "" if "사용자" in how else " — 배수 그대로 (사용자 지정)"
         elif m["base"] != m["bear"] * GROWTH_MULT["base"]:  # 사용자 원칙(2026-11-01): 모든 방법 Base = 하방 × 1.25, Bull = 하방 × 1.5 (강세장 칸은 그대로)
@@ -542,6 +544,9 @@ if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% �
     s = scenarios(10000, h, {}, ["PER"], per_growth=gr)  # 지금 11 · 13.75 · 16.5 · 강세장 16.5 · 19.25 · 22
     assert (s["bear"], s["base"], s["bull"]) == (11000, 13750, 16500) and s["bull_mkt"] == {"lo": 16500, "mid": 19250, "hi": 22000}, s
     assert "✔ 방산 업종 바닥 11배" in s["parts"][0]["how"], s
+    # PBR 은 10년 밴드 하단 · 평균 · 상단 그대로 (11/6, × 1 · 1.25 · 1.5 안 함): 0.5 · 1.0 · 1.6 × BPS 10,000
+    s = scenarios(10000, {y: {"bps": 10000}, y + 1: {"bps": 10000}}, {"PBR": {"periods": {"10y": {"low": 0.5, "avg": 1.0, "high": 1.6, "from": "2016-01-01"}}}}, ["PBR"])
+    assert (s["bear"], s["base"], s["bull"]) == (5000, 10000, 16000), s
     # 화장품 고정 배수 (sectors.yaml fixed, 11/6): 지금 10 · 15 · 20 · 강세장 15 · 20 · 25
     s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 41, "x": 10, "mult": {"bear": 10, "base": 15, "bull": 20}, "part_src": "화장품 브랜드 업종 PER",
                                                      "easy": [15, 20, 25], "how": "화장품 브랜드 업종 고정 배수"}, keep=True)
