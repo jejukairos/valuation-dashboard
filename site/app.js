@@ -515,6 +515,7 @@ function stockCard(c) {
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>`}
     ${divSaHTML(c)}
+    ${prefBox(c)}
     <div class="tgday" data-code="${esc(c.code)}" onclick="event.stopPropagation()">${tgDayHTML(c.code)}</div>
     ${tipranksHTML(c)}
     ${streetHTML(c)}
@@ -527,6 +528,60 @@ function stockCard(c) {
     ${mine}
     <div class="pills">${pills.join("")}</div>
   </button>`;
+}
+// 🔀 우선주 괴리율 (사용자 11/6: 본주와의 괴리율로 바닥·과열 판단) = (보통주 − 우선주) ÷ 보통주 — 두 종목 주간 종가(배당 밴드와 같은 날짜, 2015년~)
+const PREF_COMMON = { "005935": "005930" };
+const prefBox = (c) => (PREF_COMMON[c.code] ? `<div class="prefgap" data-code="${esc(c.code)}" onclick="event.stopPropagation()"></div>` : "");
+async function prefFill() {
+  for (const el of document.querySelectorAll(".prefgap:not([data-done])")) {
+    el.dataset.done = 1;
+    const v = encodeURIComponent(DASH.updated_at);
+    try {
+      const [p, q] = await Promise.all([PREF_COMMON[el.dataset.code], el.dataset.code].map((k) => fetch(`data/stocks/${k}.json?v=${v}`).then((r) => r.json())));
+      el.innerHTML = prefGapHTML(p, q);
+    } catch (_) { el.innerHTML = ""; }
+  }
+}
+function prefGapHTML(p, q) {
+  const A = p.bands?.DIV || p.bands?.PER, B = q.bands?.DIV || q.bands?.PER;
+  if (!A || !B || !(p.price > 0 && q.price > 0)) return "";
+  const m = new Map(B.dates.map((d, i) => [d, B.price[i]]));
+  const S = A.dates.map((d, i) => [d, A.price[i], m.get(d)]).filter(([, a, b]) => a > 0 && b > 0).map(([d, a, b]) => [d, (1 - b / a) * 100]);
+  if (S.length < 52) return "";
+  const now = (1 - q.price / p.price) * 100, dt = q.price_date || S.at(-1)[0];
+  if (S.at(-1)[0] >= dt.slice(0, 10)) S.pop();
+  S.push([dt.slice(0, 10), now]);
+  const v = S.map((x) => x[1]), L = v.length - 1, avg = v.reduce((a, b) => a + b, 0) / v.length;
+  const sd = Math.sqrt(v.reduce((a, b) => a + (b - avg) ** 2, 0) / v.length), imin = v.indexOf(Math.min(...v)), imax = v.indexOf(Math.max(...v));
+  const pos = (v.filter((x) => x < now).length / v.length) * 100;
+  const y5 = S.filter((x) => x[0] >= `${+dt.slice(0, 4) - 5}${dt.slice(4, 10)}`).map((x) => x[1]), a5 = y5.reduce((a, b) => a + b, 0) / y5.length;
+  const zone = pos >= 90 ? ["우선주 바닥권", "할인이 역사적으로 가장 넓은 쪽 — 우선주가 보통주보다 상대적으로 가장 싼 구간", "var(--good)"]
+    : pos >= 70 ? ["우선주 싼 쪽", "할인이 평소보다 넓음 — 우선주가 상대적으로 싼 편", "var(--good)"]
+    : pos > 30 ? ["보통", "할인이 평소 범위", "var(--ink)"]
+    : pos > 10 ? ["우선주 비싼 쪽", "할인이 평소보다 좁음 — 우선주가 상대적으로 비싼 편", "var(--warn-ink)"]
+    : ["우선주 과열권", "할인이 역사적으로 가장 좁은 쪽 — 우선주가 보통주를 바짝 따라붙은 구간", "var(--bad-ink)"];
+  // 그림: 주간 괴리율 · 평균(점선) · 평균 ±1 표준편차(옅은 띠) · 가장 넓을 때·좁을 때·지금
+  const W = 340, H = 170, x0 = 30, x1 = W - 56, top = 14, bot = H - 22, hi = Math.max(...v) * 1.08, lo = Math.min(0, Math.min(...v));
+  const X = (i) => x0 + ((x1 - x0) * i) / L, Y = (y) => bot - ((y - lo) / (hi - lo)) * (bot - top);
+  let g = `<rect x="${x0}" y="${Y(avg + sd)}" width="${x1 - x0}" height="${Y(avg - sd) - Y(avg + sd)}" fill="var(--s1)" opacity=".1"/>`;
+  [0, 10, 20, 30, 40].filter((t) => t <= hi).forEach((t) => { g += `<line x1="${x0}" x2="${x1}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${Y(t) + 3}" text-anchor="end" class="qx">${t}%</text>`; });
+  S.forEach(([d], i) => { if (i && d.slice(0, 4) !== S[i - 1][0].slice(0, 4) && +d.slice(2, 4) % 2 === 0) g += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle" class="qx">${d.slice(0, 4)}</text>`; });
+  g += `<line x1="${x0}" x2="${x1}" y1="${Y(avg)}" y2="${Y(avg)}" stroke="var(--muted)" stroke-dasharray="4 3"/><text x="${x1 + 4}" y="${Y(avg) + 3 + (Math.abs(Y(now) - Y(avg)) < 12 ? (Y(avg) >= Y(now) ? 9 : -9) : 0)}" class="qx">평균 ${n(avg, 0)}%</text>`;
+  g += `<path d="${v.map((y, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(y).toFixed(1)}`).join("")}" fill="none" stroke="var(--ink)" stroke-width="1.6"/>`;
+  g += [[imax, "가장 넓음"], [imin, "가장 좁음"]].map(([i, t]) => `<circle cx="${X(i)}" cy="${Y(v[i])}" r="3" fill="var(--muted)"/><text x="${X(i) + (X(i) > W / 2 ? -5 : 5)}" y="${Y(v[i]) + (i === imax ? 4 : 13)}" text-anchor="${X(i) > W / 2 ? "end" : "start"}" class="qx">${t} ${n(v[i], 0)}% (${S[i][0].slice(2, 7).replace("-", ".")})</text>`).join("");
+  g += `<circle cx="${X(L)}" cy="${Y(now)}" r="4.5" fill="${zone[2]}"/><text x="${x1 + 2}" y="${Y(now) + 3}" class="qx" style="font-weight:700">지금 ${n(now, 1)}%</text>`;
+  g += tipCols(X, (x1 - x0) / L, top, bot, S.map(([d, y]) => `${d}\n괴리율 ${n(y, 1)}%`));
+  return `<div class="chart-title" style="margin-top:14px"><b>🔀 보통주와 괴리율</b> <span class="src">(보통주 − 우선주) ÷ 보통주 · ${esc(S[0][0].slice(0, 4))}년~ 주간</span></div>
+    <div class="kv"><div class="k">지금 괴리율 <span class="src">보통주 ${n(p.price)}원 · 우선주 ${n(q.price)}원</span></div><div class="v"><b style="color:${zone[2]}">${n(now, 1)}%</b></div>
+      <div class="k">판단 <span class="src">${esc(S[0][0].slice(0, 4))}년~ ${n(v.length)}주 중 아래에서 ${n(pos, 0)}% 자리</span></div><div class="v"><b style="color:${zone[2]}">${zone[0]}</b></div></div>
+    <div class="src">${zone[1]} · 평균 ${n(avg, 1)}% (최근 5년 ${n(a5, 1)}%) · 평균 ± 1표준편차 ${n(avg - sd, 1)} ~ ${n(avg + sd, 1)}% · 가장 넓을 때 ${n(v[imax], 1)}% (${esc(S[imax][0])}) · 가장 좁을 때 ${n(v[imin], 1)}% (${esc(S[imin][0])})</div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="삼성전자 보통주·우선주 괴리율 추이" style="margin-top:4px">${g}</svg>
+    <div class="kidbox" style="margin-top:6px">🐣 우선주는 회사 일에 투표할 권리가 없는 대신 배당을 조금 더 받는 주식이라 대개 보통주보다 싸게 거래돼요. 그 차이(괴리율)가 <b>평소보다 넓으면 우선주가 상대적으로 싸고(바닥 쪽)</b>, <b>좁으면 상대적으로 비싸요(과열 쪽)</b>. 지금은 ${n(now, 1)}%로 평균 ${n(avg, 0)}%보다 ${now >= avg ? "넓어요" : "좁아요"}.</div>
+    <details class="fvt"><summary class="chart-title">📰 괴리율이 넓어지고 좁아지는 이유 <span class="src">기사 요약 · 눌러서 열기</span></summary>
+      <ul class="irl"><li>넓어질 때: 코스피200·MSCI 같은 지수를 따라가는 ETF·패시브 자금이 보통주에만 들어와요 (26년 6월 34~36%, 5년 중 가장 넓음 — 평균 16.6%의 2배)</li>
+        <li>좁아질 때: 배당 매력이 커지거나(금리 하락기) 자사주 소각·주주환원 기대가 우선주에도 퍼질 때 (20년 11월 10% 밑, 21년 6월 8.3%)</li>
+        <li>21년 8.3% → 23년 14.2% → 24년 17.4% → 25년 18.5% 로 점점 넓어지는 흐름이었어요</li></ul>
+      <div class="note src">출처: <a href="https://www.hankyung.com/article/2026062585451" target="_blank" rel="noopener">한국경제 26.6.25</a> · <a href="https://www.ajunews.com/view/20260614115554102" target="_blank" rel="noopener">아주경제 26.6.14</a> · <a href="https://mobile.newsis.com/view/NISX20260605_0003657504" target="_blank" rel="noopener">뉴시스 26.6.5</a> · <a href="https://newstomato.com/ReadNews.aspx?no=1008443" target="_blank" rel="noopener">뉴스토마토 20.11</a> · 사이트 계산은 주간 종가라 기사 숫자와 조금 달라요 · 참고용 (매수·매도 추천 아님)</div></details>`;
 }
 // ② 지난 10년 밴드 위치 (사용자 11/6: 주가 그림 아래로 · 무슨 PER 인지 눌러서 근거) — collector main.py band_info
 function bandPosHTML(c, pos) {
@@ -559,6 +614,7 @@ function renderCards() {
   else list.sort((a, b) => mk(a) - mk(b) || a.order - b.order);
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
   drawGauges(list);
+  prefFill();
   jumpBar("#stockCards", "#cardJump");
   Promise.all([tgGet().catch(() => null), repGet().catch(() => null)]).then(() => document.querySelectorAll("#stockCards .tgday").forEach((el) => { el.innerHTML = tgDayHTML(el.dataset.code); }));
 }
@@ -3683,8 +3739,9 @@ async function openStock(code) {
       ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + kqHTML(d) + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
+    prefFill();
     drawPer12mf(d);
     drawProfile(code);
     wirePrecheck();
