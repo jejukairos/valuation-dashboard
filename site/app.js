@@ -173,9 +173,9 @@ function scenHTML(c) {
   if (!s || !s.base) return "";
   const usd = c.currency === "USD";
   const fmtP = (v) => (usd ? "$" + n(v, 0) : n(v));
-  // Bear = 하방(이 정도면 바닥, 더 빠지면 안전마진) · Base = 적정주가(평균) · Bull = 최대(금리가 다시 내려갈 때)
-  const pts = [["bear", "Bear", "하방"], ["base", "Base", "적정주가"], ["bull", "Bull", "최대"]];
-  const bar = (v) => {  // 하방·적정·최대·지금 위치 막대 (보는 칸마다 눈금을 다시 잡음)
+  // Bear = 하방(이 정도면 바닥, 더 빠지면 안전마진) · Base = 적정주가 · Bull = 상방 (사용자 11/6: '최대' → '상방')
+  const pts = [["bear", "Bear", "하방"], ["base", "Base", "적정주가"], ["bull", "Bull", "상방"]];
+  const bar = (v) => {  // 하방·적정·상방·지금 위치 막대 (보는 칸마다 눈금을 다시 잡음)
     const lo0 = Math.min(c.price, v.bear), hi0 = Math.max(c.price, v.bull), pad = (hi0 - lo0) * 0.08 || hi0 * 0.05;
     const lo = Math.max(0, lo0 - pad), hi = hi0 + pad, at = (x) => Math.max(0, Math.min(100, ((x - lo) / (hi - lo)) * 100));
     return `<div class="scenbar" style="background:linear-gradient(90deg, var(--good-bg) 0 ${at(v.base)}%, var(--warn-bg) ${at(v.base)}% ${at(v.bull)}%, var(--bad-bg) ${at(v.bull)}%)">
@@ -220,11 +220,10 @@ function scenHTML(c) {
   return `<div class="scen" onclick="event.stopPropagation()">
     <div class="chart-title" style="margin-top:12px"><b>① 앞으로 실적으로 본 적정주가</b> <span class="src">${baseOf(s.parts, "12MF")}</span></div>
     ${tabs}
-    <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}${partRows(s.parts)}${perAlt("tight")}</div>
+    <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}${multHTML(s)}${partRows(s.parts)}${perAlt("tight")}</div>
     ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}${partRows(bparts)}${perAlt("easy")}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${s.sector?.easy && (s.parts || []).some((p) => /업종/.test(p.src || "")) ? `업종 PER ${s.sector.easy.map((x) => n(x, 1)).join(" · ")}배 (sectors.yaml easy)` : "성장률 × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)"}</div></div>` : ""}
     ${regLine}
     ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}${c.notes?.y2?.length ? ` · 🗒 메모 ${c.notes.y2.length}` : ""}</span></summary>${scenBoxes(s.y2, s.y2.parts)}${notesHTML(c.notes?.y2, c, s.y2)}</details>` : ""}
-    ${multHTML(s)}
     ${c.notes?.memo?.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🗒 증권사 메모 <span class="src">${c.notes.memo.length}개</span></summary>${notesHTML(c.notes.memo, c)}</details>` : ""}
     ${floorHTML(c)}
     ${growthHTML(c)}
@@ -238,15 +237,13 @@ document.addEventListener("click", (e) => {
   box.querySelectorAll(".scenseg [data-sm]").forEach((x) => x.classList.toggle("on", x === b));
   box.querySelectorAll("[data-sm-box]").forEach((x) => { x.hidden = x.dataset.smBox !== b.dataset.sm; });
 }, true);
-// 배수를 어떻게 정했는지 한 줄 (성장률 × 1·1.5·2 / 업종 PER / 10년 밴드)
+// 배수를 어떻게 정했는지 한 줄 (성장률 / 업종 PER / 10년 밴드) — 하방·적정주가·상방 칸 바로 아래 (사용자 11/6) · 35배 상한 노란 칸은 뺌
 function multHTML(s) {
   const r = s.sa_ref, ref = r && (r["5y"] != null || r.sector != null)  // 시킹알파 같은 줄의 참고값
     ? ` <span style="opacity:.8">(참고: 이 종목 5년 평균 ${r["5y"] == null ? "-" : n(r["5y"], 1) + "%"} · 업종 중앙값 ${r.sector == null ? "-" : n(r.sector, 1) + "%"})</span>` : "";
   return (s.parts || []).map((p) => {
     const m = p.mult, d = p.kind === "PBR" ? 2 : 1;
-    const NM = { bear: "하방", base: "적정주가", bull: "최대", bm_lo: "강세장 하방", bm_hi: "강세장 상방" };
-    const cap = p.capped ? `<div class="warnbox" style="margin-top:4px">⚠ 12MF PER ${p.capped.max}배가 넘는 칸은 의미가 없다고 봐서 ${p.capped.max}배로 다시 계산했어요 — 원래 ${Object.entries(p.capped.from).map(([k, v]) => `${NM[k] || k} ${n(v, 1)}배`).join(" · ")}</div>` : "";
-    return `<div class="note src">📐 ${p.kind} ${n(m.bear, d)} · ${n(m.base, d)} · ${n(m.bull, d)}배 = ${esc(p.how || p.src)}${p.kind === "PER" && /성장률/.test(p.how || "") ? ref : ""}</div>${cap}`;
+    return `<div class="note src">📐 ${p.kind} ${n(m.bear, d)} · ${n(m.base, d)} · ${n(m.bull, d)}배 = ${esc(p.how || p.src)}${p.kind === "PER" && /성장률/.test(p.how || "") ? ref : ""}</div>`;
   }).join("");
 }
 // 배당주 점검 (리얼티 인컴 등): somong.yaml my.sa_div 에 적은 시킹알파 숫자
