@@ -3657,12 +3657,14 @@ async function openStock(code) {
     const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬
+    await consGet();
+    const consG = consFor(code), consHtml = consG ? consHTML(consG, false) : "";  // 📈 그 종목 업종 컨센서스 (닫아 둠)
     try { await gpeGet(); } catch (_) { /* 🌍 글로벌 비교 그림만 빠짐 */ }
     const EXP_CODE = { "003230": ["ramen", "🍜 라면 수출"], "278470": ["cosmetics", "💄 화장품 수출"], "483650": ["cosmetics", "💄 화장품 수출"], "034020": ["power", "⚡ 전력기기 수출 (변압기·GIS·케이블)"],
       ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + kqHTML(d) + growHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + kqHTML(d) + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
@@ -4438,13 +4440,14 @@ async function loadIndustry() {
   if (!EXP) { try { EXP = await (await fetch("data/exports.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { EXP = {}; } }
   if (!AUTOS) { try { AUTOS = await (await fetch("data/autosales.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { AUTOS = {}; } }
   await liGet();
+  await consGet();
   // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
-  const secs = [["💄 화장품", () => expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
-    ["🍜 라면·음식료", () => key("음식료") + expHTML("ramen") + expHTML("food")],
-    ["💾 반도체", () => expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + key("2차전지")], ["🧱 기판·CCL", () => key("기판") + gpeCard("CCL·기판")],
-    ["🛡 방산", () => key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
-    ["🏬 백화점", () => gpeCard("백화점")], ["🚗 자동차", () => autosalesHTML() + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
+  const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => consSec(["화장품"]) + expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
+    ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + expHTML("ramen") + expHTML("food")],
+    ["💾 반도체", () => consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
+    ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
+    ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
   secs.push(["🔑 그 밖의 업종", Object.keys(K).filter((k) => !used.has(k)).map((k) => keyGroup(k, K[k])).join("")], ["⚖️ 고정비·변동비 (전 업종)", costIndHTML()]);
   $("#industryBody").innerHTML = secs.filter(([, h]) => h).map(([t, h]) => `<section data-jump="${esc(t)}" data-jname="${esc(t)}" style="margin-top:18px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">${t}</h2>${h}</section>`).join("");
@@ -4607,7 +4610,7 @@ function keyCard(c, open) {
 // 묶음 하나: 키팩터 한 줄 + 변곡점 체크 + 카드들 (code = 지금 보는 종목 → 그 종목이 주인공인 카드만 펼침, 산업 탭은 모두 펼침)
 function keyGroup(name, g, code) {
   return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}
-    ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${evHTML(g.ev)}
+    ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${evHTML(g.ev)}${vcHTML(g.vc)}
     ${(g.cards || []).filter((c) => code || !c.stock_only).map((c) => keyCard(c, !code || [].concat(c.code).includes(code))).join("")}</div>`;
 }
 // 📅 업종 이벤트 일정표 (keychart.yaml 묶음의 ev: {t 제목, src, note, rows [{d 정렬 날짜, w 보이는 날짜, e 이벤트, p 확인 포인트, k 1 = 특히 중요}]}) — 사용자 11/5 2차전지 일정
@@ -4623,6 +4626,66 @@ function evHTML(ev) {
     <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th>일정</th><th style="text-align:left">이벤트</th><th style="text-align:left">확인 포인트</th></tr></thead><tbody>${ev.rows.map(tr).join("")}</tbody></table></div>
     ${ev.note ? `<div class="kidbox" style="margin-top:6px">${esc(ev.note)}</div>` : ""}${ev.src ? `<div class="note src">출처: ${esc(ev.src)}</div>` : ""}</details>`;
 }
+// 🔗 밸류체인 표 (keychart.yaml 묶음의 vc: [{t, why, kid, rows [[단계, 회사들]]}]) — 우리 종목 이름은 굵게
+function vcHTML(vc) {
+  if (!vc?.length) return "";
+  const ours = [...new Set((DASH?.stocks || []).map((c) => c.name))].sort((a, b) => b.length - a.length);
+  const bold = (t) => ours.reduce((s, nm) => s.split(esc(nm)).join(`<b>${esc(nm)}</b>`), esc(t));
+  return vc.map((v) => `<details class="fvt" open style="margin-top:8px"><summary class="chart-title"><b>🔗 ${esc(v.t)}</b> <span class="src">굵은 글씨 = 이 사이트에서 보는 종목</span></summary>
+    <div class="tbl-wrap"><table class="compact" style="width:100%"><tbody>${v.rows.map(([s, x]) => `<tr><td style="white-space:nowrap;text-align:left"><b>${esc(s)}</b></td><td style="text-align:left;white-space:normal">${bold(x)}</td></tr>`).join("")}</tbody></table></div>
+    ${v.kid ? `<div class="kidbox" style="margin-top:6px">🐣 ${esc(v.kid)}</div>` : ""}${v.why ? `<div class="note src">${esc(v.why)}</div>` : ""}</details>`).join("");
+}
+/* ---------- 📈 업종별 매출·영업이익 컨센서스 추이 (data/cons_ind.json ← collector/cons_trend.py) — 사용자 11/5: 증권사 '셀 업체 컨센서스' 그림처럼 모든 업종, 종목 상세에선 닫아 둠 ---------- */
+let CONS = null;
+async function consGet() { if (!CONS) { try { CONS = await (await fetch("data/cons_ind.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CONS = {}; } } return CONS; }
+const consJo = (v) => (Math.abs(v) >= 1e4 ? `${n(v / 1e4, 1)}조` : `${n(v, 0)}억`);
+function consRef(s, mo) {  // mo 달(×30일) 전이거나 그보다 앞선 마지막 점 — 지난 1년은 달마다 점이라 그달 말 값
+  const L = s.at(-1)?.[0];
+  if (!L) return null;
+  const cut = new Date(+new Date(L) - mo * 30 * 864e5).toISOString().slice(0, 10);
+  return [...s].reverse().find((x) => x[0] <= cut) || null;
+}
+function consChg(s, mo) {
+  const r = consRef(s, mo), v = s.at(-1)?.[1];
+  return r && v != null ? { p: r[1] > 0 && v > 0 ? (v / r[1] - 1) * 100 : null, d: v - r[1] } : null;
+}
+const consCell = (c) => (c ? `<b class="${kcol(c.d)}">${c.p != null ? sg(c.p, 1) : (c.d > 0 ? "+" : "") + consJo(c.d)}</b>` : "-");
+function consHTML(g, open) {
+  const ys = CONS.years, nm = { rev: "매출", op: "영업이익" };
+  const chart = (it) => {
+    const L = [...new Set(ys.flatMap((y) => g[it][y].map((x) => x[0])))].sort(), at = (y) => { const m = Object.fromEntries(g[it][y]); return L.map((d) => m[d] ?? null); };
+    return lineChart({ t: `${nm[it]} 컨센서스`, labels: L, s: [{ n: `${ys[0]}년`, v: at(ys[0]), col: "var(--s1)" }, { n: `${ys[1]}년`, v: at(ys[1]), col: "var(--muted)", right: true, lab: "below" }],
+      fl: consJo, fr: consJo, tick: (i) => (/-(01|04|07|10)-/.test(L[i]) && (!i || L[i].slice(0, 7) !== L[i - 1].slice(0, 7)) ? `${L[i].slice(2, 4)}.${L[i].slice(5, 7)}` : "") });
+  };
+  const rows = ["rev", "op"].flatMap((it) => ys.map((y) => { const s = g[it][y]; return s.length ? `<tr><td style="text-align:left">${nm[it]} ${y}E</td><td><b>${consJo(s.at(-1)[1])}</b></td><td>${consCell(consChg(s, 1))}</td><td>${consCell(consChg(s, 3))}</td></tr>` : ""; })).join("");
+  const r1 = consChg(g.op[ys[0]], 1) || {}, o3 = consChg(g.op[ys[1]], 3), o3a = consChg(g.op[ys[0]], 3), word = (c) => (c?.d > 0 ? "올라갔어요" : c?.d < 0 ? "내려갔어요" : "그대로예요");
+  const kid = o3 ? `🐣 증권사들이 보는 ${esc(g.k)} 회사들의 내년(${ys[1]}년) 영업이익이 3달 전보다 ${o3.p != null ? n(Math.abs(o3.p), 1) + "% " : ""}${word(o3)}${o3a ? ` · 올해(${ys[0]}년)는 ${o3a.p != null ? n(Math.abs(o3a.p), 1) + "% " : ""}${word(o3a)}` : ""}. 숫자가 꾸준히 올라가면 '실적 기대가 높아지는 업종', 꺾여 내려가면 '기대가 낮아지는 업종'이에요.` : "";
+  const ref = (b) => { const r = consRef(g.op[ys[0]], b); return r ? `${+r[0].slice(5, 7)}/${+r[0].slice(8, 10)} 대비` : ""; };
+  const memo = Object.keys(g.mem || {}).length ? ` · 일부 칸은 자료가 짧은 종목을 뺀 합계` : "";
+  return `<details class="card" style="margin-top:8px"${open ? " open" : ""}><summary class="chart-title"><b>📈 ${esc(g.k)} 매출·영업이익 컨센서스</b> <span class="src">${g.names.map(esc).join(" · ")} 합계 · 영업이익 ${ys[1]}E ${ref(3)} ${consCell(o3)}</span></summary>
+    <div class="tbl-wrap"><table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">합계</th><th>지금</th><th>${ref(1)}</th><th>${ref(3)}</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="grid g2">${chart("rev")}${chart("op")}</div>
+    ${kid ? `<div class="kidbox" style="margin-top:6px">${kid}</div>` : ""}
+    <div class="note src">${esc(CONS.src || "")} · ${esc(g[`op`][ys[0]].at(-1)?.[0] || "")} 기준 · 지난 1년은 달마다, 11/5 부터는 매일 점이 쌓여요${memo} · 영업이익이 적자→흑자로 바뀌면 % 대신 금액 차이 · 매수·매도 추천 아님</div></details>`;
+}
+function consIndHTML() {  // 산업 탭 맨 위: 모든 업종 한눈에 (내년 영업이익 예상이 3달 전보다 많이 오른 순)
+  const G = CONS?.groups || [];
+  if (!G.length) return "";
+  const y = CONS.years[1], k3 = (g) => consChg(g.op[y], 3);
+  const S = [...G].sort((a, b) => (k3(b)?.p ?? -1e9) - (k3(a)?.p ?? -1e9));
+  return `<div class="note src">한국 보유·관심·공동 종목을 업종끼리 더한 증권사 컨센서스(와이즈리포트) · 업종을 누르면 아래에서 그림이 열려요 · 업종 칸이 따로 있는 곳(2차전지·반도체·방산 …)은 그 칸에도 있어요</div>
+    <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th style="text-align:left">업종</th><th>${CONS.years[0]}E 영업이익<br><span class="src">3달 전 대비</span></th><th>${y}E 영업이익<br><span class="src">3달 전 대비</span></th><th>${y}E 매출<br><span class="src">3달 전 대비</span></th></tr></thead><tbody>
+    ${S.map((g) => `<tr><td style="text-align:left;white-space:normal"><a href="#industry" data-cons="${esc(g.k)}">${esc(g.k)}</a> <span class="src">${g.names.length}곳</span></td><td>${consCell(consChg(g.op[CONS.years[0]], 3))}</td><td>${consCell(k3(g))}</td><td>${consCell(consChg(g.rev[y], 3))}</td></tr>`).join("")}</tbody></table></div>
+    <div id="consAll">${S.map((g) => `<div data-consk="${esc(g.k)}">${consHTML(g, false)}</div>`).join("")}</div>`;
+}
+document.addEventListener("click", (e) => {  // 한눈에 표의 업종 이름 → 그 업종 그림 열고 스크롤
+  const a = e.target.closest("[data-cons]"); if (!a) return;
+  e.preventDefault();
+  const d = document.querySelector(`#consAll [data-consk="${CSS.escape(a.dataset.cons)}"] details`);
+  if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+});
+const consFor = (code) => (CONS?.groups || []).find((g) => g.codes.includes(code));
+const consSec = (ks) => [...new Set(ks.flatMap((k) => (CONS?.groups || []).filter((g) => g.k.includes(k))))].map((g) => consHTML(g, true)).join("");  // ks 순서대로 (2차전지 → ESS)
 /* ---------- 🪨 중국 탄산리튬 가격 (data/lithium.json ← collector/lithium.py, 평일 하루 두 번) — 사용자 11/5: 매일 트래킹, 삼성SDI·LG엔솔 상세에서 바로 ---------- */
 let LI = null;
 const LI_CODES = ["006400", "373220", "096770"];  // 셀 회사: 삼성SDI · LG에너지솔루션 · SK이노베이션(SK온)
