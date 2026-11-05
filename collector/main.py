@@ -574,6 +574,11 @@ def stock_detail(h, rates_now, fx):
         "band_avg": {k:(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("avg")
                      for k in ("PER", "PBR") if k in bands},
         "band_pos": rnd(band_pos, 1), "fwd_per": rnd(fwd_per), "bond_per": rnd(bond_per),
+        # ② 밴드 위치 근거 (사용자 11/6: 무슨 PER 인지 눌러서 보게) — 주마다 배수, 10년(없으면 전체) 중 지금이 몇 % 자리인지
+        "band_info": [{"k": k, "basis": bands[k].get("basis"), "cur": rnd(bands[k]["mult"][-1], 2), "date": bands[k]["dates"][-1],
+                       **{x: st.get(x) for x in ("from", "low", "avg", "high", "min", "max", "pos", "pos_cheap", "n")}}
+                      for k in ([k for k in ("PER", "PBR") if k in bands and k in methods] or ["DIV"]) if k in bands
+                      for st in [bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}] if st.get("pos") is not None],
         "bond_ratio": rnd(ratio, 3), "bond_signal": C.bond_signal(ratio), "bond_label": bond_label,
         "div_signal": det.get("div", {}).get("signal") if "DIV" in methods else None,
         "div_yield": det.get("div", {}).get("cur_yield") if "DIV" in methods else None,

@@ -515,9 +515,6 @@ function stockCard(c) {
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>`}
     ${divSaHTML(c)}
-    ${c.scen ? `<div class="chart-title" style="margin-top:14px"><b>② 지난 10년 밴드에서 지금 위치</b> <span class="src">0% = 10년 중 가장 싼 쪽 · 100% = 가장 비싼 쪽</span></div>` : ""}
-    <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
-    <div class="bandlbl"><span>밴드 하단 0%</span><span>10년 밴드 위치 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>상단 100%</span></div>
     <div class="tgday" data-code="${esc(c.code)}" onclick="event.stopPropagation()">${tgDayHTML(c.code)}</div>
     ${somongHTMLcard(c)}
     ${tipranksHTML(c)}
@@ -526,9 +523,31 @@ function stockCard(c) {
     ${fairTableHTML(c)}
     ${somongHTML(c)}
     ${priceBox(c, 6, "span")}
+    ${bandPosHTML(c, pos)}
     ${mine}
     <div class="pills">${pills.join("")}</div>
   </button>`;
+}
+// ② 지난 10년 밴드 위치 (사용자 11/6: 주가 그림 아래로 · 무슨 PER 인지 눌러서 근거) — collector main.py band_info
+function bandPosHTML(c, pos) {
+  if (!c.scen && pos == null) return "";
+  const B = c.band_info || [], NM = { PER: "PER", PBR: "PBR", DIV: "배당수익률" };
+  const what = B.length ? B.map((b) => NM[b.k]).join("·") : "PER·PBR";
+  const li = B.map((b) => {
+    const f = (v) => (v == null ? "-" : b.k === "DIV" ? n(v, 2) + "%" : n(v, b.k === "PBR" ? 2 : 1) + "배"), base = b.k === "PER" ? "EPS" : "BPS";
+    const how = b.k === "DIV" ? "그해 주당배당 ÷ 주가 (높을수록 싼 쪽이라 거꾸로 셈)"
+      : b.basis === "forward" ? `조정 ${b.k} = 주가 ÷ 그때 기준 1년 뒤 ${base} (아직 안 나온 해는 추정치) — 이익이 빨리 늘던 종목이라 앞 실적으로 맞춤`
+      : `${b.k} = 주가 ÷ 그때 이미 발표된 최근 1년 ${base} (지난 실적 기준 · 후행)`;
+    return `<li><b>${NM[b.k]} 지금 ${f(b.cur)}</b> <span class="src">(${esc(b.date || "")} 주)</span> → ${esc((b.from || "").slice(0, 4))}년부터 ${n(b.n, 0)}주 중 아래에서 <b>${n(b.k === "DIV" ? b.pos_cheap : b.pos, 0)}%</b> 자리
+      <div class="src">${how}<br>가장 낮음 ${f(b.min)} · 하위 10% ${f(b.low)} · 평균 ${f(b.avg)} · 상위 10% ${f(b.high)} · 가장 높음 ${f(b.max)}</div></li>`;
+  }).join("");
+  return `<div class="chart-title" style="margin-top:14px"><b>② 지난 10년 ${what} 중 지금 자리</b> <span class="src">0% = 10년 중 가장 쌌던 때 · 100% = 가장 비쌌던 때</span></div>
+    <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
+    <div class="bandlbl"><span>가장 쌌던 쪽 0%</span><span>지금 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>가장 비쌌던 쪽 100%</span></div>
+    <details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title">ⓘ 무엇으로 쟀나 · 근거 <span class="src">${B.length ? B.map((b) => `${NM[b.k]}${b.k === "DIV" ? "" : b.basis === "forward" ? " (조정·1년 뒤 실적)" : " (후행·지난 실적)"}`).join(" + ") : "다음 갱신 때 채워져요"} · 눌러서 열기</span></summary>
+      <div class="kidbox" style="margin-top:6px">🐣 지난 10년 동안 <b>매주</b> ${what}을 계산해서 낮은 순으로 줄 세운 뒤, 지금 숫자가 아래에서 몇 % 자리인지예요. 3% 면 '10년 중 이보다 쌌던 주가 3% 밖에 없다'는 뜻이에요.${B.length > 1 ? ` PER·PBR 둘 다 쓰는 종목이라 <b>두 자리의 평균</b>이에요.` : ""}</div>
+      ${li ? `<ul class="irl" style="margin-top:6px">${li}</ul>` : ""}
+      <div class="note src">⚠ 위 ① 적정주가는 '앞으로 12개월 실적(12MF)' 기준이고, 이 칸은 주마다 그때의 연간 실적으로 이은 10년 밴드라 PER 숫자가 달라요 · 그림은 종목을 눌러 상세 화면 '밴드차트'(네이버 방식)에서 · 10년이 안 된 종목은 상장·데이터 시작부터</div></details>`;
 }
 const grp = (c) => c.group || "보유";
 function renderCards() {
