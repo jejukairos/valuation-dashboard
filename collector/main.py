@@ -235,17 +235,24 @@ def stock_detail(h, rates_now, fx):
         ltg = cg[0] if cg else None
         adj = [cg or (None, "")]
     # 한국 = 컨센서스 3년 영업이익 성장률, 미국 = 시킹알파 3~5년 EPS 성장률(적어 둔 종목)을 늘 씀
-    pp = (bands.get("PER") or {}).get("periods", {})
-    low = (pp.get("10y") or pp.get("all") or {}).get("low")  # 역사적 저점권 PER (10년 밴드 하위 10%) = 성장률 방식 하방 (사용자 11/6)
-    pg = C.growth_fair(hist, adj, force_adj=mkt == "KR" or bool(mkt == "US" and sa), low=low) if ("PER" in fm and "PER" in bands) else None
+    ind = None
+    if mkt == "KR":  # 네이버 업종 PER · 같은 업종 중앙값 (기준 PER 후보 + 화면 🏷 칸)
+        try:
+            ind = kr_stock.sector_per(str(h.get("data_code") or code))
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("네이버 업종 PER", f"{name}: {str(e)[:60]}")
+    # 기준 PER = 성장률 · 업종 중앙값 · 업종 바닥 중 가장 낮은 값 (사용자 11/6) → × 1 · 1.25 · 1.5
+    s0 = SECTORS.get(h.get("sector")) or {}
+    cands = [((ind or {}).get("peer_med"), f"업종 중앙값 (네이버 같은 업종 {len([p for p in (ind or {}).get('peers', []) if p.get('per')])}곳)"),
+             (s0.get("bear") if str(s0.get("kind", "PER")).upper() == "PER" else None, f"{h.get('sector')} 업종 바닥")]
+    pg = C.growth_fair(hist, adj, force_adj=mkt == "KR" or bool(mkt == "US" and sa), cands=cands) if ("PER" in fm and "PER" in bands) else None
     sec_name = h.get("sector") if h.get("fair_mode") == "sector" else None  # 업종 배수는 fair_mode: sector 로 고른 종목만
     sec = dict(SECTORS[sec_name], name=sec_name) if sec_name in SECTORS else None
     if pg:
         pg["label"] = ("3년 영업이익 성장률" if mkt == "KR" and "영업이익" in pg["src"] else
                        "시킹알파 3~5년 EPS 성장률" if "시킹알파" in pg["src"] else "EPS 성장률")
-        # 성장률이 너무 세서 하방이 지금 가격보다 50% 넘게 높으면 → 업종 PER, 없으면 이 종목 PER 밴드
-        # 성장률 × 1 로 잡은 값이 너무 센지 (11/6 부터 적정주가 칸 — 하방은 10년 저점 PER)
-        hi = C.too_high({"bear": pg["g"]}, C.fwd12(hist, "eps"), price, bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"))
+        # 기준 PER 로 잡은 하방이 지금 가격보다 50% 넘게 높거나 35배를 넘으면 → 업종 PER, 없으면 이 종목 PER 밴드
+        hi = C.too_high({"bear": pg["x"]}, C.fwd12(hist, "eps"), price, bands.get("PER"), SECTORS.get(h.get("sector")), h.get("sector"))
         if hi:
             pg["raw"], pg["how"] = dict(pg["mult"]), hi[1]
             pg["mult"] = {k: rnd(v, 1) for k, v in hi[0].items()}
@@ -261,15 +268,14 @@ def stock_detail(h, rates_now, fx):
         other = pg["adj"] if pg["g"] == pg["median"] else pg["median"]
         e12 = C.fwd12(hist, "eps")
         if other and other > 0 and e12 and e12 > 0 and fm == ["PER"] and max(other, pg["g"]) / min(other, pg["g"]) >= 2:
-            scen["alt"] = {"g": rnd(other, 1), **{k: rnd(e12 * f, 2) for k, f in C.growth_mult(other, low).items()}}
+            scen["alt"] = {"g": rnd(other, 1), **{k: rnd(e12 * other * f, 2) for k, f in C.GROWTH_MULT.items()}}
         # 내 엑셀의 성장률 방법들을 나란히: ① 기본값 ② 보정값 ③ Finviz (④ 내가 정한 PER 은 화면에서 somong.yaml 값으로)
         ways = [("기본값", pg["median"], f"{pg['window']} EPS 성장률 중앙값"), ("보정값", adj[0][0], adj[0][1] or "컨센서스 없음")]
         if mkt == "US":
             ways.append(("Finviz", fv5, "Finviz EPS next 5Y"))
         scen["ways"] = [{"name": nm, "g": rnd(g, 1), "src": s, "used": bool(g) and rnd(g, 1) == pg["g"],
-                         **({k: rnd(e12 * f, 2) for k, f in C.growth_mult(g, low).items()} if g and g > 0 and e12 and e12 > 0 else {})}
-                        for nm, g, s in ways]  # 성장률 15% → PER 15배 (숫자 그대로) · 하방 = 10년 저점 PER
-        scen["low"] = rnd(low, 1) if low else None
+                         **({k: rnd(e12 * g * f, 2) for k, f in C.GROWTH_MULT.items()} if g and g > 0 and e12 and e12 > 0 else {})}
+                        for nm, g, s in ways]  # 성장률 15% → PER 15배 (숫자 그대로, 업종 중앙값·바닥과 비교 전)
         scen["e12"] = rnd(e12, 2) if e12 else None
         if mkt == "US":
             scen["ltg_cmp"] = ltg_cmp
@@ -289,11 +295,8 @@ def stock_detail(h, rates_now, fx):
             t = s_.get("tight") or [s_["bear"], (s_["bear"] + s_["base"]) / 2, s_["base"]]
             ez = s_.get("easy") or [s_["base"], (s_["base"] + s_["bull"]) / 2, s_["bull"]]
             scen["per_alt"] = {"e12": rnd(e12, 2), "tight": [rnd(x, 1) for x in t], "easy": [rnd(x, 1) for x in ez], "history": s_.get("history")}
-        if mkt == "KR":
-            try:
-                scen["ind"] = kr_stock.sector_per(str(h.get("data_code") or code))
-            except Exception as e:  # noqa: BLE001
-                REPORT.block("네이버 업종 PER", f"{name}: {str(e)[:60]}")
+        if ind:
+            scen["ind"] = ind
     poss =[(bands[k]["periods"].get("10y") or bands[k]["periods"].get("all") or {}).get("pos")
             for k in ("PER", "PBR") if k in bands and k in methods]
     poss = [p for p in poss if p is not None]
