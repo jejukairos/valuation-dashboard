@@ -259,7 +259,15 @@ def stock_detail(h, rates_now, fx):
             pg["part_src"] = f"{h['sector']} 업종 PER" if "업종" in hi[1] else "PER 밴드"
             if "업종" in hi[1] and (SECTORS.get(h.get("sector")) or {}).get("easy"):
                 pg["easy"] = SECTORS[h["sector"]]["easy"]  # 🐂 강세장 칸 업종 배수 (sectors.yaml easy)
-    scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg, keep=bool(h.get("keep_mult")))
+        if s0.get("fixed") and s0.get("tight"):  # 화장품: 업종 고정 배수 그대로 (사용자 11/6) — 지금 10 · 15 · 20, 강세장 15 · 20 · 25
+            t, ez = s0["tight"], s0.get("easy")
+            pg["raw"] = pg.get("raw") or dict(pg["mult"])
+            pg["mult"] = dict(zip(("bear", "base", "bull"), t))
+            pg["part_src"] = f"{h['sector']} 업종 PER"
+            pg["how"] = f"{h['sector']} 업종 고정 배수 {' · '.join(f'{x:g}' for x in t)}" + (f" (🐂 강세장 {' · '.join(f'{x:g}' for x in ez)})" if ez else "") + " — 화장품은 모두 같은 기준 (사용자 11/6)"
+            if ez:
+                pg["easy"] = ez
+    scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg, keep=bool(h.get("keep_mult") or s0.get("fixed")))
     if scen and pg:
         scen["growth"] = pg
         e27 = (hist.get(y0 + 1) or {}).get("eps")

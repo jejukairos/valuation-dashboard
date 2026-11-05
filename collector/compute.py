@@ -290,7 +290,7 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None, keep=Fals
         if grow:
             pass  # 성장률 방식은 기준 PER × 1 · 1.25 · 1.5 그대로 (반올림 때문에 다시 곱하지 않게)
         elif keep and m["base"] != m["bear"] * GROWTH_MULT["base"]:
-            how += " — 이 종목은 배수 그대로 (사용자 지정 2026-11-02)"
+            how += " — 배수 그대로 (사용자 지정)"
         elif m["base"] != m["bear"] * GROWTH_MULT["base"]:  # 사용자 원칙(2026-11-01): 모든 방법 Base = 하방 × 1.25, Bull = 하방 × 1.5 (강세장 칸은 그대로)
             m = {k: m["bear"] * f for k, f in GROWTH_MULT.items()}
             how += f" → 하방 {m['bear']:g}배 × 1 · 1.25 · 1.5"
@@ -542,6 +542,10 @@ if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% �
     s = scenarios(10000, h, {}, ["PER"], per_growth=gr)  # 지금 11 · 13.75 · 16.5 · 강세장 16.5 · 19.25 · 22
     assert (s["bear"], s["base"], s["bull"]) == (11000, 13750, 16500) and s["bull_mkt"] == {"lo": 16500, "mid": 19250, "hi": 22000}, s
     assert "✔ 방산 업종 바닥 11배" in s["parts"][0]["how"], s
+    # 화장품 고정 배수 (sectors.yaml fixed, 11/6): 지금 10 · 15 · 20 · 강세장 15 · 20 · 25
+    s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 41, "x": 10, "mult": {"bear": 10, "base": 15, "bull": 20}, "part_src": "화장품 브랜드 업종 PER",
+                                                     "easy": [15, 20, 25], "how": "화장품 브랜드 업종 고정 배수"}, keep=True)
+    assert (s["bear"], s["base"], s["bull"]) == (10000, 15000, 20000) and s["bull_mkt"] == {"lo": 15000, "mid": 20000, "hi": 25000}, s
     s = scenarios(10000, h, {}, ["PER"], per_growth={"g": 25, "x": 25, "mult": {k: 25 * f for k, f in GROWTH_MULT.items()}})
     assert (s["bear"], s["base"], s["bull"]) == (25000, 31250, 35000) and s["bull_mkt"] == {"lo": 35000, "mid": 35000, "hi": 35000}, s
     # 컨센서스 성장률 = 해마다 성장률 평균: 영업이익 100 → 99 → 108 → 136 (-1% · +9% · +26%) → 약 11.4%
