@@ -3944,24 +3944,32 @@ function pbrCard(it, base, i) {
       sum.push(`${esc(base)} PBR <b>${mfmt(r.mult)}배</b> = ${n(p)}원 <span class="${c < 0 ? "verdict red" : "verdict green"}" style="font-size:13px">(지금보다 ${pct(c, 0, true)})</span>`);
     }
   }
-  const band = it.band10 ? `<div class="note">10년 PBR 밴드: 하단 ${it.band10.low} · 평균 ${it.band10.avg} · 상단 ${it.band10.high}배 · 지금 위치 <b>${n(it.band10.pos, 0)}%</b> <span class="src">(직전 연도 실적 기준)</span></div>` : "";
+  const band = it.band10 ? `<div class="note">10년 PBR 밴드: ${it.band10.min != null ? `가장 낮았던 때 ${it.band10.min} · ` : ""}하단 ${it.band10.low} · 평균 ${it.band10.avg} · 상단 ${it.band10.high}${it.band10.max != null ? ` · 가장 높았던 때 ${it.band10.max}` : ""}배 · 지금 위치 <b>${n(it.band10.pos, 0)}%</b> <span class="src">(직전 연도 실적 기준)</span></div>` : "";
+  // 📏 내 기준선 (사용자 11/5: 삼성전자 0.7배 = 저평가, 1배 = 매력적) — 연도마다 지금 PBR 이 어느 자리인지
+  const ms = [...(it.marks || [])].sort((a, b) => a[0] - b[0]), mk = (m) => ms.find(([v]) => v === m)?.[1];
+  const where = (p) => {
+    const z = ms.find(([v]) => p <= v), dn = ms.filter(([v]) => v < p).at(-1);
+    return [z && `<b>${esc(z[1])}</b> 자리`, dn && `${dn[0]}배(${esc(dn[1])})까지 ${pct((dn[0] / p - 1) * 100, 0, true)}`].filter(Boolean).join(" · ");
+  };
+  const marks = ms.length ? `<div class="kidbox" style="margin-top:8px">📏 <b>내 기준선</b> — ${ms.map(([v, t]) => `${v}배 = ${esc(t)}`).join(" · ")}
+    <ul class="irl">${ys.filter((y) => it.pbr[y]).map((y) => `<li>${esc(y)} <b>${it.pbr[y].toFixed(2)}배</b> — ${where(it.pbr[y])}</li>`).join("")}</ul></div>` : "";
   return `<div class="card">
     <div class="stock"><div class="row1"><span class="name">${esc(it.name)}</span><span class="price">${won(it.price)}</span></div></div>
     <div class="sub">${esc(it.date)} 기준 ${it.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""} · 최근 실적(${it.bps_last.year}) BPS ${n(it.bps_last.bps)} → PBR ${times(it.bps_last.pbr, 2)}</div>
     <div class="tbl-wrap"><table><thead><tr><th>구분</th>${ys.map((y) => `<th class="${cls(y)}">${y}</th>`).join("")}</tr></thead><tbody>
       <tr><td>BPS</td>${ys.map((y) => `<td class="${cls(y)}">${n(it.bps[y])}</td>`).join("")}</tr>
       <tr><td>현재 PBR</td>${ys.map((y) => `<td class="${cls(y)}">${pbrCell(it.pbr[y])}</td>`).join("")}</tr>
-      ${it.rows.map((r) => `<tr><td>PBR ${mfmt(r.mult)}</td>${ys.map((y) => `<td class="${cls(y)} ${r.chg[y] != null && Math.abs(r.chg[y]) < 10 ? "hot" : ""}">${r.prices[y] == null ? "N/A" : n(r.prices[y])}<br><span class="src">${pct(r.chg[y], 0, true)}</span></td>`).join("")}</tr>`).join("")}
+      ${it.rows.map((r) => `<tr><td>PBR ${mfmt(r.mult)}${mk(r.mult) ? `<br><b>${esc(mk(r.mult))}</b>` : ""}</td>${ys.map((y) => `<td class="${cls(y)} ${r.chg[y] != null && Math.abs(r.chg[y]) < 10 ? "hot" : ""}">${r.prices[y] == null ? "N/A" : n(r.prices[y])}<br><span class="src">${pct(r.chg[y], 0, true)}</span></td>`).join("")}</tr>`).join("")}
     </tbody></table></div>
     ${it.auto_multiples ? `<div class="note">배수는 10년 PBR 밴드의 하단·평균·상단을 자동으로 넣었어요.</div>` : ""}
     ${sum.length ? `<ul class="summary">${sum.map((s) => `<li>${s}</li>`).join("")}</ul>` : ""}
     ${it.alert ? (it.alert.hit
       ? `<div class="memo" style="background:var(--good-bg);color:var(--good-ink)">✅ 지금 ${esc(it.alert.year)} PBR <b>${it.alert.pbr}배</b> — ${it.alert.below}배 이하예요. <span class="src">(${esc(it.alert.text)})</span></div>`
       : `<div class="memo">🎯 ${esc(it.alert.year)} PBR ${it.alert.below}배 = <b>${n(it.alert.target_price)}원</b> (지금보다 ${pct(it.alert.gap, 1, true)}) · 지금 ${it.alert.pbr}배 <span class="src">(${esc(it.alert.text)})</span></div>`) : ""}
-    ${band}
+    ${marks}${band}
     <div class="calc"><input id="calc-${i}" inputmode="numeric" placeholder="가격을 넣어 보세요 (예: 200000)" aria-label="${esc(it.name)} 가격 입력"></div>
     <div class="calc-out" id="calc-out-${i}"></div>
-    ${it.memo ? `<div class="memo">📝 ${esc(it.memo)}</div>` : ""}
+    ${Array.isArray(it.memo) ? `<div class="memo">📝<ul class="irl">${it.memo.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : it.memo ? `<div class="memo">📝 ${esc(it.memo)}</div>` : ""}
     <div class="note src">${esc(it.source)} · 굵은 칸 = 지금 가격과 10% 이내 · 표의 %는 지금 가격 대비</div>
   </div>`;
 }
