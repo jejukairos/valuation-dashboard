@@ -221,8 +221,8 @@ function scenHTML(c) {
     <div class="chart-title" style="margin-top:12px"><b>① 앞으로 실적으로 본 적정주가</b> <span class="src">${baseOf(s.parts, "12MF")}</span></div>
     ${tabs}
     ${regLine}
-    <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${multHTML(s)}${bar(s)}${scenBoxes(s, s.parts)}${partRows(s.parts)}${perAlt("tight")}</div>
-    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}><div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${s.sector?.easy && (s.parts || []).some((p) => /업종/.test(p.src || "")) ? `업종 PER ${s.sector.easy.map((x) => n(x, 1)).join(" · ")}배 (sectors.yaml easy)` : "기준 PER × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)"}</div>${bar(bv)}${scenBoxes(bv, bparts)}${partRows(bparts)}${perAlt("easy")}</div>` : ""}
+    <div data-sm-box="now"${m0 === "now" ? "" : " hidden"}>${bar(s)}${scenBoxes(s, s.parts)}${partRows(s.parts)}${perAlt("tight")}${multHTML(s)}</div>
+    ${bv ? `<div data-sm-box="bull"${m0 === "bull" ? "" : " hidden"}>${bar(bv)}${scenBoxes(bv, bparts)}${partRows(bparts)}${perAlt("easy")}<div class="note src">🐂 금리가 내려가 돈이 풀릴 때 · ${s.sector?.easy && (s.parts || []).some((p) => /업종/.test(p.src || "")) ? `업종 PER ${s.sector.easy.map((x) => n(x, 1)).join(" · ")}배 (sectors.yaml easy)` : "기준 PER × 1.5 · 1.75 · 2 (업종·밴드 PER 은 보통 · 1.5배 · 2배)"}</div></div>` : ""}
     ${s.y2 ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">📅 ${esc(s.y2.label)} 기준 <span class="src">같은 배수 × ${baseOf(s.y2.parts, s.y2.label)}${c.notes?.y2?.length ? ` · 🗒 메모 ${c.notes.y2.length}` : ""}</span></summary>${scenBoxes(s.y2, s.y2.parts)}${notesHTML(c.notes?.y2, c, s.y2)}</details>` : ""}
     ${c.notes?.memo?.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🗒 증권사 메모 <span class="src">${c.notes.memo.length}개</span></summary>${notesHTML(c.notes.memo, c)}</details>` : ""}
     ${floorHTML(c)}
@@ -237,7 +237,7 @@ document.addEventListener("click", (e) => {
   box.querySelectorAll(".scenseg [data-sm]").forEach((x) => x.classList.toggle("on", x === b));
   box.querySelectorAll("[data-sm-box]").forEach((x) => { x.hidden = x.dataset.smBox !== b.dataset.sm; });
 }, true);
-// 배수를 어떻게 정했는지 한 줄 (성장률 / 업종 PER / 10년 밴드) — 탭·'지금 시장' 줄 바로 아래, 막대·칸 위 (사용자 11/6) · 35배 상한 노란 칸은 뺌
+// 배수를 어떻게 정했는지 한 줄 (성장률 / 업종 PER / 10년 밴드) — 하방·적정주가·상방 칸 아래, '28E 기준' 바로 위 (사용자 11/6 마지막 요청) · 35배 상한 노란 칸은 뺌
 function multHTML(s) {
   const r = s.sa_ref, ref = r && (r["5y"] != null || r.sector != null)  // 시킹알파 같은 줄의 참고값
     ? ` <span style="opacity:.8">(참고: 이 종목 5년 평균 ${r["5y"] == null ? "-" : n(r["5y"], 1) + "%"} · 업종 중앙값 ${r.sector == null ? "-" : n(r.sector, 1) + "%"})</span>` : "";
