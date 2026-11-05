@@ -3656,12 +3656,13 @@ async function openStock(code) {
     const growHtml = await growthBlock(code, d);
     const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
+    const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬
     try { await gpeGet(); } catch (_) { /* 🌍 글로벌 비교 그림만 빠짐 */ }
     const EXP_CODE = { "003230": ["ramen", "🍜 라면 수출"], "278470": ["cosmetics", "💄 화장품 수출"], "483650": ["cosmetics", "💄 화장품 수출"], "034020": ["power", "⚡ 전력기기 수출 (변압기·GIS·케이블)"],
       ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => kqHTML(d) + growHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + kqHTML(d) + growHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + per12mfHTML(d) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     drawPer12mf(d);
     drawProfile(code);
@@ -4026,6 +4027,7 @@ function renderGroup(g, el, mkt) {
   const ax = $({ "#watchFull": "#watchAccel", "#jointCards": "#jointAccel" }[el] || "#none");  // 📐 주봉 차트 모양 + 🚀 이익 증가율 가속 표 (보유 탭과 같은 칸, 11/5)
   if (ax) { ax.innerHTML = patAlertHTML(list) + accelHTML(list); accSecFill(); }
   drawGauges(list);
+  liGet().then(() => { const s = liStat(LI); if (s) LI_CODES.forEach((c) => $(el).querySelector(`.card.stock[data-code="${c}"] .pills`)?.insertAdjacentHTML("afterbegin", liPill(s))); });  // 🪨 셀 회사 카드에 리튬 한 줄
 }
 
 /* ---------- 🏭 산업 탭: 아마존 K-뷰티 Top100 품목 수 (config/amazon_kbeauty.yaml, 날마다 손으로 적음) ---------- */
@@ -4435,11 +4437,12 @@ async function loadIndustry() {
   try { await gpeGet(); } catch (_) { /* 🌍 업종별 글로벌 PER 만 빠짐 */ }
   if (!EXP) { try { EXP = await (await fetch("data/exports.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { EXP = {}; } }
   if (!AUTOS) { try { AUTOS = await (await fetch("data/autosales.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { AUTOS = {}; } }
+  await liGet();
   // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const secs = [["💄 화장품", () => expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => key("음식료") + expHTML("ramen") + expHTML("food")],
-    ["💾 반도체", () => expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => expHTML("power")], ["🔋 2차전지", () => key("2차전지")], ["🧱 기판·CCL", () => key("기판") + gpeCard("CCL·기판")],
+    ["💾 반도체", () => expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + key("2차전지")], ["🧱 기판·CCL", () => key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => gpeCard("백화점")], ["🚗 자동차", () => autosalesHTML() + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
@@ -4604,8 +4607,57 @@ function keyCard(c, open) {
 // 묶음 하나: 키팩터 한 줄 + 변곡점 체크 + 카드들 (code = 지금 보는 종목 → 그 종목이 주인공인 카드만 펼침, 산업 탭은 모두 펼침)
 function keyGroup(name, g, code) {
   return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}
-    ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${evHTML(g.ev)}
     ${(g.cards || []).filter((c) => code || !c.stock_only).map((c) => keyCard(c, !code || [].concat(c.code).includes(code))).join("")}</div>`;
+}
+// 📅 업종 이벤트 일정표 (keychart.yaml 묶음의 ev: {t 제목, src, note, rows [{d 정렬 날짜, w 보이는 날짜, e 이벤트, p 확인 포인트, k 1 = 특히 중요}]}) — 사용자 11/5 2차전지 일정
+function evHTML(ev) {
+  if (!ev?.rows?.length) return "";
+  const today = new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10), nx = ev.rows.find((x) => x.d >= today);
+  const tr = (x) => {
+    const past = x.d < today, dd = Math.round((new Date(x.d) - new Date(today)) / 864e5), exact = /^\d+\/\d+$/.test(x.w);
+    return `<tr style="${past ? "opacity:.45;" : ""}${x.k ? "background:var(--warn-bg);" : ""}${x === nx ? "outline:2px solid var(--s1);" : ""}"><td style="white-space:nowrap">${esc(x.w)}${past ? `<br><span class="src">지남</span>` : exact ? `<br><b class="src">${dd ? `D-${dd}` : "오늘"}</b>` : ""}</td>`
+      + `<td style="text-align:left;white-space:normal">${x.k ? "⭐ " : ""}${esc(x.e)}</td><td style="text-align:left;white-space:normal" class="src">${esc(x.p || "")}</td></tr>`;
+  };
+  return `<details class="fvt" open style="margin-top:8px"><summary class="chart-title"><b>📅 ${esc(ev.t || "주요 일정")}</b> <span class="src">⭐ = 특히 중요 · 파란 테두리 = 다음 일정 · 지난 일정은 흐리게</span></summary>
+    <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th>일정</th><th style="text-align:left">이벤트</th><th style="text-align:left">확인 포인트</th></tr></thead><tbody>${ev.rows.map(tr).join("")}</tbody></table></div>
+    ${ev.note ? `<div class="kidbox" style="margin-top:6px">${esc(ev.note)}</div>` : ""}${ev.src ? `<div class="note src">출처: ${esc(ev.src)}</div>` : ""}</details>`;
+}
+/* ---------- 🪨 중국 탄산리튬 가격 (data/lithium.json ← collector/lithium.py, 평일 하루 두 번) — 사용자 11/5: 매일 트래킹, 삼성SDI·LG엔솔 상세에서 바로 ---------- */
+let LI = null;
+const LI_CODES = ["006400", "373220", "096770"];  // 셀 회사: 삼성SDI · LG에너지솔루션 · SK이노베이션(SK온)
+async function liGet() { if (!LI) { try { LI = await (await fetch("data/lithium.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { LI = {}; } } return LI; }
+function liStat(L) {
+  const d = L?.d || [];
+  if (d.length < 30) return null;
+  const last = d.at(-1), t0 = +new Date(last[0]);
+  const at = (days) => { for (let i = d.length - 1; i >= 0; i--) if (+new Date(d[i][0]) <= t0 - days * 864e5) return d[i][1]; return null; };
+  const ch = (v) => (v ? (last[1] / v - 1) * 100 : null), y1 = String(+last[0].slice(0, 4) - 1) + last[0].slice(4);
+  const hi = d.filter((x) => x[0] >= y1).reduce((a, b) => (b[1] > a[1] ? b : a)), m1 = ch(at(28));
+  return { last, a1: at(365), d1: ch(d.at(-2)[1]), w1: ch(at(7)), m1, m3: ch(at(91)), y1: ch(at(365)), ytd: ch([...d].reverse().find((x) => x[0] < last[0].slice(0, 4))?.[1]), hi, dd: ch(hi[1]),
+    tr: m1 == null ? null : m1 <= -5 ? ["🔻", "내리는 중", "--bad"] : m1 >= 5 ? ["🔺", "오르는 중", "--good"] : ["↔", "멈춤 (4주 ±5% 안)", "--muted"] };
+}
+const liW = (v) => `${n(v / 1e4, 1)}만 위안`;
+const liPill = (s) => `<span class="pill ${s.tr[0] === "🔻" ? "red" : s.tr[0] === "🔺" ? "green" : "yellow"}">🪨 탄산리튬 ${liW(s.last[1])}/톤 · 4주 ${sg(s.m1, 1)} · 1년 고점 ${sg(s.dd, 0)}</span>`;
+function liHTML(code) {
+  const s = liStat(LI);
+  if (!s) return "";
+  const wk = {};  // 주마다 마지막 날 (2025년부터 — 증권사 그림과 같은 기간)
+  LI.d.filter((x) => x[0] >= "2025-01-01").forEach(([dt, v]) => { const t = new Date(dt), k = new Date(t - ((t.getDay() + 1) % 7) * 864e5).toISOString().slice(0, 10); wk[k] = [dt, v]; });
+  const W = Object.values(wk), cell = (t, v) => `<div class="k">${t}</div><div class="v"><b class="${kcol(v)}">${sg(v, 1)}</b></div>`;
+  const me = code ? `<div class="note">🔗 ${esc(DASH?.stocks?.find((c) => c.code === code)?.name || "")}는 배터리 <b>셀</b> 회사예요 → 리튬이 싸지면 재료값이 줄어드는 쪽. 다만 판매가격도 금속값에 몇 달 늦게 따라 내려가서, 값이 빨리 내리면 비싸게 사 둔 재료 때문에 잠깐 이익률이 깎이기도 해요(역래깅).</div>` : "";
+  return `<div class="card" style="margin-top:8px" data-jump="lithium" data-jname="🪨 탄산리튬"><div class="chart-title"><b>🪨 중국 탄산리튬 가격 (매일)</b> <span class="src">${esc(s.last[0])} 종가 · <b style="color:var(${s.tr[2]})">${s.tr[0]} ${s.tr[1]}</b></span></div>
+    <div style="font-size:20px;margin:4px 0"><b>${liW(s.last[1])}</b> <span class="src">/톤</span> <span class="${kcol(s.d1)}">${sg(s.d1, 1)}</span> <span class="src">하루</span></div>
+    <div class="kv" style="grid-template-columns:repeat(4,auto);gap:2px 10px">${cell("1주", s.w1)}${cell("4주", s.m1)}${cell("3개월", s.m3)}${cell("1년", s.y1)}${cell("올해", s.ytd)}${cell(`1년 고점 ${esc(s.hi[0].slice(2, 7).replace("-", "."))} ${liW(s.hi[1])} 대비`, s.dd)}</div>
+    ${lineChart({ t: "탄산리튬 선물 (주마다 마지막 날 종가, 만 위안/톤)", labels: W.map((x) => x[0]), s: [{ n: "탄산리튬", v: W.map((x) => x[1] / 1e4), col: "var(--s1)" }], fl: (v) => n(v, 1),
+      tick: (i) => (i && W[i][0].slice(5, 7) !== W[i - 1][0].slice(5, 7) && /-(01|07)-/.test(W[i][0]) ? `${W[i][0].slice(2, 4)}.${W[i][0].slice(5, 7)}` : "") })}
+    <div class="kidbox" style="margin-top:6px">🐣 리튬은 배터리에 꼭 들어가는 재료예요. 1년 전엔 1톤에 ${liW(s.a1 || 0)}쯤 하던 게 ${esc(s.hi[0].slice(2, 4))}년 ${+s.hi[0].slice(5, 7)}월 ${liW(s.hi[1])}까지 올랐다가 지금 ${liW(s.last[1])}로 내려왔어요. 배터리를 <b>만드는</b> 회사(셀)엔 재료값이 싸지는 일이지만, 재료를 <b>파는</b> 회사(양극재 등 소재)엔 파는 값이 내려가는 일이에요.</div>
+    <ul class="irl" style="margin-top:6px">
+      <li>📉 왜 내리나 (신한투자증권): 중국 안 재고가 늘고 · 광산 공급이 늘고 · 전기차 수요가 약해서</li>
+      <li>🔋 셀 회사 (LG에너지솔루션·삼성SDI·SK온) = 원재료 비용이 줄어드는 쪽</li>
+      <li>🧪 소재 회사 (에코프로비엠·포스코퓨처엠·엘앤에프) = 판매가격 하락 + 재고평가손실 (비싸게 산 재고 값이 깎임)</li>
+      <li>🔄 볼 것: 소재 회사는 수주가 느는 것보다, <b>리튬값이 멈추고(↔) 공장 가동률이 돌아와</b> 실제 이익이 나아지는지가 중요</li></ul>${me}
+    <div class="note src">출처: ${esc(LI.src || "")} · ${esc(LI.updated_at || "")} 받음 · 4주 −5% 아래 = 🔻 · +5% 위 = 🔺 · 그 사이 = ↔ · 증권사 그림(KOMIS 현물, 달러/kg)과 단위·기준이 달라 숫자가 조금 달라요 · 원화는 오늘 환율로 바꾼 대략</div></div>`;
 }
 // 종목 상세의 '자세한 내용 →' 링크: 산업 탭으로 가서 그 카드(id="kc-…")를 펼치고 스크롤
 let KC_GO = null;
