@@ -83,6 +83,7 @@ holdings:
     sector: 자동차
     industry: 자동차
     methods: [PBR, PER, DIV]
+    fixed_per: {tight: [4, 7, 10], easy: [5, 9, 13]}   # 사용자 2026-11-06: PER 하방 4 · 적정 7 · 상방 10, 🐂 강세장 5 · 9 · 13 (PBR 은 10년 밴드 하단·평균·상단 × 12MF BPS)
     avg_price:
     quantity:
 
