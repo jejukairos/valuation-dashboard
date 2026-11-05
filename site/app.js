@@ -670,25 +670,55 @@ function pbrFloorHTML(d, c) {
     <div class="note src">PBR = ${basis} · 주간 · ${esc(ds[0].slice(0, 4))}년~ · 바닥 = 앞뒤 반년 중 가장 낮고, 그 뒤 반년 안에 PBR 이 15% 넘게 다시 오른 주 · 12MF PBR(카드 위 숫자)과는 기준이 달라 숫자가 달라요 · 참고용 (매수·매도 추천 아님)</div>`;
 }
 // ② 지난 10년 밴드 위치 (사용자 11/6: 주가 그림 아래로 · 무슨 PER 인지 눌러서 근거) — collector main.py band_info
+const BAND_NM = { PER: "PER", PBR: "PBR", DIV: "배당수익률" };
+// 밴드 위치에 쓰는 배수 (main.py poss 와 같은 규칙): 적정가 방법 중 PER·PBR, 없으면 배당수익률
+const bandKinds = (c, bands) => { const k = ["PER", "PBR"].filter((x) => (c.methods || []).includes(x) && bands?.[x]); return k.length ? k : bands?.DIV ? ["DIV"] : []; };
 function bandPosHTML(c, pos) {
   if (!c.scen && pos == null) return "";
-  const B = c.band_info || [], NM = { PER: "PER", PBR: "PBR", DIV: "배당수익률" };
-  const what = B.length ? B.map((b) => NM[b.k]).join("·") : "PER·PBR";
-  const li = B.map((b) => {
-    const f = (v) => (v == null ? "-" : b.k === "DIV" ? n(v, 2) + "%" : n(v, b.k === "PBR" ? 2 : 1) + "배"), base = b.k === "PER" ? "EPS" : "BPS";
-    const how = b.k === "DIV" ? "그해 주당배당 ÷ 주가 (높을수록 싼 쪽이라 거꾸로 셈)"
-      : b.basis === "forward" ? `조정 ${b.k} = 주가 ÷ 그때 기준 1년 뒤 ${base} (아직 안 나온 해는 추정치) — 이익이 빨리 늘던 종목이라 앞 실적으로 맞춤`
-      : `${b.k} = 주가 ÷ 그때 이미 발표된 최근 1년 ${base} (지난 실적 기준 · 후행)`;
-    return `<li><b>${NM[b.k]} 지금 ${f(b.cur)}</b> <span class="src">(${esc(b.date || "")} 주)</span> → ${esc((b.from || "").slice(0, 4))}년부터 ${n(b.n, 0)}주 중 아래에서 <b>${n(b.k === "DIV" ? b.pos_cheap : b.pos, 0)}%</b> 자리
-      <div class="src">${how}<br>가장 낮음 ${f(b.min)} · 하위 10% ${f(b.low)} · 평균 ${f(b.avg)} · 상위 10% ${f(b.high)} · 가장 높음 ${f(b.max)}</div></li>`;
-  }).join("");
+  const B = c.band_info || [], what = B.length ? B.map((b) => BAND_NM[b.k]).join("·") : ["PER", "PBR"].filter((x) => (c.methods || []).includes(x)).join("·") || "PER·PBR";
   return `<div class="chart-title" style="margin-top:14px"><b>② 지난 10년 ${what} 중 지금 자리</b> <span class="src">0% = 10년 중 가장 쌌던 때 · 100% = 가장 비쌌던 때</span></div>
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
     <div class="bandlbl"><span>가장 쌌던 쪽 0%</span><span>지금 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>가장 비쌌던 쪽 100%</span></div>
-    <details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title">ⓘ 무엇으로 쟀나 · 근거 <span class="src">${B.length ? B.map((b) => `${NM[b.k]}${b.k === "DIV" ? "" : b.basis === "forward" ? " (조정·1년 뒤 실적)" : " (후행·지난 실적)"}`).join(" + ") : "다음 갱신 때 채워져요"} · 눌러서 열기</span></summary>
-      <div class="kidbox" style="margin-top:6px">🐣 지난 10년 동안 <b>매주</b> ${what}을 계산해서 낮은 순으로 줄 세운 뒤, 지금 숫자가 아래에서 몇 % 자리인지예요. 3% 면 '10년 중 이보다 쌌던 주가 3% 밖에 없다'는 뜻이에요.${B.length > 1 ? ` PER·PBR 둘 다 쓰는 종목이라 <b>두 자리의 평균</b>이에요.` : ""}</div>
-      ${li ? `<ul class="irl" style="margin-top:6px">${li}</ul>` : ""}
-      <div class="note src">⚠ 위 ① 적정주가는 '앞으로 12개월 실적(12MF)' 기준이고, 이 칸은 주마다 그때의 연간 실적으로 이은 10년 밴드라 PER 숫자가 달라요 · 그림은 종목을 눌러 상세 화면 '밴드차트'(네이버 방식)에서 · 10년이 안 된 종목은 상장·데이터 시작부터</div></details>`;
+    <details class="fvt bandwhy" data-code="${esc(c.code)}" onclick="event.stopPropagation()"><summary class="chart-title">ⓘ 무엇으로 쟀나 · 근거 차트 <span class="src">${esc(what)} 10년 주간 · 눌러서 열기</span></summary>
+      <div class="kidbox" style="margin-top:6px">🐣 지난 10년 동안 <b>매주</b> ${esc(what)}을 계산해서 낮은 순으로 줄 세운 뒤, 지금 숫자가 아래에서 몇 % 자리인지예요. 3% 면 '10년 중 이보다 쌌던 주가 3% 밖에 없다'는 뜻이에요.${what.includes("·") ? ` 둘 다 쓰는 종목이라 위 막대는 <b>두 자리의 평균</b>이에요.` : ""}</div>
+      <div class="bwb src">불러오는 중…</div>
+      <div class="note src">⚠ 위 ① 적정주가는 '앞으로 12개월 실적(12MF)' 기준이고, 이 칸은 주마다 그때의 연간 실적으로 이은 10년 밴드라 숫자가 달라요 · 12MF PER 흐름은 종목을 눌러 상세 화면 '📈 12MF PER 밴드'에서 · 10년이 안 된 종목은 상장·데이터 시작부터</div></details>`;
+}
+document.addEventListener("toggle", async (e) => {
+  const el = e.target;
+  if (!el.classList?.contains("bandwhy") || !el.open || el.dataset.done) return;
+  el.dataset.done = 1;
+  const c = DASH.stocks.find((x) => x.code === el.dataset.code) || {};
+  try {
+    const d = await (await fetch(`data/stocks/${c.code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json();
+    el.querySelector(".bwb").outerHTML = bandKinds(c, d.bands).map((k) => bandWhyHTML(k, d.bands[k])).join("") || `<div class="src">밴드 자료가 없어요</div>`;
+  } catch (_) { el.querySelector(".bwb").textContent = "자료를 못 불러왔어요"; }
+}, true);
+// 한 가지 배수(PER·PBR·배당수익률)의 10년 주간 선 + 하위 10%·평균·상위 10% 선 + 지금 점 (compute.py band 와 같은 숫자)
+function bandWhyHTML(k, b) {
+  const st = b?.periods?.["10y"] || b?.periods?.all;
+  if (!st?.avg) return "";
+  const div = k === "DIV", d0 = div ? 2 : k === "PBR" ? 2 : 1, f = (v) => (v == null ? "-" : n(v, d0) + (div ? "%" : "배")), base = k === "PER" ? "EPS" : "BPS";
+  const I = b.dates.map((t, i) => i).filter((i) => b.dates[i] >= st.from && b.mult[i] > 0), ds = I.map((i) => b.dates[i]), v = I.map((i) => b.mult[i]);
+  if (v.length < 20) return "";
+  const cur = v.at(-1), pos = div ? st.pos_cheap : st.pos, hiY = Math.max(st.max, cur) * 1.06, loY = Math.max(0, Math.min(st.min, cur) * 0.94);
+  const W = 340, H = 170, x0 = 32, x1 = W - 66, top = 12, bot = H - 20, L = v.length - 1;
+  const X = (i) => x0 + ((x1 - x0) * i) / L, Y = (y) => bot - ((Math.min(y, hiY) - loY) / (hiY - loY)) * (bot - top);
+  let g = "";
+  [loY, (loY + hiY) / 2, hiY].forEach((t) => { g += `<line x1="${x0}" x2="${x1}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${Y(t) + 3}" text-anchor="end" class="qx">${n(t, d0)}</text>`; });
+  ds.forEach((t, i) => { if (i && t.slice(0, 4) !== ds[i - 1].slice(0, 4) && +t.slice(2, 4) % 2 === 0) g += `<text x="${X(i)}" y="${H - 5}" text-anchor="middle" class="qx">${t.slice(0, 4)}</text>`; });
+  const lines = [[st.high, "상위10%", "var(--bad)"], [st.avg, "평균", "var(--muted)"], [st.low, "하위10%", "var(--good)"]];
+  let lastY = -99;
+  lines.forEach(([y, t, col]) => { const yy = Math.max(Y(y) + 3, lastY + 10); lastY = yy; g += `<line x1="${x0}" x2="${x1}" y1="${Y(y)}" y2="${Y(y)}" stroke="${col}" stroke-dasharray="4 3"/><text x="${x1 + 3}" y="${yy}" class="qx">${t} ${n(y, d0)}</text>`; });
+  g += `<path d="${v.map((y, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(y).toFixed(1)}`).join("")}" fill="none" stroke="var(--ink)" stroke-width="1.5"/>`;
+  g += `<circle cx="${X(L)}" cy="${Y(cur)}" r="4.5" fill="var(--s1)"/>`;
+  g += tipCols(X, (x1 - x0) / L, top, bot, ds.map((t, i) => `${t}\n${BAND_NM[k]} ${f(v[i])}`));
+  const how = div ? "그해 주당배당 ÷ 주가 (높을수록 싼 쪽이라 위치는 거꾸로 셈)"
+    : b.basis === "forward" ? `조정 ${k} = 주가 ÷ 그때 기준 1년 뒤 ${base} (아직 안 나온 해는 추정치) — 이익·자본이 빨리 늘던 종목이라 한 해 앞 실적으로 맞춤`
+    : `${k} = 주가 ÷ 그때 이미 발표된 최근 연간 ${base} (지난 실적 기준 · 후행)`;
+  return `<div class="chart-title" style="margin-top:8px"><b>${BAND_NM[k]} ${b.basis === "forward" && !div ? "(조정 · 1년 뒤 실적)" : div ? "" : "(후행 · 지난 실적)"}</b> <span class="src">지금 ${f(cur)} · ${esc(st.from.slice(0, 4))}년부터 ${n(v.length)}주 중 아래에서 <b>${n(pos, 0)}%</b> 자리</span></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${BAND_NM[k]} 10년 주간 추이">${g}</svg>
+    <div class="src">${how} · 가장 낮음 ${f(st.min)} · 가장 높음 ${f(st.max)}${k === "PER" ? " · 이익이 거의 없던 때의 아주 큰 PER 은 통계에서 뺌" : ""}</div>`;
 }
 const grp = (c) => c.group || "보유";
 function renderCards() {
