@@ -3970,7 +3970,7 @@ function showView() {
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 탭 (사용자 11/5) — 🇰🇷 보유는 #kr
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   $("#earnView").hidden = view !== "earn";
   if (view === "earn") renderEarn();
   $("#chartView").hidden = view !== "chart";
@@ -3984,6 +3984,8 @@ function showView() {
   if (view === "news") loadNews();
   $("#industryView").hidden = view !== "industry";
   if (view === "industry") loadIndustry();
+  $("#policyView").hidden = view !== "policy";
+  if (view === "policy") renderPolicy();
   $("#marketView").hidden = view !== "market";
   $("#scoreView").hidden = view !== "score";
   if (view === "score") renderScore();
@@ -4625,6 +4627,12 @@ function evHTML(ev) {
   return `<details class="fvt" open style="margin-top:8px"><summary class="chart-title"><b>📅 ${esc(ev.t || "주요 일정")}</b> <span class="src">⭐ = 특히 중요 · 파란 테두리 = 다음 일정 · 지난 일정은 흐리게</span></summary>
     <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th>일정</th><th style="text-align:left">이벤트</th><th style="text-align:left">확인 포인트</th></tr></thead><tbody>${ev.rows.map(tr).join("")}</tbody></table></div>
     ${ev.note ? `<div class="kidbox" style="margin-top:6px">${esc(ev.note)}</div>` : ""}${ev.src ? `<div class="note src">출처: ${esc(ev.src)}</div>` : ""}</details>`;
+}
+// 🏛 정책 탭 (사용자 11/5: "맨 끝에 정책 탭 — 선거·정책 이런 걸 메모해 나가기") ← keychart.yaml policy: {ev 일정표, notes [카드 + top 핵심 줄], 최신이 위}
+async function renderPolicy() {
+  const P = (await keyLoad()).policy || {};
+  $("#policyBody").innerHTML = (P.notes || []).map((c) => `${(c.top || []).length ? `<div class="kidbox" style="margin-top:12px">📌 <b>${esc(c.t)}</b> <span class="src">${esc(c.d || "")}</span><ul class="irl">${c.top.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${keyCard(c, true)}`).join("")
+    + evHTML(P.ev) || `<div class="empty">config/keychart.yaml 의 policy 에 메모를 넣으면 여기에 보여요.</div>`;
 }
 // 🔗 밸류체인 표 (keychart.yaml 묶음의 vc: [{t, why, kid, rows [[단계, 회사들]]}]) — 우리 종목 이름은 굵게
 function vcHTML(vc) {
