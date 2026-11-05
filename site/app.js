@@ -266,16 +266,58 @@ function floorHTML(c) {
   const s = c.scen, ind = s.ind, sec = s.sector;
   const warn = s.bear > c.price * 1.5 ? `<div class="warnbox" style="margin-top:6px">⚠ 하방(Bear)이 지금 가격보다 ${pct((s.bear / c.price - 1) * 100, 0)} 높아요. 추정 EPS 가 너무 높거나 이익이 한 해 튄 건 아닌지 확인이 필요해요.</div>` : "";
   const out = [];
-  if (sec) out.push(`<div class="note src">🏷 ${esc(sec.name)} PER 역사: 바닥 ${n(sec.bear, 1)} · 보통 ${n(sec.base, 1)} · 최고 ${n(sec.bull, 1)}배${sec.history ? ` — ${esc(sec.history)}` : ""}</div>`);
+  if (sec && sec.bear != null) out.push(`<div class="note src">🏷 ${esc(sec.name)} PER 역사 <span>(12MF · 증권사 리포트·기사로 정한 값, 평균 아님)</span>: 바닥 ${n(sec.bear, 1)} · 보통 ${n(sec.base, 1)} (평소 범위 위쪽) · 최고 ${n(sec.bull, 1)}배 (리레이팅 때)${sec.history ? ` — ${esc(sec.history)}` : ""}</div>`);
   if (sec?.tight) out.push(`<div class="note">📏 적정주가에 쓰는 배수 (사용자 원칙): 🔴 긴축·약세장 <b>${sec.tight.map((x) => n(x, 1)).join(" · ")}배</b> · 🐂 강세장 <b>${(sec.easy || []).map((x) => n(x, 1)).join(" · ")}배</b> <span class="src">— 하락장엔 지금 PER 근처에서 보수적으로, 금리 인하·수급이 들어올 때 넓힘</span></div>`);
   (sec?.notes || []).forEach((x) => out.push(`<div class="note src">📝 ${esc(x.date)} ${esc(x.source)}: ${esc(x.text)}</div>`));
   if (ind && (ind.per || ind.peer_med)) out.push(`<div class="note src">🏭 네이버 업종 PER${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 최근 4분기 ${ind.per == null ? "-" : n(ind.per, 1) + "배"}${ind.peer_med ? ` · 같은 업종 ${ind.peers.length}곳 중앙값 <b>${n(ind.peer_med, 1)}배</b> (${ind.peers.filter((p) => p.per).map((p) => `${esc(p.name)} ${n(p.per, 1)}${p.fwd ? "" : "*"}`).join(" · ")})` : ""}${ind.peers.some((p) => p.per && !p.fwd) ? " <span>* 추정치 없어 현재 PER</span>" : ""}</div>`);
-  // 🏭 업종 PBR (사용자 11/6: PBR 로 매기는 종목은 업종 PBR 도) — 네이버 같은 업종 회사들의 PBR (지난 결산 BPS 기준)
-  const pbrK = (c.methods || []).includes("PBR");
-  if (ind?.pbr_med) out[pbrK ? "unshift" : "push"](`<div class="note${pbrK ? "" : " src"}">🏭 업종 PBR${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 같은 업종 ${ind.peers.filter((p) => p.pbr > 0).length}곳 중앙값 <b>${n(ind.pbr_med, 2)}배</b>${ind.pbr_own ? ` · ${esc(c.name)} ${n(ind.pbr_own, 2)}배 (${pct((ind.pbr_own / ind.pbr_med - 1) * 100, 0, true)})` : ""}
-    <span class="src">(${ind.peers.filter((p) => p.pbr > 0).map((p) => `${esc(p.name)} ${n(p.pbr, 2)}`).join(" · ")}) · 모두 지난 결산 BPS 기준이라 위 12MF PBR 과 숫자가 달라요</span></div>`);
   if (s.rerating) out.push(`<div class="note src">🔁 리레이팅: ${esc(s.rerating)}</div>`);
-  return warn + (out.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🏷 업종 ${pbrK ? "PBR·PER" : "PER"} · 리레이팅 메모${pbrK && ind?.pbr_med ? ` <span class="src">업종 PBR ${n(ind.pbr_med, 2)}배</span>` : ""}</summary>${out.join("")}</details>` : "");
+  return warn + (out.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🏷 업종 PER · 리레이팅 메모</summary>${out.join("")}</details>` : "") + pbrMemoBox(c);
+}
+// 🏷 업종 PBR · 리레이팅 메모 (사용자 11/6: 업종 PER 메모처럼 — 이 종목 PBR 10년 하단·평균·상단 + 업종 PBR 하단·평균·상단) — PBR 종목만, 열 때 stocks/*.json 으로 계산
+const pbrKey = (c) => c.scen?.sector?.name || c.industry;
+const pbrMemoBox = (c) => ((c.methods || []).includes("PBR") && c.market !== "US" ? `<details class="fvt pbrmemo" data-code="${esc(c.code)}" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🏷 업종 PBR · 리레이팅 메모${c.scen?.ind?.pbr_med ? ` <span class="src">같은 업종 지금 ${n(c.scen.ind.pbr_med, 2)}배</span>` : ""}</summary><div class="pmb src">불러오는 중…</div></details>` : "");
+document.addEventListener("toggle", async (e) => {
+  const el = e.target;
+  if (!el.classList?.contains("pbrmemo") || !el.open || el.dataset.done) return;
+  el.dataset.done = 1;
+  const c = DASH.stocks.find((x) => x.code === el.dataset.code) || {}, v = encodeURIComponent(DASH.updated_at);
+  const mem = DASH.stocks.filter((x) => pbrKey(x) === pbrKey(c) && (x.methods || []).includes("PBR") && x.market !== "US" && !/우$/.test(x.name));
+  try {
+    const ds = await Promise.all(mem.map((x) => fetch(`data/stocks/${x.code}.json?v=${v}`).then((r) => r.json()).catch(() => null)));
+    el.querySelector(".pmb").outerHTML = pbrMemoHTML(c, ds.filter((d) => d?.bands?.PBR?.mult?.length));
+  } catch (_) { el.querySelector(".pmb").textContent = "자료를 못 불러왔어요"; }
+}, true);
+function pbrStats(dates, mult) {  // 10년 주간 PBR → 가장 낮음 · 하위 10% · 평균 · 상위 10% · 가장 높음 (compute.py stats 와 같은 잣대)
+  const cut = `${+dates.at(-1).slice(0, 4) - 10}${dates.at(-1).slice(4)}`, v = mult.filter((m, i) => m > 0 && dates[i] >= cut).sort((a, b) => a - b);
+  if (v.length < 20) return null;
+  const q = (p) => v[Math.min(v.length - 1, Math.floor((p / 100) * (v.length - 1)))];
+  return { min: v[0], low: q(10), avg: v.reduce((a, b) => a + b, 0) / v.length, high: q(90), max: v.at(-1), from: dates.find((d) => d >= cut), cur: [...mult].reverse().find((m) => m > 0), n: v.length };
+}
+function pbrMemoHTML(c, ds) {
+  const me = ds.find((d) => d.code === c.code), f = (x) => (x == null ? "-" : n(x, 2) + "배");
+  const row = (nm, st, b) => (st ? `<tr><td style="text-align:left">${b ? `<b>${nm}</b>` : nm}</td><td>${f(st.low)}</td><td><b>${f(st.avg)}</b></td><td>${f(st.high)}</td><td><b>${f(st.cur)}</b></td></tr>` : "");
+  const span = (nm, st) => (st ? `${nm} ${n(st.min, 2)}~${n(st.max, 2)}배` : "");
+  const own = me && pbrStats(me.bands.PBR.dates, me.bands.PBR.mult);
+  // 업종 = 사이트가 추적하는 같은 업종 PBR 종목들의 주마다 평균 (현대차·기아 등)
+  let sec = null;
+  if (ds.length > 1) {
+    const base = me || ds[0], maps = ds.map((d) => new Map(d.bands.PBR.dates.map((t, i) => [t, d.bands.PBR.mult[i]])));
+    const avg = base.bands.PBR.dates.map((t) => { const xs = maps.map((m) => m.get(t)).filter((x) => x > 0); return xs.length === ds.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; });
+    sec = pbrStats(base.bands.PBR.dates, avg.map((x) => x ?? 0));
+  }
+  const ind = c.scen?.ind, ps = c.scen?.pbr_sec, key = pbrKey(c);
+  const where = own ? (own.cur <= own.low ? "10년 하단(하위 10%) 아래 — 가장 싼 쪽" : own.cur >= own.high ? "10년 상단(상위 10%) 위 — 가장 비싼 쪽" : own.cur < own.avg ? "10년 평균 아래" : "10년 평균 위") : "";
+  return `${own ? `<div class="note" style="margin-top:4px">지금 ${esc(c.name)} PBR <b>${f(own.cur)}</b> → ${where}${sec ? ` · ${esc(key)} 업종(추적 ${ds.length}곳 평균) 지금 ${f(sec.cur)}, 업종 평균 ${f(sec.avg)}` : ""}</div>` : ""}
+    <div class="tbl-wrap"><table class="compact" style="width:100%;margin-top:4px"><thead><tr><th style="text-align:left">10년 PBR</th><th>하단</th><th>평균</th><th>상단</th><th>지금</th></tr></thead><tbody>
+      ${row(esc(c.name), own, true)}${sec ? row(`${esc(key)} 업종`, sec) : ""}
+      ${ds.filter((d) => d.code !== c.code).map((d) => row(`<span class="src">${esc(d.name)}</span>`, pbrStats(d.bands.PBR.dates, d.bands.PBR.mult))).join("")}</tbody></table></div>
+    <div class="note src">가장 낮음~가장 높음: ${[span(esc(c.name), own), span(`${esc(key)} 업종`, sec)].filter(Boolean).join(" · ")} · 하단 = 10년 중 아래 10% 자리 · 상단 = 위 10% 자리 · ${sec ? `업종 = 사이트가 추적하는 ${ds.map((d) => esc(d.name)).join("·")} 의 주마다 평균 · ` : ""}PBR = 주가 ÷ 그때 기준 1년 뒤 BPS (주간, ${esc((own || sec)?.from?.slice(0, 4) || "")}년~) · 위 카드의 12MF PBR 과 기준이 달라요${ds.length < 2 ? ` · ${esc(key)} 업종은 사이트가 이 종목만 추적해서 업종 줄이 없어요` : ""}</div>
+    ${ind?.pbr_med ? `<div class="note">🏭 지금 같은 업종 PBR${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: ${ind.peers.filter((p) => p.pbr > 0).length}곳 중앙값 <b>${n(ind.pbr_med, 2)}배</b>${ind.pbr_own ? ` · ${esc(c.name)} ${n(ind.pbr_own, 2)}배 (${pct((ind.pbr_own / ind.pbr_med - 1) * 100, 0, true)})` : ""}
+      <span class="src">(${ind.peers.filter((p) => p.pbr > 0).map((p) => `${esc(p.name)} ${n(p.pbr, 2)}`).join(" · ")}) · 네이버, 지난 결산 BPS 기준</span></div>` : ""}
+    ${ps?.history ? `<div class="note src">📰 ${esc(ps.name || key)} PBR 역사 (리포트·기사): ${esc(ps.history)}</div>` : ""}
+    ${ps?.rerating ? `<div class="note src">🔁 PBR 리레이팅: ${esc(ps.rerating)}</div>` : ""}
+    ${(ps?.links || []).length ? `<div class="note src">출처: ${ps.links.map((l) => `<a href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t)}</a>`).join(" · ")}</div>` : ""}
+    <div class="kidbox" style="margin-top:6px">🐣 PBR 은 '회사 순자산의 몇 배에 거래되나'예요. 이 종목과 같은 업종의 지난 10년 하단·평균·상단을 나란히 보면, 지금이 업종보다 싼지·비싼지와 역사적으로 어디쯤인지 같이 볼 수 있어요.</div>`;
 }
 // 성장률 방식 (내 엑셀 '소몽의 적정주가 템플릿'): 기준 PER = 성장률 · 업종 중앙값 · 업종 바닥 중 가장 낮은 값 × 1 · 1.25 · 1.5 (사용자 11/6)
 function growthHTML(c) {

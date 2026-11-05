@@ -296,6 +296,10 @@ def stock_detail(h, rates_now, fx):
         s_ = SECTORS.get(h.get("sector")) or {}
         scen["rerating"] = h.get("rerating") or s_.get("rerating")
         scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "tight", "easy", "history", "notes")}} if s_ else None
+        # 🏷 업종 PBR 메모 (사용자 11/6): sectors.yaml 업종의 pbr {history, rerating, links} — 업종(sector) 이 없으면 industry 이름으로 (반도체)
+        ps = SECTORS.get(h.get("sector") or "") or SECTORS.get(h.get("industry") or "") or {}
+        if "PBR" in methods and ps.get("pbr"):
+            scen["pbr_sec"] = {"name": h.get("sector") or h.get("industry"), **ps["pbr"]}
         # 📐 PBR 로만 적정가를 매기는데 업종에 리레이팅 기록이 있는 종목(롯데쇼핑): PER 로도 Bear·Base·Bull — 화면에선 접어 둠
         #    🔴 긴축·약세장 = 리레이팅 전 바닥~보통 (sectors.yaml tight 가 있으면 그것) · 🐂 강세장 = 리레이팅 된 보통~최고 (easy)
         e12 = C.fwd12(hist, "eps")
