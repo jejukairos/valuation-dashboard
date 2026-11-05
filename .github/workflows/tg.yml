@@ -46,7 +46,7 @@ jobs:
         run: |
           git config user.name "valuation-bot"
           git config user.email "valuation-bot@users.noreply.github.com"
-          git add site/data/tg_reports.json site/data/reports.json site/data/news.json cache/news.json cache/reports_pdf.json 2>/dev/null || true
+          git add site/data/tg_reports.json site/data/reports.json site/data/news.json cache/news.json cache/reports_pdf.json site/data/rep_all.json cache/ind_pages.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "리포트·뉴스 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done

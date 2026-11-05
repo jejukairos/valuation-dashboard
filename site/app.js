@@ -3220,7 +3220,7 @@ const EXP_K = { ramen: ["🍜 라면 수출", "HS 1902.30.1010", ["전체", "미
 function expHTML(kind) {
   const E = EXP?.[kind], L = EXP?.[`${kind}_latest`] || EXP?.latest, [title, hs, show, col1, eok, note] = EXP_K[kind];
   if (!L || (!E && !L[kind])) return "";  // 월별 그림(E)이 아직 없어도 증권사 표만 먼저
-  const fm = (v) => (v == null ? "-" : eok ? `$${n(v / 100, eok === true ? 0 : eok)}억` : `$${n(v, 1)}m`);  // eok 숫자 = 소수 자리 (자동차 65.5억)
+  const fm = (v) => (v == null ? "-" : `${n(v / 100, eok === true ? 0 : eok || 2)}억$`);  // 모든 업종 억 달러 (원화는 wonize 가 붙임) · eok 숫자 = 소수 자리 (자동차 65.5억)
   const dy = (yy) => (yy == null ? null : ((1 + yy / 100) * L.days.ly / L.days.this - 1) * 100);  // 영업일수 감안 일평균 전년비 (영업일수는 사용자 글에만 있음)
   const hv = (k) => Object.values(L[k]).some((r) => r[0] != null);  // 금액이 하나도 없으면(증권사 % 만 준 표) 금액 칸을 뺌
   const tbl = (k, nm) => (L[k] ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(nm)}${hv(k) ? "" : ` (${esc(L.ym)})`}</th>${hv(k) ? `<th>${esc(L.vh || L.ym)}</th>` : ""}<th>전년비</th><th>전월비</th>${L.days ? "<th>일평균 전년비</th>" : ""}</tr></thead><tbody>
@@ -3229,13 +3229,15 @@ function expHTML(kind) {
   if (ms.length) for (let y = +ms[0].slice(0, 4), m = +ms[0].slice(5); `${y}-${String(m).padStart(2, "0")}` <= ms.at(-1); m === 12 ? (y++, m = 1) : m++) all.push(`${y}-${String(m).padStart(2, "0")}`);
   // 연도별 같은 달 비교 (가로 1~12월, 해마다 선 하나 · 올해만 주황 굵게 — 사용자 전달 그림 모양)
   const yrs = [...new Set(ms.map((x) => x.slice(0, 4)))].sort(), YC = ["#c7d9f2", "#9cc0ea", "#6fa2de", "#4383cf", "#2563b0", "#173f7a"];
-  const season = (c) => (E?.[c] ? lineChart({ t: `${c} 월별 수출 — 연도별 같은 달 비교`, labels: Array.from({ length: 12 }, (_, i) => `${i + 1}월`), fl: (v) => (eok ? `${n(v / 100, 0)}억` : n(v, 0)),
+  // 단위는 모든 업종 똑같이 억 달러 (사용자 11/5 '173? 63? 뭐지') — 0 부터 그림, 예시 한 줄은 원화가 저절로 붙음(wonize)
+  const season = (c) => (E?.[c] ? lineChart({ t: `${c} 월별 수출 (억 달러) — 연도별 같은 달 비교`, why: `숫자 단위 = 억 달러 · 예) ${eok ? "10" : "1.5"}억 달러 · 색깔별 숫자 = 그해 가장 최근 달`, zero: true,
+    labels: Array.from({ length: 12 }, (_, i) => `${i + 1}월`), fl: (v) => n(v / 100, eok ? 0 : 2),
     s: yrs.map((y, i) => ({ n: `${y}년`, v: Array.from({ length: 12 }, (_, m) => E[c][`${y}-${String(m + 1).padStart(2, "0")}`] ?? null), col: i === yrs.length - 1 ? "#e8692f" : YC[Math.max(0, YC.length - (yrs.length - 1) + i)] })),
     tick: (i) => (i % 2 === 0 ? `${i + 1}월` : "") }) : "");
   const ago = (x) => `${+x.slice(0, 4) - 1}${x.slice(4)}`, yoy = all.slice(-36);
   const yl = (cs) => cs.filter((c) => E[c]).map((c, i) => ({ n: c, v: yoy.map((x) => (E[c][x] && E[c][ago(x)] ? (E[c][x] / E[c][ago(x)] - 1) * 100 : null)), col: i ? GPE_COL[(i - 1) % GPE_COL.length] : "var(--ink)" }));
   const ych = (t, cs) => lineChart({ t, labels: yoy, s: yl(cs), fl: (v) => `${n(v, 0)}%`, zero: true, tick: (i) => (yoy[i].endsWith("-01") ? `'${yoy[i].slice(2, 4)}` : "") });
-  return `<h3 id="kc-exp-${kind}">${title} <span class="src">${hs} · 월별 · ${eok ? "억" : "백만"} 달러 · ${esc(L.src || "")}</span></h3><div class="card">
+  return `<h3 id="kc-exp-${kind}">${title} <span class="src">${hs} · 월별 · 단위 억 달러 · ${esc(L.src || "")}</span></h3><div class="card">
     ${(L.notes || []).length ? `<ul class="irl" style="margin-top:0">${L.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${tbl(kind, col1)}${kind === "cosmetics" ? `<details class="fvt"><summary class="chart-title">기초(스킨케어) · 색조(메이크업·립·아이) 나눠 보기</summary>${tbl("skincare", "기초")}${tbl("makeup", "색조")}</details>` : ""}
     ${L.timeline && L[kind] ? (() => {  // 🚗 줄 = 달인 표 → 선으로 이은 월별 그림 (막대 = 전년비) + 🐣
@@ -4847,7 +4849,7 @@ function amzHTML() {
     ${how ? `<div class="${how.startsWith("추정") ? "warnbox" : "note src"}" style="margin:0 0 8px">표 출처: ${esc(how)}</div>` : ""}
     <div class="tbl-wrap"><table class="compact" style="width:100%;text-align:center"><thead><tr><th style="text-align:left">브랜드</th>${A.countries.map((c, i) => `<th>${A.flags?.[i] || ""} ${esc(c)}</th>`).join("")}<th>합계</th></tr></thead>
       <tbody>${rows}<tr style="border-top:2px solid var(--border)"><td style="text-align:left"><b>합계</b></td>${tot}<td>${cell(all(cur), prv ? all(prv) : null, true)}</td></tr></tbody></table></div>
-    ${mv ? `<div class="chart-title" style="margin-top:12px"><b>오늘 순위 변동</b> <span class="src">⚡ 크게 오름 · ⚠️ 크게 내림 · ❌ Top100 탈락 · 🆕 새로 진입</span></div><ul class="irl">${mv}</ul>` : ""}
+    ${mv ? `<details style="margin-top:12px"><summary class="chart-title"><b>오늘 순위 변동 ${(A.days[d].moves || []).length}개</b> <span class="src">⚡ 크게 오름 · ⚠️ 크게 내림 · ❌ Top100 탈락 · 🆕 새로 진입 · 눌러서 보기</span></summary><ul class="irl">${mv}</ul></details>` : ""}
     <div class="chart-title" style="margin-top:12px"><b>추이</b> <span class="src">날마다 쌓여요 · 브랜드를 누르면 나라별</span></div>
     <div class="chips" id="amz-chips" style="margin:6px 0">${chips}</div>
     <div id="amz-leg"></div><div class="chart-box"><canvas id="amz-chart"></canvas></div>
@@ -4855,30 +4857,25 @@ function amzHTML() {
     <div class="note src">출처: ${esc(A.source || "")}${A.channels ? ` (${Object.entries({ daol: "다올", kyobo: "교보", kmj: "한투" }).map(([k, l]) => `<a href="${esc(A.channels[k])}" target="_blank" rel="noopener">${l}</a>`).join(" · ")})` : ""} · 상장사 연결: 메디큐브 = 에이피알, 달바 = 달바글로벌, COSRX = 아모레퍼시픽 자회사${ds.some((x) => A.days[x].derived) ? ` · ${ds.filter((x) => A.days[x].derived).map((x) => x.slice(5).replace("-", "/")).join(", ")}은 다음 날 표의 ▲▼로 거꾸로 계산` : ""}</div>
   </div>`;
 }
-// 크로스체크: 다올 표 vs 교보(나라별 K-뷰티 수·브랜드 합계) vs 한투(브랜드×나라, 이탈리아 빼고) — 다른 칸은 빨간 글씨
+// 세 채널(다올·교보·한투)은 같은 아마존 순위를 세는 거라 표는 위 하나만 (사용자 11/5 '3개 채널 동일한 거 1개만, 중복 빼고')
+//   → 다른 채널과 몇 칸 다른지 한 줄 + 우리 종목 브랜드(메디큐브·달바) 제품별 순위만 접어서 (한투)
 function amzCross(day, cur) {
   const K = day.kyobo, M = day.kmj, ci = AMZ.countries, IT = ci.indexOf("이탈리아");
   if (!K && !M) return "";
-  let bad = 0;
-  const td = (v, ref) => { const x = v != null && ref != null && v !== ref; bad += x; return `<td${x ? ' style="color:var(--bad-ink);font-weight:700"' : ""}>${v ?? '<span class="src">–</span>'}</td>`; };
-  const src = (o, l) => (o?.url ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${l}</a>` : l);
+  let bad = 0, cmp = 0;
+  const chk = (v, ref) => { if (v != null && ref != null) { cmp++; bad += v !== ref; } };
   const col = (i) => Object.values(cur).reduce((s, a) => s + (a[i] || 0), 0), all = ci.reduce((s, _, i) => s + col(i), 0);
-  let rows = K ? `<tr><td style="text-align:left"><b>K-뷰티 전체</b></td><td>다올</td>${ci.map((_, i) => `<td>${col(i)}</td>`).join("")}<td>${all}</td></tr>
-    <tr><td></td><td>${src(K, "교보")}</td>${ci.map((c, i) => td(K.countries?.[c], col(i))).join("")}${td(K.total, all)}</tr>` : "";
-  const bs = [...new Set([...Object.keys(M?.brands || {}), ...Object.keys(K?.brands || {}).filter((b) => cur[b])])].sort((a, b) => amzSum(cur[b]) - amzSum(cur[a]));
-  for (const b of bs) {
+  if (K) { ci.forEach((c, i) => chk(K.countries?.[c], col(i))); chk(K.total, all); }
+  for (const b of new Set([...Object.keys(M?.brands || {}), ...Object.keys(K?.brands || {}).filter((x) => cur[x])])) {
     const v = cur[b] || ci.map(() => 0), m = M?.brands?.[b];
-    rows += `<tr style="border-top:1px solid var(--border)"><td style="text-align:left"><b>${esc(b)}</b></td><td>다올</td>${v.map((x) => `<td>${x}</td>`).join("")}<td>${amzSum(v)}</td></tr>`;
-    if (m) rows += `<tr><td></td><td>${src(M, "한투")}</td>${ci.map((c, i) => (i === IT ? '<td class="src">안 셈</td>' : td(m[c] || 0, v[i]))).join("")}${td(amzSum(Object.values(m)), amzSum(v) - v[IT])}</tr>`;
-    if (K?.brands?.[b] != null) rows += `<tr><td></td><td>${src(K, "교보")}</td><td colspan="${ci.length}" class="src">나라별 숫자 없음</td>${td(K.brands[b], amzSum(v))}</tr>`;
+    if (m) { ci.forEach((c, i) => i !== IT && chk(m[c] || 0, v[i])); chk(amzSum(Object.values(m)), amzSum(v) - v[IT]); }
+    if (K?.brands?.[b] != null) chk(K.brands[b], amzSum(v));
   }
-  const R = M?.ranks || {};
-  const rk = Object.keys(R).map((b) => `<details ${["메디큐브", "달바"].includes(b) ? "open" : ""}><summary><b>${esc(b)}</b> 제품별 순위 <span class="src">한투 · 숫자 = 그 나라 Top100 순위</span></summary>
+  const R = M?.ranks || {}, ours = Object.keys(R).filter((b) => DASH.stocks.some((x) => x.code === AMZ.brands?.[b]?.stock));
+  const rk = ours.map((b) => `<details style="margin-top:6px"><summary><b>${esc(b)}</b> 제품별 순위 <span class="src">${esc(AMZ.brands[b].company)} · 숫자 = 그 나라 Top100 순위 · 눌러서 보기</span></summary>
     <div class="tbl-wrap"><table class="compact" style="width:100%;text-align:center"><thead><tr><th style="text-align:left">제품</th>${ci.slice(0, IT).map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
     <tbody>${Object.entries(R[b]).map(([p, r]) => `<tr><td style="text-align:left">${esc(p)}</td>${ci.slice(0, IT).map((c) => `<td>${r[c] ? (r[c] <= 10 ? `<b>${r[c]}</b>` : r[c]) : '<span class="src">–</span>'}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>`).join("");
-  return `<div class="chart-title" style="margin-top:14px"><b>🔍 크로스체크 (같은 날 세 채널)</b> <span class="src">${bad ? `다른 칸 ${bad}개 (빨간 글씨) — 채널마다 순위를 잰 시각이 달라서 조금씩 차이가 나요` : "세 채널 숫자가 모두 같아요"} · 한투 합계는 이탈리아 빼고 비교</span></div>
-    <div class="tbl-wrap"><table class="compact" style="width:100%;text-align:center"><thead><tr><th style="text-align:left">브랜드</th><th>출처</th>${ci.map((c, i) => `<th>${AMZ.flags?.[i] || ""}</th>`).join("")}<th>합계</th></tr></thead><tbody>${rows}</tbody></table></div>
-    ${rk ? `<div style="margin-top:10px">${rk}</div>` : ""}`;
+  return `<div class="note src" style="margin-top:10px">🔍 같은 날 ${[K && "교보", M && "한투"].filter(Boolean).join("·")} 숫자와 비교: ${bad ? `${cmp}칸 중 ${bad}칸이 조금 달라요 (채널마다 순위를 잰 시각이 달라서)` : `${cmp}칸 모두 같아요`}</div>${rk}`;
 }
 function drawAmz() {
   const C = themeColors(), A = AMZ, ds = Object.keys(A.days).sort(), last = A.days[ds[ds.length - 1]].counts;
@@ -4918,7 +4915,7 @@ function estAlertHTML() {  // 첫 화면: 방향 개수 + 변곡점 종목만
   if (!L.length) return "";
   const cnt = (s) => L.filter((c) => c.est.sig === s).length, turn = L.filter((c) => /전환|꺾임/.test(c.est.sig));
   return `<div class="card" style="margin-bottom:12px"><b>📈 이익 추정치 방향</b> <span class="src">증권사 예상 이익이 올라가면 기대감·수급이 따라올 수 있어요 · 매일 갱신 · 참고용</span>
-    <div style="margin-top:4px">${Object.keys(EST_ORD).map((s) => `${s} <b>${cnt(s)}</b>`).join(" · ")} · <a href="#reports">리포트 탭 방향판 →</a></div>
+    <div style="margin-top:4px">${Object.keys(EST_ORD).map((s) => `${s} <b>${cnt(s)}</b>`).join(" · ")}</div>
     ${turn.length ? `<ul class="irl">${turn.map((c) => `<li><a href="#stock/${esc(c.code)}">${esc(c.name)}</a> <b>${esc(c.est.sig)}</b> — ${esc(c.est.y)}년 ${esc(c.est.what)} 예상 1주 ${estP(c.est["1주"])} · 1개월 ${estP(c.est["1개월"])}</li>`).join("")}</ul>` : ""}</div>`;
 }
 /* ---------- 📐 주봉 차트 모양 (collector/patterns.py → stocks/{코드}.json pattern · 카드 pat) — 조건에 맞는 모양만 알려 줌, 매수·매도 판단 아님 ---------- */
@@ -4971,16 +4968,6 @@ function patHTML(d) {  // 종목 상세: 차트 + 조건 설명
       <li>🚀 <b>전고점 돌파</b>: 13주 넘게 못 넘던 큰 고점을 주봉 종가로 넘음 · 🧪 <b>지지 시험</b>: 넘었던 전고점까지 다시 내려옴 — 예전에 막던 가격이 이제 받쳐 주는지 보는 자리</li>
     </ul></div>
     <div class="note src">주봉 종가로만 계산해요 (장중 꼬리는 안 봄) · 모양이 맞아도 실패가 많아요 · 매수·매도 추천이 아니에요</div></div></details>`;
-}
-function estBoardHTML(mkt) {  // 리포트 탭: 종목마다 추정치 1주·1개월·3개월 + 목표가 30일 올림·내림
-  const L = (DASH?.stocks || []).filter((c) => c.est && mktOf(c.code) === mkt)
-    .sort((a, b) => (EST_ORD[a.est.sig] ?? 5) - (EST_ORD[b.est.sig] ?? 5) || (b.est["1개월"] ?? -999) - (a.est["1개월"] ?? -999));
-  if (!L.length) return `<div class="note src">📈 이익 추정치는 매일 쌓는 중이에요 — 다음 갱신부터 표가 생겨요.</div>`;
-  return `<h3>📈 이익 추정치 · 목표주가 방향판 <span class="src">${mkt === "KR" ? "내년 영업이익 예상 (와이즈리포트 컨센서스)" : "내년 EPS 예상 (야후 컨센서스)"} · 목표가는 최근 30일 · 변곡점(🔄·⚠)이 위로</span></h3>
-    <div class="card"><div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">종목</th><th>신호</th><th>1주</th><th>1개월</th><th>3개월</th><th>목표가 30일</th></tr></thead><tbody>
-    ${L.map((c) => { const [u, d] = tpCnt(c.code); return `<tr><td style="text-align:left"><a href="#stock/${esc(c.code)}">${esc(c.name)}</a> <span class="src">${esc(c.est.y)}E</span></td><td>${esc(c.est.sig || "")}</td><td>${estP(c.est["1주"])}</td><td>${estP(c.est["1개월"])}</td><td>${estP(c.est["3개월"])}</td>
-      <td>${u || d ? `<b style="color:var(--good-ink)">▲${u}</b> <b style="color:var(--bad-ink)">▼${d}</b>` : '<span class="src">-</span>'}</td></tr>`; }).join("")}</tbody></table></div>
-    <div class="note src">🔄 상향 전환? = 한 달 동안 내려가다 최근 1주 올라감 · ⚠ 꺾임? = 한 달 동안 오르다 최근 1주 내려감 · 한국은 매일 쌓기 시작한 날부터 비교돼요 (1주·1개월 칸은 그만큼 지나야 채워짐)</div></div>`;
 }
 function estHTML(d) {  // 종목 상세: 연도별 추정치 지금 vs 1일·1주·1개월·3개월·6개월·1년 전 + 흐름 그림 + 다른 출처(블룸버그 등)
   const e = d.est, sd = e?.seed, tw = (TGR?.stocks?.[d.code] || []).filter((x) => x.est_w != null).slice(0, 8);
@@ -5145,20 +5132,68 @@ async function loadReports() {
   try { await repGet(); } catch (_) { $("#reportsBody").innerHTML = `<div class="empty">리포트를 아직 못 받았어요. 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
   try { await newsGet(); } catch (_) { /* 해외 증권사 기사만 빠짐 */ }
   try { await tgGet(); } catch (_) { /* 텔레그램 채널 글만 빠짐 */ }
-  const all = REPS.stocks || [], grps = ["전체", ...new Set(all.map((r) => r.group))];
+  const all = REPS.stocks || [], grps = ["전체", ...new Set(all.map((r) => r.group)), "산업"];  // 🏭 산업 = 우리 종목 업종 산업 리포트 6개월 (사용자 11/5)
   $("#reportsIntro").innerHTML = `${esc(REPS.updated_at || "")} 갱신 · ${esc(REPS.src || "")}<br><span class="src">원문은 증권사 PDF 링크로만 — 여기엔 숫자와 짧은 요약 · 참고용 (매수·매도 추천 아님)</span>`;
   const latest = (r) => r.notes?.[0]?.d || r.list?.[0]?.d || "";
   const list = REP_CODE ? all.filter((r) => r.code === REP_CODE)
     : all.filter((r) => r.market === REP_MKT && (REP_GRP === "전체" || r.group === REP_GRP)).sort((a, b) => latest(b).localeCompare(latest(a)));
-  $("#reportsBody").innerHTML = (REP_CODE ? `<div class="note"><a href="#reports">← 전체 종목 리포트</a></div>` : `<div class="seg repmk" style="margin-bottom:8px"><button data-mk="KR" class="${REP_MKT === "KR" ? "on" : ""}">🇰🇷 한국 리포트</button><button data-mk="US" class="${REP_MKT === "US" ? "on" : ""}">🇺🇸 미국 리포트</button></div>
-    <div class="chips repgrp" style="margin-bottom:10px">${grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === REP_GRP ? "on" : ""}">${esc(g)}</button>`).join("")}</div>${tgWeekHTML(REP_MKT)}${estBoardHTML(REP_MKT)}`)
-    + `<div class="grid g2">${list.map((r) => `<div class="card" id="rep-${esc(r.code)}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:17px">${esc(r.name)}</b>
-      <span class="src">${esc(r.group)} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>${repSum(r)}${(r.notes || []).map((x) => repNote(x, r.market)).join("")}${repTable(r, 15)}${tgHTML(r.code, 15)}${ibHTML(r.code)}</div>`).join("") || `<div class="empty">리포트가 없어요.</div>`}</div>`;
+  const find = `<input id="repQ" class="sel" type="search" value="${esc(REP_Q)}" placeholder="🔎 기업명·종목코드로 리포트 찾기 (예: 에코프로, 005930)" aria-label="기업명으로 리포트 찾기" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:6px"><div id="repFind">${repFindHTML()}</div>`;
+  $("#reportsBody").innerHTML = find + (REP_CODE ? `<div class="note"><a href="#reports">← 전체 종목 리포트</a></div>` : `<div class="seg repmk" style="margin-bottom:8px"><button data-mk="KR" class="${REP_MKT === "KR" ? "on" : ""}">🇰🇷 한국 리포트</button><button data-mk="US" class="${REP_MKT === "US" ? "on" : ""}">🇺🇸 미국 리포트</button></div>
+    <div class="chips repgrp" style="margin-bottom:10px">${grps.map((g) => `<button data-g="${esc(g)}" class="chip ${g === REP_GRP ? "on" : ""}">${g === "산업" ? "🏭 " : ""}${esc(g)}</button>`).join("")}</div>${REP_GRP === "산업" ? "" : tgWeekHTML(REP_MKT)}`)
+    + (REP_GRP === "산업" && !REP_CODE ? indRepHTML() : `<div class="grid g2">${list.map((r) => `<div class="card" id="rep-${esc(r.code)}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:17px">${esc(r.name)}</b>
+      <span class="src">${esc(r.group)} · <a href="#stock/${esc(r.code)}">상세 화면</a></span></div>${repSum(r)}${(r.notes || []).map((x) => repNote(x, r.market)).join("")}${repTable(r, 15)}${tgHTML(r.code, 15)}${ibHTML(r.code)}</div>`).join("") || `<div class="empty">리포트가 없어요.</div>`}</div>`);
 }
+// 🏭 산업 리포트 (reports.json industry ← 한경 컨센서스 산업 리포트 6개월, 제목 낱말로 우리 업종에 짝지음) — ⭐ 인뎁스(20쪽+) 먼저
+const indRow = (x) => `<li><span class="src">${mdDay(x.d)}</span> ${x.deep ? "⭐ <b>" : ""}<a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>${x.deep ? "</b>" : ""} <span class="src">${esc(x.firm)}${x.p ? ` · ${x.p}쪽` : ""}${x.more ? ` · 같은 제목 ${x.more}번 더 (최신만)` : ""}</span></li>`;
+const indUniq = (L) => { const m = new Map(); for (const x of L) { const k = `${x.firm}|${x.t}`; if (m.has(k)) m.get(k).more++; else m.set(k, { ...x, more: 0 }); } return [...m.values()]; };  // 'F&B Weekly Talk' 같은 연재물은 최신 한 줄로 (중복 빼기)
+function indRepHTML() {
+  const I = REPS.industry || [], S = DASH.stocks.filter((c) => mktOf(c.code) === "KR" && c.industry && !/우$/.test(c.name));
+  const inds = [...new Set(["보유", "관심", "공동"].flatMap((g) => S.filter((c) => c.group === g).map((c) => c.industry)))];
+  const cut = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), newDeep = indUniq(I.filter((x) => x.deep && x.d >= cut)).slice(0, 10);
+  const empty = [], body = inds.map((k) => {
+    const L = I.filter((x) => x.inds.includes(k)), D = indUniq(L.filter((x) => x.deep)), R = indUniq(L.filter((x) => !x.deep));
+    if (!L.length) { empty.push(k); return ""; }
+    const who = [...new Set(S.filter((c) => c.industry === k).map((c) => `${c.name}${c.group === "보유" ? "" : `(${c.group})`}`))].join("·");
+    return `<details class="card" style="margin-bottom:8px"><summary><b>${esc(k)}</b> <span class="src">${esc(who)} · ${L.length}개 · ⭐ ${D.length}</span></summary>
+      ${D.length ? `<ul class="irl" style="list-style:none;padding-left:2px">${D.map(indRow).join("")}</ul>` : ""}
+      ${R.length ? `<details style="margin-top:6px"${D.length ? "" : " open"}><summary class="src">그 밖의 리포트 ${R.length}개 (최신 순)</summary><ul class="irl" style="list-style:none;padding-left:2px">${R.map(indRow).join("")}</ul></details>` : ""}</details>`;
+  }).join("");
+  return `<div class="card" style="margin-bottom:10px"><b>🏭 산업 리포트 — 보유·관심·공동 종목 업종 · 최근 6개월</b>
+    <div class="src">⭐ = 인뎁스 (20쪽 넘는 리포트 · 쪽수를 아직 못 센 건 제목에 연간전망·Outlook·심층) · 업종은 제목 낱말로 짝지어서 가끔 엉뚱하게 붙을 수 있어요 · 원문 = 한경 컨센서스 PDF · 확인 ${esc(REPS.updated_at || "")}</div>
+    ${newDeep.length ? `<div style="margin-top:8px"><b>🆕 최근 30일 ⭐ 인뎁스</b></div><ul class="irl" style="list-style:none;padding-left:2px">${newDeep.map((x) => indRow(x).replace("</li>", ` <span class="qtag">${esc(x.inds.join("·"))}</span></li>`)).join("")}</ul>` : ""}</div>
+    ${body}${empty.length ? `<div class="note src">6개월 동안 짝지어진 산업 리포트 없음: ${esc(empty.join(" · "))}</div>` : ""}`;
+}
+// 🔎 기업명 검색 (사용자 11/5): 우리 종목 + 한경 6개월 기업 리포트 전부(rep_all.json, 처음 입력할 때만 받음) + 산업 리포트 제목
+let REPA = null, REP_Q = "", REP_PICK = "";
+const repAllGet = async () => { if (!REPA) { try { REPA = await (await fetch("data/rep_all.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { REPA = { rows: [] }; } } return REPA; };
+const HK_PDF = "https://consensus.hankyung.com/analysis/downpdf?report_idx=";
+function repFindHTML() {
+  const q = REP_Q.trim().toLowerCase();
+  if (!q) return "";
+  const co = new Map(), hit = (name, code) => name.toLowerCase().includes(q) || code.toLowerCase().startsWith(q);
+  for (const r of REPS?.stocks || []) if (hit(r.name, r.code)) co.set(r.code, { name: r.name, ours: r, n: 0 });
+  for (const x of REPA?.rows || []) if (hit(x[2], x[1])) { if (!co.has(x[1])) co.set(x[1], { name: x[2], n: 0 }); co.get(x[1]).n++; }
+  const C = [...co.entries()].sort((a, b) => !!b[1].ours - !!a[1].ours || b[1].n - a[1].n).slice(0, 12);
+  const pick = REP_PICK && co.get(REP_PICK), P = pick ? (REPA?.rows || []).filter((x) => x[1] === REP_PICK) : [];
+  const ind = (REPS?.industry || []).filter((x) => x.t.toLowerCase().includes(q)).slice(0, 8);
+  return `<div class="card" style="margin-bottom:10px">${C.length ? `<div class="chips">${C.map(([c, v]) => `<button class="chip${c === REP_PICK ? " on" : ""}" data-find="${esc(c)}" data-ours="${v.ours ? 1 : ""}">${esc(v.name)} <span class="src">${v.ours ? esc(v.ours.group) + " · " : ""}${v.n ? `${v.n}개` : esc(c)}</span></button>`).join("")}</div>` : `<div class="src">'${esc(REP_Q)}' — 최근 6개월 한경 컨센서스 기업 리포트에 없는 이름이에요${REPA ? "" : " (목록 받는 중…)"}</div>`}
+    ${pick ? `<div style="margin-top:8px"><b>${esc(pick.name)}</b> <span class="src">${esc(REP_PICK)} · 최근 6개월 ${P.length}개 · 한경 컨센서스</span><div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">날짜 · 증권사</th><th style="text-align:left">제목</th><th>목표주가</th><th>의견</th></tr></thead><tbody>
+      ${P.slice(0, 40).map((x) => `<tr><td style="text-align:left;white-space:nowrap"><span class="src">${esc(mdDay(x[0]))}</span> ${esc(x[6])}</td><td style="text-align:left;white-space:normal;min-width:12em"><a href="${HK_PDF}${esc(x[7])}" target="_blank" rel="noopener">${esc(x[3])}</a></td><td>${x[4] ? n(x[4], 0) + "원" : "-"}</td><td>${esc(x[5] || "")}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
+    ${ind.length ? `<div style="margin-top:8px"><b>🏭 산업 리포트 제목에 '${esc(REP_Q)}'</b></div><ul class="irl" style="list-style:none;padding-left:2px">${ind.map(indRow).join("")}</ul>` : ""}
+    <div class="src" style="margin-top:4px">이름을 누르면 리포트 목록 · 보유·관심·공동 종목은 요약·목표가 변화까지 있는 칸으로 가요</div></div>`;
+}
+document.addEventListener("input", async (e) => {
+  if (e.target.id !== "repQ") return;
+  REP_Q = e.target.value; REP_PICK = "";
+  $("#repFind").innerHTML = repFindHTML();
+  if (REP_Q.trim() && !REPA) { await repAllGet(); $("#repFind").innerHTML = repFindHTML(); }
+});
 document.addEventListener("click", (e) => {
-  const m = e.target.closest("#reportsBody .repmk button"), g = e.target.closest("#reportsBody .repgrp button");
+  const m = e.target.closest("#reportsBody .repmk button"), g = e.target.closest("#reportsBody .repgrp button"), f = e.target.closest("#repFind [data-find]");
   if (m) { REP_MKT = m.dataset.mk; loadReports(); }
   if (g) { REP_GRP = g.dataset.g; loadReports(); }
+  if (f && f.dataset.ours) { REP_PICK = ""; location.hash = `#reports/${f.dataset.find}`; }
+  else if (f) { REP_PICK = REP_PICK === f.dataset.find ? "" : f.dataset.find; $("#repFind").innerHTML = repFindHTML(); }
 });
 // 🎯 증권사 시각 (종목 상세, 핵심 이슈 아래): 요약 1개 + 최근 리포트 4개 → 리포트 탭으로
 async function repBlock(code) {

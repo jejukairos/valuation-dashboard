@@ -8,7 +8,7 @@ import time
 from datetime import timedelta
 from html import unescape
 
-from common import CACHE, HTTP, REPORT, load_yaml, now_kst, read_json, write_json
+from common import CACHE, DATA, HTTP, REPORT, load_yaml, now_kst, read_json, write_json
 
 HK = "https://consensus.hankyung.com"
 KEEP = 30  # 종목당 최근 리포트 수
@@ -126,22 +126,37 @@ def kr(code, days=DAYS, budget=None):
 
 # 🏭 산업 리포트 → 우리 업종(stocks.yaml industry) 짝짓기: 제목 낱말 + 한경 업종 번호 중 뜻이 분명한 것만
 # shortcut: 제목 낱말로만 짝지음 — 제목에 업종 말이 없으면 놓치거나 엉뚱하게 붙을 수 있음, 틀린 게 자주 보이면 낱말을 고칠 것
+# (인터넷의 '게임'은 '치킨 게임'·'본게임'까지 걸려서 11/5 뺌)
 IND_RE = {"화장품": r"화장품|뷰티|Beauty|코스메틱|ODM", "반도체": r"반도체|메모리|HBM|D램|DRAM|낸드|NAND|파운드리|Semi|후공정",
-          "인터넷": r"인터넷|게임|플랫폼|웹툰|포털", "조선": r"조선|LNG선|선박|해운", "조선기자재": r"조선|LNG선|선박|기자재",
+          "인터넷": r"인터넷|플랫폼|웹툰|포털|네이버|NAVER|커머스", "조선": r"조선|LNG선|선박|해운", "조선기자재": r"조선|LNG선|선박|기자재",
           "자동차": r"자동차|완성차|Auto|전기차|판매량", "자동차부품": r"자동차|완성차|Auto|전기차|부품", "방산": r"방산|방위|국방|Defen[cs]e",
           "방산·철도": r"방산|방위|국방|철도", "건설·원전": r"건설|원전|원자력|SMR|주택|해외수주", "원자력·전력기기": r"원전|원자력|SMR|전력기기|변압기|전선|케이블",
           "전력": r"전력|유틸리티|한전|발전", "ESS·부품": r"ESS|배터리|2차전지|이차전지|양극재|LFP", "기판": r"기판|PCB|MLCC|FC-?BGA|CCL",
           "기판·전자부품": r"기판|PCB|MLCC|FC-?BGA|CCL|전자부품", "OLED 소재": r"OLED|디스플레이", "엔터": r"엔터|K-?pop|케이팝|음반|콘서트|아이돌",
           "유통": r"유통|리테일|Retail|백화점|편의점|면세", "음식료": r"음식료|F&B|식품|라면|음료|주류", "의료기기": r"의료기기|미용기기|에스테틱|메디컬",
-          "의류": r"의류|패션|OEM|아웃도어|섬유", "증권": r"증권|브로커리지", "지주": r"지주", "항공": r"항공|여객|LCC"}
-IND_CODE = {"029": ["자동차", "자동차부품"], "152": ["조선", "조선기자재"], "153": ["인터넷"]}
+          "의류": r"의류|패션|OEM|아웃도어|섬유", "증권": r"증권|브로커리지", "지주": r"지주", "항공": r"항공|여객|LCC",
+          "2차전지": r"2차전지|이차전지|배터리|Battery|양극재|음극재|리튬|전고체|셀\s*업체", "정유·2차전지": r"정유|정제마진|석유|Refin|2차전지|이차전지|배터리"}
+IND_CODE = {"152": ["조선", "조선기자재"]}  # 029(항공·스페이스X 섞임)·153(철강·코인 섞임)은 뺌 (11/5, 6개월치 보고)
+SKIP_RE = r"\bDaily\b|데일리|Coverage at a Gla"  # 매일 나오는 짧은 글·담당 종목 표는 6개월 목록에서 뺌 (중복)
+# ⭐ 인뎁스 (사용자 11/5 '인뎁스 리포트면 더 중요 별표시'): PDF 가 20쪽 이상 — 쪽수를 아직 못 셌으면 제목(연간전망·Outlook·심층 등)으로
+DEEP_PAGES = 20
+DEEP_RE = r"전망|Outlook|심층|In-?depth|Deep[\s-]?dive|딥\s?다이브|인뎁스|Initiation|산업\s*분석|Big\s*Picture"
+PAGES = {}  # report_idx → 쪽수 (cache/ind_pages.json, 한 번 센 PDF 는 다시 안 받음 · 못 읽으면 0)
 
 
-def industry(days=2):
-    """한경 컨센서스 산업 리포트 (최근 days 일) → [{d, t, firm, who, u, inds}] (inds = 짝지은 우리 업종, 없으면 뺌)."""
+def pdf_pages(url):
+    import io
+
+    import pypdf
+    r = HTTP.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)  # 한경은 크기만 알려 주지 않아서 통째로 받아 셈
+    return len(pypdf.PdfReader(io.BytesIO(r.content)).pages)
+
+
+def industry(days=183, budget=None):
+    """한경 컨센서스 산업 리포트 (최근 days 일, 사용자 11/5 '6개월치') → [{d, t, firm, who, u, inds, p 쪽수, deep}] (inds = 짝지은 우리 업종, 없으면 뺌)."""
     now = now_kst()
     r = HTTP.get(f"{HK}/analysis/list", params={"skinType": "industry", "sdate": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
-                                                "edate": now.strftime("%Y-%m-%d"), "report_type": "IN", "pagenum": 200},
+                                                "edate": now.strftime("%Y-%m-%d"), "report_type": "IN", "pagenum": 5000},  # 6개월 ≈ 1,100개를 한 번에
                  headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
     r.encoding = "utf-8"
     out = []
@@ -152,9 +167,37 @@ def industry(days=2):
         td = [unescape(re.sub(r"<[^>]+>", " ", x)).strip() for x in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)] + [""] * 5
         t, c = re.sub(r"\s+", " ", unescape(a.group(2))).strip(), re.search(r"industry_code=(\w+)", row)
         inds = sorted({k for k, rx in IND_RE.items() if re.search(rx, t, re.I)} | set(IND_CODE.get(c.group(1) if c else "", [])))
-        if inds:
-            out.append({"d": td[0], "t": t, "who": td[3], "firm": td[4], "u": HK + a.group(1), "inds": inds})
+        if not inds or re.search(SKIP_RE, t, re.I):
+            continue
+        x, k = {"d": td[0], "t": t, "who": td[3], "firm": td[4], "u": HK + a.group(1), "inds": inds}, a.group(1).rsplit("=", 1)[-1]
+        if k not in PAGES and budget and budget[0] > 0:  # 최신 것부터 한 번에 budget 개까지 쪽수 세기
+            try:
+                PAGES[k] = pdf_pages(x["u"])
+            except Exception:  # noqa: BLE001
+                PAGES[k] = 0
+            budget[0] -= 1
+            time.sleep(0.5)
+        if PAGES.get(k):
+            x["p"] = PAGES[k]
+        if (x.get("p") or 0) >= DEEP_PAGES or (not x.get("p") and re.search(DEEP_RE, t, re.I)):
+            x["deep"] = 1
+        out.append(x)
     return out
+
+
+def all_co(days=183):
+    """🔎 리포트 탭 검색용: 한경 컨센서스 6개월 기업 리포트 전부 (우리 종목 아니어도) → 짧은 줄 [날짜, 코드, 이름, 제목, 목표가, 의견, 증권사, report_idx]."""
+    now = now_kst()
+    r = HTTP.get(f"{HK}/analysis/list", params={"skinType": "business", "sdate": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
+                                                "edate": now.strftime("%Y-%m-%d"), "report_type": "CO", "pagenum": 20000},
+                 headers={"User-Agent": "Mozilla/5.0"}, timeout=120)
+    r.encoding = "utf-8"
+    rows = []
+    for x in parse_hk(r.text):
+        m = re.match(r"\s*(.+?)\s*\(([0-9A-Z]{6})\)\s*(.*)", x["t"])  # '삼성전자(005930) 제목' · 새 코드는 '0011T0' 처럼 글자 섞임
+        if m:
+            rows.append([x["d"], m.group(2), m.group(1), m.group(3), x["tp"], x["rating"], x["firm"], x["u"].rsplit("=", 1)[-1]])
+    return {"updated_at": now.strftime("%Y-%m-%d %H:%M"), "src": "한경 컨센서스 공개 목록 (최근 6개월 기업 리포트)", "rows": rows}
 
 
 def collect(todo):
@@ -181,12 +224,19 @@ def collect(todo):
             lst = []
         out.append({"code": code, "name": h["name"], "market": mkt, "group": g, "notes": notes.get(code) or [], "list": lst})
     write_json(CACHE / "reports_pdf.json", PDF)
+    PAGES.update(read_json(CACHE / "ind_pages.json") or {})
+    pb = [80]  # 산업 리포트 쪽수 세기: 한 번에 PDF 80개까지 (처음 6개월치는 여러 번에 나눠 채워짐)
     try:
-        ind = industry()
+        ind = industry(budget=pb)
     except Exception as e:  # noqa: BLE001
         REPORT.block("증권사 리포트", f"산업 리포트: {str(e)[:60]}")
         ind = []
-    print(f"  리포트: {sum(len(x['list']) for x in out)}건 · 요약 {sum(len(x['notes']) for x in out)}건 · PDF 새로 {150 - budget[0]}개 · 산업 {len(ind)}건")
+    write_json(CACHE / "ind_pages.json", PAGES)
+    try:
+        write_json(DATA / "rep_all.json", all_co())
+    except Exception as e:  # noqa: BLE001  — 검색 목록만 지난 것 그대로
+        REPORT.block("증권사 리포트", f"검색용 전체 목록: {str(e)[:60]}")
+    print(f"  리포트: {sum(len(x['list']) for x in out)}건 · 요약 {sum(len(x['notes']) for x in out)}건 · PDF 새로 {150 - budget[0]}개 · 산업 {len(ind)}건 (⭐ {sum(1 for x in ind if x.get('deep'))} · 쪽수 새로 {80 - pb[0]}개)")
     return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "src": "한국 = 한경 컨센서스 공개 목록 · 미국 = 야후 증권사 의견 변경 · 요약 = config/reports.yaml",
             "stocks": out, "industry": ind}
 
@@ -216,6 +266,9 @@ if __name__ == "__main__":
         assert val_basis("Valuation 지표 EPS 24,413 BPS 141,812 EV/EBITDA 3.1") == ""  # 값 표
         assert rate_key("Buy") == rate_key("매수") == rate_key("BUY ") and rate_key("Hold") != rate_key("Buy") and rate_key("Trading Buy") == "TBUY"
         assert rate_key("투자의견없음") == rate_key("Not Rated") == rate_key("N/A") == "NR" and rate_key(None) == ""
+        assert re.search(DEEP_RE, "[2027년 연간전망] 2027, 왜 다시 2차전지인가") and not re.search(DEEP_RE, "[인터넷/게임] IBKS Daily")
+        assert re.search(IND_RE["2차전지"], "2027, 왜 다시 2차전지인가") and not re.search(IND_RE["2차전지"], "은행 중심 방어력")
+        assert {"조선", "조선기자재", "자동차", "인터넷"} <= set(IND_RE) and not re.search(IND_RE["인터넷"], "CLARITY Act = 치킨 게임")
         print("ok")
     elif sys.argv[1:] == ["--all"]:  # 리포트만 따로 갱신 (tg.yml 저녁 매시간) — 본 갱신(main.py)과 같은 종목 목록
         from common import DATA
