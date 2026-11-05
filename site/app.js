@@ -4226,9 +4226,15 @@ function drawHTML(list, at) {
       + `<div class="src">오닐 조건: 앞선 상승 +${p.pre}% ${ok(p.pre >= 25)} · 깊이 ${p.depth}% ${ok(p.depth <= 33)}(12~33%) · 기간 ${p.wk}주 ${ok(p.wk >= 7)}(7주+) · 손잡이 ${p.st === "handle" || p.st === "out" ? `${n(p.dip, 1)}% 눌림 ✅` : "⬜ 아직"}</div>`);
     if (q) lines.push(`📏 채널: <b style="color:${q.st === "below" ? "var(--warn-ink)" : "inherit"}">${q.st === "below" ? "지지선 아래로 이탈" : q.st === "above" ? "저항선 위" : "채널 안"}</b> ${q.run}${u === "주" ? "주" : "일"}째 — 지지선 ${fmt(q.lo)} (${sg((x.last / q.lo - 1) * 100, 1)}) · 저항선 ${fmt(q.up)} (${sg((x.last / q.up - 1) * 100, 1)})`
       + `<div class="src">${q.a >= 0 ? t[q.a] : ""} 저점과 ${t[q.b]} 저점을 이은 지지선 (그 사이 한 번도 안 깨짐) · 저항선은 같은 기울기${q.was_above && q.st !== "above" ? " · 한때 저항선 위로 올라갔다가 다시 내려옴" : ""}</div>`);
+    const M = x.mm;  // Ⓜ M자 (쌍봉): 고점과 고점·저점과 저점이 낮아짐 (사용자 11/6 EWY 주봉 그림)
+    if (M) lines.push(`Ⓜ M자(쌍봉): <b style="color:${M.st === "form" ? "inherit" : "var(--warn-ink)"}">${{ below: "고점도 저점도 낮아짐 — 가운데 골(목선) 아래", dipped: "목선 아래로 갔다가 다시 위", form: "두 번째 고점이 더 낮음 · 목선은 아직 위" }[M.st]}</b>`
+      + `<div class="src">고점 ${t[M.a]} ${fmt(M.A)} → ${t[M.c]} ${fmt(M.C)} (<b>${sg(M.lh, 1)}</b>) · 저점 ${t[M.b]} ${fmt(M.B)} → ${t[M.d]} ${fmt(M.D)} (<b>${sg(M.ll, 1)}</b>) · 목선 = 두 고점 사이 가장 낮은 종가 ${fmt(M.B)}, 지금 ${sg((x.last / M.B - 1) * 100, 1)}</div>`);
     const over = (X, Y) => {
       let g = "";
       const path = (pts) => pts.map(([i, v], j) => `${j ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+      if (M) g += `<path d="${path([[M.s, x.ch.c[M.s]], [M.a, M.A], [M.b, M.B], [M.c, M.C], [N - 1, x.last]])}" fill="none" stroke="var(--warn)" stroke-width="6" stroke-opacity=".7" stroke-linecap="round" stroke-linejoin="round"/>`
+        + `<line x1="${X(M.b)}" x2="${X(N - 1)}" y1="${Y(M.B)}" y2="${Y(M.B)}" stroke="var(--warn-ink)" stroke-width="1.5" stroke-dasharray="5 4"/>`
+        + [[M.a, M.A, "고점1"], [M.c, M.C, "고점2"], [M.b, M.B, "저점1"]].map(([i, v, s], j) => `<text x="${X(i)}" y="${Y(v) + (j < 2 ? -8 : 16)}" text-anchor="middle" class="qx" style="font-weight:700">${s}</text>`).join("");
       if (p) g += `<path d="${path(p.path.map((v, j) => [p.a + j, v]))}" transform="translate(0,7)" fill="none" stroke="var(--good)" stroke-width="9" stroke-opacity=".3" stroke-linecap="round" stroke-linejoin="round"/>`;
       if (q) {
         const i0 = Math.max(0, q.a), ln = (k) => path(Array.from({ length: N - i0 }, (_, j) => [i0 + j, Math.exp(q.la + q.s * (i0 + j - q.a) + k)]));
@@ -4242,7 +4248,7 @@ function drawHTML(list, at) {
     const ref = p ? (p.st === "handle" || p.st === "out" ? { v: p.R, t: "손잡이 고점" } : { v: p.H, t: "컵 왼쪽 고점" }) : null;
     // 📅 일봉·주봉·월봉·연봉 (사용자 11/4) — 기본 봉엔 계산한 선까지, 다른 봉은 캔들 + 이평선만 (board.py draw tfs)
     const TFN = { d: "일봉", w: "주봉", m: "월봉", y: "연봉" };
-    const cap = (tf) => (tf === x.tf ? `${wk ? "주봉 2년 · 로그 눈금 · 초록 20주선 · 회색 50주선(≈1년 평균)" : al ? "일봉 약 10개월 · 파랑 5일 · 초록 20일 · 주황 60일 · 빨강 120일선" : "일봉 약 10개월 · 초록 20일선 · 회색 50일선 · 주황 200일선"}${vs ? " · 빨간 띠 = 거래량 지지대" : ""}${q ? " · 보라 = 지지선·저항선" : ""}${p ? " · 연두 띠 = 컵 모양" : ""}`
+    const cap = (tf) => (tf === x.tf ? `${wk ? "주봉 2년 · 로그 눈금 · 초록 20주선 · 회색 50주선(≈1년 평균)" : al ? "일봉 약 10개월 · 파랑 5일 · 초록 20일 · 주황 60일 · 빨강 120일선" : "일봉 약 10개월 · 초록 20일선 · 회색 50일선 · 주황 200일선"}${vs ? " · 빨간 띠 = 거래량 지지대" : ""}${q ? " · 보라 = 지지선·저항선" : ""}${p ? " · 연두 띠 = 컵 모양" : ""}${M ? " · 주황 굵은 선 = M자 · 점선 = 목선" : ""}`
       : `${{ d: "일봉 약 10개월", w: "주봉 2년 · 로그 눈금", m: "월봉 10년 · 로그 눈금", y: "연봉 (올해 봉은 진행 중) · 로그 눈금" }[tf]} · 이평선 ${Object.keys(x.tfs[tf]?.ma || {}).join("·")}${{ d: "일", w: "주", m: "개월", y: "년" }[tf]}${tf === "w" ? " (30주선 = 와인스타인 기준선)" : ""} · 계산한 선은 ${TFN[x.tf]}에서만`);
     DRAWBOX[i] = (tf) => (tf === x.tf || x.tfs?.[tf] ? `${tf === x.tf ? candleSVG(x.ch, x.tf, fmt, ref, over) : candleSVG(x.tfs[tf], tf, fmt)}<div class="src">${cap(tf)} · ${esc(x.date)} 종가</div>` : "");
     const tfBtn = `<div class="seg dtfseg" data-di="${i}" style="margin-top:6px">${["d", "w", "m", "y"].filter((k) => k === x.tf || x.tfs?.[k]).map((k) => `<button data-dtf="${k}" class="${k === x.tf ? "on" : ""}">${TFN[k]}</button>`).join("")}</div>`;
@@ -4251,9 +4257,9 @@ function drawHTML(list, at) {
       ${tfBtn}<div class="cbox" data-di="${i}">${DRAWBOX[i](x.tf)}</div>
       ${x.memo ? `<div class="note src">🗣 ${esc(x.memo)}</div>` : ""}</div>`;
   };
-  return `<h2 data-jump="draw" data-jname="✏️ 선 그은 차트">✏️ 선 그은 차트 <span class="src">컵위드핸들 · 200일선 · 지지선·저항선 채널 · 역배열·거래량 지지대 · 일·주·월·연봉 · ${esc(at || "")}</span></h2>
+  return `<h2 data-jump="draw" data-jname="✏️ 선 그은 차트">✏️ 선 그은 차트 <span class="src">컵위드핸들 · 200일선 · 지지선·저항선 채널 · M자 · 역배열·거래량 지지대 · 일·주·월·연봉 · ${esc(at || "")}</span></h2>
     <div class="grid g2">${list.map(card).join("")}</div>
-    <div class="kidbox">🐣 <b>컵위드핸들</b>(윌리엄 오닐): 주가가 커피잔처럼 둥글게 내려갔다 올라온 뒤, 손잡이처럼 살짝 쉬었다가 손잡이 고점을 넘는 모양이에요. <b>200일선</b>: 약 10개월 평균 가격 — 위에 있으면 큰 흐름이 위쪽이에요. <b>채널</b>: 바닥끼리 이은 선(지지선)과, 같은 기울기로 꼭대기에 닿는 선(저항선) 사이 길 — 지지선 아래로 내려오면 오르던 길을 벗어난 거예요. <b>역배열</b>: 이평선은 그 기간에 산 사람들의 평균 가격(평단)이에요. 긴 선(120일)이 맨 위·짧은 선(5일)이 맨 아래로 줄 서면, 6개월 안에 산 사람이 모두 손해 중이라 오를 때마다 '본전이면 팔자'는 물량이 겹겹이 나와요. <b>거래량 지지대</b>: 많이 사고판 가격대라 받침이 강해요 — 대신 깨지면 떨어지는 힘도 커요.</div>
+    <div class="kidbox">🐣 <b>컵위드핸들</b>(윌리엄 오닐): 주가가 커피잔처럼 둥글게 내려갔다 올라온 뒤, 손잡이처럼 살짝 쉬었다가 손잡이 고점을 넘는 모양이에요. <b>200일선</b>: 약 10개월 평균 가격 — 위에 있으면 큰 흐름이 위쪽이에요. <b>채널</b>: 바닥끼리 이은 선(지지선)과, 같은 기울기로 꼭대기에 닿는 선(저항선) 사이 길 — 지지선 아래로 내려오면 오르던 길을 벗어난 거예요. <b>역배열</b>: 이평선은 그 기간에 산 사람들의 평균 가격(평단)이에요. 긴 선(120일)이 맨 위·짧은 선(5일)이 맨 아래로 줄 서면, 6개월 안에 산 사람이 모두 손해 중이라 오를 때마다 '본전이면 팔자'는 물량이 겹겹이 나와요. <b>거래량 지지대</b>: 많이 사고판 가격대라 받침이 강해요 — 대신 깨지면 떨어지는 힘도 커요. <b>M자(쌍봉)</b>: 한 번 꼭대기를 찍고 내려왔다가 다시 올라갔는데 첫 꼭대기를 못 넘고(고점이 낮아짐) 또 내려와요. 두 꼭대기 사이 골(목선)까지 깨면 저점도 낮아진 것 — 오르던 흐름이 꺾였다는 신호로 봐요.</div>
     <div class="note src">선은 사람이 긋지 않고 갱신 때마다 같은 규칙으로 다시 계산해요 (평일 아침·한국장 마감 뒤 + 일~목 저녁 8시~새벽 2시 매시간) · 야후, 배당 안 깎은 가격 (증권사 차트와 같은 숫자) · 채널은 로그 가격 기준 · 기술적 분석은 참고 수단일 뿐이에요 (매수·매도 추천 아님)</div>`;
 }
 // 캔들 차트 (일봉 2년 · 주봉 5년 · 월봉 10년): 이평선 · RS 선(지수 대비) · 거래량 · 마지막 가격 · 기준선(전일 종가 / 12주 고점)
@@ -4921,7 +4927,7 @@ function estAlertHTML() {  // 첫 화면: 방향 개수 + 변곡점 종목만
 /* ---------- 📐 주봉 차트 모양 (collector/patterns.py → stocks/{코드}.json pattern · 카드 pat) — 조건에 맞는 모양만 알려 줌, 매수·매도 판단 아님 ---------- */
 const PAT = { cup: ["☕", "컵위드핸들"], hi: ["📐", "하락 추세선 돌파"], lo: ["📉", "추세 아래선 이탈"], brk: ["🚀", "전고점 돌파"], test: ["🧪", "전고점 지지 시험"], lost: ["⚠", "전고점 아래로"] };
 const patLi = (s) => `${PAT[s.k]?.[0] || ""} <b>${esc(s.t)}</b> <span class="src">${esc(s.d)}</span>`;
-function patAlertHTML(list = (DASH?.stocks || []).filter((c) => mktOf(c.code) === MKT)) {  // 보유 탭: 그 시장 전 종목 · 관심·공동 탭: 그 묶음 종목 (종류별 개수 + 목록)
+function patAlertHTML(list = (DASH?.stocks || []).filter((c) => mktOf(c.code) === MKT && c.group === "보유")) {  // 보유 탭: 그 시장 보유 종목만 (사용자 11/6) · 관심·공동 탭: 그 묶음 종목 (종류별 개수 + 목록)
   const ord = Object.keys(PAT), L = list.filter((c) => c.pat?.length)
     .sort((a, b) => Math.min(...a.pat.map((s) => ord.indexOf(s.k))) - Math.min(...b.pat.map((s) => ord.indexOf(s.k))));  // 컵·추세선 돌파가 위로
   if (!L.length) return "";

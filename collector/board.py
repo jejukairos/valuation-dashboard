@@ -226,7 +226,10 @@ DRAW = [("WMT", "월마트", "d", "11/3 전달 그림: 6~10월에 컵 모양을 
                                "6개월(120일) 안에 산 사람이 모두 손실 중이라 반등 때마다 '본전' 매물이 나와 저항이 겹겹이, 이 약세 심리는 짧은 게 아니라 오래 쌓인 것. "
                                "바로 아래엔 2~4월 큰 거래량으로 만든 강한 지지대 — 버티면 안심이지만 깨지면 하락 힘이 셀 수 있어 민감하게 볼 구간. "
                                "저항은 갭 상승으로 뚫는 게 가장 좋다(본전 매물이 덜 나옴)는 개인 의견",
-         {"ma": (5, 20, 60, 120), "kr": True})]
+         {"ma": (5, 20, 60, 120), "kr": True}),
+        # 5번째 칸 m = M자(쌍봉) 계산 (m_shape)
+        ("EWY", "한국 ETF (MSCI 코리아 · 달러)", "w", "11/6 전달 그림 (EWY 주봉): 6월 고점 뒤 M자 — 고점과 고점이 낮아지고 저점과 저점도 낮아짐. "
+                                               "그림의 첫 봉우리 근처에 'SK하이닉스 ADR 상장' 표시", {"m": True})]
 
 
 def cup_shape(c, k):
@@ -299,6 +302,29 @@ def channel(h, l, c, k, span):
             "lo": float(np.exp(base[T])), "up": float(np.exp(base[T] + off)), "was_above": bool((lc[B:T + 1] > base[B:T + 1] + off).any())}
 
 
+def m_shape(c, k, span):
+    """M자(쌍봉) · 고점과 저점이 함께 낮아짐 (사용자 11/6 EWY 주봉 그림), 종가 기준.
+    A = 최근 span 봉 가장 높은 종가(첫 봉우리) → 10%+ 눌린 뒤 가장 높은 되돌림 고점 C(두 번째 봉우리, 좌우 2주 고점)
+    → B = A~C 사이 가장 낮은 종가(가운데 골 = 목선). C 뒤에 C 보다 높은 종가가 없어야 함.
+    st: below 지금 목선 아래 (저점도 낮아짐) · dipped 목선 아래로 갔다가 다시 위 · form 두 번째 봉우리 뒤 내려오는 중."""
+    from patterns import _piv
+    T = len(c) - 1
+    lo0 = max(0, T + 1 - span)
+    A = lo0 + int(c[lo0:T + 1].argmax())
+    cand = [p for p in _piv(c[:T + 1], 2 * k) if A + 4 * k <= p <= T - k and c[A + 1:p].min() <= 0.9 * c[A]]
+    if not cand:
+        return None
+    C = max(cand, key=lambda p: c[p])
+    B = A + 1 + int(c[A + 1:C].argmin())
+    if c[C] < c[B] + 0.3 * (c[A] - c[B]) or c[C + 1:T + 1].max() >= c[C]:  # 되돌림이 너무 약하거나, 두 번째 봉우리를 이미 넘음
+        return None
+    D = C + 1 + int(c[C + 1:T + 1].argmin())  # 두 번째 봉우리 뒤 가장 낮은 종가
+    st = "below" if c[T] < c[B] else "dipped" if c[D] < c[B] else "form"
+    S = max(0, A - 8 * k) + int(c[max(0, A - 8 * k):A + 1].argmin())  # M 왼쪽 다리 시작 (첫 봉우리 전 8주 안 가장 낮은 곳)
+    return {"st": st, "s": S, "a": A, "b": B, "c": C, "d": D, "A": c[A], "B": c[B], "C": c[C], "D": c[D],
+            "lh": (c[C] / c[A] - 1) * 100, "ll": (c[D] / c[B] - 1) * 100}
+
+
 def ma_align(c, ns):
     """이평선 배열 (ns 짧은 것부터): 정배열 = 짧은 선이 위 (5 > 20 > 60 > 120) · 역배열 = 긴 선이 위 · 그 밖 = 섞임.
     그 상태가 며칠째(run)인지 + 종가가 모든 선 아래(below_all)인지 (사용자 전달 글 11/4: '모든 이평선을 위에 깔고 있는 역배열')."""
@@ -365,6 +391,10 @@ def draw():
             g = next((i for i in range(len(C) - 1, len(C) - 11, -1) if Lo[i] > Hi[i - 1]), None)
             x |= {"kr": bool(o.get("kr")), "align": ma_align(b["Close"], o["ma"]), "vs": vol_shelf(Hi, Lo, C, V),
                   "gap": {"i": rel(g), "pct": r_((Op[g] / C[g - 1] - 1) * 100, 1)} if g is not None else None}
+        if o.get("m"):
+            mm = m_shape(C, k, 52 * k)
+            if mm and mm["s"] >= off:
+                x["mm"] = {**{kk: rel(mm[kk]) for kk in "sabcd"}, **{kk: r_(mm[kk], 2) for kk in ("A", "B", "C", "D", "lh", "ll")}, "st": mm["st"]}
         # 📅 일봉·주봉·월봉·연봉 버튼 (사용자 11/4) — 기본 봉(tf)은 위 ch, 나머지는 캔들 + 이평선만 (이평선은 전체 기간으로 계산한 뒤 자름)
         TF = {"d": (d, 200, o.get("ma") or (20, 50, 200)), "w": (resample(full, "W-FRI"), 104, (10, 30)),
               "m": (resample(full, "ME"), 120, (10, 20)), "y": (resample(full, "YE"), 60, (5,))}
@@ -828,6 +858,11 @@ if __name__ == "__main__":
         ch_ = channel(cc * 1.01, cc * 0.99, cc, 1, 120)
         assert ch_ and ch_["a"] == 0 and ch_["st"] == "below" and abs(ch_["s"] - 0.01) < 0.002, ch_
         assert channel(cc[:-1] * 1.01, cc[:-1] * 0.99, cc[:-1], 1, 120)["st"] == "in"
+        # M자: 100 → 200(첫 봉우리) → 150(골) → 180(두 번째) → 140 이면 목선 아래 · 160 까지만이면 내려오는 중 · 210 이면 아님
+        mv = list(np.linspace(100, 200, 10)) + list(np.linspace(195, 150, 6)) + list(np.linspace(155, 180, 6)) + [175, 170, 165, 160]
+        mm = m_shape(np.array(mv + [140.0]), 1, 52)
+        assert mm and mm["st"] == "below" and mm["A"] == 200 and mm["B"] == 150 and mm["C"] == 180 and mm["D"] == 140, mm
+        assert m_shape(np.array(mv), 1, 52)["st"] == "form" and m_shape(np.array(mv + [210.0]), 1, 52) is None
         # 이평선 배열: 계속 내리면 역배열 + 종가가 모든 선 아래 · 계속 오르면 정배열
         al = ma_align(-up + 500, (5, 20, 60, 120))
         assert al["st"] == "역배열" and al["below_all"] and al["run"] > 200 and ma_align(up, (5, 20, 60, 120))["st"] == "정배열", al

@@ -229,6 +229,8 @@ watchlist:
   - {name: 인텔, market: US, code: INTC, industry: 반도체, methods: [PER]}
   # 🧠 AI 칩 — 데이터센터 GPU(인스팅트)·CPU(EPYC), 엔비디아·인텔 경쟁 (2026-11-04 사용자)
   - {name: AMD, market: US, code: AMD, industry: 반도체, methods: [PER]}
+  # 📱 칩 설계도(IP) — 스마트폰·데이터센터 CPU 설계 사용료 (2026-11-06 사용자: "관심 미국 탭에 오라클·인텔·AMD·ARM 등, 내가 실적 올리는 것들")
+  - {name: ARM, market: US, code: ARM, industry: 반도체, methods: [PER]}
 
 # ---------- 공동자산 — 🤝 공동자산 탭 ----------
 # 형식은 holdings 와 같아요 (예: - {name: 삼성전자, market: KR, code: "005930", industry: 반도체, methods: [PBR, PER], fair_methods: [PBR]})
