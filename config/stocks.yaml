@@ -23,6 +23,7 @@ holdings:
     sector: 음식료
     industry: 음식료
     methods: [PER]
+    fixed_per: {tight: [10, 15, 20], easy: [15, 20, 25]}   # 사용자 2026-11-06: 하방 10 · 적정 15 · 상방 20, 🐂 강세장 15 · 20 · 25
     avg_price:
     quantity:
 

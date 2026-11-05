@@ -266,10 +266,14 @@ function floorHTML(c) {
   const s = c.scen, ind = s.ind, sec = s.sector;
   const warn = s.bear > c.price * 1.5 ? `<div class="warnbox" style="margin-top:6px">⚠ 하방(Bear)이 지금 가격보다 ${pct((s.bear / c.price - 1) * 100, 0)} 높아요. 추정 EPS 가 너무 높거나 이익이 한 해 튄 건 아닌지 확인이 필요해요.</div>` : "";
   const out = [];
-  if (sec && sec.bear != null) out.push(`<div class="note src">🏷 ${esc(sec.name)} PER 역사 <span>(12MF · 증권사 리포트·기사로 정한 값, 평균 아님)</span>: 바닥 ${n(sec.bear, 1)} · 보통 ${n(sec.base, 1)} (평소 범위 위쪽) · 최고 ${n(sec.bull, 1)}배 (리레이팅 때)${sec.history ? ` — ${esc(sec.history)}` : ""}</div>`);
+  if (sec && sec.bear != null) {
+    out.push(`<div class="note src">🏷 ${esc(sec.name)} PER 역사 <span>(업종 대표값 · 12MF · 이 종목 PER 아님)</span>: 바닥 ${n(sec.bear, 1)} · 보통 ${n(sec.base, 1)} · 최고 ${n(sec.bull, 1)}배${sec.history ? ` — 근거 숫자: ${esc(sec.history)}` : ""}</div>`);
+    // 사용자 11/6 '업종 PER 인지, 어떻게 계산된 건지 헷갈려' → 공식으로 계산한 평균이 아니라 위 근거 숫자를 보고 정한 세 단계
+    out.push(`<div class="note src">📐 어떻게 정했나: 공식으로 계산한 평균이 아니에요. 증권사 리포트·기사에 나온 이 업종 회사들의 PER(12개월 선행)을 모아 보고 <b>바닥</b> = 업종이 가장 싸게 거래된 수준, <b>보통</b> = 평소 받는 범위, <b>최고</b> = 리레이팅 때 받아 본 수준으로 정한 값이에요 (2026-10-26 조사).${sec.basis ? `<br>→ ${esc(sec.basis)}` : ""}</div>`);
+  }
   if (sec?.tight) out.push(`<div class="note">📏 적정주가에 쓰는 배수 (사용자 원칙): 🔴 긴축·약세장 <b>${sec.tight.map((x) => n(x, 1)).join(" · ")}배</b> · 🐂 강세장 <b>${(sec.easy || []).map((x) => n(x, 1)).join(" · ")}배</b> <span class="src">— 하락장엔 지금 PER 근처에서 보수적으로, 금리 인하·수급이 들어올 때 넓힘</span></div>`);
   (sec?.notes || []).forEach((x) => out.push(`<div class="note src">📝 ${esc(x.date)} ${esc(x.source)}: ${esc(x.text)}</div>`));
-  if (ind && (ind.per || ind.peer_med)) out.push(`<div class="note src">🏭 네이버 업종 PER${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 최근 4분기 ${ind.per == null ? "-" : n(ind.per, 1) + "배"}${ind.peer_med ? ` · 같은 업종 ${ind.peers.length}곳 중앙값 <b>${n(ind.peer_med, 1)}배</b> (${ind.peers.filter((p) => p.per).map((p) => `${esc(p.name)} ${n(p.per, 1)}${p.fwd ? "" : "*"}`).join(" · ")})` : ""}${ind.peers.some((p) => p.per && !p.fwd) ? " <span>* 추정치 없어 현재 PER</span>" : ""}</div>`);
+  if (ind && (ind.per || ind.peer_med)) out.push(`<div class="note src">🏭 네이버 업종 PER${ind.wics ? ` (WICS ${esc(ind.wics)})` : ""}: 최근 4분기 ${ind.per == null ? "-" : n(ind.per, 1) + "배"}${ind.peer_med ? ` · 같은 업종 ${ind.peers.length}곳 중앙값 <b>${n(ind.peer_med, 1)}배</b> (${ind.peers.filter((p) => p.per).map((p) => `${esc(p.name)} ${n(p.per, 1)}${p.fwd ? "" : "*"}`).join(" · ")})` : ""}${ind.peers.some((p) => p.per && !p.fwd) ? " <span>* 추정치 없어 현재 PER</span>" : ""}<br><span>↳ 최근 4분기 = 업종 전체가 지난 1년 실제로 번 이익 기준 PER (와이즈리포트) · 중앙값 = 네이버가 고른 같은 업종 회사들의 추정 PER 가운데 값 — 둘 다 매일 자동</span></div>`);
   if (s.rerating) out.push(`<div class="note src">🔁 리레이팅: ${esc(s.rerating)}</div>`);
   return warn + (out.length ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🏷 업종 PER · 리레이팅 메모</summary>${out.join("")}</details>` : "") + pbrMemoBox(c);
 }

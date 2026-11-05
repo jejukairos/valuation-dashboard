@@ -299,7 +299,7 @@ def stock_detail(h, rates_now, fx):
         scen["regime"] = (rates_now.get("regime") or {}).get(mkt)  # 🐂 강세장 칸 옆에 '지금 시장' 표시용
         s_ = SECTORS.get(h.get("sector")) or {}
         scen["rerating"] = h.get("rerating") or s_.get("rerating")
-        scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "tight", "easy", "history", "notes")}} if s_ else None
+        scen["sector"] = {"name": h.get("sector"), **{k: s_.get(k) for k in ("bear", "base", "bull", "tight", "easy", "history", "notes", "basis")}} if s_ else None
         # 🏷 업종 PBR 메모 (사용자 11/6): sectors.yaml 업종의 pbr {history, rerating, links} — 업종(sector) 이 없으면 industry 이름으로 (반도체)
         ps = SECTORS.get(h.get("sector") or "") or SECTORS.get(h.get("industry") or "") or {}
         if "PBR" in methods and ps.get("pbr"):
