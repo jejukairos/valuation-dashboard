@@ -683,13 +683,13 @@ function bandPosHTML(c, pos) {
   return `<div class="chart-title" style="margin-top:14px"><b>② 지난 10년 ${what} 중 지금 자리</b> <span class="src">0% = 10년 중 가장 쌌던 때 · 100% = 가장 비쌌던 때</span></div>
     <div class="bandbar">${pos == null ? "" : `<span class="dot" style="left:${Math.max(0, Math.min(100, pos))}%"></span>`}</div>
     <div class="bandlbl"><span>가장 쌌던 쪽 0%</span><span>지금 ${pos == null ? "N/A" : n(pos, 0) + "%"}</span><span>가장 비쌌던 쪽 100%</span></div>
-    <details class="fvt bandwhy" data-code="${esc(c.code)}" onclick="event.stopPropagation()"><summary class="chart-title">📈 밴드 차트 모두 <span class="src">12MF PBR·PER 밴드 · PBR·PER 밴드 · 선행·후행 PER 추이 + 적정주가 표 · 5년·10년·최대 · 눌러서 열기</span></summary>
+    <details class="fvt bandwhy" data-code="${esc(c.code)}" onclick="event.stopPropagation()"><summary class="chart-title">📈 밴드 차트 모두 <span class="src">12MF PBR·PER 밴드 · PBR·PER 밴드 · 선행 PER·PBR 추이 + 적정주가 표 · 5년·10년·최대 · 눌러서 열기</span></summary>
       <div class="bwb src">불러오는 중…</div>
       <div class="note src">⚠ 그림마다 쓰는 이익(앞으로 12개월 · 그해 · 지난 12개월)이 달라 배수 숫자가 조금씩 달라요 · 그림을 누르면 그 날 숫자 · 10년이 안 된 종목은 상장·데이터 시작부터 · 참고용 (매수·매도 추천 아님)</div></details>`;
 }
 // 📈 밴드 그림 묶음 (사용자 11/6 마지막): 신호 탭 · 카드 · 종목 상세 모두 같은 함수 — 그림 먼저, 그다음 적정주가 표
-//   PBR 로 매기는 종목(삼성전자·SK하이닉스·현대차·기아…) = 12MF PBR → PBR 밴드 → 12MF PER → PER 밴드 → 선행 PER(NTM) → 후행 PER(TTM)
-//   PER 로 매기는 종목 = 12MF PER → PER 밴드 → 12MF PBR → PBR 밴드 → 선행 PER(NTM) → 후행 PER(TTM)
+//   PBR 로 매기는 종목(삼성전자·SK하이닉스·현대차·기아…) = 12MF PBR → PBR 밴드 → 12MF PER → PER 밴드 → 선행 PER 추이 → PBR 추이 (Koyfin)
+//   PER 로 매기는 종목 = 12MF PER → PER 밴드 → 12MF PBR → PBR 밴드 → 선행 PER 추이 → PBR 추이 (Koyfin)
 const pbrFirstOf = (c) => (c?.scen?.parts || []).some((p) => p.kind === "PBR");
 const hasBps = (d) => (d.history || []).filter((r) => r.bps > 0).length >= 2;
 function nvOne(px, which, tag = "button") {  // 네이버식 밴드 하나 (PER 또는 PBR) — 자기 기간 탭
@@ -703,14 +703,14 @@ function wireNvOne(d, px, which) {
 }
 function bandChartsHTML(d, px, tag, pbrFirst) {
   const P = hasBps(d) ? [per12mfHTML(d, px, tag, "bps"), nvOne(px, "pbr", tag)] : [], E = [per12mfHTML(d, px, tag), nvOne(px, "per", tag)];
-  return (pbrFirst ? [...P, ...E] : [...E, ...P]).join("") + kfBlock(px, tag) + kfBlock(px, tag, "ttm");
+  return (pbrFirst ? [...P, ...E] : [...E, ...P]).join("") + kfBlock(px, tag) + (hasBps(d) ? kfBlock(px, tag, "pb") : "");
 }
 function wireBandCharts(d, px) {
   wirePer12mf(d, px);
   if (hasBps(d)) { wirePer12mf(d, px, "bps"); wireNvOne(d, px, "pbr"); }
   wireNvOne(d, px, "per");
   wireKf(d, px);
-  wireKf(d, px, "ttm");
+  wireKf(d, px, "pb");  // 그림이 없으면(BPS 부족) drawKf 가 그냥 넘어감
 }
 let BW_N = 0;
 async function bandAllRender(box, c) {  // box = '불러오는 중' 자리 (.bwb) — 카드 '📈 밴드 차트 모두' · 📡 신호 탭 '📈 밴드 차트'
@@ -2505,14 +2505,18 @@ function drawNv(id, d, key, kind, period) {
     <br><span class="src">${s.from}~ · 선 = ${key === "eps" ? "EPS" : "BPS"} × 배수 (연간 실적·추정치를 각 해 12월 말에 두고 달마다 이음, 네이버 방식) · 배수 = ${nm} ${kind} 하위 ${DASH.settings.band.low_pct}% ~ 상위 ${100 - DASH.settings.band.high_pct}% 를 4등분 · 아래 이름을 누르면 선을 끄고 켤 수 있어요</span>`;
 }
 
-/* ---------- Koyfin 식 선행 PER(NTM) 추이 ----------
-   NTM EPS = 앞으로 12개월 EPS (Y년 실적을 (Y-1)년 12월 말에 두고 직선 보간 = 올해·내년 추정을 남은 기간 비율로 섞음).
+/* ---------- Koyfin 식 추이 (선 하나 + High / Median / Low) ----------
+   mode "ntm" = 선행 PER: NTM EPS = 앞으로 12개월 EPS (Y년 실적을 (Y-1)년 12월 말에 두고 직선 보간 = 올해·내년 추정을 남은 기간 비율로 섞음).
+   mode "pb"  = PBR (사용자 11/6, 후행 PER 추이 대신): BPS = Y년 말 BPS 를 그해 12월 말에 두고 직선 보간 (지난 결산 순자산 기준 P/B, 올해 칸은 연말 추정 포함).
    1년 이하 기간은 일별 종가, 그보다 길면 주간 종가. High / Median / Low = 그 기간 최고·가운데·최저. */
 const KF_PERIODS = [["all", "ALL"], ["10y", "10Y"], ["5y", "5Y"], ["1y", "1Y"], ["ytd", "YTD"], ["6m", "6M"], ["3m", "3M"]];
-// mode "ttm" (사용자 11/6): 후행 = 지난 12개월 EPS → Y년 실적을 그해 12월 말에 둠 (NTM 보다 1년 뒤로) · 올해 칸은 이미 나온 분기 + 남은 분기 추정이 섞임
+const KF_M = (mode) => (mode === "pb"
+  ? { id: "kfb", key: "bps", off: 0, dg: 2, title: "PBR 추이", lab: "P/B", e: "BPS = 그때의 주당 순자산 (해마다 연말 BPS 를 12월 말에 두고 이음 — 'PBR 밴드 차트'와 같은 BPS, 올해 칸은 연말 추정 포함) · Koyfin 의 P/B 도 지난 결산 순자산 기준이에요" }
+  : { id: "kf", key: "eps", off: 1, dg: 1, title: "선행 PER 추이", lab: "P/E (NTM)", e: "NTM EPS = 앞으로 12개월 EPS (올해·내년 추정을 남은 기간 비율로 섞음, 지난 시점은 실제 실적으로 계산 — 12MF PER 밴드와 같은 EPS) · Koyfin 은 그 당시 컨센서스를 써서 과거 구간 숫자가 조금 다를 수 있어요" });
 function kfSeries(d, period, mode = "ntm") {
-  const anchors = d.history.filter((r) => r.eps > 0).map((r) => [Date.UTC(r.year - (mode === "ttm" ? 0 : 1), 11, 31), r.eps]).sort((a, b) => a[0] - b[0]);
-  const ntm = (t) => {
+  const M = KF_M(mode);
+  const anchors = d.history.filter((r) => r[M.key] > 0).map((r) => [Date.UTC(r.year - M.off, 11, 31), r[M.key]]).sort((a, b) => a[0] - b[0]);
+  const base = (t) => {
     for (let i = 1; i < anchors.length; i++) {
       const [t0, v0] = anchors[i - 1], [t1, v1] = anchors[i];
       if (t >= t0 && t <= t1) return v0 + ((v1 - v0) * (t - t0)) / (t1 - t0);
@@ -2528,18 +2532,16 @@ function kfSeries(d, period, mode = "ntm") {
   const back = { "10y": [10, 0], "5y": [5, 0], "1y": [1, 0], "6m": [0, 6], "3m": [0, 3] }[period];
   const from = period === "all" ? 0 : period === "ytd" ? Date.UTC(L.getUTCFullYear(), 0, 1)
     : Date.UTC(L.getUTCFullYear() - back[0], L.getUTCMonth() - back[1], L.getUTCDate());
-  pts = pts.filter(([t]) => t >= from).map(([t, p]) => { const e = ntm(t); return [t, e ? p / e : null]; })
-    .filter(([, v]) => v != null && v > 0 && v <= (DASH.settings.band.per_cap || 1e9));
+  pts = pts.filter(([t]) => t >= from).map(([t, p]) => { const e = base(t); return [t, e ? p / e : null]; })
+    .filter(([, v]) => v != null && v > 0 && (M.key !== "eps" || v <= (DASH.settings.band.per_cap || 1e9)));
   if (pts.length < 5) return null;
   const vs = pts.map((x) => x[1]).sort((a, b) => a - b);
   return { labels: pts.map(([t]) => ymd(t)), pe: pts.map((x) => Math.round(x[1] * 100) / 100),
     hi: vs[vs.length - 1], med: vs[Math.floor(vs.length / 2)], lo: vs[0], cur: pts[pts.length - 1][1] };
 }
-const KF_M = (mode) => (mode === "ttm" ? { id: "kft", nm: "후행", tag: "TTM", e: "지난 12개월 EPS (그해 실적을 12월 말에 두고 이음 — 네이버 PER 밴드와 같은 EPS, 올해 칸은 남은 분기 추정 포함)" }
-  : { id: "kf", nm: "선행", tag: "NTM", e: "앞으로 12개월 EPS (올해·내년 추정을 남은 기간 비율로 섞음, 지난 시점은 실제 실적으로 계산 — 12MF PER 밴드와 같은 EPS) · Koyfin 은 그 당시 컨센서스를 써서 과거 구간 숫자가 조금 다를 수 있어요" });
 function kfBlock(px = "", tag = "button", mode = "ntm") {
   const M = KF_M(mode);
-  return `<h3>${M.nm} PER 추이 <span class="src">Koyfin 방식 · P/E (${M.tag})</span></h3><div class="card">
+  return `<h3>${M.title} <span class="src">Koyfin 방식 · ${M.lab}</span></h3><div class="card">
     ${segTabs(`${px}${M.id}-seg`, KF_PERIODS, "10y", tag)}
     <div class="chart-box nvbox"><canvas id="${px}${M.id}-chart"></canvas></div><div class="note" id="${px}${M.id}-note"></div></div>`;
 }
@@ -2547,21 +2549,22 @@ function drawKf(d, period, px = "", mode = "ntm") {
   const M = KF_M(mode), s = kfSeries(d, period, mode), cv = document.getElementById(`${px}${M.id}-chart`);
   if (!cv) return;
   if (!s) { if (charts.has(`${px}${M.id}-chart`)) charts.get(`${px}${M.id}-chart`).destroy(); $(`#${px}${M.id}-note`).textContent = "이 기간은 자료가 부족해요."; return; }
-  const C = themeColors(), flat = (v) => s.pe.map(() => v);
-  const ds = [{ label: `P/E (${M.tag})`, data: s.pe, borderColor: mode === "ttm" ? C.s3 : C.s7, borderWidth: 3 },
-    { label: `High ${n(s.hi, 1)}배`, data: flat(s.hi), borderColor: BAND_COL[3], borderDash: [6, 4], borderWidth: 2 },
-    { label: `Median ${n(s.med, 1)}배`, data: flat(s.med), borderColor: C.ink2, borderDash: [6, 4], borderWidth: 2 },
-    { label: `Low ${n(s.lo, 1)}배`, data: flat(s.lo), borderColor: BAND_COL[1], borderDash: [6, 4], borderWidth: 2 }];
-  makeChart(cv, s.labels, ds, { fmt: (v) => n(v, 1) + "배", yfmt: (v) => n(v, 0) + "x", xlen: 7 });
+  const C = themeColors(), flat = (v) => s.pe.map(() => v), f = (v) => n(v, M.dg);
+  const ds = [{ label: M.lab, data: s.pe, borderColor: mode === "pb" ? C.s3 : C.s7, borderWidth: 3 },
+    { label: `High ${f(s.hi)}배`, data: flat(s.hi), borderColor: BAND_COL[3], borderDash: [6, 4], borderWidth: 2 },
+    { label: `Median ${f(s.med)}배`, data: flat(s.med), borderColor: C.ink2, borderDash: [6, 4], borderWidth: 2 },
+    { label: `Low ${f(s.lo)}배`, data: flat(s.lo), borderColor: BAND_COL[1], borderDash: [6, 4], borderWidth: 2 }];
+  makeChart(cv, s.labels, ds, { fmt: (v) => f(v) + "배", yfmt: (v) => n(v, mode === "pb" ? 1 : 0) + "x", xlen: 7 });
   const pos = s.hi > s.lo ? ((s.cur - s.lo) / (s.hi - s.lo)) * 100 : null;
   $(`#${px}${M.id}-note`).innerHTML = `${legend(ds.map((x) => [x.label, x.borderColor, !!x.borderDash]))}
-    지금 P/E (${M.tag}) <b>${n(s.cur, 1)}배</b> · 이 기간 가운데값 ${n(s.med, 1)}배 대비 ${pct((s.cur / s.med - 1) * 100, 0, true)}${pos == null ? "" : ` · 최저~최고 사이 ${n(pos, 0)}% 위치`}
-    <br><span class="src">${M.tag} EPS = ${M.e}</span>`;
+    지금 ${M.lab} <b>${f(s.cur)}배</b> · 이 기간 가운데값 ${f(s.med)}배 대비 ${pct((s.cur / s.med - 1) * 100, 0, true)}${pos == null ? "" : ` · 최저~최고 사이 ${n(pos, 0)}% 위치`}
+    <br><span class="src">${M.e}</span>`;
 }
 function wireKf(d, px = "", mode = "ntm") {
   drawKf(d, "10y", px, mode);
   segWire(`#${px}${KF_M(mode).id}-seg`, (p) => drawKf(d, p, px, mode));
 }
+
 
 // PER 적정주가 — 종목 상세에서 밴드 그림 묶음(bandChartsHTML) 바로 아래에
 function perValHTML(d) {
@@ -4132,7 +4135,7 @@ function sigTable(o) {  // o = {name, unit, L 지금 수준, date, m {pbf 12MF P
 }
 // 📈 표 아래 밴드 차트 (사용자 11/6, 닫힘): 지수 = 시장 탭과 같은 함수(fwdBand·hBand)·같은 자료 · 종목 = 상세 화면과 같은 bandAllRender (한 번 갱신되면 같이 바뀜)
 const idxBandBox = (k, what) => `<details class="fvt idxband" data-k="${k}"><summary class="chart-title">📈 밴드 차트 <span class="src">${what} · 5년·10년·최대 · 눌러서 열기</span></summary><div class="ibb"></div></details>`;
-const stockBandBox = (code) => `<details class="fvt bandall" data-code="${esc(code)}"><summary class="chart-title">📈 밴드 차트 <span class="src">12MF PBR·PER 밴드 · PBR·PER 밴드 · 선행·후행 PER 추이 + 적정주가 표 · 5년·10년·최대 · 눌러서 열기</span></summary><div class="bwb src">불러오는 중…</div></details>`;
+const stockBandBox = (code) => `<details class="fvt bandall" data-code="${esc(code)}"><summary class="chart-title">📈 밴드 차트 <span class="src">12MF PBR·PER 밴드 · PBR·PER 밴드 · 선행 PER·PBR 추이 + 적정주가 표 · 5년·10년·최대 · 눌러서 열기</span></summary><div class="bwb src">불러오는 중…</div></details>`;
 document.addEventListener("toggle", (e) => {
   const el = e.target;
   if (!el.classList?.contains("idxband") || !el.open || el.dataset.done) return;
@@ -4189,7 +4192,7 @@ async function signalHTML() {
   // 📈 밴드 차트 (사용자 11/6): 보유 종목마다 눌러서 — bandAllRender (그림 먼저, 그다음 카드와 같은 적정주가 표)
   const own = DASH.stocks.filter((c) => grp(c) === "보유" && !/우$/.test(c.name)).sort((a, b) => (a.market === "US") - (b.market === "US"));
   const row = (c) => `<details class="fvt bandall" data-code="${esc(c.code)}" style="margin-top:4px"><summary class="chart-title"><b>${c.market === "US" ? "🇺🇸" : "🇰🇷"} ${esc(c.name)}</b> <span class="src">${money(c.price, c.currency)}${c.band_pos != null ? ` · 10년 자리 ${n(c.band_pos, 0)}%` : ""}${c.scen?.base ? ` · 적정주가 대비 ${pct((c.price / c.scen.base - 1) * 100, 0, true)}` : ""}</span></summary><div class="bwb src">불러오는 중…</div></details>`;
-  const bands = `<details class="card" style="margin-top:12px"><summary class="chart-title" style="margin-top:0"><b>📈 밴드 차트 — 보유 종목</b> <span class="src">눌러서 열기 · 종목을 누르면 12MF·PBR·PER 밴드 · 선행·후행 PER 추이 + 적정주가 표 · 5년·10년·최대</span></summary>
+  const bands = `<details class="card" style="margin-top:12px"><summary class="chart-title" style="margin-top:0"><b>📈 밴드 차트 — 보유 종목</b> <span class="src">눌러서 열기 · 종목을 누르면 12MF·PBR·PER 밴드 · 선행 PER·PBR 추이 + 적정주가 표 · 5년·10년·최대</span></summary>
     <div class="kidbox" style="margin-top:6px">🐣 밴드 선은 '그 배수를 받으면 주가가 얼마인지'예요. 오른쪽(앞으로)은 증권사 이익 추정치로 그린 선이라, 지금 주가가 어느 선 근처인지 볼 수 있어요. 그림을 누르면 그 날 숫자가 나와요.</div>${own.map(row).join("")}</details>`;
   return `<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
 }

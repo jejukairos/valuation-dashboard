@@ -1,5 +1,6 @@
 """공통 도구: HTTP 요청(지연·재시도), JSON 저장, 실패 기록."""
 import json
+import math
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -94,13 +95,24 @@ def write_json(path, obj):
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, separators=(",", ":"), allow_nan=False, default=_clean)
+        json.dump(_finite(obj), f, ensure_ascii=False, separators=(",", ":"), allow_nan=False, default=_clean)
     os.replace(tmp, path)
+
+
+def _finite(o):
+    """NaN·무한대 → None (2026-11-06 리얼티 인컴 종목 파일이 NaN 숫자 하나 때문에 통째로 저장 실패)."""
+    if isinstance(o, float):
+        return o if math.isfinite(o) else None
+    if isinstance(o, dict):
+        return {k: _finite(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_finite(v) for v in o]
+    return o
 
 
 def _clean(o):
     if hasattr(o, "item"):
-        return o.item()
+        return _finite(o.item())
     return str(o)
 
 
