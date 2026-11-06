@@ -57,7 +57,7 @@ s+='쿠키 사용: '+navigator.cookieEnabled+'\\n';o.textContent=s;})();</script
   if (new URL(ctx.request.url).pathname === "/ping-files") {
     // 공개돼도 괜찮은 파일(아이콘·화면 틀)이 실제로 올라가 있는지만 확인
     const out = [];
-    for (const p of ["/", "/icon.svg", "/style.css"]) {
+    for (const p of ["/", "/icon.svg", "/style.css", "/app.js"]) {  // app.js 는 글자 수만 (배포가 됐는지 Claude 가 로그인 없이 확인)
       const fake = { ...ctx, request: new Request(new URL(p, ctx.request.url), { method: "GET" }),
         next: (req) => ctx.next(req || new Request(new URL(p, ctx.request.url))) };
       const r = await serveSite(fake);

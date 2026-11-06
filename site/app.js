@@ -692,8 +692,19 @@ function bandPosHTML(c, pos) {
 //   PER 로 매기는 종목 = 12MF PER → PER 밴드 → 12MF PBR → PBR 밴드 → 선행 PER 추이 → PBR 추이 (Koyfin)
 const pbrFirstOf = (c) => (c?.scen?.parts || []).some((p) => p.kind === "PBR");
 const hasBps = (d) => (d.history || []).filter((r) => r.bps > 0).length >= 2;
-function nvOne(px, which, tag = "button") {  // 네이버식 밴드 하나 (PER 또는 PBR) — 자기 기간 탭
-  return `<h3>${which === "per" ? "PER" : "PBR"} 밴드 차트 <span class="src">네이버 방식 · 그해 ${which === "per" ? "EPS" : "BPS"}</span></h3><div class="card">${segTabs(`${px}nv-${which}-seg`, NV_PERIODS, "5", tag)}${nvBlock(`${px}nv-${which}`, "")}</div>`;
+// ⚠ 추정치 섞임 (사용자 11/6: 올해 칸은 남은 분기가 추정 — 확정 실적·사업보고서 나온 해만 정확) · mode fwd = 12MF·선행(원래 추정 기준), year = 그해 실적을 이어 그린 그림
+function estWarnHTML(d, mode, v, fut = true) {  // fut = 오른쪽에 '앞으로' 선이 있는 그림 (Koyfin 추이는 없음)
+  const Y = (d.history || []).find((r) => r.estimate)?.year;
+  if (!Y) return "";
+  const lq = Object.keys(d.qtrs || {}).sort().pop(), qy = lq ? +lq.slice(0, 4) : 0;
+  const q = qy >= Y - 1 ? ` · 지금까지 발표된 분기 실적: <b>${qy}년 ${+lq.slice(5, 7)}월 말까지</b>${qy >= Y ? ` (${Y}년 남은 분기는 추정)` : ""}` : "";
+  return `<div class="warnbox" style="margin-top:6px;font-size:14px">⚠ <b>추정치 섞임</b> — ${mode === "fwd"
+    ? `지금 숫자${fut ? "와 오른쪽 '앞으로' 선" : ""}은 <b>${Y}·${Y + 1}년 ${v} 추정치</b>(증권사 컨센서스)로 계산해요. 지난 구간은 나중에 나온 확정 실적으로 다시 그린 값이에요.`
+    : `<b>${Y}년 1월~지금</b> 구간${fut ? "과 오른쪽 '앞으로' 선" : ""}은 <b>${Y}년 ${v} 추정치</b>(증권사 컨센서스)가 섞인 값이에요.`} <b>${Y - 1}년 결산까지는 확정 실적</b>(사업보고서)이라 정확해요${q}.</div>`;
+}
+function nvOne(d, px, which, tag = "button") {  // 네이버식 밴드 하나 (PER 또는 PBR) — 자기 기간 탭
+  const v = which === "per" ? "EPS" : "BPS";
+  return `<h3>${which === "per" ? "PER" : "PBR"} 밴드 차트 <span class="src">네이버 방식 · 그해 ${v}</span></h3><div class="card">${segTabs(`${px}nv-${which}-seg`, NV_PERIODS, "5", tag)}${nvBlock(`${px}nv-${which}`, "")}${estWarnHTML(d, "year", v)}</div>`;
 }
 function wireNvOne(d, px, which) {
   if (!document.getElementById(`${px}nv-${which}`)) return;
@@ -702,8 +713,8 @@ function wireNvOne(d, px, which) {
   segWire(`#${px}nv-${which}-seg`, draw);
 }
 function bandChartsHTML(d, px, tag, pbrFirst) {
-  const P = hasBps(d) ? [per12mfHTML(d, px, tag, "bps"), nvOne(px, "pbr", tag)] : [], E = [per12mfHTML(d, px, tag), nvOne(px, "per", tag)];
-  return (pbrFirst ? [...P, ...E] : [...E, ...P]).join("") + kfBlock(px, tag) + (hasBps(d) ? kfBlock(px, tag, "pb") : "");
+  const P = hasBps(d) ? [per12mfHTML(d, px, tag, "bps"), nvOne(d, px, "pbr", tag)] : [], E = [per12mfHTML(d, px, tag), nvOne(d, px, "per", tag)];
+  return (pbrFirst ? [...P, ...E] : [...E, ...P]).join("") + kfBlock(px, tag, "ntm", d) + (hasBps(d) ? kfBlock(px, tag, "pb", d) : "");
 }
 function wireBandCharts(d, px) {
   wirePer12mf(d, px);
@@ -1090,6 +1101,16 @@ document.addEventListener("pointermove", (e) => {
 });
 // capture: 카드(button) 안 접힌 칸은 누르기를 막아서(stopPropagation) 그 안 그림도 눌러서 숫자가 보이게 먼저 받음 (사용자 11/6)
 document.addEventListener("click", (e) => { const t = e.target.closest?.(".tiphit"); if (t) tipAt(t, e.clientX, e.clientY); else tipHide(); }, true);
+// 사용자 11/6: 휴대폰에서 그림을 눌러 뜬 숫자 상자(Chart.js 툴팁)가 그림 밖을 눌러도 남아 있던 것 — 그 그림 말고 다른 곳을 누르면 모두 닫기
+document.addEventListener("click", (e) => {
+  const cv = e.target.closest?.("canvas");
+  for (const ch of Object.values(Chart.instances || {})) {
+    if (ch.canvas === cv || !ch.tooltip?.getActiveElements?.().length) continue;
+    ch.tooltip.setActiveElements([], { x: 0, y: 0 });
+    ch.setActiveElements([]);
+    ch.update("none");
+  }
+}, true);
 document.addEventListener("scroll", tipHide, { passive: true, capture: true });  // 화면이 움직이면 상자가 엉뚱한 데 남지 않게
 // 막대(값) + 선(%) 미니 차트. 음수 막대는 빨강, 마지막 분기는 진하게
 function qPanel(title, tag, labels, bars, line, usd, color, est = null) {  // est: 칸마다 추정(E) 여부 → 회색, 강조는 마지막 실적 칸
@@ -2539,11 +2560,11 @@ function kfSeries(d, period, mode = "ntm") {
   return { labels: pts.map(([t]) => ymd(t)), pe: pts.map((x) => Math.round(x[1] * 100) / 100),
     hi: vs[vs.length - 1], med: vs[Math.floor(vs.length / 2)], lo: vs[0], cur: pts[pts.length - 1][1] };
 }
-function kfBlock(px = "", tag = "button", mode = "ntm") {
+function kfBlock(px = "", tag = "button", mode = "ntm", d = null) {
   const M = KF_M(mode);
   return `<h3>${M.title} <span class="src">Koyfin 방식 · ${M.lab}</span></h3><div class="card">
     ${segTabs(`${px}${M.id}-seg`, KF_PERIODS, "10y", tag)}
-    <div class="chart-box nvbox"><canvas id="${px}${M.id}-chart"></canvas></div><div class="note" id="${px}${M.id}-note"></div></div>`;
+    <div class="chart-box nvbox"><canvas id="${px}${M.id}-chart"></canvas></div><div class="note" id="${px}${M.id}-note"></div>${d ? estWarnHTML(d, mode === "pb" ? "year" : "fwd", mode === "pb" ? "BPS" : "EPS", false) : ""}</div>`;
 }
 function drawKf(d, period, px = "", mode = "ntm") {
   const M = KF_M(mode), s = kfSeries(d, period, mode), cv = document.getElementById(`${px}${M.id}-chart`);
@@ -3461,7 +3482,7 @@ function per12mfHTML(d, px = "", tag = "button", key = "eps") {
   if (!s) return "";
   return `<h3>📈 12MF ${K.k} 밴드 <span class="src">앞으로 ${esc(s.end.slice(0, 7))}까지 · 지금 ${n(s.now, K.dg)}배</span></h3><div class="card">
     ${segTabs(`${px}${K.id}-seg`, P12_PERIODS, "5", tag)}
-    <div id="${px}${K.id}-legend"></div><div class="chart-box tall"><canvas id="${px}${K.id}"></canvas></div><div class="note" id="${px}${K.id}-note"></div>
+    <div id="${px}${K.id}-legend"></div><div class="chart-box tall"><canvas id="${px}${K.id}"></canvas></div><div class="note" id="${px}${K.id}-note"></div>${estWarnHTML(d, "fwd", K.v)}
     <div class="note src">선 = 배수 × 그 시점의 12개월 선행 ${K.v} (올해·내년 ${K.v} 를 남은 달 수만큼 섞음) · 주가가 끝난 오른쪽은 추정치 ${K.v} 로 그린 앞으로의 선 · 배수 = 그 기간 ${K.k} 하위 5%~상위 5% 를 딱 떨어지는 간격으로.
     ${key === "eps" ? "적정가 계산과 같은 기준이에요. 'PER 밴드 차트'는 네이버 방식(그해 EPS 를 12월 말에 두고 이음)이라 PER 숫자가 달라요" : "📡 신호 탭 표의 12MF PBR 과 같은 기준이에요. 'PBR 밴드 차트'는 네이버 방식이라 숫자가 달라요"}</div></div>`;
 }
