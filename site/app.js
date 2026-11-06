@@ -1388,12 +1388,12 @@ document.addEventListener("click", (e) => {
   box.querySelectorAll(".kseg button").forEach((x) => x.classList.toggle("on", x === b));
   box.querySelector(".qgrid").innerHTML = kqCharts(KQ_MAP[box.dataset.code], b.dataset.k);
 });
-// 📋 IR 요약 · IR 분석 (config/ir_brief.yaml → data/ir_brief.json) — 사용자 11/6: 텔레그램 실적 알림 채널의 두 칸 형식을 맨 먼저, 그다음 우리 심층 요약
+// 📋 IR 요약 · IR 분석 (config/ir_brief.yaml → data/ir_brief.json) — 사용자 11/6: 텔레그램 실적 알림 채널의 두 칸 형식 · 숫자·그래프 아래 · 두 칸 다 닫아 두고 누르면 펼침
 let IRB = {};
 function irBriefHTML(code, name) {
   const e = (IRB[code] || IRB[PREF_COMMON[code]] || [])[0];  // 우선주는 보통주 실적 그대로
   if (!e) return "";
-  const box = (t, secs) => `<details class="fvt" open><summary class="chart-title"><b>${esc(name || code)} (${esc(code)}) ${t}</b> <span class="src">${esc(e.period || e.quarter || "")}</span></summary>
+  const box = (t, secs) => `<details class="fvt"><summary class="chart-title"><b>${esc(name || code)} (${esc(code)}) ${t}</b> <span class="src">${esc(e.period || e.quarter || "")}</span></summary>
     ${(secs || []).map((s) => `<div style="margin-top:6px"><b>${esc(s.h)}</b><ul class="irl">${(s.l || []).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
   const src = e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.src || "회사 IR 자료")}</a>` : esc(e.src || "");
   return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${box("IR 요약", e.sum)}${box("IR 분석", e.ana)}
