@@ -18,7 +18,10 @@ $claude = Join-Path $env:USERPROFILE ".local\bin\claude.exe"
 $edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 $port = 9355
 
-function Publish($msg, $files = @("config/earnings.yaml", "config/segments.yaml", "site/data/earnings.json", "config/ir_brief.yaml", "site/data/ir_brief.json")) {
+function BadYaml($list) {  # 파이썬 yaml 로 안 읽히는 파일 이름들
+    @($list | Where-Object { $_ -like "*.yaml" -and (Test-Path $_) } | Where-Object { & $py -c "import sys, yaml; yaml.safe_load(open(sys.argv[1], encoding='utf-8'))" $_ 2>$null; $LASTEXITCODE -ne 0 })
+}
+function Publish($msg, $files =@("config/earnings.yaml", "config/segments.yaml", "site/data/earnings.json", "config/ir_brief.yaml", "site/data/ir_brief.json")) {
     # 요약 파일이 읽히면 사이트용 json 도 만들고 그 파일들만 올림
     if ($files -contains "site/data/earnings.json") {
         & $py tools\earnings_check.py export
@@ -28,9 +31,9 @@ function Publish($msg, $files = @("config/earnings.yaml", "config/segments.yaml"
         & $py tools\earnings_check.py export_ir
         if ($LASTEXITCODE -ne 0) { Log "ir_brief.yaml 읽기 실패 - IR 요약은 빼고 올림"; $files = @($files | Where-Object { $_ -notlike "*ir_brief*" }) }
     }
-    $ym = @($files | Where-Object { $_ -like "*.yaml" })  # 깨진 YAML 은 사이트 수집기를 멈추게 하니 올리기 전에 읽어 봄
-    & $py -c "import sys, yaml; [yaml.safe_load(open(f, encoding='utf-8')) for f in sys.argv[1:]]" @ym
-    if ($LASTEXITCODE -ne 0) { Log "YAML 읽기 실패 - 올리지 않음"; return $false }
+    # 깨진 YAML 은 사이트 수집기를 멈추게 하니 올리기 전에 읽어 봄 — 깨진 파일만 빼고 나머지는 올림 (11/5~6: kpi.yaml 하나 때문에 실적 요약이 이틀 동안 안 올라감)
+    $bad = BadYaml $files
+    if ($bad.Count) { Log "YAML 읽기 실패: $($bad -join ', ') - 그 파일만 빼고 올림 (저녁·아침 매일 점검이 고침)"; $files = @($files | Where-Object { $bad -notcontains $_ }) }
     git add $files
     git commit -q -m "$msg`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- $files
     for ($i = 0; $i -lt 3; $i++) {
@@ -46,9 +49,15 @@ $cal = Get-Content (Join-Path $repo "site\data\ir_calendar.json") -Raw -Encoding
 $now = Get-Date
 foreach ($e in @($cal.items | Where-Object { $_.market -eq "KR" })) {
     $when = ([DateTimeOffset]::Parse($e.when)).LocalDateTime
-    if ($e.time_unknown -or $now -lt $when.AddMinutes(-5) -or $now -gt $when.AddHours(6)) { continue }
+    # 시간 미정(네이버 IR 일정에 날짜만)도 그날 08시~다음 날 02시엔 자막이 생겼는지 봄 (11/6 삼양·롯데쇼핑·LIG 가 시간 미정이라 아예 안 봤음)
+    $from, $to = if ($e.time_unknown) { $when.Date.AddHours(8), $when.Date.AddHours(26) } else { $when.AddMinutes(-5), $when.AddHours(6) }
+    if ($now -lt $from -or $now -gt $to) { continue }
     try { $ec = (Invoke-RestMethod "https://stock.naver.com/api/stockSecurity/earning-calls/v1/$($e.code)" -TimeoutSec 20).earningCall } catch { Log "$($e.name) 일정 확인 실패: $_"; continue }
-    if (-not $ec -or -not $ec.aspUrl) { Log "$($e.name) 자막 화면 없음 (네이버가 자막을 안 주는 발표)"; continue }
+    if (-not $ec -or -not $ec.aspUrl) {
+        $ns = Join-Path $td ".nocap_$($e.code)_$(Get-Date -Format yyyyMMdd)"  # 10분마다 같은 줄이 쌓이지 않게 하루 한 번만 적음
+        if (-not (Test-Path $ns)) { New-Item $ns -ItemType File -Force | Out-Null; Log "$($e.name) 자막 화면 없음 (네이버가 자막을 안 주는 발표) - 저녁·아침 매일 점검이 공시·IR 자료·기사로 요약" }
+        continue
+    }
     $qtr = "$($ec.fiscalQuarter)Q$($ec.fiscalYear.Substring(2))"
     $txt = Join-Path $td "$($e.code)_$($ec.fiscalYear)Q$($ec.fiscalQuarter).txt"
     if (Test-Path "$txt.done") { continue }
@@ -97,14 +106,21 @@ if ($now.Hour -ge 7 -and $tries -lt 3 -and -not (Test-Path "$astamp.done")) {
     }
 }
 
-# 매일 아침 한 번: 미국 공식 원문 등 빠진 요약 (earnings_task.md)
-$stamp = Join-Path $td ".daily_$(Get-Date -Format yyyyMMdd)"
-if ($now.Hour -ge 8 -and -not (Test-Path $stamp)) {
+# 매일 두 번 (아침 8시대 · 저녁 7시대): 미국 공식 원문 등 빠진 요약 (earnings_task.md)
+# 저녁 = 한국 잠정실적이 오후에 나오고 네이버 자막이 없는 발표가 많아서 (11/6 삼양·롯데쇼핑·LIG) 그날 저녁에 공시·IR 자료·기사로 요약 — 사용자는 20~02시에 봄
+$slot = if ($now.Hour -ge 19) { "pm" } elseif ($now.Hour -ge 8) { "am" } else { $null }
+$stamp = Join-Path $td ".daily_$(Get-Date -Format yyyyMMdd)$slot"
+if ($slot -and -not (Test-Path $stamp)) {
     New-Item $stamp -ItemType File -Force | Out-Null
-    $prompt = "tools/earnings_task.md 를 읽고 그 순서대로 오늘 실적발표 요약을 해줘. 한국 종목 자막은 transcripts 폴더에 있으면 그걸 써. 파일 수정만 하고 git 은 하지 마. 모든 답변은 쉬운 한국어로."
+    # earnings_task.md 가 고치는 파일 전부 (핵심 지표·빅테크 숨은 숫자·부문 예상·쉬운 이벤트·성장률·경쟁사 콜도 같이 올림)
+    $daily = @("config/earnings.yaml", "config/segments.yaml", "config/kpi.yaml", "config/bigtech.yaml", "config/seg_cons.yaml", "config/events.yaml", "config/keychart.yaml", "config/ir_brief.yaml", "config/growth.yaml", "config/peer_calls.yaml")
+    $prompt = "tools/earnings_task.md 를 읽고 그 순서대로 오늘 실적발표 요약을 해줘. 한국 종목 자막은 transcripts 폴더에 있으면 그걸 써 (네이버 자막이 없는 발표는 DART 잠정실적 공시·회사 IR 자료·기사로). 파일 수정만 하고 git 은 하지 마. 모든 답변은 쉬운 한국어로."
+    $fix = BadYaml $daily
+    if ($fix.Count) {  # 깨진 YAML 은 먼저 고치게 (안 고치면 그 파일만 계속 못 올라감)
+        $why = ($fix | ForEach-Object { "$_ → " + ((& $py -c "import sys, yaml; yaml.safe_load(open(sys.argv[1], encoding='utf-8'))" $_ 2>&1 | Select-Object -Last 2) -join " ") }) -join " / "
+        $prompt = "먼저: 다음 YAML 파일이 형식이 깨져 파이썬에서 안 읽혀 — $why . 내용은 그대로 두고 형식만 고쳐줘 (콜론·따옴표가 든 글은 작은따옴표로 감싸기). 그다음 " + $prompt
+    }
     & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write,WebFetch,WebSearch" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
-    # earnings_task.md 가 고치는 파일 전부 (핵심 지표·빅테크 숨은 숫자·부문 예상·쉬운 이벤트도 같이 올림)
-    $daily = @("config/earnings.yaml", "config/segments.yaml", "config/kpi.yaml", "config/bigtech.yaml", "config/seg_cons.yaml", "config/events.yaml", "config/keychart.yaml", "config/ir_brief.yaml")
     if (git status --porcelain $daily) { if (Publish "실적발표 요약 (매일 점검)" ($daily + "site/data/earnings.json" + "site/data/ir_brief.json")) { Log "매일 점검 요약 올림" } } else { Log "매일 점검: 새 요약 없음" }
 }
 

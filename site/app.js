@@ -1390,14 +1390,31 @@ document.addEventListener("click", (e) => {
 });
 // 📋 IR 요약 · IR 분석 (config/ir_brief.yaml → data/ir_brief.json) — 사용자 11/6: 텔레그램 실적 알림 채널의 두 칸 형식 · 숫자·그래프 아래 · 두 칸 다 닫아 두고 누르면 펼침
 let IRB = {};
-function irBriefHTML(code, name) {
-  const e = (IRB[code] || IRB[PREF_COMMON[code]] || [])[0];  // 우선주는 보통주 실적 그대로
+// 📋 숫자로 먼저 (사용자 11/6 "IR 요약·분석 미리") — 회사 IR 요약이 아직 없는 분기는 잠정실적 숫자(k = kq)로만 만든 요약을 먼저, 발표가 끝나면 ir_brief.yaml 이 바꿔 넣음 (한국만)
+const vsTag = (v) => (v == null ? "" : v >= 10 ? "서프라이즈" : v >= 3 ? "상회" : v > -3 ? "부합" : v > -10 ? "하회" : "쇼크");
+function irAuto(k) {
+  if (!k?.rows?.length || k.cur === "USD") return null;
+  const R = Object.fromEntries(k.rows.map((r) => [r.f || { 매출액: "sales", 영업이익: "op", 순이익: "ni", 당기순이익: "ni" }[r.item], r])), F = (f, v) => kqF(f, k.cur)(v), P = (v, t) => (v == null ? "" : `${t} ${v >= 0 ? "+" : ""}${n(v, 1)}%`);
+  const line = (r) => r && r.act != null ? `${r.item}: ${F(r.f, r.act)} (${[r.est != null && r.vs_est != null ? `예상 ${F(r.f, r.est)} 대비 ${r.vs_est >= 0 ? "+" : ""}${n(r.vs_est, 1)}% ${vsTag(r.vs_est)}` : "", P(r.qoq, "QoQ"), P(r.yoy, "YoY")].filter(Boolean).join(" · ")})` : null;
+  const qs = k.quarters || [], at = (lb) => qs.find((q) => q.q === lb), i = qs.findIndex((q) => q.q === k.latest), om = (q) => (q?.sales > 0 && q.op != null ? (q.op / q.sales) * 100 : null);
+  const m = [om(qs[i]), i > 0 ? om(qs[i - 1]) : null, om(at(qAgo(k.latest)))], mm = [m[1] != null ? `직전 분기 ${n(m[1], 1)}%` : "", m[2] != null ? `1년 전 ${n(m[2], 1)}%` : ""].filter(Boolean).join(" · ");
+  const sum = [{ h: `${k.latest}${k.prelim ? " 잠정" : ""} 실적 · 연결`, l: [line(R.sales), line(R.op), m[0] != null ? `영업이익률: ${n(m[0], 1)}%${mm ? ` (${mm})` : ""}` : null, line(R.ni)].filter(Boolean) },
+    { h: "다음 확인 사항", l: ["회사 설명·부문별 숫자·가이던스 — 회사 IR 자료·컨퍼런스콜이 정리되면 예약 작업이 이 칸을 바꿔 넣어요"] }];
+  const o = R.op, s = R.sales, ni = R.ni, ana = [{ h: "한 줄 평가", l: [[o?.vs_est != null ? `영업이익 예상 대비 ${n(o.vs_est, 1)}% ${vsTag(o.vs_est)}` : "", s?.vs_est != null ? `매출 ${n(s.vs_est, 1)}% ${vsTag(s.vs_est)}` : ""].filter(Boolean).join(" · ") || "예상(컨센서스)이 없어 비교 못 함"] }];
+  if ((k.points || []).length) ana.push({ h: "✦ 숫자로 본 점 (최근 5개 분기)", l: k.points });
+  if (o?.qoq != null && ni?.qoq != null && (o.qoq > 0) !== (ni.qoq > 0)) ana.push({ h: "영업이익과 순이익의 차이", l: [`영업이익 QoQ ${n(o.qoq, 1)}% · 순이익 ${n(ni.qoq, 1)}% — 방향이 달라요. 영업 밖 손익(환율·이자·지분법·평가손익 등) 영향일 수 있어 분기보고서로 확인`] });
+  return { quarter: k.latest, period: `${k.latest}${k.prelim ? " 잠정" : ""} · 숫자로 먼저`, date: k.filing?.date, src: "잠정실적 숫자로 자동 요약 (네이버·DART)", u: k.filing?.url, sum, ana, auto: true };
+}
+function irBriefHTML(code, name, k) {
+  let e = (IRB[code] || IRB[PREF_COMMON[code]] || [])[0];  // 우선주는 보통주 실적 그대로
+  const qk = (q) => String(q || "").replace(/^(\d)Q(\d\d)$/, "$2.$1Q");  // '3Q26' → '26.3Q'
+  if (k && (!e || qk(e.quarter) < k.latest)) e = irAuto(k) || e;  // 이번 분기 회사 IR 요약이 아직 없으면 숫자로 먼저
   if (!e) return "";
   const box = (t, secs) => `<details class="fvt"><summary class="chart-title"><b>${esc(name || code)} (${esc(code)}) ${t}</b> <span class="src">${esc(e.period || e.quarter || "")}</span></summary>
     ${(secs || []).map((s) => `<div style="margin-top:6px"><b>${esc(s.h)}</b><ul class="irl">${(s.l || []).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
   const src = e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.src || "회사 IR 자료")}</a>` : esc(e.src || "");
   return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${box("IR 요약", e.sum)}${box("IR 분석", e.ana)}
-    <div class="src" style="margin-top:6px">📋 ${esc(e.date || "")} · ${src} · 증감률·이익률은 발표 숫자로 계산한 값 · 분석은 해석이고 매매 추천이 아니에요</div></div>`;
+    <div class="src" style="margin-top:6px">📋 ${esc(e.date || "")} · ${src} · ${e.auto ? "회사 설명·해석은 발표가 끝나면 예약 작업이 바꿔 넣어요" : "증감률·이익률은 발표 숫자로 계산한 값"} · 분석은 해석이고 매매 추천이 아니에요</div></div>`;
 }
 // ✦ 포인트 (collector/kq.py points — 텔레그램 실적 알림과 같은 규칙: 5개 분기 최대·영업이익률 / QoQ 엇갈림·동반 성장)
 const kqPtHTML = (k) => ((k.points || []).length ? `<div class="kqpt" style="margin-top:8px"><b>✦ 포인트</b> <span class="src">최근 5개 분기 기준</span><ul class="irl">${k.points.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "");
@@ -1641,9 +1658,9 @@ function kqNewsHTML() {
       ${priceBox(c)}
       ${kqTable(k)}
       ${kqPtHTML(k)}
+      ${irBriefHTML(c.code, c.name, k)}
       ${moodHTML(c)}
       ${kqBox(k, c.code)}
-      ${irBriefHTML(c.code, c.name)}
     </div>` };
   });
   const shown = new Set(list.map((c) => c.code));
@@ -1683,6 +1700,7 @@ function kqHTML(d) {
     ${nx ? `<div class="note">📌 다음 ${esc(nx.q)} 컨센서스: ${[["sales", "매출"], ["op", "영업이익"], ["ni", "순이익"], ["eps", "EPS"]].filter(([f]) => nx[f] != null).map(([f, l]) => `${l} ${kqF(f, k.cur)(nx[f])}`).join(" · ")} <span class="src">(${esc(nx.date)} ${k.cur === "USD" ? "발표 예정" : "기준"}, 발표되면 이 값과 비교해요)</span></div>` : ""}
     ${k.filing ? `<div class="note src">${k.cur === "USD" ? "발표" : "공시"}: <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${esc(k.filing.name)}</a></div>` : ""}
     ${(EARNINGS[d.card?.code] || []).length ? "" : earningsHTML(d.card?.code, true)}
+    ${irBriefHTML(d.card?.code, d.card?.name, k)}
     ${longHTML(d)}
     ${qtrHTML(d, "q", true)}
   </div>`;
@@ -2272,8 +2290,10 @@ function earningsHTML(code, inline = false) {  // inline = 요약이 아직 없�
   const list = EARNINGS[code] || [];
   const ev = (IRCAL.items || []).find((e) => e.code === code && e.dday >= -7);
   const next = ev ? `<div class="note">📅 ${irWhen(ev)} ${esc(ev.title || "")}${ev.live ? " · 🔴 라이브 컨퍼런스콜" : ""}${ev.url ? ` · <a href="${esc(ev.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${ev.script_url ? ` · <a href="${esc(ev.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</div>` : "";
-  if (!list.length && inline) return next ? `${next}<div class="note src">📞 발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 바로 아래에 넣어요.</div>` : "";
-  if (!list.length) return next ? `<h3>📞 실적발표</h3><div class="card">${next}<div class="note src">발표가 끝나면 예약 작업이 스크립트를 읽고 요약해서 여기에 넣어요.</div></div>` : "";
+  // 네이버 발표 자막이 있는 발표만 '스크립트'가 있음 — 없는 발표(11/6 삼양·롯데쇼핑·LIG)는 저녁·아침 매일 점검이 공시·IR 자료·기사로 요약
+  const how = ev?.script_url ? "발표가 끝나면 예약 작업이 네이버 발표 자막(스크립트)을 읽고 요약해서" : "지금은 네이버 발표 자막(스크립트)이 없어요 — 생기면 예약 작업이 자막을 읽고, 끝내 없으면 저녁 7시대·아침 8시대에 잠정실적 공시·IR 자료·기사로 요약해서";
+  if (!list.length && inline) return next ? `${next}<div class="note src">📞 ${how} 바로 아래 📋 칸과 요약에 넣어요.</div>` : "";
+  if (!list.length) return next ? `<h3>📞 실적발표</h3><div class="card">${next}<div class="note src">📞 ${how} 여기에 넣어요.</div></div>` : "";
   // 맨 위(최신) 분기만 펼침 → 🧭 바뀐 것 → 그 전 분기들은 접어 둠 (past: true 는 핵심만 짧게)
   const full = (e, i) => `<details class="fvt"${i === 0 ? " open" : ""}><summary class="chart-title"><b>${esc(e.quarter)} 실적발표</b> <span class="src">${esc(e.date || "")} ${esc(e.source || "")}</span></summary>
       ${onceHTML(e.once)}
@@ -4024,7 +4044,7 @@ async function openStock(code) {
       ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (IRB[code] || IRB[PREF_COMMON[code]] ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
