@@ -1395,7 +1395,9 @@ const vsTag = (v) => (v == null ? "" : v >= 10 ? "서프라이즈" : v >= 3 ? "�
 function irAuto(k) {
   if (!k?.rows?.length || k.cur === "USD") return null;
   const R = Object.fromEntries(k.rows.map((r) => [r.f || { 매출액: "sales", 영업이익: "op", 순이익: "ni", 당기순이익: "ni" }[r.item], r])), F = (f, v) => kqF(f, k.cur)(v), P = (v, t) => (v == null ? "" : `${t} ${v >= 0 ? "+" : ""}${n(v, 1)}%`);
-  const line = (r) => r && r.act != null ? `${r.item}: ${F(r.f, r.act)} (${[r.est != null && r.vs_est != null ? `예상 ${F(r.f, r.est)} 대비 ${r.vs_est >= 0 ? "+" : ""}${n(r.vs_est, 1)}% ${vsTag(r.vs_est)}` : "", P(r.qoq, "QoQ"), P(r.yoy, "YoY")].filter(Boolean).join(" · ")})` : null;
+  const TT = Object.fromEntries(kqTurns(k).map((t, j) => [k.rows[j].item, t]));
+  const line = (r) => { if (!r || r.act == null) return null; const t = TT[r.item] || {};
+    return `${r.item}: ${F(r.f, r.act)} (${[t.vs ? `예상 ${F(r.f, r.est)} → ${t.vs}` : r.est != null && r.vs_est != null ? `예상 ${F(r.f, r.est)} 대비 ${r.vs_est >= 0 ? "+" : ""}${n(r.vs_est, 1)}% ${vsTag(r.vs_est)}` : "", t.qoq ? `QoQ ${t.qoq}` : P(r.qoq, "QoQ"), t.yoy ? `YoY ${t.yoy}` : P(r.yoy, "YoY")].filter(Boolean).join(" · ")})`; };
   const qs = k.quarters || [], at = (lb) => qs.find((q) => q.q === lb), i = qs.findIndex((q) => q.q === k.latest), om = (q) => (q?.sales > 0 && q.op != null ? (q.op / q.sales) * 100 : null);
   const m = [om(qs[i]), i > 0 ? om(qs[i - 1]) : null, om(at(qAgo(k.latest)))], mm = [m[1] != null ? `직전 분기 ${n(m[1], 1)}%` : "", m[2] != null ? `1년 전 ${n(m[2], 1)}%` : ""].filter(Boolean).join(" · ");
   const sum = [{ h: `${k.latest}${k.prelim ? " 잠정" : ""} 실적 · 연결`, l: [line(R.sales), line(R.op), m[0] != null ? `영업이익률: ${n(m[0], 1)}%${mm ? ` (${mm})` : ""}` : null, line(R.ni)].filter(Boolean) },
@@ -1419,10 +1421,18 @@ function irBriefHTML(code, name, k) {
 // ✦ 포인트 (collector/kq.py points — 텔레그램 실적 알림과 같은 규칙: 5개 분기 최대·영업이익률 / QoQ 엇갈림·동반 성장)
 const kqPtHTML = (k) => ((k.points || []).length ? `<div class="kqpt" style="margin-top:8px"><b>✦ 포인트</b> <span class="src">최근 5개 분기 기준</span><ul class="irl">${k.points.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "");
 // 실적 · 예상 · 예상 대비 · QoQ · YoY 표 (상세 화면과 첫 화면 '🧾 실적 발표' 같이 씀)
+// 흑자전환·적자전환·적자축소·적자확대 — 0 이하가 끼면 % 대신 말로 (텔레그램 실적 알림처럼, 사용자 11/6 CJ CGV 순이익 YoY '흑자전환')
+const turnTxt = (a, b) => (a == null || b == null || (a > 0 && b > 0) ? null : b <= 0 && a > 0 ? "흑자전환" : a <= 0 && b > 0 ? "적자전환" : a > b ? "적자축소" : a < b ? "적자확대" : "적자지속");
+function kqTurns(k) {  // 줄마다 {vs, qoq, yoy} 말 (null 이면 % 로)
+  const qs = k.quarters || [], i = qs.findIndex((q) => q.q === k.latest), cur = qs[i], prev = i > 0 ? qs[i - 1] : null, ago = qs.find((q) => q.q === qAgo(k.latest));
+  return (k.rows || []).map((r) => { const f = r.f || { 매출액: "sales", 영업이익: "op", 순이익: "ni", 당기순이익: "ni" }[r.item];
+    return { vs: r.act != null && r.est != null && (r.act > 0) !== (r.est > 0) ? (r.act > 0 ? "흑자(예상 적자)" : "적자(예상 흑자)") : null, qoq: turnTxt(cur?.[f], prev?.[f]), yoy: turnTxt(cur?.[f], ago?.[f]) }; });
+}
 function kqTable(k) {
-  const P = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${v >= 0 ? "+" : ""}${n(v, 1)}%</span>`);
+  const P = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${v >= 0 ? "+" : ""}${n(v, 1)}%</span>`), T = kqTurns(k);
+  const C = (t, v) => (t ? `<span class="${/^적자(?!축소)/.test(t) ? "neg" : ""}">${t}</span>` : P(v));
   return `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(k.latest)}${k.prelim ? " 잠정" : ""}</th><th>실적</th><th>예상</th><th>예상 대비</th><th>QoQ</th><th>YoY</th></tr></thead><tbody>
-    ${k.rows.map((r) => `<tr><td>${esc(r.item)}</td><td><b>${r.act == null ? "-" : kqF(r.f, k.cur)(r.act)}</b></td><td>${r.est == null ? "-" : kqF(r.f, k.cur)(r.est)}</td><td>${P(r.vs_est)}</td><td>${P(r.qoq)}</td><td>${P(r.yoy)}</td></tr>`).join("")}
+    ${k.rows.map((r, j) => `<tr><td>${esc(r.item)}</td><td><b>${r.act == null ? "-" : kqF(r.f, k.cur)(r.act)}</b></td><td>${r.est == null ? "-" : kqF(r.f, k.cur)(r.est)}</td><td>${C(T[j].vs, r.vs_est)}</td><td>${C(T[j].qoq, r.qoq)}</td><td>${C(T[j].yoy, r.yoy)}</td></tr>`).join("")}
   </tbody></table></div>`;
 }
 // 주가: 기간 탭 (1개월~1년 = 일봉 종가, 3년~10년 = 상세 데이터의 주봉 종가) — 부드러운 선 + 색 채움 + 오른쪽 눈금 + 마지막 가격
