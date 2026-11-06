@@ -53,6 +53,8 @@ def view(code, unit, what, trend=None):
     rows, today = H.get(code) or {}, now_kst()
     if not rows:
         return None
+    # 한국: 매일 기록이 쌓이기 전 칸(1개월~1년 전)·흐름 그림 앞부분은 와이즈리포트 '컨센서스 추이'(지난 1년 달마다, cons_trend.py → cache/cons_hist.json)
+    mon = {y: v.get("op") or {} for y, v in ((read_json(CACHE / "cons_hist.json") or {}).get(code) or {}).items()} if unit == "억원" else {}
     last = rows[max(rows)]
     chg = {}
     for y in sorted(last):
@@ -61,11 +63,15 @@ def view(code, unit, what, trend=None):
             old = (_ago(rows, days, today) or {}).get(y)
             if old is None and trend and nm in (trend.get(y) or {}):
                 old = trend[y][nm]  # 미국: 쌓인 기록이 없으면 야후가 준 과거 값
+            if old is None and mon.get(y):
+                old = _ago({d: {y: v} for d, v in mon[y].items()}, days, today)
+                old = old and old[y]
             if old is not None:
                 ago[nm] = [old, _pct(last[y], old)]
         chg[y] = {"now": last[y], "ago": ago}
-    return {"unit": unit, "what": what, "since": min(rows), "chg": chg,
-            "pts": {y: [[d, v[y]] for d, v in sorted(rows.items()) if v.get(y) is not None] for y in sorted(last)},
+    pts = {y: sorted({**(mon.get(y) or {}), **{d: v[y] for d, v in rows.items() if v.get(y) is not None}}.items()) for y in sorted(last)}
+    return {"unit": unit, "what": what, "since": min(d for p in pts.values() for d, _ in p), "daily": min(rows), "chg": chg,
+            "pts": {y: [list(x) for x in p] for y, p in pts.items()},
             "seed": (load_yaml("est_seed.yaml") or {}).get(code)}
 
 

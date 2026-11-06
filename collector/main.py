@@ -737,13 +737,13 @@ def op_last_g(longq, years):
     return "적자" if cur <= 0 else "흑전" if prev <= 0 else rnd((cur / prev - 1) * 100, 1)
 
 
-def _match(src, dst):
-    """src 칸 이름 → dst 칸 이름: 겹치는 분기 2개 이상에서 모두 1.5% 안으로 같아야 같은 칸 (우연히 한 분기만 비슷한 건 안 바꿈)."""
+def _match(src, dst, tol=0.015):
+    """src 칸 이름 → dst 칸 이름: 겹치는 분기 2개 이상에서 모두 1.5%(tol) 안으로 같아야 같은 칸 (우연히 한 분기만 비슷한 건 안 바꿈)."""
     names, used = {}, set()
     for nm in sorted({x for r in src.values() for x in r}):
         for kn in sorted({x for r in dst.values() for x in r} - used):
             pairs = [(r[nm], dst[lb][kn]) for lb, r in src.items() if r.get(nm) and kn in (dst.get(lb) or {})]
-            if len(pairs) >= 2 and all(abs(b / a - 1) < 0.015 for a, b in pairs):
+            if len(pairs) >= 2 and all(abs(b / a - 1) < tol for a, b in pairs):
                 names[nm] = kn
                 used.add(kn)
                 break
@@ -785,6 +785,11 @@ def seg_quarters(raw, seg, longq, mkt, long=None):
                 row["나머지"] = rnd(rev - tot)
             rows[lb] = row
         out[k] = rows
+    if len((long or {}).get("op") or {}) >= 4:  # 📊 부문별 영업이익 + 같은 부문 매출(이익률용) — 이름은 매출 칸과 금액이 맞으면 그 한글 이름, 지역은 GEO_KO
+        op, orv, geo = conv(long["op"]), conv(long.get("op_rev") or {}), {a.lower(): b for a, b in GEO_KO.items()}
+        nm = {**{x: geo[x.lower()] for r in op.values() for x in r if x.lower() in geo}, **_match(orv, out.get("prod") or ko, 0.003)}  # 0.3% — 메타 '앱 패밀리'(광고+기타)가 '광고'로 바뀌지 않게
+        out["op"], out["op_rev"] = ({lb: {nm.get(x, x): rnd(v) for x, v in r.items()} for lb, r in m.items()} for m in (op, orv))
+        out["src_op"] = long["src_op"]
     return out or None
 
 def op_yoy(code, mkt, kqd, qtrs, manual=None, n=5, dq=None):

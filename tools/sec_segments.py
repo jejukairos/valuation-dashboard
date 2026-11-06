@@ -92,8 +92,8 @@ def labels(xml):
     return {loc[f]: re.sub(r"\s*\[Member\]$|\s+Segment$", "", txt[t]) for f, t in arc.items() if f in loc and txt.get(t)}
 
 
-def facts(xml):
-    """축 하나만 붙은 매출 {(축, 멤버, 시작, 끝): 값} + 축 없는 전체 매출 {(시작, 끝): 값}.
+def facts(xml, names=REV):
+    """축 하나만 붙은 매출(names = 영업이익 이름이면 영업이익) {(축, 멤버, 시작, 끝): 값} + 축 없는 전체 매출 {(시작, 끝): 값}.
     2025년부터(ASU 2023-07) 부문 숫자에 붙는 '연결 항목 = 영업부문' 축과 '집중도 구분' 축은 없는 것으로 봄."""
     root = ET.fromstring(xml)
     ctx, tctx = {}, {}
@@ -110,11 +110,11 @@ def facts(xml):
     out, tot = {}, {}
     for el in root:
         cid, nm = el.get("contextRef"), el.tag.split("}")[-1]
-        if nm not in REV or not el.text or not re.fullmatch(r"-?\d+(\.\d+)?", el.text.strip()):
+        if nm not in names or not el.text or not re.fullmatch(r"-?\d+(\.\d+)?", el.text.strip()):
             continue
         for box, k in ((out, ctx.get(cid)), (tot, tctx.get(cid))):
-            if k and (k not in box or REV.index(nm) < box[k][0]):
-                box[k] = (REV.index(nm), float(el.text))
+            if k and (k not in box or names.index(nm) < box[k][0]):
+                box[k] = (names.index(nm), float(el.text))
     return {k: v for k, (_, v) in out.items()}, {k: v for k, (_, v) in tot.items()}
 
 def quarterly(vals):
@@ -219,7 +219,45 @@ def ticker(t, cik):
     return out
 
 
+def op_part(t):
+    """📊 부문별 영업이익 (사용자 11/6) — 받아 둔 XBRL(cache/sec_raw)만 읽음, SEC 접속 없음.
+    '사업부문' 축의 OperatingIncomeLoss → 분기 · 부문 합이 회사 전체 영업이익과 매출의 10% 안으로 맞는 분기만 (차이 = 본사 비용 등)."""
+    d = RAW / t
+    files = sorted((f for f in d.glob("*.xml.gz") if not f.name.endswith("_lab.xml.gz")), key=lambda f: f.name.split("-")[1:])
+    op, rv, top, trv, lab = {}, {}, {}, {}, {}
+    for f in files:  # 접수번호 순 = 대체로 시간 순 → 같은 기간은 나중 보고서 숫자
+        try:
+            xi = gzip.decompress(f.read_bytes())
+            (o, ot), (r, rt) = facts(xi, ["OperatingIncomeLoss"]), facts(xi)
+        except Exception as e:  # noqa: BLE001
+            print(f"    ⚠ {t} {f.name}: {str(e)[:80]}")
+            continue
+        lf = d / f.name.replace(".xml.gz", "_lab.xml.gz")
+        if lf.exists():
+            lab.update(labels(gzip.decompress(lf.read_bytes())))
+        op.update({(m, s, e): v for (ax, m, s, e), v in o.items() if ax == "seg"})
+        rv.update({(m, s, e): v for (ax, m, s, e), v in r.items() if ax == "seg"})
+        top.update({("전체", s, e): v for (s, e), v in ot.items()})
+        trv.update({("전체", s, e): v for (s, e), v in rt.items()})
+    oq, rq = quarterly(op), quarterly(rv)
+    to, tr = ({e: r["전체"] for e, r in quarterly(x).items()} for x in (top, trv))
+    ok = {e: r for e, r in oq.items() if len(r) >= 2 and e in to and tr.get(e) and abs(sum(r.values()) - to[e]) <= 0.1 * tr[e]}
+    if len(ok) < 4:
+        return {}
+    name = lambda r: {pretty(m, lab): v for m, v in r.items()}
+    return {"op": unify({e: name(r) for e, r in ok.items()}), "op_rev": unify({e: name({m: v for m, v in rq.get(e, {}).items() if m in r}) for e, r in ok.items()}),
+            "src_op": "SEC 10-Q·10-K XBRL (사업부문 축 영업이익)"}
+
+
 def main(only):
+    if only[:1] == ["--op"]:  # 받아 둔 파일로 부문 영업이익만 다시 (연락처 필요 없음)
+        saved = json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else {}
+        for t in only[1:] or sorted(x.name for x in RAW.iterdir() if x.is_dir()):
+            p = op_part(t)
+            saved.setdefault(t, {}).update(p)
+            print(f"  {t}: 부문 이익 {len(p.get('op') or {})}분기", list((p.get("op") or {}).get(max(p["op"]), {}))[:6] if p else "")
+        OUT.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
+        return
     contact = os.environ.get("SEC_CONTACT")
     if not contact:
         sys.exit("SEC_CONTACT(연락처 이메일) 환경변수가 없어요")
@@ -234,7 +272,7 @@ def main(only):
             print("  CIK 없음", t)
             continue
         try:
-            saved[t] = ticker(t, c)
+            saved[t] = {**ticker(t, c), **op_part(t)}
         except Exception as e:  # noqa: BLE001
             print(f"  ✗ {t}: {str(e)[:100]}")
             continue

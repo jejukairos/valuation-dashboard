@@ -77,6 +77,11 @@
      · ndr: 비공개 NDR·그룹콜·프리뷰 콜이 기사·리포트로 알려졌으면 {d, t, lines, after 그 뒤 주가, u} — 원문이 없으니 '보도'·'추측'을 밝히고,
        확인 안 된 제재·위반은 단정하지 않는다. 주가는 site/data/dashboard.json 의 chart 종가로 계산.
      관심·공동 종목은 diff 3~6줄만 (시간 되면).
+   - 🎤 컨콜·가이던스 요지 ①~⑥ (사용자 11/6 — 종목 상세 🧱 제품군별 매출 아래 접힘 칸, callBriefHTML): 아래 칸으로 6칸이 채워져요. **모든 종목(보유·관심·공동) 실적마다**
+     ① 한눈에 = easy·short·vs·once ② 경영진 발표 = keys·facts ③ 가이던스·목표 = guide·guide_note ④ 질의응답 = qa ⑤ 직전 분기 콜과 비교 = diff·voice ⑥ 체크포인트 = check·miss·next.
+     · qa·diff 는 보유종목만이 아니라 관심·공동도 적는다 (자막·노트가 있으면 qa 핵심 5개 이상, diff 3줄 이상) — 없으면 그 칸이 '이번엔 없음'으로 보여요.
+     · check: ✅ 다음 분기 발표까지 확인할 것 3~6줄 — 회사가 약속한 일정(확정)·가이던스 숫자·증설 가동 시점·주주환원 발표·이번에 답을 피한 질문. 예) "27년 1월 26년 주주환원 규모 발표 (회사 확정)"
+       확정(회사가 날짜를 말함)·예상(증권사·우리 추정)을 괄호로 구분.
      · 네이버 자막이 없으면('다시듣기를 제공하지 않는 기업') 노다지 IR노트(https://contents.premium.naver.com/ystreet/irnote/contents)의
        '[컨콜노트-전체공개] {회사}' 글을 node tools/page_dump.mjs <글 주소> transcripts\{코드}_{연도}Q{분기}_irnote.txt <Edge 디버깅 포트> 6 으로
        바로 저장 (나중에 비공개로 바뀔 수 있음 · Edge 를 --remote-debugging-port 로 먼저 띄움, ec_read.mjs 와 같은 방식).

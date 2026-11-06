@@ -182,7 +182,7 @@ def geo_table(rows):
 def note_tables(t):
     """연결재무제표 주석의 영업부문 칸 (새 양식 = '영업부문 (연결)' 제목, 예전 양식 = 주석 본문의 '영업부문' 글자 뒤 4만 자)."""
     secs = sections(t)
-    body = "".join(b for ti, b in secs if re.search(r"영업\s*부문|부문\s*정보|부문별\s*정보", ti) and not re.search(r"^\d+-\d+\.|별도|재무제표$", ti) and "(연결)" in ti or re.search(r"영업\s*부문.*연결", ti))
+    body = "".join(b for ti, b in secs if re.search(r"영업\s*부문|부문\s*정보|부문별\s*(정보|보고)", ti) and not re.search(r"^\d+-\d+\.|별도|재무제표$", ti) and "(연결)" in ti or re.search(r"영업\s*부문.*연결", ti))
     if not body:
         note = "".join(b for ti, b in secs if re.search(r"연결\s*재무제표\s*주석", ti))
         i = next((m.start() for m in re.finditer(r"영업\s*부문", note) if m.start() > 2000), -1)
@@ -205,21 +205,26 @@ SKIPC = re.compile(r"제거|조정|내부|연결\s*조정|consol", re.I)
 GSUM = re.compile(r"^(합\s*계|총\s*계|계|연결\s*(합계|금액|후\s*금액)?|연결\s*후\s*(금액|합계)|기업\s*전체\s*총계(\s*합계)?|부문의\s*합계(\s*합계)?|.*\s합계)$")
 
 
-def parse_note(g):
-    """주석 표 → ({칸: 값}, 합계) — 매출 줄(순매출·외부 매출 먼저)의 칸별 값, 칸 이름은 머리 여러 줄 중 맨 아래 글자."""
+OPR = r"^(보고)?(부문)?영업(이익|손익)(\(손실\))?$"  # 부문별 영업이익 줄 ('세전부문이익'은 아님)
+
+
+def parse_note(g, op=False):
+    """주석 표 → ({칸: 값}, 합계) — 매출 줄(순매출·외부 매출 먼저, op 면 영업이익 줄)의 칸별 값, 칸 이름은 머리 여러 줄 중 맨 아래 글자."""
     pick = None
-    for pat in (r"순\s*매출|외부\s*(고객)?.*(수익|매출)|외부매출", r"^(수익\s*\(매출액\)|매출액|영업수익|수익|매출)$"):
+    for pat in (OPR,) if op else (r"순\s*매출|외부\s*(고객)?.*(수익|매출)|외부매출", r"^(수익\s*\(매출액\)|매출액|영업수익|수익|매출)$"):
         pick = next((i for i, r in enumerate(g) if r and re.search(pat, r[0].replace(" ", "") if "^" in pat else r[0]) and sum(num(c) is not None for c in r[1:]) >= 2), None)
         if pick is not None:
             break
     if pick is None or pick == 0:
         return None
     head, row, out, tot = g[:pick], g[pick], {}, None
+    cum = any(c.strip() == "누적" for hr in head for c in hr)  # '3개월'·'누적' 칸이 같이 있으면(삼성전자) 누적만 — 분기는 누적 차이로 냄
     for j in range(1, len(row)):
-        path = []
-        for hr in head:
-            c = hr[j] if j < len(hr) else ""
-            if c and (not path or path[-1] != c) and num(c) is None and not unit(c) and not PER.fullmatch(c):
+        hs, path = [hr[j] if j < len(hr) else "" for hr in head], []
+        if cum and "누적" not in [c.strip() for c in hs]:
+            continue
+        for c in hs:
+            if c and c.strip() != "누적" and (not path or path[-1] != c) and num(c) is None and not unit(c) and not PER.fullmatch(c):
                 path.append(c)
         v = num(row[j])
         if v is None or not path:
@@ -230,18 +235,18 @@ def parse_note(g):
             continue
         if any(SKIPC.search(x) for x in path[1:]) or SKIPC.search(leaf):
             continue
-        nm = f"{path[-2]} {leaf}" if len(path) >= 2 and re.fullmatch(r"[A-Z0-9 ]{2,6}|.*이외", leaf) else leaf  # 'KUS' → '북중미 KUS'
+        nm = f"{path[-2]} {leaf}" if len(path) >= 2 and re.fullmatch(r"[A-Z0-9 ]{2,6}|.*이외", leaf) and not re.fullmatch(r"(보고|영업)?\s*부문|지역", path[-2]) else leaf  # 'KUS' → '북중미 KUS' ('보고부문 SDC' 는 'SDC')
         nm = re.sub(r"본사\s*소재지\s*(국가)?", "국내", nm)
         out[nm] = out.get(nm, 0) + v
     return (out, tot) if len(out) >= 2 else None
 
 
-def parse_note_t(g):
+def parse_note_t(g, op=False):
     """2025년부터 쓰는 세로 양식 (지역·부문이 줄, 매출이 칸 — XBRL 표를 그대로 펼친 모양) → ({칸: 값}, 합계).
     줄 이름에 '… 합계'(부문 사이 거래를 뺀 순매출)가 있는 줄을 쓰고, '영업부문'(총매출)·'제거·조정' 줄은 뺌."""
     h = c = None
     for i in range(min(3, len(g))):
-        c = next((j for j, x in enumerate(g[i]) if re.search(r"수익\s*\(매출액\)|순\s*매출|^매출액$|영업수익", x)), None)
+        c = next((j for j, x in enumerate(g[i]) if (re.search(OPR, x.replace(" ", "")) if op else re.search(r"수익\s*\(매출액\)|순\s*매출|^매출액$|영업수익", x))), None)
         if c:
             h = i
             break
@@ -297,12 +302,27 @@ def report_note(t):
     return (prod or {}, geo or {}, tot, False) if (prod or geo) else None
 
 
+def report_op(t):
+    """영업부문 주석 → (부문별 영업이익, 같은 표의 부문별 매출, 영업이익 합계) — 이익률을 같은 부문 이름으로 내려고 매출도 같은 표에서."""
+    for u, g in note_tables(t):
+        x = (parse_note(g, True) or parse_note_t(g, True)) if u else None
+        if x:  # 소계 칸·숫자를 이름으로 잘못 읽은 칸은 뺌
+            x = ({k: v for k, v in x[0].items() if not TOT.match(k.replace(" ", "")) and not re.search(r"소\s*계$", k) and num(k) is None}, x[1])
+        if x and len(x[0]) >= 2 and not any(re.match(r"^(매출|영업이익|영업손익|당기|순이익|자산|부채|자본)", k.replace(" ", "")) for k in x[0]):  # 지역 부문(삼양식품)은 그대로 씀
+            r = parse_note(g) or parse_note_t(g)
+            rev = {k: v * u for k, v in r[0].items() if k in x[0]} if r else {}
+            return {k: v * u for k, v in x[0].items()}, rev, (x[1] * u if x[1] is not None else None), False
+    return None
+
+
 def report(path, src="A"):
     """보고서 하나 → (제품군, 지역, 합계, 내부거래 포함 표인지) — 원 단위. 못 읽으면 None.
     src A = 사업의 내용 '매출실적' 표, B = 연결 주석 '영업부문' 표 (A 가 연결 전체와 안 맞는 회사용: 기아 등)."""
     t = doc_text(path)
     if src == "B":
         return report_note(t)
+    if src == "OP":  # (영업이익, 매출, 영업이익 합계) — quarters() 가 prod·geo 자리에 담아 누적 차이를 냄
+        return report_op(t)
     tabs = sales_tables(t)
     prod = geo = tot = None
     inner = bool(re.search(r"내부\s*거래(를|가)?\s*포함", t[:400000]))
@@ -323,6 +343,9 @@ def report(path, src="A"):
             if gt and len(gt) >= 2 and not (tot and abs(sum(gt.values()) / tot - 1) > 0.1):  # 지역 합이 매출 표 합계와 10% 넘게 다르면 다른 표(해외 법인 등)
                 geo = gt
     return (prod or {}, geo or {}, tot, inner) if (prod or geo) else None
+
+
+NK = lambda s: re.sub(r"[\s·ㆍ,/\-\.]|\(.*?\)|및", "", s)  # noqa: E731 — 표기만 다른 칸 이름을 같은 열쇠로
 
 
 def quarters(code, src="A"):
@@ -360,8 +383,14 @@ def quarters(code, src="A"):
                 continue
             if old is None:
                 q[kind] = dict(cur)
-            elif set(cur) == set(old):  # 이름이 같은 칸끼리만 뺌
-                q[kind] = {n: cur[n] - old[n] for n in cur}
+                continue
+            # 이름이 같은 칸끼리 뺌 — 띄어쓰기·쉼표만 다른 이름('소스조미소재'='소스, 조미소재')은 같게, 0 인 칸은 빼고 봄
+            c2, o2 = {NK(n): (n, v) for n, v in cur.items() if v}, {NK(n): v for n, v in old.items() if v}
+            if set(c2) == set(o2):
+                q[kind] = {n: v - o2[k] for k, (n, v) in c2.items()}
+            elif len(c2) == len(o2) and len(set(c2) - set(o2)) == 1:  # 칸 하나만 이름이 바뀜 ('이엔에스' → 'E&S', '유제품/기능성식품' → '뉴트리션') — 남은 하나끼리 짝
+                (a,), (b,) = set(c2) - set(o2), set(o2) - set(c2)
+                q[kind] = {n: v - o2[b if k == a else k] for k, (n, v) in c2.items()}
         if q.get("prod") or q.get("geo"):
             out[end] = {**q, "tot": (tot - (prev[1][2] or 0)) if tot and prev and prev[1][2] else tot if not prev else None, "inner": inner}
     return out
@@ -388,10 +417,26 @@ def check(code, q):
                 bad.append(f"{lb}({s:,.0f}/{rev or 0:,.0f})")
     return keep, bad
 
+def check_op(code, q):
+    """부문 영업이익 합이 DART 분기 영업이익과 매출의 4% 안으로 맞는 분기만 (차이 = 본사 비용·부문 사이 제거) → ({끝: 이익}, {끝: 매출})."""
+    p = ROOT / "site" / "data" / "stocks" / f"{code}.json"
+    lq = (json.loads(p.read_text(encoding="utf-8")).get("longq") or {}) if p.exists() else {}
+    op, rv = {}, {}
+    for end, r in q.items():
+        y, m = int(end[:4]), int(end[5:7])
+        L = lq.get(f"{y % 100:02d}.{(m - 1) // 3 + 1}Q") or {}
+        part = r.get("prod")
+        if part and L.get("rev") and L.get("op") is not None and abs(sum(part.values()) / 1e8 - L["op"]) <= 0.04 * L["rev"]:
+            op[end] = part
+            if r.get("geo") and set(r["geo"]) == set(part):
+                rv[end] = r["geo"]
+    return op, rv
+
+
 def tidy(q):
     """해마다 조금씩 다른 표기('소스,조미소재'·'소스· 조미소재'·'기 타'·'국내 (내수)')를 같은 칸으로 — 이름은 최신 표기."""
     from difflib import SequenceMatcher
-    key = lambda s: {"MEMORY": "메모리"}.get(s.strip().upper(), re.sub(r"[\s·ㆍ,/\-\.]|\(.*?\)|및", "", s))
+    key = lambda s: {"MEMORY": "메모리", "E&S": "이엔에스", "IT서비스부문": "정보통신부문"}.get(s.strip().upper(), re.sub(r"[\s·ㆍ,/\-\.]|\(.*?\)|및", "", s))  # 이름만 바뀐 부문
     when, disp = defaultdict(set), {}
     for e in sorted(q, reverse=True):
         for m in q[e]:
@@ -436,12 +481,17 @@ def main(codes):
                 new[kind], new["src_" + kind] = tidy({**(old.get(kind) or {}), **q}), SRC[src][kind]
             elif old.get(kind):
                 new[kind], new["src_" + kind] = old[kind], old.get("src_" + kind)
+        opq, rvq = check_op(code, quarters(code, "OP"))  # 📊 부문별 영업이익 (사용자 11/6) — 부문을 하나만 쓰는 회사는 없음
+        if len(opq) >= 4 or (old.get("op") and opq):
+            new["op"], new["op_rev"], new["src_op"] = tidy({**(old.get("op") or {}), **opq}), tidy({**(old.get("op_rev") or {}), **rvq}), "DART 연결재무제표 주석 '영업부문' 영업이익 (누적 차이로 분기)"
+        elif old.get("op"):
+            new.update({k: old[k] for k in ("op", "op_rev", "src_op") if k in old})
         if not new:
             print(f"  ✗ {code}: 맞는 분기 없음 (안 맞음 {len(bads)}: {' '.join(bads[:5])})")
             continue
         saved[code] = new
         say = lambda k: f"{len(new[k])}분기 {min(new[k])[:7]}~{max(new[k])[:7]} ({best[k][1]})" if new.get(k) else "없음"
-        print(f"  {code}: 제품군 {say('prod')} · 지역 {say('geo')}")
+        print(f"  {code}: 제품군 {say('prod')} · 지역 {say('geo')} · 부문 이익 {len(new.get('op') or {})}분기")
     OUT.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
     print("저장:", OUT)
 
@@ -455,6 +505,8 @@ if __name__ == "__main__":
         pr, ge, tt = classify(rows)
         assert pr == {"면스낵": 120, "소스": 10, "물류 등 용역매출": 7} and ge == {"국내": 25, "해외(수출)": 105} and tt == 137, (pr, ge, tt)
         assert unit("(단위 : 백만원)") == 1e6 and unit("(단위: 억원)") == 1e8
+        assert NK("소스, 조미소재") == NK("소스조미소재") == NK("소스· 조미소재") and NK("유제품/ 기능성식품") == NK("유제품 기능성식품")
+        assert re.search(OPR, "영업이익(손실)") and re.search(OPR, "보고부문영업이익") and not re.search(OPR, "세전부문이익(손실)")
         print("ok")
     else:
         main(sys.argv[1:])
