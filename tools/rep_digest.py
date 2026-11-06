@@ -120,7 +120,8 @@ def todo(days=3, mx=10):
         T = {}
     for code, L in (T.get("stocks") or {}).items():
         for x in L if code in S else []:
-            ok = (x["ch"] == "ked_epic_ai" and "리서치 요약" in x.get("t", "")) or (x["ch"] == "bumgore" and x.get("ib"))
+            # 제목에 우리 종목 이름이 있을 때만 (계열사·동종 회사 리포트 '한화시스템 … 한화오션 지분' 같은 건 우리 종목 리포트가 아님 — 11/6 11개 섞였음)
+            ok = S[code]["name"] in x.get("t", "") and ((x["ch"] == "ked_epic_ai" and "리서치 요약" in x.get("t", "")) or (x["ch"] == "bumgore" and x.get("ib")))
             if ok and x["d"] >= cut and x["u"] not in have_u and not any((code, d, fk(x.get("firm"))) in hk for d in (x["d"], prev(x["d"]))):
                 rows.append((S[code], {**x, "tg": True}))
     TXT.mkdir(parents=True, exist_ok=True)
