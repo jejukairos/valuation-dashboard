@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["collector/global_pe.py", "collector/employees.py", "collector/segq.py", "collector/lithium.py", "collector/cons_trend.py", "config/global_peers.yaml", ".github/workflows/gpe.yml"]
+    paths: ["collector/global_pe.py", "collector/employees.py", "collector/segq.py", "collector/lithium.py", "collector/dram.py", "collector/cons_trend.py", "config/global_peers.yaml", ".github/workflows/gpe.yml"]
 
 permissions:
   contents: write
@@ -49,6 +49,11 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: cd collector && python -u lithium.py
+      - name: 💾 D램 가격 (트렌드포스 공개 화면 — 받은 날은 쌓아 둠)
+        if: always()
+        env:
+          PYTHONIOENCODING: utf-8
+        run: cd collector && python -u dram.py
       - name: 📈 업종별 매출·영업이익 컨센서스 추이 (와이즈리포트 — 받은 날짜는 쌓아 둠)
         if: always()
         env:
@@ -63,6 +68,7 @@ jobs:
           git add cache/demp_*.json 2>/dev/null || true
           git add cache/segq.json 2>/dev/null || true
           git add site/data/lithium.json site/data/cons_ind.json cache/cons_hist.json 2>/dev/null || true
+          git add site/data/dram.json cache/dram_hist.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "글로벌 동종 12MF PER $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done

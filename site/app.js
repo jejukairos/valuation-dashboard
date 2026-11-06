@@ -1637,13 +1637,13 @@ function kqNewsHTML() {
       <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${capTxt(c)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
     return { date: k.date || "", html: `<div class="card" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">${head}
       <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${k.cur === "USD" ? "발표" : "공시"}</a>` : ""}</div>
-      ${irBriefHTML(c.code, c.name)}
       ${ez ? kid({ date: ez.date, title: `${ez.quarter} 실적발표`, easy: ez.easy, sum: true }) : ""}
       ${priceBox(c)}
       ${kqTable(k)}
       ${kqPtHTML(k)}
       ${moodHTML(c)}
       ${kqBox(k, c.code)}
+      ${irBriefHTML(c.code, c.name)}
     </div>` };
   });
   const shown = new Set(list.map((c) => c.code));
@@ -3909,7 +3909,7 @@ async function openStock(code) {
     const growHtml = await growthBlock(code, d);
     const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
-    const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬
+    const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : DR_CODES.includes(code) ? (await drGet(), drHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬 · 💾 메모리 회사는 D램 값
     await consGet();
     const consG = consFor(code), consHtml = consG ? consHTML(consG, false) : "";  // 📈 그 종목 업종 컨센서스 (닫아 둠)
     try { await gpeGet(); } catch (_) { /* 🌍 글로벌 비교 그림만 빠짐 */ }
@@ -3917,7 +3917,7 @@ async function openStock(code) {
       ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + (IRB[code] || IRB[PREF_COMMON[code]] ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 그 아래 숫자와 심층 요약</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + kqHTML(d) + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (IRB[code] || IRB[PREF_COMMON[code]] ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
@@ -4754,12 +4754,13 @@ async function loadIndustry() {
   if (!EXP) { try { EXP = await (await fetch("data/exports.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { EXP = {}; } }
   if (!AUTOS) { try { AUTOS = await (await fetch("data/autosales.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { AUTOS = {}; } }
   await liGet();
+  await drGet();
   await consGet();
   // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + expHTML("ramen") + expHTML("food")],
-    ["💾 반도체", () => consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
+    ["💾 반도체", () => drHTML() + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
@@ -5041,6 +5042,48 @@ function liHTML(code) {
       <li>🧪 소재 회사 (에코프로비엠·포스코퓨처엠·엘앤에프) = 판매가격 하락 + 재고평가손실 (비싸게 산 재고 값이 깎임)</li>
       <li>🔄 볼 것: 소재 회사는 수주가 느는 것보다, <b>리튬값이 멈추고(↔) 공장 가동률이 돌아와</b> 실제 이익이 나아지는지가 중요</li></ul>${me}
     <div class="note src">출처: ${esc(LI.src || "")} · ${esc(LI.updated_at || "")} 받음 · 4주 −5% 아래 = 🔻 · +5% 위 = 🔺 · 그 사이 = ↔ · 증권사 그림(KOMIS 현물, 달러/kg)과 단위·기준이 달라 숫자가 조금 달라요 · 원화는 오늘 환율로 바꾼 대략</div></div>`;
+}
+/* ---------- 💾 D램 가격 (data/dram.json ← collector/dram.py, 트렌드포스 공개 화면 평일 하루 두 번 · 받은 날은 쌓아 둠) — 사용자 11/6: 크로스체크·트래킹, "이번에 꺾였어" ---------- */
+let DR = null;
+const DR_CODES = ["005930", "005935", "000660", "MU"], DR_MAIN = "DDR5 16Gb (2Gx8) 4800/5600";
+async function drGet() { if (!DR) { try { DR = await (await fetch("data/dram.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { DR = {}; } } return DR; }
+function drStat(D, name = DR_MAIN) {
+  const h = D?.hist?.[name] || [], row = D?.secs?.dram_spot?.rows?.find((r) => r.n === name);
+  if (!h.length || !row) return null;
+  const hi = h.reduce((a, b) => (b[1] >= a[1] ? b : a)), last = h.at(-1), dd = (last[1] / hi[1] - 1) * 100;
+  let down = 0; for (let i = h.length - 1; i > 0 && h[i][1] < h[i - 1][1]; i--) down++;  // 기록된 날끼리 연속 하락
+  const tr = row.chg < 0 && dd <= -1 ? ["🔻", `꺾임 — 고점 대비 ${sg(dd, 1)}`, "--bad"] : row.chg > 0 && last[1] >= hi[1] ? ["🔺", "최고가", "--good"] : ["↔", "멈춤", "--muted"];
+  return { h, row, hi, last, dd, down, tr };
+}
+const drFix = () => {  // DDR5 고정거래가 = keychart.yaml 'ddr5-price' 카드 (산업부 월별)
+  const c = (KEYC?.industry?.반도체?.cards || []).find((x) => x.id === "ddr5-price")?.charts?.[0], l = c?.lines?.find((x) => x.n === "고정거래가");
+  return l ? [l.v.at(-1), c.q.at(-1)] : null;
+};
+function drHTML(code) {
+  const s = drStat(DR);
+  if (!s) return "";
+  const sec = DR.secs, ds = sec.dram_spot, d4 = ds.rows.find((r) => r.n.startsWith("DDR4 16Gb (2Gx8) 3200")), c4 = sec.dram_contract?.rows?.find((r) => r.n === "DDR4 16Gb 2Gx8"), fx = drFix();
+  const usd = (v) => "$" + n(v, v >= 100 ? 0 : 2), md = (dt) => `${+dt.slice(5, 7)}/${+dt.slice(8, 10)}`;
+  const dates = s.h.map((x) => x[0]), ser = [{ n: "DDR5 16Gb", v: s.h.map((x) => x[1]), col: "var(--s1)" }];  // DDR5 하나만 — 여러 개를 한 눈금에 그리면 -2% 꺾임이 평평하게 보임 (DDR4 는 아래 표)
+  const tbl = Object.values(sec).map((x) => `<tr><td colspan="4" style="text-align:left;background:var(--surface-2)"><b>${esc(x.t)}</b> <span class="src">${esc(x.date.slice(0, 10))}</span></td></tr>`
+    + x.rows.map((r) => `<tr><td style="text-align:left">${esc(r.n)}</td><td>${usd(r.avg)}</td><td class="${kcol(r.chg)}">${r.chg == null ? "-" : sg(r.chg, 2)}</td><td class="src">${esc(r.mk || "")}</td></tr>`).join("")).join("");
+  const gap = (a, b) => sg((a / b - 1) * 100, 0);
+  const me = code ? `<div class="note">🔗 ${esc(DASH?.stocks?.find((c) => c.code === code)?.name || "")}는 D램을 <b>파는</b> 회사예요 → 값이 오르면 이익이 늘고, 꺾이면 몇 달 뒤 고정거래가·이익에 반영돼요.</div>` : "";
+  return `<div class="card" style="margin-top:8px" data-jump="dram" data-jname="💾 D램 가격"><div class="chart-title"><b>💾 D램 현물 가격 (매일)</b> <span class="src">${esc(ds.date)} (대만 시각) · <b style="color:var(${s.tr[2]})">${s.tr[0]} ${s.tr[1]}</b></span></div>
+    <div style="font-size:20px;margin:4px 0"><b>${usd(s.row.avg)}</b> <span class="src">DDR5 16Gb 칩 1개 · 세션 평균</span> <span class="${kcol(s.row.chg)}">${sg(s.row.chg, 2)}</span> <span class="src">지난 세션</span></div>
+    <ul class="irl">
+      <li>${s.dd < 0 ? "🔻" : "🔺"} 기록 중 고점 ${usd(s.hi[1])} (${md(s.hi[0])}) → 지금 ${usd(s.last[1])} = <b class="${kcol(s.dd)}">${sg(s.dd, 1)}</b>${s.down ? ` · 기록된 날 기준 <b>${s.down}번 연속 하락</b>` : ""}</li>
+      ${fx ? `<li>⚖️ DDR5 현물 ${usd(s.row.avg)} vs 고정거래가 ${usd(fx[0])} (${esc(fx[1])}, 산업부) → 현물이 <b>${gap(s.row.avg, fx[0])}</b> 위 · 현물이 고정가 아래로 내려오면 보통 고정가도 꺾여요</li>` : ""}
+      ${d4 && c4 ? `<li>🧓 DDR4 16Gb 현물 ${usd(d4.avg)} vs 고정거래가 ${usd(c4.avg)} (${esc(sec.dram_contract.date.slice(0, 7))}) → 현물이 ${gap(d4.avg, c4.avg)} 위</li>` : ""}
+    </ul>
+    ${lineChart({ t: "DDR5 16Gb 현물 (세션 평균, 달러) — 받은 날마다 쌓임", labels: dates, s: ser, fl: (v) => n(v, 2), tick: (i) => md(dates[i]) })}
+    <details class="fvt"><summary class="chart-title">📋 트렌드포스 표 전체 (현물·고정거래가·모듈·GDDR)</summary><div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">제품</th><th>평균값</th><th>변화</th><th>만드는 곳</th></tr></thead><tbody>${tbl}</tbody></table></div></details>
+    <div class="kidbox" style="margin-top:6px">🐣 컴퓨터·서버에 들어가는 메모리 칩 값이에요. 그날그날 시장에서 사고파는 값(현물)이 최근 조금씩 내렸어요. 큰 회사끼리 한 달 단위로 정하는 값(고정거래가)은 아직 오르는 중이라, 현물이 고정가 쪽으로 계속 내려오는지가 '꺾였나'를 가르는 신호예요.</div>
+    <ul class="irl" style="margin-top:6px">
+      <li>🔎 볼 것 ①: 현물이 며칠·몇 주 연속으로 내리는지 (하루 이틀 -1% 는 흔한 흔들림)</li>
+      <li>🔎 볼 것 ②: 11월 고정거래가 (11월 말 발표) — 한 달 오름폭 +3~4% 가 0%·마이너스로 바뀌는지</li>
+      <li>🔎 볼 것 ③: 트렌드포스 10월 고정가 글 요약 — 4분기에도 PC D램 값은 오르지만 오름폭이 줄어드는 중, 노트북 판매 약세·재고 증가가 협상을 빡빡하게 함</li></ul>${me}
+    <div class="note src">출처: <a href="${esc(DR.u)}" target="_blank" rel="noopener">${esc(DR.src)}</a> · ${esc(DR.updated_at)} 받음 · ${esc(DR.seed || "")} · 꺾임 = 지난 세션 하락 + 기록 중 고점보다 1% 넘게 아래 (예측 아님) · 원화는 오늘 환율로 바꾼 대략</div></div>`;
 }
 // 종목 상세의 '자세한 내용 →' 링크: 산업 탭으로 가서 그 카드(id="kc-…")를 펼치고 스크롤
 let KC_GO = null;
