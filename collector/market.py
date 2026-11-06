@@ -213,20 +213,22 @@ def kospi_forward():
             "hist": sorted([[k, v] for k, v in h.items()])}
 
 
-def kospi_trailing():
-    """KRX 코스피 PER·PBR·배당수익률 (KRX 로그인 계정이 GitHub Secrets 에 있을 때만)."""
+def kospi_trailing(code="1001"):
+    """KRX 지수 PER·PBR·배당수익률 (코스피 1001 · 코스닥 2001, KRX 로그인 계정이 GitHub Secrets 에 있을 때만)."""
     if not (os.environ.get("KRX_ID") and os.environ.get("KRX_PW")):
         raise RuntimeError("KRX 로그인 계정이 없어 후행 PER 은 생략 (선택 사항)")
     from pykrx import stock
     end = now_kst().strftime("%Y%m%d")
-    df = stock.get_index_fundamental("20000101", end, "1001")
+    df = stock.get_index_fundamental("20000101", end, code)
     if df is None or df.empty:
         raise RuntimeError("KRX 응답 없음")
     df = df[df["PER"] > 0]
     w = df.resample("W-FRI").last().dropna()
     w.index = list(w.index[:-1]) + [df.index[-1]]  # 이번 주는 아직 안 온 금요일 대신 실제 마지막 거래일
     last = df.iloc[-1]
+    # level = 그날 지수 종가 · fwd_per = KRX 선행 PER (없으면 0 → None) — 📡 신호 탭 표 (사용자 11/6)
     return {"per": float(last["PER"]), "pbr": float(last["PBR"]), "div": float(last.get("배당수익률", 0) or 0),
+            "level": float(last.get("종가", 0) or 0) or None, "fwd_per": float(last.get("선행PER", 0) or 0) or None,
             "date": df.index[-1].strftime("%Y-%m-%d"), "source": "KRX (pykrx)",
             "hist": [[d.strftime("%Y-%m-%d"), round(float(v), 2)] for d, v in w["PER"].items()],
             "pbr_hist": [[d.strftime("%Y-%m-%d"), round(float(v), 3)] for d, v in w["PBR"].items() if v > 0]}
@@ -295,6 +297,7 @@ def collect():
         "sp500_forward": attempt("S&P500 선행 PER (FactSet)", sp500_forward),
         "kospi_forward": attempt("코스피 선행 PER (직접 계산)", kospi_forward),
         "kospi_trailing": _optional(kospi_trailing),
+        "kosdaq_trailing": _optional(lambda: kospi_trailing("2001")),
     }
 
 

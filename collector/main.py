@@ -889,8 +889,9 @@ def main():
     m = market.collect()
     for k in ("sp500_trailing", "sp500_forward", "kospi_forward"):
         m[k] = keep_prev(m[k], prev_mkt.get(k), k)
-    if m.get("kospi_trailing", {}).get("error") and prev_mkt.get("kospi_trailing", {}).get("per"):
-        m["kospi_trailing"] = dict(prev_mkt["kospi_trailing"], stale=True)
+    for k in ("kospi_trailing", "kosdaq_trailing"):
+        if (m.get(k) or {}).get("error") and (prev_mkt.get(k) or {}).get("per"):
+            m[k] = dict(prev_mkt[k], stale=True)
     m["manheim"] = keep_prev(attempt("미국 중고차 가격지수 (Manheim)", manheim.collect),
                              prev_mkt.get("manheim"), "manheim")
     m["kospi_fwd_bands"] = keep_prev(attempt("코스피 선행 PER·PBR 밴드", market.kospi_fwd_bands,

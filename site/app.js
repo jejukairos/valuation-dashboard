@@ -4100,13 +4100,62 @@ function kospiMarksTable() {
     <div class="note">선행 기준 = 12개월 선행 BPS(직접 계산, 증권사 차트와 같은 방식) · 지난 실적 기준 = KRX PBR. 자본(BPS)이 그대로라고 보고 계산했어요. 기준선은 config/settings.yaml 의 kospi_pbr_marks 에서 바꿀 수 있어요.</div>`;
 }
 
-/* ---------- PBR 계산기 탭 ---------- */
+/* ---------- 📡 신호 탭 (사용자 11/6: 맨 왼쪽 · PBR 탭을 안으로) — 코스피·코스닥·삼성전자·SK하이닉스: 지수(주가)가 얼마면 PBR·PER 이 몇 배인지 + 지금 자리 ---------- */
+const SIG_REF = { d: "11/5", L: 5383.8, pbf: 1.02, pbt: 1.34, pef: 3.76, pet: 8.55 };  // 사용자 11/6 전달 증권사 표 (코스피, 비교용)
+const niceStep = (x) => { const p = 10 ** Math.floor(Math.log10(x)); return [1, 2, 2.5, 5, 10].map((k) => k * p).find((s) => s >= x); };  // x 보다 크거나 같은 '딱 떨어지는' 간격 (코스피 200 · 삼성 1만 · 하이닉스 5만)
+function sigTable(o) {  // o = {name, unit, L 지금 수준, date, m {pbf 12MF PBR, pbt TTM PBR, pef 12MF PER, pet TTM PER}, marks [{v, kind, t}], pos, src}
+  const st = niceStep(o.L * 0.0325), lv = [o.L];  // 지금 ~ -26% 를 8~9줄로
+  for (let x = Math.ceil(o.L / st) * st + st; x >= o.L * 0.74; x -= st) if (Math.abs(x - o.L) > st * 0.2) lv.push(x);
+  lv.sort((a, b) => b - a);
+  const K = ["pbf", "pbt", "pef", "pet"], d = o.dec || 0;
+  const rows = lv.map((x) => { const now = x === o.L;
+    return `<tr${now ? ' style="background:var(--warn-bg);font-weight:700"' : ""}><td style="text-align:left;white-space:nowrap">${n(x, now ? d : 0)}${now ? " ◀ 지금" : ` <span class="src">${pct((x / o.L - 1) * 100, 0, true)}</span>`}</td>${K.map((k) => `<td>${o.m[k] > 0 ? n((o.m[k] * x) / o.L, 2) : "-"}</td>`).join("")}</tr>`; }).join("");
+  const mk = (o.marks || []).filter((m) => o.m[m.kind] > 0).map((m) => { const x = (o.L * m.v) / o.m[m.kind]; return `${esc(m.t)} = <b>${n(x, 0)}</b> (${pct((x / o.L - 1) * 100, 0, true)})`; });
+  return `<div class="card" style="margin-bottom:10px"><div class="chart-title"><b>${esc(o.name)}</b> <span class="src">${esc(o.date || "")}</span></div>
+    <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th rowspan="2" style="text-align:left">${esc(o.unit)}</th><th colspan="2">PBR (배)</th><th colspan="2">PER (배)</th></tr><tr><th>12MF</th><th>TTM</th><th>12MF</th><th>TTM</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${o.pos ? `<div class="note">📍 ${o.pos}</div>` : ""}${mk.length ? `<div class="note">📏 ${mk.join(" · ")}</div>` : ""}<div class="note src">${o.src}</div></div>`;
+}
+const pctRank = (h, v, yrs = 10) => { const ds = h.map((x) => x[0]), a = h.slice(sliceYears(ds, yrs)).map((x) => x[1]).filter((x) => x > 0); return a.length ? { pos: (a.filter((x) => x < v).length / a.length) * 100, avg: a.reduce((s, x) => s + x, 0) / a.length, from: h[sliceYears(ds, yrs)]?.[0] } : null; };
+async function signalHTML() {
+  const M = DASH.market || {}, kf = M.kospi_forward || {}, kt = M.kospi_trailing || {}, kq = M.kosdaq_trailing || {}, ws = M.woosan || {}, out = [];
+  if (kf.level && kf.value) {  // 코스피: 12MF = 시총 상위 150 컨센서스 합산(직접 계산) · TTM = KRX (같은 날 종가로 맞춤)
+    const L = kf.level, adj = kt.level ? L / kt.level : 1, r = kt.pbr_hist ? pctRank(kt.pbr_hist, kt.pbr) : null;
+    out.push(sigTable({ name: "코스피", unit: "지수", L, dec: 1, date: `${kt.date || kf.date} 종가 기준`,
+      m: { pbf: kf.fwd_pbr, pbt: kt.pbr && kt.pbr * adj, pef: kf.value, pet: kt.per && kt.per * adj },
+      marks: (DASH.settings?.kospi_pbr_marks || []).map((m) => ({ v: m.value, kind: "pbf", t: `12MF PBR ${m.value}배${m.label && !m.label.startsWith("PBR") ? ` (${m.label.split(" (")[0]})` : ""}` })),
+      pos: r ? `TTM PBR ${n(kt.pbr, 2)}배 = ${esc(String(r.from || "").slice(0, 4))}년부터 10년 중 아래에서 <b>${n(r.pos, 0)}%</b> 자리 (10년 평균 ${n(r.avg, 2)}배)` : "",
+      src: `12MF = 시총 상위 150곳 중 ${kf.used || "-"}곳 컨센서스 합산 (직접 계산) · TTM = KRX 지난 실적 · 📷 비교: 전달 증권사 표(${SIG_REF.d} ${n(SIG_REF.L, 1)}) PBR ${SIG_REF.pbf}·${SIG_REF.pbt} · PER ${SIG_REF.pef}·${SIG_REF.pet}` }));
+  }
+  if (kq.level && kq.pbr) {  // 코스닥: KRX 후행 PER·PBR (+ KRX 선행 PER, 없으면 우산 텔레그램 주간 12MF PER)
+    const r = kq.pbr_hist ? pctRank(kq.pbr_hist, kq.pbr) : null, fpe = kq.fwd_per || (ws.kosdaq_pe ? ws.kosdaq_pe : null);
+    out.push(sigTable({ name: "코스닥", unit: "지수", L: kq.level, dec: 2, date: `${kq.date} 종가 기준`, m: { pbf: null, pbt: kq.pbr, pef: fpe, pet: kq.per },
+      pos: r ? `TTM PBR ${n(kq.pbr, 2)}배 = 10년 중 아래에서 <b>${n(r.pos, 0)}%</b> 자리 (10년 평균 ${n(r.avg, 2)}배)` : "",
+      src: `TTM = KRX 지난 실적 · 12MF PER = ${kq.fwd_per ? "KRX 선행 PER" : `우산 텔레그램 주간 숫자 (${esc(ws.date || "")} 기준이라 지수와 날짜가 달라요)`} · 12MF PBR 은 무료 자료가 없어 비워 둠` }));
+  } else out.push(`<div class="card" style="margin-bottom:10px"><b>코스닥</b> <span class="src">KRX 코스닥 PER·PBR 을 다음 데이터 갱신 때부터 받아요${ws.kosdaq_pe ? ` · 지금은 12MF PER ${n(ws.kosdaq_pe, 1)}배만 (우산 텔레그램 ${esc(ws.date || "")})` : ""}</span></div>`);
+  const v = encodeURIComponent(DASH.updated_at);
+  for (const code of ["005930", "000660"]) {
+    const c = DASH.stocks.find((x) => x.code === code);
+    if (!c) continue;
+    let d = {};
+    try { d = await (await fetch(`data/stocks/${code}.json?v=${v}`)).json(); } catch (_) { /* TTM 칸만 빠짐 */ }
+    const L = c.price, now = d.now || {}, adj = now.price ? L / now.price : 1, fm = c.fwd_mult || {}, b = d.bands?.PBR?.periods?.["10y"];
+    const mk = ((PBR?.items || []).find((x) => x.code === code)?.marks || []).map(([val, lab]) => ({ v: val, kind: "pbf", t: `12MF PBR ${val}배 ${lab}` }));
+    out.push(sigTable({ name: c.name, unit: "주가 (원)", L, date: `${d.price_date || ""} 종가 기준`.trim(),
+      m: { pbf: fm.PBR?.["12MF"], pbt: now.pbr && now.pbr * adj, pef: fm.PER?.["12MF"], pet: now.per && now.per * adj }, marks: mk,
+      pos: b ? `PBR (1년 뒤 BPS 기준) 10년 중 아래에서 <b>${n(b.pos, 0)}%</b> 자리 (하단 ${n(b.low, 2)} · 평균 ${n(b.avg, 2)} · 상단 ${n(b.high, 2)}배)` : "",
+      src: "12MF = 증권사 컨센서스 앞으로 12개월 EPS·BPS (카드 위 숫자와 같음) · TTM = 네이버 지난 실적 PER·PBR · 📏 = 🧮 PBR 기준선 (아래 계산기와 같음)" }));
+  }
+  return `<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}`;
+}
+
+/* ---------- PBR 계산기 (📡 신호 탭 아래쪽) ---------- */
 let PBR = null;
 async function loadPBR() {
   if (!PBR) {
     try { PBR = await (await fetch("data/pbr_watch.json?t=" + Date.now(), { cache: "no-store" })).json(); }
     catch (e) { $("#pbrCards").innerHTML = `<div class="empty">PBR 계산기 데이터를 불러오지 못했어요.</div>`; return; }
   }
+  signalHTML().then((h) => { $("#signalBody").innerHTML = h; }).catch(() => { $("#signalBody").innerHTML = `<div class="empty">신호 표를 못 그렸어요.</div>`; });
   const base = PBR.base_year;
   $("#pbrIntro").innerHTML = `연도별 추정 BPS(주당순자산) × PBR 배수로 가격을 계산해요. <b>${esc(base)}</b> 열이 기준 연도예요. 갱신 ${esc(PBR.updated_at)}`;
   $("#pbrCards").innerHTML = PBR.items.map((it, i) => pbrCard(it, base, i)).join("") || `<div class="empty">config/pbr_watch.yaml 에 종목을 넣어 주세요.</div>`;
@@ -4176,7 +4225,7 @@ function showView() {
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 탭 (사용자 11/5) — 🇰🇷 보유는 #kr
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   $("#earnView").hidden = view !== "earn";
   if (view === "earn") renderEarn();
   $("#chartView").hidden = view !== "chart";
