@@ -12,9 +12,12 @@ from common import DATA, HTTP, load_yaml, now_kst, write_json
 from street import _text
 
 AICA = "aicorporateanalysisdeepdive"  # 기사 요약(원문 링크) + '종목 3Q26 증권사 리포트 종합'(몇 곳·목표가 상향/유지/하향) — 사용자 2026-11-03 크로스체크용
-KR_CH = ["report_figure_by_offset", "ked_epic_ai", "maddingStock", AICA, "bumgore", "bornlupin"]  # bumgore·본루팡 = 한국 종목 해외 증권사 리포트 요약 (사용자 2026-11-03)
+# 에테르 반도체 새 채널 (사용자 2026-11-06: 옛 aethersemiresearch 에서 하나씩 옮김 — 미국 리포트·외국계 증권사의 한국 종목 리포트가 많음)
+# 공개 미리보기가 열려 있음 · 시황·데스크 코멘트도 많아 제목(첫 두 줄)에 종목이 있을 때만
+AETHER = "aethersemiconductor"
+KR_CH = ["report_figure_by_offset", "ked_epic_ai", "maddingStock", AICA, "bumgore", "bornlupin", AETHER]  # bumgore·본루팡 = 한국 종목 해외 증권사 리포트 요약 (사용자 2026-11-03)
 INSIDER = "insidertracking"  # 미국 주식 인사이더 — '(티커) Q3 어닝콜 요약'·'실적 요약' (사용자 2026-11-03: 경쟁사 실적·콜은 여기 참고) · 뉴스도 많아 제목에 종목이 있을 때만
-US_CH = ["Fundeasyearnings", "fundeasy_choi", INSIDER]
+US_CH = ["Fundeasyearnings", "fundeasy_choi", INSIDER, AETHER]
 # 🎙 경쟁사(미국) 새 실적 요약 알림: peer_calls 의 미국 경쟁사 → 그 회사 이름이 제목에 있고 '실적·어닝·콜' 글
 # shortcut: 회사 이름 검색어를 손으로 적음 — 경쟁사를 새로 넣으면 여기에도 한 줄
 PEER_Q = {"EL": "Lauder", "ELF": "e.l.f.", "MU": "마이크론", "LMT": "록히드", "RTX": "RTX"}
@@ -144,7 +147,8 @@ def collect():
         for ch in US_CH if us else KR_CH:
             for q in names:
                 try:
-                    ok = lambda x: about(x["text"], names) and (ch != AICA or aica_ok(x["text"], names)) and (ch != INSIDER or any(n in x["text"].split("\n", 1)[0] for n in names))  # noqa: E731
+                    ok = lambda x: about(x["text"], names) and (ch != AICA or aica_ok(x["text"], names)) and (ch != INSIDER or any(n in x["text"].split("\n", 1)[0] for n in names)) \
+                        and (ch != AETHER or any(n in " ".join(x["text"].strip().split("\n")[:2]) for n in names))  # noqa: E731
                     for x in filter(ok, search(ch, q, cut)):
                         posts.setdefault(x["id"], {"d": x["d"], "hm": x["hm"], "ch": ch, "u": f"https://t.me/{x['id']}",
                                                    **({"src": x["src"]} if x.get("src") else {}), **parse(x["text"], names)})
