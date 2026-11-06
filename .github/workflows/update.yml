@@ -17,7 +17,7 @@ on:
         default: 1
   push:                       # 계산 코드·설정이 바뀌면 바로 다시 갱신 (봇의 데이터 저장은 이 경로가 아니라 다시 돌지 않음)
     branches: [main]
-    paths: ["collector/**", "config/**", ".github/workflows/update.yml"]
+    paths: ["collector/**", "config/**", ".github/workflows/update.yml", "!config/rep_digest.yaml", "!config/ir_brief.yaml"]  # 리포트·IR 요약은 PC 작업이 json 까지 바로 올려서 80분 갱신을 안 돌림
 
 permissions:
   contents: write

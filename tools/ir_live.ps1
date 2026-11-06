@@ -107,3 +107,22 @@ if ($now.Hour -ge 8 -and -not (Test-Path $stamp)) {
     $daily = @("config/earnings.yaml", "config/segments.yaml", "config/kpi.yaml", "config/bigtech.yaml", "config/seg_cons.yaml", "config/events.yaml", "config/keychart.yaml", "config/ir_brief.yaml")
     if (git status --porcelain $daily) { if (Publish "실적발표 요약 (매일 점검)" ($daily + "site/data/earnings.json" + "site/data/ir_brief.json")) { Log "매일 점검 요약 올림" } } else { Log "매일 점검: 새 요약 없음" }
 }
+
+# 📑 리포트 한 장 요약 (사용자 11/6): 07~01시 매시간 한 번 — 우리 종목 새 한경 리포트 PDF + 한경에 없는 증권사의 텔레그램 리서치 요약 최대 8개
+#   → Claude 가 tools/rep_digest_task.md 대로 config/rep_digest.yaml (목표가 근거·이익 추정·컨센서스·어조·일정 확정/예상·캐파·주주환원·리스크·임원 매도)
+$rstamp = Join-Path $td ".rep_$(Get-Date -Format yyyyMMddHH)"
+if (($now.Hour -ge 7 -or $now.Hour -le 1) -and -not (Test-Path $rstamp)) {
+    New-Item $rstamp -ItemType File -Force | Out-Null
+    $rf = @(& $py -X utf8 tools\rep_digest.py todo --days 3 --max 8 | Where-Object { $_ -like "transcripts/*" })
+    if ($rf.Count) {
+        $nd = "transcripts/reports/new_digest.yaml"; Remove-Item $nd -ErrorAction SilentlyContinue
+        $prompt = "tools/rep_digest_task.md 를 읽고, 아래 리포트 글자 파일들을 그 형식 그대로 요약해서 $nd 에 새 파일로 써줘 (이번 파일들만). 종목별 지난 흐름·최근 목표가는 transcripts/reports/_ctx.yaml — 그걸 이어서 그 종목 flow 를 새로 쓰고 flow_d 는 오늘 날짜. 파일: $($rf -join ', '). 원문에 없는 숫자는 만들지 말고 쉬운 한국어로. 파일 쓰기만 하고 git 은 하지 마."
+        & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Write" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
+        & $py -X utf8 tools\rep_digest.py merge $nd
+        if ($LASTEXITCODE -eq 0) { & $py -X utf8 tools\rep_digest.py export }
+        if ($LASTEXITCODE -eq 0) {
+            Add-Content -Path (Join-Path $td "reports\.sent") -Value ($rf | ForEach-Object { Split-Path $_ -Leaf }) -Encoding UTF8  # 넘긴 파일은 다시 안 넘김
+            if (Publish "📑 리포트 한 장 요약 $($rf.Count)개" @("config/rep_digest.yaml", "site/data/rep_digest.json")) { Log "리포트 요약 $($rf.Count)개 올림" } }
+        else { Log "rep_digest.yaml 점검 실패 - 되돌리고 다음 시간에 다시"; git checkout -- config/rep_digest.yaml }
+    }
+}
