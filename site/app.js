@@ -694,9 +694,10 @@ async function bandAllRender(box, c) {  // box = '불러오는 중' 자리 (.bwb
   const px = `bw${++BW_N}-`;
   try {
     const d = await (await fetch(`data/stocks/${c.code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json();
-    const ks = bandKinds(c, d.bands), what = ks.map((k) => BAND_NM[k]).join("·");
+    // 사용자 11/6: PER 만 쓰는 종목도 PBR 그림을 바로 아래에 똑같이 (카드 ② 막대는 적정가에 쓰는 배수만)
+    const mk = bandKinds(c, d.bands), ks = ["PER", "PBR"].filter((k) => d.bands?.[k]).concat(mk.includes("DIV") ? ["DIV"] : []), what = ks.map((k) => BAND_NM[k]).join("·");
     box.outerHTML = bandSumHTML(c, d) + bandFutHTML(d, px)
-      + (ks.length ? `<h3>② 10년 자리 근거 <span class="src">${esc(what)} 주간 · 기간 탭</span></h3><div class="card"><div class="kidbox" style="margin:0 0 6px">🐣 그 기간 동안 <b>매주</b> ${esc(what)}을 계산해서 낮은 순으로 줄 세운 뒤, 지금 숫자가 아래에서 몇 % 자리인지예요. 3% 면 '이보다 쌌던 주가 3% 밖에 없다'는 뜻이에요.${ks.length > 1 ? " 둘 다 쓰는 종목이라 카드의 ② 막대는 <b>두 자리의 평균</b>(10년)이에요." : ""}</div>${ks.map((k) => bandWhyHTML(k, d.bands[k], px + k)).join("")}</div>` : "")
+      + (ks.length ? `<h3>② 10년 자리 근거 <span class="src">${esc(what)} 주간 · 기간 탭 · 그림을 누르면 그 주 숫자</span></h3><div class="card"><div class="kidbox" style="margin:0 0 6px">🐣 그 기간 동안 <b>매주</b> 배수를 계산해서 낮은 순으로 줄 세운 뒤, 지금 숫자가 아래에서 몇 % 자리인지예요. 3% 면 '이보다 쌌던 주가 3% 밖에 없다'는 뜻이에요. 카드의 ② 막대는 ${esc(mk.map((k) => BAND_NM[k]).join("·"))}${mk.length > 1 ? " 두 자리의 평균" : ""}(10년)이에요.</div>${ks.map((k) => bandWhyHTML(k, d.bands[k], px + k)).join("")}</div>` : "")
       + per12mfHTML(d, px, "span") + per12mfHTML(d, px, "span", "bps")
       + `<h3>밴드차트 <span class="src">네이버 방식</span></h3><div class="card">${nvSeg(px, "span")}${nvBlock(px + "nv-per", "PER 차트")}${nvBlock(px + "nv-pbr", "PBR 차트")}</div>`
       + kfBlock(px, "span");
@@ -725,9 +726,9 @@ function bandFutInner(d, per) {
   const now = d.price, t0 = new Date(String(d.price_date || "").slice(0, 10) || Date.now()), H = [3, 6, 12], usd = d.currency === "USD";
   const at = (m) => { const t = new Date(t0); t.setUTCMonth(t.getUTCMonth() + m); return t.toISOString().slice(0, 10); };
   const fp = (v) => (usd ? "$" + n(v, 0) : n(v));
-  const sec = [], s = (d.methods || []).includes("PER") && per12mfSeries(d, per);
+  const sec = [], s = per12mfSeries(d, per);
   if (s) sec.push({ t: "📈 12MF PER 밴드 (그때의 12개월 선행 EPS × 배수)", rows: s.ms.map((m) => [`${n(m, 1)}배`, H.map((h) => { const e = s.f12(at(h)); return e ? e * m : null; })]) });
-  const sb = (d.methods || []).includes("PBR") && per12mfSeries(d, per, "bps");
+  const sb = per12mfSeries(d, per, "bps");
   if (sb) sec.push({ t: "📈 12MF PBR 밴드 (그때의 12개월 선행 BPS × 배수)", rows: sb.ms.map((m) => [`${n(m, 2)}배`, H.map((h) => { const e = sb.f12(at(h)); return e ? e * m : null; })]) });
   for (const [key, kind] of [["eps", "PER"], ["bps", "PBR"]]) {
     if (!d.bands?.[kind]) continue;
@@ -747,9 +748,9 @@ function bandSumHTML(c, d) {
   const rows = [], z = (p) => (p == null ? ["-", ""] : p <= 20 ? ["싼 쪽", "var(--good)"] : p >= 80 ? ["비싼 쪽", "var(--bad-ink)"] : ["중간", "var(--ink)"]);
   const add = (nm, now, p, note) => { const [t, col] = z(p); rows.push(`<tr><td style="text-align:left">${nm}</td><td>${now}</td><td>${p == null ? "-" : n(p, 0) + "%"}</td><td style="color:${col};font-weight:700">${t}</td></tr>${note ? `<tr><td colspan="4" class="src" style="text-align:left;padding-top:0">${note}</td></tr>` : ""}`); };
   if (c.band_pos != null) add("② 10년 밴드 자리", "", c.band_pos, "");
-  const s12 = (d.methods || []).includes("PER") && per12mfSeries(d, "10");
+  const s12 = per12mfSeries(d, "10");
   if (s12) { const pe = s12.pts.filter((p) => p[1] != null).map((p) => p[1] / p[2]); add("📈 12MF PER (10년)", `${n(s12.now, 1)}배`, (pe.filter((x) => x < s12.now).length / pe.length) * 100); }
-  const b12 = (d.methods || []).includes("PBR") && per12mfSeries(d, "10", "bps");
+  const b12 = per12mfSeries(d, "10", "bps");
   if (b12) { const pb = b12.pts.filter((p) => p[1] != null).map((p) => p[1] / p[2]); add("📈 12MF PBR (10년)", `${n(b12.now, 2)}배`, (pb.filter((x) => x < b12.now).length / pb.length) * 100); }
   const kf = d.history && (d.bands?.PER || d.bands?.PBR) ? kfSeries(d, "10y") : null;
   if (kf) add("선행 PER NTM (10년)", `${n(kf.cur, 1)}배`, kf.hi > kf.lo ? ((kf.cur - kf.lo) / (kf.hi - kf.lo)) * 100 : null, `가운데값 ${n(kf.med, 1)}배 대비 ${pct((kf.cur / kf.med - 1) * 100, 0, true)} · 최저~최고 사이 자리`);
@@ -1155,7 +1156,8 @@ document.addEventListener("pointermove", (e) => {
   const t = e.target.closest?.(".tiphit");
   if (t) tipAt(t, e.clientX, e.clientY); else if (!e.target.closest?.("svg")) tipHide();
 });
-document.addEventListener("click", (e) => { const t = e.target.closest?.(".tiphit"); if (t) tipAt(t, e.clientX, e.clientY); else tipHide(); });
+// capture: 카드(button) 안 접힌 칸은 누르기를 막아서(stopPropagation) 그 안 그림도 눌러서 숫자가 보이게 먼저 받음 (사용자 11/6)
+document.addEventListener("click", (e) => { const t = e.target.closest?.(".tiphit"); if (t) tipAt(t, e.clientX, e.clientY); else tipHide(); }, true);
 document.addEventListener("scroll", tipHide, { passive: true, capture: true });  // 화면이 움직이면 상자가 엉뚱한 데 남지 않게
 // 막대(값) + 선(%) 미니 차트. 음수 막대는 빨강, 마지막 분기는 진하게
 function qPanel(title, tag, labels, bars, line, usd, color, est = null) {  // est: 칸마다 추정(E) 여부 → 회색, 강조는 마지막 실적 칸
@@ -3347,7 +3349,7 @@ function capexGuideSVG(gs) {
 // shortcut: 과거 시점의 선행 EPS 는 당시 컨센서스 대신 실제 연간 EPS(지난 해는 실적, 앞 해는 지금 추정)로 계산 — 무료로 과거 컨센서스를 받게 되면 바꾸기
 const P12_PERIODS = [["5", "5년"], ["10", "10년"], ["all", "최대"]];  // 사용자 11/6: 밴드는 5년·10년·최대 탭으로
 function per12mfSeries(d, yrs = "5", key = "eps") {  // key = eps → 12MF PER 밴드 · bps → 12MF PBR 밴드 (사용자 11/6)
-  const b = d.bands?.[key === "bps" ? "PBR" : "PER"], eps = Object.fromEntries((d.history || []).map((r) => [r.year, r[key]]));
+  const b = d.bands?.[key === "bps" ? "PBR" : "PER"] || d.bands?.PER || d.bands?.PBR, eps = Object.fromEntries((d.history || []).map((r) => [r.year, r[key]]));  // 주가 줄은 어느 밴드든 같음
   if (!b?.dates?.length) return null;
   const f12 = (ds) => {
     const dt = new Date(ds), y = dt.getFullYear(), w0 = Math.max(0, (12 - dt.getMonth() - dt.getDate() / 31) / 12);
@@ -3524,8 +3526,7 @@ function expHTML(kind) {
 // 12MF 밴드 (key eps = PER · bps = PBR): 선 = 배수 × 그 시점의 12개월 선행 EPS·BPS, 오른쪽은 추정치로 그린 앞으로의 선
 const P12K = (key) => (key === "bps" ? { k: "PBR", v: "BPS", id: "b12", dg: 2 } : { k: "PER", v: "EPS", id: "p12", dg: 1 });
 function per12mfHTML(d, px = "", tag = "button", key = "eps") {
-  const K = P12K(key);
-  if (!(d.methods || []).includes(K.k)) return "";
+  const K = P12K(key);  // 적정가 방법과 관계없이 자료가 있으면 (사용자 11/6: 12MF PBR 밴드를 모든 종목에)
   const s = per12mfSeries(d, "5", key);
   if (!s) return "";
   return `<h3>📈 12MF ${K.k} 밴드 <span class="src">앞으로 ${esc(s.end.slice(0, 7))}까지 · 지금 ${n(s.now, K.dg)}배</span></h3><div class="card">

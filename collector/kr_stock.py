@@ -1,6 +1,7 @@
 """한국 종목: 네이버(가격·현재 지표), 와이즈리포트(컨센서스·최근 5년), OpenDART(10년 이상 재무)."""
 import ast
 import io
+import math
 import os
 import re
 import statistics
@@ -223,8 +224,9 @@ def dart_history(stock_code, splits=()):
     cache = read_json(path, {})
     now = now_kst()
     last_fy = now.year - 1 if now.month >= 4 else now.year - 2
-    years = list(range(last_fy, 2015, -3))
-    if cache.get("last_fy") == last_fy and cache.get("data") and cache.get("v") == 2:
+    # 사용자 11/6 '모든 종목 10년치 이상': 3년 간격이면 '전전기' 칸이 없는 회사는 중간 해가 비어서 → 해마다 사업보고서 (2015 보고서의 전기 = 2014)
+    years = list(range(last_fy, 2014, -1))
+    if cache.get("last_fy") == last_fy and cache.get("data") and cache.get("v") == 3:
         return {int(k): v for k, v in cache["data"].items()}
 
     cc = corp_code(stock_code)
@@ -236,16 +238,17 @@ def dart_history(stock_code, splits=()):
             y = ry - off
             eps = ni = eq = None
             for r in rows:
-                # 옛 보고서는 'ifrs_', 최근 보고서는 'ifrs-full_' 로 시작한다
+                # 옛 보고서는 'ifrs_', 최근 보고서는 'ifrs-full_' 로 시작한다 · 자본변동표(SCE) 같은 이름 행은 빼고 손익(IS·CIS)·재무상태(BS) 에서만
                 aid = r.get("account_id", "").split("_", 1)[-1]
                 v = _amt(r.get(f"{col}_amount"))
+                sj = r.get("sj_div")
                 if v is None:
                     continue
-                if eps is None and aid == "BasicEarningsLossPerShare":
+                if eps is None and aid == "BasicEarningsLossPerShare" and sj in ("IS", "CIS"):
                     eps = v
-                elif ni is None and aid == "ProfitLossAttributableToOwnersOfParent":
+                elif ni is None and aid == "ProfitLossAttributableToOwnersOfParent" and sj in ("IS", "CIS"):
                     ni = v
-                elif eq is None and aid == "EquityAttributableToOwnersOfParent":
+                elif eq is None and aid == "EquityAttributableToOwnersOfParent" and sj == "BS":
                     eq = v
             if ni is None:  # 계정 이름으로 한 번 더 (지배기업 소유주 귀속 순이익)
                 for r in rows:
@@ -254,15 +257,22 @@ def dart_history(stock_code, splits=()):
                             and "포괄" not in nm and _amt(r.get(f"{col}_amount")) is not None:
                         ni = _amt(r.get(f"{col}_amount"))
                         break
-            if eq is None:
+            if eq is None:  # 옛 보고서: '지배기업의 소유주에게 귀속되는 자본' 처럼 '지분' 대신 '자본'
                 for r in rows:
                     nm = r.get("account_nm", "").replace(" ", "")
-                    if r.get("sj_div") == "BS" and "지배기업" in nm and "지분" in nm and _amt(r.get(f"{col}_amount")) is not None:
+                    if r.get("sj_div") == "BS" and "지배기업" in nm and ("지분" in nm or "자본" in nm) and "비지배" not in nm \
+                            and _amt(r.get(f"{col}_amount")) is not None:
+                        eq = _amt(r.get(f"{col}_amount"))
+                        break
+            if eq is None and not any("비지배" in r.get("account_nm", "") for r in rows if r.get("sj_div") == "BS"):
+                for r in rows:  # 비지배지분이 없는 회사(별도 재무제표 등) = 자본총계가 곧 주주 몫
+                    if r.get("sj_div") == "BS" and (r.get("account_id", "").split("_", 1)[-1] == "Equity" or r.get("account_nm", "").replace(" ", "") == "자본총계") \
+                            and _amt(r.get(f"{col}_amount")) is not None:
                         eq = _amt(r.get(f"{col}_amount"))
                         break
             if eps is None:
                 for r in rows:
-                    if "기본주당" in r.get("account_nm", "") and _amt(r.get(f"{col}_amount")) is not None:
+                    if "기본주당" in r.get("account_nm", "") and r.get("sj_div") in ("IS", "CIS") and _amt(r.get(f"{col}_amount")) is not None:
                         eps = _amt(r.get(f"{col}_amount"))
                         break
             if eps is None and ni is None:
@@ -298,9 +308,13 @@ def dart_history(stock_code, splits=()):
         if rec.get("ni") is not None and rec.get("equity"):
             base = (rec["equity"] + prev["equity"]) / 2 if prev.get("equity") else rec["equity"]
             rec["roe"] = rec["ni"] / base * 100
+    # 이번에 못 받은 해(접속 실패 등)는 예전 캐시 값을 그대로 (예전 값은 이미 분할 보정됨)
+    for k, v in (cache.get("data") or {}).items():
+        if int(k) not in data or not (data[int(k)].get("eps") or data[int(k)].get("ni")):
+            data[int(k)] = {**v, **{kk: vv for kk, vv in data.get(int(k), {}).items() if vv is not None}}
     if not data:
         raise RuntimeError("DART 재무 데이터 없음")
-    write_json(path, {"last_fy": last_fy, "data": data, "v": 2})
+    write_json(path, {"last_fy": last_fy, "data": data, "v": 3})
     return data
 
 
@@ -488,7 +502,9 @@ def cross_check(stock_code, wise_annual_data):
 
 
 def _sane(dart):
-    """단위가 섞인 옛 보고서 값 걸러내기: 순이익÷EPS(=주식수)가 다른 해와 2배 넘게 다르면 버린다."""
+    """단위가 섞인 옛 보고서 값 바로잡기: 순이익÷EPS(=주식수)가 다른 해와 2배 넘게 다르거나 EPS 가 비면
+    EPS = 순이익 ÷ 여러 해 가운데 주식수 (사용자 11/6 '10년치 이상' — 예전엔 그 해를 버렸음, 현대로템 14~16년 EPS 가 1,000배로 들어옴).
+    순이익 없이 EPS 만 있는 해는 다른 해 EPS 와 20배 넘게 다르지 않을 때만."""
     shares = {y: r["ni"] / r["eps"] for y, r in dart.items()
               if r.get("ni") and r.get("eps") and r["ni"] * r["eps"] > 0}
     if not shares:
@@ -497,12 +513,23 @@ def _sane(dart):
     ok = {}
     for y, r in dart.items():
         s = shares.get(y)
-        if s is None:
-            # 적자 해: EPS 부호만 맞으면 같은 주식수로 크기 검증
-            if r.get("ni") and r.get("eps") and abs(r["ni"] / r["eps"]) / med < 2 and abs(r["ni"] / r["eps"]) / med > 0.5:
-                ok[y] = r
+        if s is not None and 0.5 < s / med < 2:
+            ok[y] = r
+        elif s is not None:  # 단위만 틀림 (1,000배 등): 10의 거듭제곱만큼만 바로잡음 — 유상증자로 주식 수가 바뀐 회사도 안전
+            k = round(math.log10(s / med))
+            if abs(k) >= 2 and 0.5 < s / med / 10 ** k < 2:  # 100배·1,000배(원↔천원)만 — 10배쯤은 실제 증자·감자일 수 있음
+                ok[y] = dict(r, eps=r["eps"] * 10 ** k, eps_fixed=True)
+    for y, r in dart.items():  # EPS 가 빈 해: 앞뒤 2년 안 실제 주식 수(순이익÷EPS)로만
+        if y in ok or not r.get("ni") or r.get("eps") is not None:
             continue
-        if 0.5 < s / med < 2:
+        near = [ok[z]["ni"] / ok[z]["eps"] for z in sorted(ok, key=lambda z: abs(z - y)) if abs(z - y) <= 2
+                and not ok[z].get("eps_fixed") and ok[z].get("ni") and ok[z].get("eps") and ok[z]["ni"] * ok[z]["eps"] > 0]
+        if near:
+            ok[y] = dict(r, eps=r["ni"] / near[0], eps_fixed=True)
+    eps_ok = sorted(abs(r["eps"]) for r in ok.values() if r.get("eps"))
+    me = eps_ok[len(eps_ok) // 2] if eps_ok else None
+    for y, r in dart.items():
+        if y not in ok and not r.get("ni") and r.get("eps") and me and 1 / 20 < abs(r["eps"]) / me < 20:
             ok[y] = r
     return ok
 
@@ -583,4 +610,9 @@ if __name__ == "__main__":  # 자체 점검: 분기 3개월 영업이익과 1년
     assert q["202509"]["op"] == 30 and q["202509"]["op_ago"] == 20
     assert q["202512"]["op"] == 40 and q["202512"]["op_ago"] == 30
     assert q["202603"]["op"] == 50 and q["202603"]["op_ago"] == 25
+    # 옛 DART 값 바로잡기: 주식 수 100주 · 2014년 EPS 가 1,000배(원↔천원) → 1/1000 · 2015년 EPS 빔 → 2016년 주식 수로 · 2013년 10배 차이(증자일 수 있음) → 버림
+    dd = {2014: {"ni": 1000, "eps": 10000}, 2015: {"ni": 2000}, 2016: {"ni": 3000, "eps": 30}, 2017: {"ni": 4000, "eps": 40},
+          2018: {"ni": 5000, "eps": 50}, 2013: {"ni": 1000, "eps": 100}}
+    sn = _sane(dd)
+    assert sn[2014]["eps"] == 10 and sn[2015]["eps"] == 20 and sn[2016]["eps"] == 30 and 2013 not in sn, sn
     print("ok")
