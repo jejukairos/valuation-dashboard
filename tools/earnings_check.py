@@ -1,6 +1,7 @@
 """실적 요약 예약 작업(tools/ir_live.ps1) 도우미.
 has <코드> <분기>  → earnings.yaml 에 그 분기 요약이 이미 있으면 종료코드 0
-export            → earnings.yaml 을 site/data/earnings.json 으로 (전체 갱신을 기다리지 않고 바로 사이트에 반영)"""
+export            → earnings.yaml 을 site/data/earnings.json 으로 (전체 갱신을 기다리지 않고 바로 사이트에 반영)
+export_ir         → ir_brief.yaml(📋 IR 요약·IR 분석)을 site/data/ir_brief.json 으로 (earnings.yaml 과 따로 — 둘이 동시에 고쳐져도 안 겹치게)"""
 import sys
 from pathlib import Path
 
@@ -12,3 +13,9 @@ if sys.argv[1] == "has":
     sys.exit(0 if any(x.get("quarter") == sys.argv[3] for x in d.get(sys.argv[2]) or []) else 1)
 if sys.argv[1] == "export":
     write_json(DATA / "earnings.json", d)
+if sys.argv[1] == "export_ir":
+    ir = load_yaml("ir_brief.yaml") or {}
+    bad = [f"{c} {e.get('quarter')}" for c, l in ir.items() for e in l if not (e.get("sum") and e.get("ana"))]
+    if bad:
+        sys.exit(f"ir_brief.yaml: IR 요약(sum)·IR 분석(ana) 둘 다 있어야 함 — {bad}")
+    write_json(DATA / "ir_brief.json", ir)

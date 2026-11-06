@@ -1346,21 +1346,25 @@ function kqBars(title, qs, f, est, color, cur, opt = {}) {  // opt.tag = 제목 
     const cx = x0 + bw * i + bw / 2, last = i === li;
     g += `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(q.q)}</text>`;
     if (q[f] == null) {  // 실적이 아직 없는 칸 (잠정실적엔 EPS 가 없음): 예상만 회색으로, 실적 자리는 비워 둠
-      if (last && ev != null) g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--axis)") + lab(cx, ly(ev), ev, "qv", "var(--muted)");
+      if (last && ev != null) g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--muted)") + lab(cx - bw * 0.21, ly(ev), ev, "qv", "var(--muted)");
       return;
     }
     if (q.est) { g += bar(cx, bw * 0.5, q[f], "var(--axis)") + lab(cx, ly(q[f]), q[f], "qv", "var(--muted)"); return; }
-    if (last && ev != null) {  // 예상(회색) vs 실적(색) 막대 나란히 — 숫자도 각 막대 위 왼쪽·오른쪽으로 (사용자 11/5: 위아래로 쌓지 말고, 그림을 살짝 가려도 됨)
-      g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--axis)") + bar(cx + bw * 0.21, bw * 0.38, q[f], color)
-        + lab(cx - 1, ly(ev), ev, "qv", "var(--muted)").replace('text-anchor="middle"', 'text-anchor="end"')
-        + lab(cx + 1, ly(q[f]), q[f], "qv b", color).replace('text-anchor="middle"', 'text-anchor="start"');
+    if (last && ev != null) {  // 예상(진한 회색) vs 실적(색) 막대 나란히 — 숫자는 각 막대 바로 위 가운데, 높이가 비슷해 겹치면 큰 값 숫자를 한 줄 위로 (텔레그램 실적 알림 그림처럼, 사용자 11/6)
+      const xe = cx - bw * 0.21, xa = cx + bw * 0.21, v = q[f];
+      let ye = ly(ev), ya = ly(v);
+      if (Math.abs(ye - ya) < 11 && (ev >= 0) === (v >= 0)) {
+        if (ev >= 0) { if (v >= ev) ya = ye - 11; else ye = ya - 11; }  // 위로 쌓기
+        else if (v <= ev) ya = ye + 11; else ye = ya + 11;  // 음수는 막대 아래라 더 작은 값을 한 줄 아래로
+      }
+      g += bar(xe, bw * 0.38, ev, "var(--muted)") + bar(xa, bw * 0.38, v, color) + lab(xe, ye, ev, "qv", "var(--muted)") + lab(xa, ya, v, "qv b", color);
     } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? (q[f] < 0 ? "var(--bad)" : color) : null);
   });
   g += tipCols((i) => x0 + bw * i + bw / 2, bw, 0, 172, qs.map((q, i) => `${q.q}${q.est ? " (예상 E)" : ""}\n${title}: ${q[f] == null ? "-" : SV(q[f]) + unit}${i === li && ev != null ? `\n예상(컨센서스): ${SV(ev)}${unit}` : ""}`));
   const s = ev != null && ev > 0 && qs[li]?.[f] != null ? (qs[li][f] / ev - 1) * 100 : null;  // 마지막 실적 분기 (뒤에 예상 E 가 붙어도)
   const tag = s == null ? "" : `<span class="qtag${s < 0 ? " bad" : ""}">예상대비 ${s >= 0 ? "+" : ""}${n(s, 1)}%</span>`;
   return `<div class="qp"><div class="qt"><b>${title} <span class="src">${unit}</span></b>${tag || opt.tag || ""}</div>${opt.sub ? `<div class="src">${opt.sub}</div>` : ""}<svg viewBox="0 0 ${W} 172" role="img" aria-label="${esc(title)}">${g}</svg>
-    ${ev != null || qs.some((q) => q.est) ? `<div class="src" style="text-align:right;padding:0 4px 4px"><span style="color:var(--axis)">■</span> ${ev != null ? `예상(컨센서스)${qs[li]?.[f] != null || li < 0 ? ` <b>${SV(ev)}</b>` : ""}` : "추정(E)"} · <span style="color:${color}">■</span> 실적${ev != null && qs[li]?.[f] != null ? ` <b style="color:${color}">${SV(qs[li][f])}</b>` : ""}</div>` : ""}</div>`;
+    ${ev != null || qs.some((q) => q.est) ? `<div class="src" style="text-align:right;padding:0 4px 4px"><span style="color:var(${ev != null ? "--muted" : "--axis"})">■</span> ${ev != null ? `예상(컨센서스)${qs[li]?.[f] != null || li < 0 ? ` <b>${SV(ev)}</b>` : ""}` : "추정(E)"} · <span style="color:${color}">■</span> 실적${ev != null && qs[li]?.[f] != null ? ` <b style="color:${color}">${SV(qs[li][f])}</b>` : ""}</div>` : ""}</div>`;
 }
 // 분기 / 연간 실적 막대 — 한국은 영업이익을 맨 앞에 (연간 = 와이즈리포트 연간 실적 + 추정 E)
 const KQ_MAP = {};
@@ -1384,6 +1388,19 @@ document.addEventListener("click", (e) => {
   box.querySelectorAll(".kseg button").forEach((x) => x.classList.toggle("on", x === b));
   box.querySelector(".qgrid").innerHTML = kqCharts(KQ_MAP[box.dataset.code], b.dataset.k);
 });
+// 📋 IR 요약 · IR 분석 (config/ir_brief.yaml → data/ir_brief.json) — 사용자 11/6: 텔레그램 실적 알림 채널의 두 칸 형식을 맨 먼저, 그다음 우리 심층 요약
+let IRB = {};
+function irBriefHTML(code, name) {
+  const e = (IRB[code] || IRB[PREF_COMMON[code]] || [])[0];  // 우선주는 보통주 실적 그대로
+  if (!e) return "";
+  const box = (t, secs) => `<details class="fvt" open><summary class="chart-title"><b>${esc(name || code)} (${esc(code)}) ${t}</b> <span class="src">${esc(e.period || e.quarter || "")}</span></summary>
+    ${(secs || []).map((s) => `<div style="margin-top:6px"><b>${esc(s.h)}</b><ul class="irl">${(s.l || []).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
+  const src = e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.src || "회사 IR 자료")}</a>` : esc(e.src || "");
+  return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${box("IR 요약", e.sum)}${box("IR 분석", e.ana)}
+    <div class="src" style="margin-top:6px">📋 ${esc(e.date || "")} · ${src} · 증감률·이익률은 발표 숫자로 계산한 값 · 분석은 해석이고 매매 추천이 아니에요</div></div>`;
+}
+// ✦ 포인트 (collector/kq.py points — 텔레그램 실적 알림과 같은 규칙: 5개 분기 최대·영업이익률 / QoQ 엇갈림·동반 성장)
+const kqPtHTML = (k) => ((k.points || []).length ? `<div class="kqpt" style="margin-top:8px"><b>✦ 포인트</b> <span class="src">최근 5개 분기 기준</span><ul class="irl">${k.points.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "");
 // 실적 · 예상 · 예상 대비 · QoQ · YoY 표 (상세 화면과 첫 화면 '🧾 실적 발표' 같이 씀)
 function kqTable(k) {
   const P = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${v >= 0 ? "+" : ""}${n(v, 1)}%</span>`);
@@ -1620,9 +1637,11 @@ function kqNewsHTML() {
       <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${capTxt(c)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
     return { date: k.date || "", html: `<div class="card" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">${head}
       <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${k.cur === "USD" ? "발표" : "공시"}</a>` : ""}</div>
+      ${irBriefHTML(c.code, c.name)}
       ${ez ? kid({ date: ez.date, title: `${ez.quarter} 실적발표`, easy: ez.easy, sum: true }) : ""}
       ${priceBox(c)}
       ${kqTable(k)}
+      ${kqPtHTML(k)}
       ${moodHTML(c)}
       ${kqBox(k, c.code)}
     </div>` };
@@ -1655,7 +1674,7 @@ function kqHTML(d) {
     ${k.waiting && nx ? `<div class="warnbox">🧾 ${esc(nx.q)} 잠정실적 공시가 났어요 (${esc(k.filing.date)}). 네이버 숫자에 반영되면 예상 대비가 자동으로 계산돼요. <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">공시 보기</a></div>` : ""}
     ${k.prelim && k.filing ? `<div class="note">🧾 ${esc(k.latest)} 숫자는 <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">DART 잠정실적 공시(${esc(k.filing.date)})</a> 값이에요. 네이버에 확정 숫자가 들어오면 자동으로 바뀌어요 (EPS 는 그때 채워짐).</div>` : ""}
     ${kqTable(k)}
-    ${(k.points || []).length ? `<div class="chart-title" style="margin-top:8px"><b>✦ 포인트</b></div><ul class="irl">${k.points.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${kqPtHTML(k)}
     ${acctHTML(d.code)}
     ${kqBox(k, d.code)}
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact"><thead><tr><th style="text-align:left">분기</th><th>매출액</th><th>영업이익</th><th>순이익</th><th>EPS</th></tr></thead><tbody>
@@ -3898,7 +3917,7 @@ async function openStock(code) {
       ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + (IRB[code] || IRB[PREF_COMMON[code]] ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 그 아래 숫자와 심층 요약</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + kqHTML(d) + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
@@ -5647,6 +5666,7 @@ async function load() {
     try { PROFILES = await (await fetch("data/profiles.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { PROFILES = {}; }
     try { EARNINGS = await (await fetch("data/earnings.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { EARNINGS = {}; }
     try { IRCAL = await (await fetch("data/ir_calendar.json?t=" + Date.now(), { cache: "no-store" })).json() || { items: [] }; } catch (_) { IRCAL = { items: [] }; }
+    try { IRB = await (await fetch("data/ir_brief.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { IRB = {}; }
     try { EVENTS = await (await fetch("data/events.json?t=" + Date.now(), { cache: "no-store" })).json() || []; } catch (_) { EVENTS = []; }
     try { SOMONG = await (await fetch("data/somong.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { SOMONG = {}; }
     try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { CAPEX = {}; }  // 🇺🇸 탭 빅테크 현금흐름

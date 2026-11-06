@@ -649,7 +649,7 @@ def stock_detail(h, rates_now, fx):
     det["card"]["kq_date"] = k.get("date")  # 마지막 실적 발표일 → 📬 시킹알파 값 다시 볼 때 (화면 saDue)
     if k.get("date") and (now_kst().date() - pd.Timestamp(k["date"]).date()).days <= 3:
         det["card"]["kq_new"] = k["latest"]
-        det["card"]["kq_brief"] = {f: k.get(f) for f in ("cur", "latest", "prelim", "date", "rows", "quarters", "est_bar", "filing", "annual", "fwd")}  # 첫 화면 '🧾 실적 발표'
+        det["card"]["kq_brief"] = {f: k.get(f) for f in ("cur", "latest", "prelim", "date", "rows", "quarters", "est_bar", "filing", "annual", "fwd", "points")}  # 첫 화면 '🧾 실적 발표'
     if k.get("waiting"):
         det["card"]["kq_wait"] = (k.get("next") or {}).get("q")
     return det

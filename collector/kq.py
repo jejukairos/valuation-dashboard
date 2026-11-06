@@ -83,29 +83,28 @@ def label(k):
     return f"{k[2:4]}.{int(k[4:]) // 3}Q"
 
 
-def points(qs, est):
-    """한 줄 포인트: 최근 N개 분기 최대, 영업이익률 변화, 이익 엇갈림, 예상 대비."""
-    cur, prev = qs[-1], qs[-2] if len(qs) > 1 else None
-    out, n = [], len(qs)
+def points(qs):
+    """✦포인트 — 텔레그램 실적 알림(t.me/maddingStock)과 같은 규칙 (사용자 11/6, 9개 회사로 맞춰 봄):
+    1줄 = 최근 5개 분기 최대인 항목 + 영업이익률(직전, 5개 분기 최대면 표시) / 2줄 = QoQ 엇갈림·동반 성장 중 하나
+    (매출↓영업이익↑ > 영업이익↑순이익↓ > 매출·영업이익↑ 순서 · 둘 다 줄면 안 씀). 예상 대비는 표에 있어서 안 씀."""
+    qs = qs[-5:]
+    cur, prev, n = qs[-1], qs[-2] if len(qs) > 1 else None, len(qs)
     tops = [nm for f, nm in (("sales", "매출"), ("op", "영업이익"), ("ni", "순이익"), ("eps", "EPS"))
             if cur.get(f) is not None and all(cur[f] >= (q.get(f) if q.get(f) is not None else -1e18) for q in qs)]
-    if tops and n >= 3:
-        out.append(f"{'·'.join(tops)} 최근 {n}개 분기 최대")
+    line = f"{'·'.join(tops)} 최근 {n}개 분기 최대" if tops and n >= 3 else ""
     opm = lambda q: q["op"] / q["sales"] * 100 if q.get("op") is not None and q.get("sales") else None  # noqa: E731
     if opm(cur) is not None and prev and opm(prev) is not None:
         best = all(opm(cur) >= (opm(q) if opm(q) is not None else -1e9) for q in qs)
-        out.append(f"영업이익률 {opm(cur):.1f}% (직전 {opm(prev):.1f}%{f', {n}개 분기 최대' if best and n >= 3 else ''})")
+        line += f"{', ' if line else ''}영업이익률 {opm(cur):.1f}% (직전 {opm(prev):.1f}%{f', {n}개 분기 최대' if best and n >= 3 else ''})"
+    out = [line] if line else []
     if prev:
         so, oo, no = _pct(cur.get("sales"), prev.get("sales")), _pct(cur.get("op"), prev.get("op")), _pct(cur.get("ni"), prev.get("ni"))
-        if oo is not None and no is not None and oo > 0 > no:
+        if so is not None and oo is not None and so < 0 < oo:
+            out.append(f"매출 감소(QoQ {so:+.1f}%)에도 영업이익 개선(QoQ {oo:+.1f}%)")
+        elif oo is not None and no is not None and oo > 0 > no:
             out.append(f"영업이익 증가(QoQ {oo:+.1f}%)에도 순이익 감소(QoQ {no:+.1f}%)")
         elif so is not None and oo is not None and so > 0 and oo > 0:
             out.append(f"매출·영업이익 동반 성장(QoQ {so:+.1f}% · {oo:+.1f}%)")
-        elif so is not None and oo is not None and so < 0 and oo < 0:
-            out.append(f"매출·영업이익 동반 감소(QoQ {so:+.1f}% · {oo:+.1f}%)")
-    s = _pct(cur.get("op"), (est or {}).get("op"))
-    if s is not None and abs(s) >= 10:
-        out.append(f"영업이익 예상 {'상회' if s > 0 else '하회'} ({s:+.1f}%)")
     return out
 
 
@@ -163,7 +162,7 @@ def collect(code):
     # 발표일: 이 분기의 잠정실적 공시일 (공시를 안 내는 회사는 우리가 처음 본 날)
     ann = filing["date"] if (filing and not waiting and filing["date"] > _qend(last)) else hist[last].get("seen")
     return {"latest": label(last), "prelim": hist[last].get("prelim"), "seen": hist[last].get("seen"), "date": ann, "rows": rows, "est_date": (cons.get(last) or {}).get("date"), "quarters": qs,
-            "est_bar": est, "points": points(qs, est), "filing": filing, "waiting": waiting,
+            "est_bar": est, "points": points(qs), "filing": filing, "waiting": waiting,
             "next": {"q": label(nxt[0]), **{f: cons[nxt[0]].get(f) for f in ROWS}, "date": cons[nxt[0]].get("date")} if nxt else None}
 
 
@@ -226,7 +225,7 @@ def collect_us(tkr, qtrs, hist):
     annual = [{"q": f"{str(y)[2:]}{'E' if r.get('estimate') else ''}", "est": bool(r.get("estimate")), "eps": r.get("eps")}
               for y, r in sorted((hist or {}).items()) if isinstance(r, dict) and r.get("eps") is not None][-8:]
     return {"cur": "USD", "latest": lab, "prelim": None, "seen": seen[last]["seen"], "date": (eps.get(last) or {}).get("date") or seen[last]["seen"], "rows": rows, "quarters": qs, "est_bar": est,
-            "est_date": (cons.get(lab) or {}).get("date"), "points": [], "waiting": False, "annual": annual,
+            "est_date": (cons.get(lab) or {}).get("date"), "points": points(qs), "waiting": False, "annual": annual,
             "filing": {"date": (eps.get(last) or {}).get("date"), "name": "실적발표 (야후)", "url": f"https://finance.yahoo.com/quote/{tkr}/"},
             "next": {"q": _qlabel(nxt_end), "eps": up[2], "sales": (cons.get(_qlabel(nxt_end)) or {}).get("sales"), "date": up[0]} if up else None}
 
@@ -247,4 +246,28 @@ if __name__ == "__main__":  # 잠정실적 표 읽기 점검 (HD현대중공업 
     tj = t.replace("단위 : 억원", "단위 : 조원").replace("57,325 | 63,136", "195.3 | 171.5").replace("8,917 | 10,357", "107.4 | 89.5")
     assert parse_prelim(tj, "202609")["sales"] == 1953000 and parse_prelim(tj, "202609")["op"] == 1074000  # 삼성전자 '조원'
     assert parse_prelim(t, "202606") is None and parse_prelim(t.replace("당기실적 | 2026-07-01 | ~ | 2026-09-30 | ", ""), "202609")
+    # ✦포인트: 텔레그램 실적 알림 9곳 (26.3Q, 25.3Q~26.3Q 매출·영업이익·순이익·EPS) — 채널은 소수점 아래 숫자로 계산해 0.1%p 다를 수 있어 숫자는 가리고 비교
+    import re
+    tg = {"카카오": ([(6384, 1005, 651, 147), (7261, 1279, 718, 162), (7009, 1193, 1644, 371), (7139, 1262, 3184, 719), (7029, 1178, 1004, 226)],
+                   ["영업이익률 16.8% (직전 17.7%)"]),
+          "KG파이낸셜": ([(608, 102, 78, 202), (555, 78, 43, 122), (625, 70, 40, 108), (622, 88, 67, 174), (711, 104, 81, 223)],
+                      ["매출·영업이익·순이익·EPS 최근 5개 분기 최대, 영업이익률 14.6% (직전 14.1%)", "매출·영업이익 동반 성장(QoQ +14.3% · +18.5%)"]),
+          "에스케이바이오팜": ([(1917, 701, 714, 946), (1944, 463, 1327, 1744), (2279, 898, 1027, 1342), (2474, 971, 851, 1086), (2584, 1163, 543, 693)],
+                       ["매출·영업이익 최근 5개 분기 최대, 영업이익률 45.0% (직전 39.2%, 5개 분기 최대)", "영업이익 증가(QoQ +19.8%)에도 순이익 감소(QoQ -36.1%)"]),
+          "아이쓰리시스템": ([(324, 42, 33, 469), (285, 38, 52, 719), (324, 44, 49, 669), (395, 48, 38, 524), (424, 59, 44, 602)],
+                      ["매출·영업이익 최근 5개 분기 최대, 영업이익률 13.9% (직전 12.2%, 5개 분기 최대)", "매출·영업이익 동반 성장(QoQ +7.5% · +23.5%)"]),
+          "덕산네오룩스": ([(983, 175, 141, 541), (1271, 231, 227, 898), (729, 171, 168, 648), (946, 185, 199, 783), (1068, 240, 121, 487)],
+                     ["영업이익 최근 5개 분기 최대, 영업이익률 22.5% (직전 19.6%)", "영업이익 증가(QoQ +29.5%)에도 순이익 감소(QoQ -39.6%)"]),
+          "에코프로에이치엔": ([(284, 23, 25, 119), (392, 23, 36, 173), (347, 50, 45, 215), (515, 58, 51, 241), (528, 113, 122, 581)],
+                       ["매출·영업이익·순이익·EPS 최근 5개 분기 최대, 영업이익률 21.4% (직전 11.3%, 5개 분기 최대)", "매출·영업이익 동반 성장(QoQ +2.5% · +96.9%)"]),
+          "인바디": ([(598, 98, 94, 715), (624, 95, 64, 475), (684, 130, 163, 1211), (733, 177, 145, 1050), (713, 193, 44, 326)],
+                   ["영업이익 최근 5개 분기 최대, 영업이익률 27.1% (직전 24.1%, 5개 분기 최대)", "매출 감소(QoQ -2.7%)에도 영업이익 개선(QoQ +8.9%)"]),
+          "HDC": ([(18221, 1962, 1169, 1229), (13782, 1315, 924, 1614), (12574, 1803, 1072, 1148), (15197, 2284, 2568, 3385), (17106, 2800, 1822, 3234)],
+                  ["영업이익 최근 5개 분기 최대, 영업이익률 16.4% (직전 15.0%, 5개 분기 최대)", "영업이익 증가(QoQ +22.6%)에도 순이익 감소(QoQ -29.1%)"]),
+          "티엘비": ([(689, 87, 65, 304), (726, 86, 70, 330), (758, 107, 85, 396), (882, 128, 108, 503), (940, 166, 117, 493)],
+                   ["매출·영업이익·순이익 최근 5개 분기 최대, 영업이익률 17.7% (직전 14.5%, 5개 분기 최대)", "매출·영업이익 동반 성장(QoQ +6.5% · +29.9%)"])}
+    mask = lambda s: re.sub(r"[+-]?\d+(?:\.\d+)?", "#", s)  # noqa: E731
+    for nm, (rows, want) in tg.items():
+        got = points([dict(zip(("sales", "op", "ni", "eps"), r)) for r in [(1, 1, 1, 1)] * 3 + rows])  # 앞 3분기는 5개 분기 밖
+        assert [mask(x) for x in got] == [mask(x) for x in want], (nm, got)
     print("ok")

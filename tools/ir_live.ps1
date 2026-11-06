@@ -18,11 +18,15 @@ $claude = Join-Path $env:USERPROFILE ".local\bin\claude.exe"
 $edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 $port = 9355
 
-function Publish($msg, $files = @("config/earnings.yaml", "config/segments.yaml", "site/data/earnings.json")) {
+function Publish($msg, $files = @("config/earnings.yaml", "config/segments.yaml", "site/data/earnings.json", "config/ir_brief.yaml", "site/data/ir_brief.json")) {
     # 요약 파일이 읽히면 사이트용 json 도 만들고 그 파일들만 올림
     if ($files -contains "site/data/earnings.json") {
         & $py tools\earnings_check.py export
         if ($LASTEXITCODE -ne 0) { Log "earnings.yaml 읽기 실패 - 올리지 않음"; return $false }
+    }
+    if ($files -contains "site/data/ir_brief.json") {  # 📋 IR 요약·IR 분석 — 깨졌으면 그 두 파일만 빼고 나머지는 올림
+        & $py tools\earnings_check.py export_ir
+        if ($LASTEXITCODE -ne 0) { Log "ir_brief.yaml 읽기 실패 - IR 요약은 빼고 올림"; $files = @($files | Where-Object { $_ -notlike "*ir_brief*" }) }
     }
     $ym = @($files | Where-Object { $_ -like "*.yaml" })  # 깨진 YAML 은 사이트 수집기를 멈추게 하니 올리기 전에 읽어 봄
     & $py -c "import sys, yaml; [yaml.safe_load(open(f, encoding='utf-8')) for f in sys.argv[1:]]" @ym
@@ -55,7 +59,7 @@ foreach ($e in @($cal.items | Where-Object { $_.market -eq "KR" })) {
     if ($ec.mediaStatus -ne "DONE" -or -not (Test-Path $txt) -or (Get-Item $txt).Length -lt 2000) { continue }  # 아직 진행 중이면 다음 실행 때 다시
     & $py tools\earnings_check.py has $e.code $qtr
     if ($LASTEXITCODE -eq 0) { New-Item "$txt.done" -ItemType File -Force | Out-Null; continue }
-    $prompt = "transcripts\$(Split-Path $txt -Leaf) 는 $($e.name)($($e.code)) $qtr 어닝콜 발표 자막 원문이야. tools/earnings_task.md 3번 형식 그대로 config/earnings.yaml 의 `"$($e.code)`" 맨 위에 quarter: $qtr 요약을 추가해줘 (date: $($when.ToString('yyyy-MM-dd')), source: 네이버 증권 IR 어닝콜 발표 자막, transcript: $($ec.aspUrl)). 원문에 없는 숫자는 만들지 말고 쉬운 한국어로. 파일 수정만 하고 git 은 하지 마."
+    $prompt = "transcripts\$(Split-Path $txt -Leaf) 는 $($e.name)($($e.code)) $qtr 어닝콜 발표 자막 원문이야. tools/earnings_task.md 3번 형식 그대로 config/earnings.yaml 의 `"$($e.code)`" 맨 위에 quarter: $qtr 요약을 추가해줘 (date: $($when.ToString('yyyy-MM-dd')), source: 네이버 증권 IR 어닝콜 발표 자막, transcript: $($ec.aspUrl)). 그리고 3-0 형식으로 config/ir_brief.yaml 의 `"$($e.code)`" 맨 위에 IR 요약·IR 분석도 넣어줘. 원문에 없는 숫자는 만들지 말고 쉬운 한국어로. 파일 수정만 하고 git 은 하지 마."
     & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
     & $py tools\earnings_check.py has $e.code $qtr
     if ($LASTEXITCODE -eq 0 -and (Publish "$($e.name) $qtr 실적발표 요약 (발표 자막)")) { New-Item "$txt.done" -ItemType File -Force | Out-Null; Log "$($e.name) $qtr 요약 올림" }
@@ -100,6 +104,6 @@ if ($now.Hour -ge 8 -and -not (Test-Path $stamp)) {
     $prompt = "tools/earnings_task.md 를 읽고 그 순서대로 오늘 실적발표 요약을 해줘. 한국 종목 자막은 transcripts 폴더에 있으면 그걸 써. 파일 수정만 하고 git 은 하지 마. 모든 답변은 쉬운 한국어로."
     & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write,WebFetch,WebSearch" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
     # earnings_task.md 가 고치는 파일 전부 (핵심 지표·빅테크 숨은 숫자·부문 예상·쉬운 이벤트도 같이 올림)
-    $daily = @("config/earnings.yaml", "config/segments.yaml", "config/kpi.yaml", "config/bigtech.yaml", "config/seg_cons.yaml", "config/events.yaml", "config/keychart.yaml")
-    if (git status --porcelain $daily) { if (Publish "실적발표 요약 (매일 점검)" ($daily + "site/data/earnings.json")) { Log "매일 점검 요약 올림" } } else { Log "매일 점검: 새 요약 없음" }
+    $daily = @("config/earnings.yaml", "config/segments.yaml", "config/kpi.yaml", "config/bigtech.yaml", "config/seg_cons.yaml", "config/events.yaml", "config/keychart.yaml", "config/ir_brief.yaml")
+    if (git status --porcelain $daily) { if (Publish "실적발표 요약 (매일 점검)" ($daily + "site/data/earnings.json" + "site/data/ir_brief.json")) { Log "매일 점검 요약 올림" } } else { Log "매일 점검: 새 요약 없음" }
 }
