@@ -218,6 +218,10 @@ watchlist:
   - {name: LG에너지솔루션, market: KR, code: "373220", industry: 2차전지, methods: [PBR, PER], fair_methods: [PBR]}
   - {name: 삼성SDI, market: KR, code: "006400", industry: 2차전지, methods: [PBR, PER], fair_methods: [PBR]}
   - {name: SK이노베이션, market: KR, code: "096770", industry: 정유·2차전지, methods: [PBR, PER], fair_methods: [PBR]}
+  # 🏢 AIDC (AI 데이터센터 짓기·전력) — 2026-11-06 사용자: "관심종목에 AIDC 쪽 — 자이에스앤디·GS건설·지엔씨에너지, 실적발표도" · 건설 2곳은 현대건설처럼 PBR 로 적정가
+  - {name: GS건설, market: KR, code: "006360", industry: AIDC, methods: [PBR, PER], fair_methods: [PBR]}
+  - {name: 자이에스앤디, market: KR, code: "317400", industry: AIDC, methods: [PBR, PER], fair_methods: [PBR]}
+  - {name: 지엔씨에너지, market: KR, code: "119850", industry: AIDC, methods: [PER]}
   # M7 빅테크 — 보유·공동자산에 있는 종목은 한 번만 계산하고 ⭐ 관심 탭에도 같이 보여요
   - {name: 애플, market: US, code: AAPL, industry: 하드웨어, methods: [PER]}
   - {name: 마이크로소프트, market: US, code: MSFT, industry: 소프트웨어, methods: [PER]}
