@@ -30,7 +30,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 95
+    timeout-minutes: 125   # 수집 110분 + 저장·다시 시도
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,7 +42,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: 수집
         id: collect
-        timeout-minutes: 80       # 넘으면 이 단계만 멈추고 아래 상태 기록·저장·다시 시도는 그대로 (종목 계산은 55분이 지나면 남은 종목을 직전 값으로)
+        timeout-minutes: 110      # 11/7 80분을 넘겨 실패 (종목 57개 + 캔들·사이클 단계) → 110분 · 넘으면 이 단계만 멈추고 아래 상태 기록·저장·다시 시도는 그대로 (종목 계산은 55분이 지나면 남은 종목을 직전 값으로)
         env:
           ECOS_KEY: ${{ secrets.ECOS_KEY }}
           DART_KEY: ${{ secrets.DART_KEY }}
