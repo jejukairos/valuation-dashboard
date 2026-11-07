@@ -1507,18 +1507,21 @@ function priceSpark(c, months = 6, inBtn = false) {
 }
 // 📐 선 읽기 칸 안 캔들 차트 (사용자 11/7 "일봉·주봉·월봉 + 거래량, 지지·저항·피보나치·채널 온전히") — data/ohlc/{코드}.json (collector/ohlc.py)
 // 꼭짓점 = 고가·저가 · 주봉·월봉은 로그 눈금이라 선도 로그 가격으로 계산 (그림에서 곧게 보이게)
-const TA_TF = [["d", "일봉", 250, 21, [20, 60, 120]], ["w", "주봉", 156, 4.33, [13, 26, 52]], ["m", "월봉", 150, 1, [10, 20]]], OHLC = {};
+// 이평선 (사용자 11/7): 일봉 20·60·120·200일 · 주봉 4·13·26·52주 · 월봉 5개월 — 색은 [기간, 색] (그림 아래 범례와 같음)
+const TA_TF = [["d", "일봉", 250, 21, [[20, "var(--s3)"], [60, "var(--warn)"], [120, "var(--bad)"], [200, "var(--ink)"]]],
+  ["w", "주봉", 156, 4.33, [[4, "var(--bad)"], [13, "var(--s4)"], [26, "var(--s3)"], [52, "var(--s7)"]]], ["m", "월봉", 150, 1, [[5, "var(--s3)"]]]], OHLC = {};
 function taAnalyze(full, kind, c) {
   const [, , view, pm, mas] = TA_TF.find((x) => x[0] === kind), M = full.c.length, s0 = Math.max(0, M - view);
-  const ma = Object.fromEntries(mas.map((k) => [k, full.c.map((_, i) => (i >= k - 1 ? full.c.slice(i - k + 1, i + 1).reduce((a, b) => a + b, 0) / k : null)).slice(s0)]));
-  const ch = { ...Object.fromEntries(["t", "o", "h", "l", "c", "v"].map((k) => [k, full[k].slice(s0)])), ma }, N = ch.c.length;
+  const ma = Object.fromEntries(mas.map(([k]) => [k, full.c.map((_, i) => (i >= k - 1 ? full.c.slice(i - k + 1, i + 1).reduce((a, b) => a + b, 0) / k : null)).slice(s0)]));
+  const ch = { ...Object.fromEntries(["t", "o", "h", "l", "c", "v"].map((k) => [k, full[k].slice(s0)])), ma, maCol: Object.fromEntries(mas) }, N = ch.c.length;
   const lg = kind !== "d", F = (v) => (lg ? Math.log(v) : v), I = (v) => (lg ? Math.exp(v) : v), last = ch.c[N - 1];
   const w = kind === "d" ? 5 : kind === "w" ? 3 : 2, tol = kind === "d" ? 0.025 : kind === "w" ? 0.04 : 0.06;
   const piv = (arr, hi) => { const o = []; for (let i = w; i < N - 1; i++) { const s = arr.slice(i - w, Math.min(N, i + w + 1)); if (arr[i] === (hi ? Math.max(...s) : Math.min(...s)) && (!o.length || i - o.at(-1) > w)) o.push(i); } return o; };
   const PH = piv(ch.h, true), PL = piv(ch.l, false), fmt = c.currency === "USD" ? (v) => `$${n(v, 2)}` : (v) => n(Math.round(v / (v >= 10000 ? 100 : 1)) * (v >= 10000 ? 100 : 1), 0);
   const pp = (v) => pct((v / last - 1) * 100, 1, true);
   const per = (s) => (lg ? (Math.exp(s * pm) - 1) * 100 : ((s * pm) / last) * 100);  // 기울기 → 한 달에 몇 %
-  const iA = ch.h.indexOf(Math.max(...ch.h)), iC = ch.l.indexOf(Math.min(...ch.l)), lines = [], g = [];
+  const iA = ch.h.indexOf(Math.max(...ch.h)), iC = ch.l.indexOf(Math.min(...ch.l)), lines = [], g = [], leg = [];
+  const COL = { r: "var(--bad)", s: "var(--s1)", f: "var(--s7)" }, SW = (col, dash) => `<span style="display:inline-block;width:16px;height:0;border-top:3px ${dash ? "dashed" : "solid"} ${col};vertical-align:middle;margin-right:4px"></span>`;
   // 채널: 하락 구조(최고점이 먼저) = 고점선(최고점 → 뒤 꼭짓점 중 다른 고점이 모두 아래인 선) + 평행선(최고점 뒤 최저점) · 상승 구조 = 저점선 + 평행선
   let ch2 = null;
   // 최고점이 저점보다 뒤여도, 최고점 뒤로 12% 넘게 빠졌으면 지금은 하락 구조 (삼양식품 9월 고점 → 11월)
@@ -1546,44 +1549,44 @@ function taAnalyze(full, kind, c) {
   [...PH.map((i) => [ch.h[i], "h", i]), ...PL.map((i) => [ch.l[i], "l", i])].sort((a, b) => a[0] - b[0]).forEach(([v, k, i]) => { const x = cl.find((q) => Math.abs(v / q.v - 1) < tol); if (x) { x.n++; x.v = (x.v * (x.n - 1) + v) / x.n; x[k]++; x.lastI = Math.max(x.lastI, i); } else cl.push({ v, n: 1, h: k === "h" ? 1 : 0, l: k === "l" ? 1 : 0, lastI: i }); });
   const far = kind === "d" ? 0.3 : kind === "w" ? 0.45 : 0.6, lv = cl.filter((q) => q.n >= 2 && Math.abs(q.v / last - 1) <= far), R =lv.filter((q) => q.v > last * 1.003).sort((a, b) => a.v - b.v).slice(0, 2), S = lv.filter((q) => q.v < last * 0.997).sort((a, b) => b.v - a.v).slice(0, 2);
   R.forEach((q) => { const brk = q.l >= 1 && q.l >= q.h; g.push(`<hr data-v="${q.v}" data-t="${brk ? "깨진 지지→저항" : "저항"} ${q.n}번 · ${fmt(q.v)}" data-c="r"/>`);
-    lines.push(`🧱 ${brk ? "<b>깨진 지지 → 저항</b>" : "저항"} ${fmt(q.v)} (${pp(q.v)}) · <b>${q.n}번</b> 닿음${brk ? " — 형님 원칙: 실패한 매매라도 이 근처까지는 반등해 손실을 메울 수 있음" : q.n >= 3 ? " — 3번 넘게 부딪히면 뚫을 확률↑ (쌍봉·삼봉)" : ""}`); });
-  S.forEach((q) => { g.push(`<hr data-v="${q.v}" data-t="지지 ${q.n}번 · ${fmt(q.v)}" data-c="s"/>`); lines.push(`🧱 지지 ${fmt(q.v)} (${pp(q.v)}) · <b>${q.n}번</b> 닿음${q.n >= 3 ? " — 지지를 3~4번 맞으면 다음엔 크게 깨질 확률↑" : ""}`); });
+    leg.push([SW(COL.r, 1), `${brk ? "<b>깨진 지지 → 저항</b>" : "저항"} ${fmt(q.v)} (${pp(q.v)}) · <b>${q.n}번</b> 닿음${brk ? " — 형님 원칙: 실패한 매매라도 이 근처까지는 반등해 손실을 메울 수 있음" : q.n >= 3 ? " — 3번 넘게 부딪히면 뚫을 확률↑ (쌍봉·삼봉)" : ""}`]); });
+  S.forEach((q) => { g.push(`<hr data-v="${q.v}" data-t="지지 ${q.n}번 · ${fmt(q.v)}" data-c="s"/>`); leg.push([SW(COL.s, 1), `지지 ${fmt(q.v)} (${pp(q.v)}) · <b>${q.n}번</b> 닿음${q.n >= 3 ? " — 지지를 3~4번 맞으면 다음엔 크게 깨질 확률↑" : ""}`]); });
   // 박스(횡보): 최근 d 60봉 · w 26봉 · m 12봉의 고가~저가 폭이 좁으면
   const K = kind === "d" ? 60 : kind === "w" ? 26 : 12, bh = Math.max(...ch.h.slice(-K)), bl = Math.min(...ch.l.slice(-K)), wide = (bh / bl - 1) * 100;
   if (wide < (kind === "d" ? 18 : kind === "w" ? 30 : 45)) { g.push(`<box data-a="${N - K}" data-hi="${bh}" data-lo="${bl}"/>`);
     const at = (last - bl) / (bh - bl || 1);
-    lines.push(`📦 최근 ${K}${kind === "d" ? "일" : kind === "w" ? "주" : "개월"} <b>박스권</b> ${fmt(bl)} ~ ${fmt(bh)} (폭 ${n(wide, 0)}%) · 지금 박스의 ${n(at * 100, 0)}% 자리${at <= 0.25 ? " — <b>박스 하단</b>: 횡보장 원칙은 하단 매수 (장대 음봉이어도)" : at >= 0.75 ? " — <b>박스 상단</b>: 횡보장 원칙은 상단 매도 (거래량 터진 장대 양봉이어도)" : ""} · 횡보가 길어질수록 아래로 깰 때 더 크게 빠질 수 있음`); }
+    leg.push([`<span style="display:inline-block;width:14px;height:10px;background:var(--warn);opacity:.35;vertical-align:middle;margin-right:4px"></span>`, `최근 ${K}${kind === "d" ? "일" : kind === "w" ? "주" : "개월"} <b>박스권</b> ${fmt(bl)} ~ ${fmt(bh)} (폭 ${n(wide, 0)}%) · 지금 박스의 ${n(at * 100, 0)}% 자리${at <= 0.25 ? " — <b>박스 하단</b>: 횡보장 원칙은 하단 매수 (장대 음봉이어도)" : at >= 0.75 ? " — <b>박스 상단</b>: 횡보장 원칙은 상단 매도 (거래량 터진 장대 양봉이어도)" : ""} · 횡보가 길어질수록 아래로 깰 때 더 크게 빠질 수 있음`]); }
   // 피보나치: 보이는 기간 최고점 → 그 뒤 최저점 (하락) 되돌림 38.2·50·61.8% · 아니면 최저점 → 그 뒤 최고점 (상승) 눌림
   const lowAfter = Math.min(...ch.l.slice(iA)), hiAfter = Math.max(...ch.h.slice(iC));
   if (down && lowAfter < ch.h[iA] * 0.85) { const H = ch.h[iA], L = lowAfter;
     [0.382, 0.5, 0.618].forEach((r) => g.push(`<hr data-v="${L + (H - L) * r}" data-t="피보 ${n(r * 100, 1)}%${r === 0.5 ? " · " + fmt(L + (H - L) * r) : ""}" data-c="${r === 0.5 ? "f" : "f2"}"/>`));
-    lines.push(`🌀 피보나치 (하락 되돌림): 고점 ${fmt(H)} (${ch.t[iA]}) → 저점 ${fmt(L)} · <b>50% = ${fmt(L + (H - L) / 2)}</b> (${pp(L + (H - L) / 2)}) · 38.2% ${fmt(L + (H - L) * 0.382)} · 61.8% ${fmt(L + (H - L) * 0.618)} — 하락장 원칙: 반등하면 1/2 자리를 먼저 봄`); }
+    leg.push([SW(COL.f, 1), `피보나치 (하락 되돌림): 고점 ${fmt(H)} (${ch.t[iA]}) → 저점 ${fmt(L)} · <b>50% = ${fmt(L + (H - L) / 2)}</b> (${pp(L + (H - L) / 2)}) · 38.2% ${fmt(L + (H - L) * 0.382)} · 61.8% ${fmt(L + (H - L) * 0.618)} — 하락장 원칙: 반등하면 1/2 자리를 먼저 봄`]); }
   else if (iC < iA && hiAfter > ch.l[iC] * 1.15) { const H = hiAfter, L = ch.l[iC];
     [0.382, 0.5, 0.618].forEach((r) => g.push(`<hr data-v="${H - (H - L) * r}" data-t="피보 눌림 ${n(r * 100, 1)}%${r === 0.5 ? " · " + fmt(H - (H - L) * r) : ""}" data-c="${r === 0.5 ? "f" : "f2"}"/>`));
-    lines.push(`🌀 피보나치 (상승 뒤 눌림): 저점 ${fmt(L)} → 고점 ${fmt(H)} · <b>50% 눌림 = ${fmt(H - (H - L) / 2)}</b> (${pp(H - (H - L) / 2)}) · 38.2% ${fmt(H - (H - L) * 0.382)} · 61.8% ${fmt(H - (H - L) * 0.618)}`); }
+    leg.push([SW(COL.f, 1), `피보나치 (상승 뒤 눌림): 저점 ${fmt(L)} → 고점 ${fmt(H)} · <b>50% 눌림 = ${fmt(H - (H - L) / 2)}</b> (${pp(H - (H - L) / 2)}) · 38.2% ${fmt(H - (H - L) * 0.382)} · 61.8% ${fmt(H - (H - L) * 0.618)}`]); }
   const run = ch.h[iA] / Math.min(...ch.l.slice(0, iA + 1));
   if (run >= 5) lines.push(`🚫 이 기간 저점에서 고점까지 약 <b>${n(run, 1)}배</b> — 형님 원칙: 짧게 5~10배 오른 종목은 1~2년 쉴 수 있어 쳐다보지 않음${["012450", "003230"].includes(c.code) ? " (단 한화에어로스페이스·삼양식품은 이 원칙에서 빼서 말씀하셨어요)" : ""}`);
   if (c.market !== "US" && c.market_cap && c.market_cap < 1e12) lines.push(`🚫 시가총액 약 ${n(c.market_cap / 1e8, 0)}억 — 형님 원칙: 1조 미만은 손대지 않음`);
   // over: 위 표식 → SVG (회색 채널 · 저항 빨강 점선 · 지지 파랑 점선 · 피보 보라 · 박스 연한 칸)
-  const over = (X, Y) => {  // 가로선 꼬리표는 위아래로 11px 넘게 떨어지게 밀어 겹치지 않게
-    const hs = g.filter((s) => s.startsWith("<hr") && !s.includes('data-c="f2"')).map((s) => ({ y: Y(+s.match(/data-v="([\d.e+-]+)"/)[1]) - 3, s })).sort((a, b) => a.y - b.y);
-    hs.forEach((h, i) => { if (i && h.y - hs[i - 1].y < 14) h.y = hs[i - 1].y + 14; });
-    const LY = new Map(hs.map((h) => [h.s, h.y]));
-    return g.filter((s) => !s.includes('data-c="f2"')).map((s) => {
+  // 숫자는 그림에 안 씀 (사용자 11/7 "숫자에 가려져서 보기 힘들어") — 그림 아래 범례(leg)에 색·값
+  if (ch2) leg.unshift([SW("var(--ink-2)"), `채널 ${ch2.kind === "하락" ? "고점선" : "저점선"} 지금 ${fmt(I((ch2.kind === "하락" ? ch2.top : ch2.bot)(N - 1)))} (${pp(I((ch2.kind === "하락" ? ch2.top : ch2.bot)(N - 1)))}) · 평행선 ${fmt(I((ch2.kind === "하락" ? ch2.bot : ch2.top)(N - 1)))} (${pp(I((ch2.kind === "하락" ? ch2.bot : ch2.top)(N - 1)))})`]);
+  const over = (X, Y) => g.filter((s) => !s.includes('data-c="f2"')).map((s) => {
     if (s.startsWith("<path")) { const m = s.match(/M([\d.]+),([\d.e+-]+)L([\d.]+),([\d.e+-]+)/); return `<line x1="${X(+m[1])}" y1="${Y(+m[2])}" x2="${X(+m[3])}" y2="${Y(+m[4])}" stroke="var(--ink-2)" stroke-width="1.6" stroke-opacity=".75"/>`; }
     if (s.startsWith("<box")) { const a = +s.match(/data-a="(\d+)"/)[1], hi = +s.match(/data-hi="([\d.]+)"/)[1], lo = +s.match(/data-lo="([\d.]+)"/)[1]; return `<rect x="${X(a)}" y="${Y(hi)}" width="${X(N - 1) - X(a)}" height="${Y(lo) - Y(hi)}" fill="var(--warn)" fill-opacity=".08" stroke="var(--warn)" stroke-opacity=".4" stroke-dasharray="3 3"/>`; }
-    const v = +s.match(/data-v="([\d.e+-]+)"/)[1], t = s.match(/data-t="([^"]*)"/)[1], k = s.match(/data-c="(\w+)"/)[1];
-    const col = { r: "var(--bad)", s: "var(--s1)", f: "var(--s7)", f2: "var(--s7)" }[k];
-    return `<line x1="${X(0)}" x2="${X(N - 1)}" y1="${Y(v)}" y2="${Y(v)}" stroke="${col}" stroke-width="${k === "f2" ? 1 : 1.4}" stroke-opacity="${k === "f2" ? 0.4 : 0.75}" stroke-dasharray="${k.startsWith("f") ? "2 3" : "6 4"}"/><text x="${X(N - 1) - 2}" y="${LY.get(s) ?? Y(v) - 3}" text-anchor="end" class="qx" style="fill:${col};font-size:12px;paint-order:stroke;stroke:var(--surface);stroke-width:3px">${esc(t)}</text>`;
-  }).join(""); };
-  return { ch, over, lines, fmt };
+    const v = +s.match(/data-v="([\d.e+-]+)"/)[1], k = s.match(/data-c="(\w+)"/)[1];
+    return `<line x1="${X(0)}" x2="${X(N - 1)}" y1="${Y(v)}" y2="${Y(v)}" stroke="${COL[k]}" stroke-width="1.4" stroke-opacity=".75" stroke-dasharray="${k === "f" ? "2 3" : "6 4"}"/>`;
+  }).join("");
+  return { ch, over, lines, fmt, leg, mas };
 }
 function taPanel(code, kind) {
   const d = OHLC[code], c = DASH.stocks.find((x) => x.code === code) || {};
   if (!d?.[kind]?.c?.length) return `<div class="src">이 봉 자료가 없어요</div>`;
   const a = taAnalyze(d[kind], kind, c), [, nm, view] = TA_TF.find((x) => x[0] === kind);
+  const u = { d: "일", w: "주", m: "개월" }[kind];
   return `${candleSVG(a.ch, kind, a.fmt, null, a.over)}
-    <div class="src">${nm} 최근 ${a.ch.c.length}봉${kind !== "d" ? " · 로그 눈금" : ""} · 이평선 ${TA_TF.find((x) => x[0] === kind)[4].join("·")}${{ d: "일", w: "주", m: "개월" }[kind]} · 회색 = 채널 · 빨강 점선 = 저항 · 파랑 점선 = 지지 · 보라 = 피보나치 · 노란 칸 = 박스 · 아래 막대 = 거래량 · ${esc(d.at || "")}</div>
+    <div class="src" style="line-height:1.8">${a.mas.map(([k, col]) => `<span style="display:inline-block;width:16px;height:0;border-top:3px solid ${col};vertical-align:middle;margin-right:3px"></span>${k}${u}선`).join(" · ")} · 아래 막대 = 거래량</div>
+    <div style="margin-top:4px;line-height:1.7">${a.leg.map(([sw, t]) => `<div>${sw} ${t}</div>`).join("")}</div>
+    <div class="src">${nm} 최근 ${a.ch.c.length}봉${kind !== "d" ? " · 로그 눈금" : ""} · 괄호 = 지금 가격 대비 · ${esc(d.at || "")}</div>
     <ul class="irl" style="margin-top:6px">${a.lines.map((x) => `<li>${x}</li>`).join("") || "<li>뚜렷한 선이 없어요</li>"}</ul>`;
 }
 function taTab(b) {  // 버튼 onclick (선 읽기 칸이 카드 눌림을 막느라 클릭을 위로 안 올려서)
@@ -1616,7 +1619,7 @@ function trendLines(v, wk, c, X, Y, x1) {
   const pts = [...H, ...L].map((p) => p[1]).sort((a, b) => a - b), cl = [];
   pts.forEach((p) => { const k = cl.find((x) => Math.abs(p / x.v - 1) < 0.03); if (k) { k.n++; k.v = (k.v * (k.n - 1) + p) / k.n; } else cl.push({ v: p, n: 1 }); });
   const lv = cl.filter((x) => x.n >= 2), res = lv.filter((x) => x.v > last * 1.005).sort((a, b) => a.v - b.v)[0], sup = lv.filter((x) => x.v < last * 0.995).sort((a, b) => b.v - a.v)[0];
-  const hl = (x, t) => { svg += `<line x1="${X(0)}" x2="${x1}" y1="${Y(x.v)}" y2="${Y(x.v)}" ${ST} stroke-dasharray="4 4"/><text x="${x1 - 4}" y="${Y(x.v) - 3}" text-anchor="end" class="qx" style="font-size:10px;opacity:.7">${t}</text>`; };
+  const hl = (x) => { svg += `<line x1="${X(0)}" x2="${x1}" y1="${Y(x.v)}" y2="${Y(x.v)}" ${ST} stroke-dasharray="4 4"/>`; };  // 글자는 그림에 안 씀 (선을 가려서) — 값은 아래 📐 줄
   if (res) hl(res, `저항 ${res.n}번`);
   if (sup) hl(sup, `지지 ${sup.n}번`);
   // 피보나치: 보이는 기간 최고점 → 그 뒤 최저점, 15% 넘게 내렸으면 그 폭의 50% 자리
@@ -4902,7 +4905,7 @@ function candleSVG(ch, kind, fmt, ref, over) {  // over(X, Y, lo, hi) = 위에 �
     if (bw >= 1.2) g += `<rect x="${X(i) - bw / 2}" y="${Math.min(Y(o), Y(c))}" width="${bw}" height="${Math.max(0.8, Math.abs(Y(o) - Y(c)))}" fill="${col}"/>`;
     g += `<rect x="${X(i) - bw / 2}" y="${v1 - (ch.v[i] / vmax) * (v1 - v0)}" width="${bw}" height="${(ch.v[i] / vmax) * (v1 - v0)}" fill="${col}" opacity=".35"/>`;
   });
-  const maCol = { 5: "var(--s1)", 20: "var(--s3)", 50: "var(--ink-2)", 60: "var(--warn)", 120: "var(--bad)", 200: "var(--warn)", 10: kind === "m" ? "var(--warn)" : "var(--ink-2)", 30: "var(--warn)", ...AL_COL };
+  const maCol = { 5: "var(--s1)", 20: "var(--s3)", 50: "var(--ink-2)", 60: "var(--warn)", 120: "var(--bad)", 200: "var(--warn)", 10: kind === "m" ? "var(--warn)" : "var(--ink-2)", 30: "var(--warn)", ...AL_COL, ...(ch.maCol || {}) };  // ch.maCol = 📐 선 읽기 차트가 정한 색
   Object.entries(ch.ma || {}).forEach(([k, a]) => { let d = ""; a.forEach((v, i) => { if (v > 0) d += `${d && a[i - 1] > 0 ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; }); g += `<path d="${d}" fill="none" stroke="${maCol[k] || "var(--ink-2)"}" stroke-width="1.5"/>`; });
   if (ch.rs?.length) {
     const rv = ch.rs.filter((v) => v != null), rl = Math.min(...rv), rh = Math.max(...rv), RY = (v) => rs1 - ((v - rl) / (rh - rl || 1)) * (rs1 - rs0);

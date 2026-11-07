@@ -1,6 +1,6 @@
 """📐 종목마다 일봉·주봉·월봉 캔들 + 거래량 → site/data/ohlc/{코드}.json (사용자 11/7: '선 읽기' 칸 안 차트 — 지지·저항·피보나치·채널을 고가·저가로).
 한국 = 네이버 차트 데이터(수정주가, board.kr_ohlcv) · 미국 = 야후(분할만 반영, 증권사 차트와 같은 숫자).
-일봉 약 1년 반 · 주봉 약 5년 · 월봉 약 12년만 남겨 파일을 작게 (선 계산은 화면에서 봉마다).
+일봉 약 1년 10개월 · 주봉 약 5년 · 월봉 약 12년만 남겨 파일을 작게 (선 계산은 화면에서 봉마다).
   python collector/ohlc.py [코드 …]   (코드 없으면 보유·관심·공동 전부)"""
 import sys
 
@@ -8,7 +8,7 @@ from board import kr_ohlcv, resample, us_ohlcv
 from common import DATA, REPORT, load_yaml, now_kst, write_json
 
 OUT = DATA / "ohlc"
-KEEP = {"d": 380, "w": 265, "m": 150}
+KEEP = {"d": 460, "w": 265, "m": 150}  # 일봉 460 = 화면 250봉 + 200일선 계산용
 
 
 def pack(df, digits):
