@@ -1522,7 +1522,7 @@ function taAnalyze(full, kind, c) {
   const pp = (v) => pct((v / last - 1) * 100, 1, true);
   const per = (s) => (lg ? (Math.exp(s * pm) - 1) * 100 : ((s * pm) / last) * 100);  // 기울기 → 한 달에 몇 %
   const iA = ch.h.indexOf(Math.max(...ch.h)), iC = ch.l.indexOf(Math.min(...ch.l)), lines = [], g = [], leg = [];
-  const COL = { r: "var(--bad)", s: "var(--s1)", f: "var(--s7)" }, SW = (col, dash) => `<span style="display:inline-block;width:16px;height:0;border-top:3px ${dash ? "dashed" : "solid"} ${col};vertical-align:middle;margin-right:4px"></span>`;
+  const COL = { r: "var(--bad)", s: "var(--s1)", f: "#d6409f" }  /* 피보 = 분홍 (50일선 보라와 안 겹치게) */, SW = (col, dash) => `<span style="display:inline-block;width:16px;height:0;border-top:3px ${dash ? "dashed" : "solid"} ${col};vertical-align:middle;margin-right:4px"></span>`;
   // 채널: 하락 구조(최고점이 먼저) = 고점선(최고점 → 뒤 꼭짓점 중 다른 고점이 모두 아래인 선) + 평행선(최고점 뒤 최저점) · 상승 구조 = 저점선 + 평행선
   let ch2 = null;
   // 최고점이 저점보다 뒤여도, 최고점 뒤로 12% 넘게 빠졌으면 지금은 하락 구조 (삼양식품 9월 고점 → 11월)
