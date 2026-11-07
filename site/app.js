@@ -1536,7 +1536,7 @@ function taAnalyze(full, kind, c) {
   const rs = (P, arr) => (P.length >= 2 ? (F(arr[P.at(-1)]) - F(arr[P.at(-2)])) / (P.at(-1) - P.at(-2)) : null), sH = rs(PH, ch.h);
   if (ch2) {
     const main = ch2.kind === "하락" ? ch2.top : ch2.bot, now = I(main(N - 1));
-    g.push(`<path d="M${ch2.a},${I(ch2.top(ch2.a))}L${N - 1},${I(ch2.top(N - 1))}" data-l/>`, `<path d="M${ch2.a},${I(ch2.bot(ch2.a))}L${N - 1},${I(ch2.bot(N - 1))}" data-l/>`);
+    g.push(`<path d="M${ch2.a},${I(ch2.top(ch2.a))}L${N - 1},${I(ch2.top(N - 1))}" data-t="${ch2.kind === "하락" ? "채널 고점선" : "채널 평행선(위)"}"/>`, `<path d="M${ch2.a},${I(ch2.bot(ch2.a))}L${N - 1},${I(ch2.bot(N - 1))}" data-t="${ch2.kind === "하락" ? "채널 평행선(아래)" : "채널 저점선"}"/>`);
     const flat = sH != null && ch2.kind === "하락" && (sH >= 0 || Math.abs(sH) < Math.abs(ch2.s) * 0.5);
     lines.push(`📐 <b>${ch2.kind} 채널</b> · ${ch2.kind === "하락" ? "고점선" : "저점선"} 기울기 한 달 ${pct(per(ch2.s), 1, true)}${sH != null ? ` · 최근 고점 두 개를 이은 기울기 ${pct(per(sH), 1, true)}${flat ? " → <b>완만해짐</b> (형님 원칙: 고점선이 완만해질수록 뚫고 오를 확률↑)" : ""}` : ""}`);
     if (ch2.kind === "하락" && last > now) { const k = ch.c.findIndex((v, i) => i > ch2.b && v > I(ch2.top(i))), vb = k >= 0 ? ch.v[k] / (ch.v.slice(Math.max(0, k - 20), k).reduce((a, b) => a + b, 0) / Math.min(20, k) || 1) : null;
@@ -1570,11 +1570,15 @@ function taAnalyze(full, kind, c) {
   // over: 위 표식 → SVG (회색 채널 · 저항 빨강 점선 · 지지 파랑 점선 · 피보 보라 · 박스 연한 칸)
   // 숫자는 그림에 안 씀 (사용자 11/7 "숫자에 가려져서 보기 힘들어") — 그림 아래 범례(leg)에 색·값
   if (ch2) leg.unshift([SW("var(--ink-2)"), `채널 ${ch2.kind === "하락" ? "고점선" : "저점선"} 지금 ${fmt(I((ch2.kind === "하락" ? ch2.top : ch2.bot)(N - 1)))} (${pp(I((ch2.kind === "하락" ? ch2.top : ch2.bot)(N - 1)))}) · 평행선 ${fmt(I((ch2.kind === "하락" ? ch2.bot : ch2.top)(N - 1)))} (${pp(I((ch2.kind === "하락" ? ch2.bot : ch2.top)(N - 1)))})`]);
+  // 선(또는 오른쪽 끝 점)을 누르면 그 선 가격이 뜸 (사용자 11/7 "지지선 얼마인지 저항선 얼마인지") — 다시 누르면 숨김
+  const tap = (x1, y1, x2, y2, col, dash, v, t) => `<g class="tamk" onclick="event.stopPropagation();this.classList.toggle('on')"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="1.5" stroke-opacity=".8"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`
+    + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="transparent" stroke-width="14" pointer-events="stroke"/><circle cx="${x2}" cy="${y2}" r="7" fill="transparent"/><circle cx="${x2}" cy="${y2}" r="3.5" fill="${col}"/>`
+    + `<text class="tamt" x="${x2 - 8}" y="${y2 - 6}" text-anchor="end" style="fill:${col}">${esc(t)} ${esc(fmt(v))} (${esc(pp(v))})</text></g>`;
   const over = (X, Y) => g.filter((s) => !s.includes('data-c="f2"')).map((s) => {
-    if (s.startsWith("<path")) { const m = s.match(/M([\d.]+),([\d.e+-]+)L([\d.]+),([\d.e+-]+)/); return `<line x1="${X(+m[1])}" y1="${Y(+m[2])}" x2="${X(+m[3])}" y2="${Y(+m[4])}" stroke="var(--ink-2)" stroke-width="1.6" stroke-opacity=".75"/>`; }
+    if (s.startsWith("<path")) { const m = s.match(/M([\d.]+),([\d.e+-]+)L([\d.]+),([\d.e+-]+)/); return tap(X(+m[1]), Y(+m[2]), X(+m[3]), Y(+m[4]), "var(--ink-2)", "", +m[4], s.match(/data-t="([^"]*)"/)?.[1] || "채널"); }
     if (s.startsWith("<box")) { const a = +s.match(/data-a="(\d+)"/)[1], hi = +s.match(/data-hi="([\d.]+)"/)[1], lo = +s.match(/data-lo="([\d.]+)"/)[1]; return `<rect x="${X(a)}" y="${Y(hi)}" width="${X(N - 1) - X(a)}" height="${Y(lo) - Y(hi)}" fill="var(--warn)" fill-opacity=".08" stroke="var(--warn)" stroke-opacity=".4" stroke-dasharray="3 3"/>`; }
-    const v = +s.match(/data-v="([\d.e+-]+)"/)[1], k = s.match(/data-c="(\w+)"/)[1];
-    return `<line x1="${X(0)}" x2="${X(N - 1)}" y1="${Y(v)}" y2="${Y(v)}" stroke="${COL[k]}" stroke-width="1.4" stroke-opacity=".75" stroke-dasharray="${k === "f" ? "2 3" : "6 4"}"/>`;
+    const v = +s.match(/data-v="([\d.e+-]+)"/)[1], k = s.match(/data-c="(\w+)"/)[1], t = s.match(/data-t="([^"]*)"/)[1].split(" · ")[0];
+    return tap(X(0), Y(v), X(N - 1), Y(v), COL[k], k === "f" ? "2 3" : "6 4", v, t);
   }).join("");
   return { ch, over, lines, fmt, leg, mas };
 }
@@ -1586,7 +1590,7 @@ function taPanel(code, kind) {
   return `${candleSVG(a.ch, kind, a.fmt, null, a.over)}
     <div class="src" style="line-height:1.8">${a.mas.map(([k, col]) => `<span style="display:inline-block;width:16px;height:0;border-top:3px solid ${col};vertical-align:middle;margin-right:3px"></span>${k}${u}선`).join(" · ")} · 아래 막대 = 거래량</div>
     <div style="margin-top:4px;line-height:1.7">${a.leg.map(([sw, t]) => `<div>${sw} ${t}</div>`).join("")}</div>
-    <div class="src">${nm} 최근 ${a.ch.c.length}봉${kind !== "d" ? " · 로그 눈금" : ""} · 괄호 = 지금 가격 대비 · ${esc(d.at || "")}</div>
+    <div class="src">${nm} 최근 ${a.ch.c.length}봉${kind !== "d" ? " · 로그 눈금" : ""} · 👆 선이나 선 오른쪽 끝 점을 누르면 그 가격이 떠요 (다시 누르면 숨김) · 괄호 = 지금 가격 대비 · ${esc(d.at || "")}</div>
     <ul class="irl" style="margin-top:6px">${a.lines.map((x) => `<li>${x}</li>`).join("") || "<li>뚜렷한 선이 없어요</li>"}</ul>`;
 }
 function taTab(b) {  // 버튼 onclick (선 읽기 칸이 카드 눌림을 막느라 클릭을 위로 안 올려서)
@@ -4913,10 +4917,11 @@ function candleSVG(ch, kind, fmt, ref, over) {  // over(X, Y, lo, hi) = 위에 �
     g += `<path d="${d}" fill="none" stroke="var(--s7)" stroke-width="1.3"/><text x="${x1 + 6}" y="${RY(rv.at(-1)) + 4}" class="qx" style="fill:var(--s7)">RS</text>`;
   }
   if (ref) g += `<line x1="${x0}" x2="${x1}" y1="${Y(ref.v)}" y2="${Y(ref.v)}" stroke="var(--ink-2)" stroke-dasharray="4 3"/><text x="${x1 - 4}" y="${Y(ref.v) - 4}" text-anchor="end" class="qx">${esc(ref.t)} ${fmt(ref.v)}</text>`;
-  if (over) { const cid = "cp" + Math.random().toString(36).slice(2, 8); g += `<clipPath id="${cid}"><rect x="${x0}" y="${top - 6}" width="${x1 - x0 + 20}" height="${bot - top + 12}"/></clipPath><g clip-path="url(#${cid})">${over(X, Y, lo, hi)}</g>`; }
   const maU = kind === "w" ? "주선" : kind === "m" ? "개월선" : "일선";
   g += tipCols(X, (x1 - x0) / N, top, v1, ch.t.map((t, i) => [t, `시가 ${fmt(ch.o[i])} · 고가 ${fmt(ch.h[i])}`, `저가 ${fmt(ch.l[i])} · 종가 ${fmt(ch.c[i])}`,
     ...Object.entries(ch.ma || {}).map(([k, a]) => (a[i] > 0 ? `${k}${maU} ${fmt(a[i])}` : null)), `거래량 ${n(ch.v[i])}`].filter(Boolean).join("\n")));
+  // 덧그린 선은 봉 설명 칸 위에 (📐 선을 누르면 가격이 뜨게)
+  if (over) { const cid = "cp" + Math.random().toString(36).slice(2, 8); g += `<clipPath id="${cid}"><rect x="${x0}" y="${top - 6}" width="${x1 - x0 + 20}" height="${bot - top + 12}"/></clipPath><g clip-path="url(#${cid})">${over(X, Y, lo, hi)}</g>`; }
   const last = ch.c.at(-1);
   g += `<text x="${x1 + 6}" y="${Y(hi) + 8}" class="qx">${fmt(hi)}</text><text x="${x1 + 6}" y="${Y(lo)}" class="qx">${fmt(lo)}</text>`
     + `<path d="M${x1 + 2},${Y(last)} l6,-4 v8 z" fill="var(--ink)"/><text x="${x1 + 10}" y="${Y(last) + 4}" class="qv b">${fmt(last)}</text>`;

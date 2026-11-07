@@ -395,3 +395,4 @@ ul.news li .src, ul.news li .note { display: block; margin-top: 2px; }
 .jumpbar .chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
 [data-jump] { scroll-margin-top: 190px; }
 [data-jump].flash { outline: 3px solid var(--s2); outline-offset: 2px; transition: outline-color .3s; }
+.tamk { cursor: pointer; } .tamk .tamt { display: none; font-size: 13px; font-weight: 700; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; } .tamk.on .tamt { display: inline; } .tamk.on circle:last-of-type { r: 5; }  /* 📐 선을 누르면 가격 (사용자 11/7) */
