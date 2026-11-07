@@ -712,8 +712,14 @@ function wireNvOne(d, px, which) {
   draw("5");
   segWire(`#${px}nv-${which}-seg`, draw);
 }
+// 📌 pbr_watch.yaml chart_note — 신호 탭 표와 종목 상세 밴드 차트 위에 같은 코멘트 (사용자 11/7 삼성전자)
+const pbrNoteHTML = (code) => { const L = (PBR?.items || []).find((x) => x.code === code)?.chart_note || [];
+  return L.length ? `<div class="kidbox" style="margin:6px 0">${L.map((x) => `<div${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</div>`).join("")}</div>` : ""; };
 function bandChartsHTML(d, px, tag, pbrFirst) {
-  const P = hasBps(d) ? [per12mfHTML(d, px, tag, "bps"), nvOne(d, px, "pbr", tag)] : [], E = [per12mfHTML(d, px, tag), nvOne(d, px, "per", tag)];
+  return pbrNoteHTML(d.code || d.card?.code) + bandChartsBody(d, px, tag, pbrFirst);
+}
+function bandChartsBody(d, px, tag, pbrFirst) {
+  const P =hasBps(d) ? [per12mfHTML(d, px, tag, "bps"), nvOne(d, px, "pbr", tag)] : [], E = [per12mfHTML(d, px, tag), nvOne(d, px, "per", tag)];
   return (pbrFirst ? [...P, ...E] : [...E, ...P]).join("") + kfBlock(px, tag, "ntm", d) + (hasBps(d) ? kfBlock(px, tag, "pb", d) : "");
 }
 function wireBandCharts(d, px) {
@@ -729,7 +735,7 @@ async function bandAllRender(box, c) {  // box = '불러오는 중' 자리 (.bwb
   try {
     const d = await (await fetch(`data/stocks/${c.code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json();
     const ft = fairTableHTML(c);  // 카드에 있는 '적정주가 · EPS × PER / BPS × PBR' 표 그대로 (사용자: 🔮 표 대신)
-    box.outerHTML = bandChartsHTML(d, px, "span", pbrFirstOf(c))
+    box.outerHTML = bandChartsBody(d, px, "span", pbrFirstOf(c))  // 📌 코멘트는 바깥(신호 표)에 이미 있음
       + (ft ? `<h3>적정주가 표 <span class="src">카드와 같은 표 · 연도별 EPS·BPS × 과거 배수 · 초록 = 지금보다 위</span></h3><div class="card">${ft}</div>` : "");
     wireBandCharts(d, px);
   } catch (err) { box.textContent = "자료를 못 불러왔어요"; console.log("bandwhy", err); }
@@ -4364,7 +4370,7 @@ async function signalHTML() {
     out.push(sigTable({ name: c.name, unit: "주가 (원)", L, date: `${d.price_date || ""} 종가 기준`.trim(),
       m: { pbf: fm.PBR?.["12MF"], pbt: now.pbr && now.pbr * adj, pef: fm.PER?.["12MF"], pet: now.per && now.per * adj }, marks: mk,
       pos: b ? `PBR (1년 뒤 BPS 기준) 10년 중 아래에서 <b>${n(b.pos, 0)}%</b> 자리 (하단 ${n(b.low, 2)} · 평균 ${n(b.avg, 2)} · 상단 ${n(b.high, 2)}배)` : "",
-      src: `12MF = 증권사 컨센서스 앞으로 12개월 EPS·BPS (카드 위 숫자와 같음) · TTM = 네이버 지난 실적 PER·PBR${mk.length ? " · 📏 = 🧮 PBR 기준선 (아래 계산기와 같음)" : ""}`, extra: stockBandBox(code) }));
+      src: `12MF = 증권사 컨센서스 앞으로 12개월 EPS·BPS (카드 위 숫자와 같음) · TTM = 네이버 지난 실적 PER·PBR${mk.length ? " · 📏 = 🧮 PBR 기준선 (아래 계산기와 같음)" : ""}`, extra: pbrNoteHTML(code) + stockBandBox(code) }));
   }
   // 📈 밴드 차트 (사용자 11/6): 보유 종목마다 눌러서 — bandAllRender (그림 먼저, 그다음 카드와 같은 적정주가 표)
   const own = DASH.stocks.filter((c) => grp(c) === "보유" && !/우$/.test(c.name)).sort((a, b) => (a.market === "US") - (b.market === "US"));
@@ -5883,6 +5889,7 @@ async function load() {
     try { EARNINGS = await (await fetch("data/earnings.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { EARNINGS = {}; }
     try { IRCAL = await (await fetch("data/ir_calendar.json?t=" + Date.now(), { cache: "no-store" })).json() || { items: [] }; } catch (_) { IRCAL = { items: [] }; }
     try { IRB = await (await fetch("data/ir_brief.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { IRB = {}; }
+    try { PBR = await (await fetch("data/pbr_watch.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { /* 📌 코멘트·기준선만 빠짐 */ }
     try { EVENTS = await (await fetch("data/events.json?t=" + Date.now(), { cache: "no-store" })).json() || []; } catch (_) { EVENTS = []; }
     try { SOMONG = await (await fetch("data/somong.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { SOMONG = {}; }
     try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { CAPEX = {}; }  // 🇺🇸 탭 빅테크 현금흐름
