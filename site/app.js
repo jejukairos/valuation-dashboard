@@ -714,7 +714,7 @@ function wireNvOne(d, px, which) {
 }
 // 📌 pbr_watch.yaml chart_note — 신호 탭 표와 종목 상세 밴드 차트 위에 같은 코멘트 (사용자 11/7 삼성전자)
 const pbrNoteHTML = (code) => { const L = (PBR?.items || []).find((x) => x.code === code)?.chart_note || [];
-  return L.length ? `<div class="kidbox" style="margin:6px 0">${L.map((x) => `<div${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</div>`).join("")}</div>` : ""; };
+  return L.length ? `<details class="fvt" style="margin:6px 0"><summary class="chart-title">${esc(L[0])}</summary><ul class="irl">${L.slice(1).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></details>` : ""; };  // 닫힘 (사용자 11/7)
 function bandChartsHTML(d, px, tag, pbrFirst) {
   return pbrNoteHTML(d.code || d.card?.code) + bandChartsBody(d, px, tag, pbrFirst);
 }
@@ -4326,16 +4326,20 @@ document.addEventListener("toggle", (e) => {
   const M = DASH.market || {}, box = el.querySelector(".ibb"), kb = DASH.settings.kospi_bands || {};
   if (el.dataset.k === "kospi") {
     const kt = M.kospi_trailing || {};
-    box.innerHTML = (M.kospi_fwd_bands ? fwdBandHTML("sg-kfper", "12개월 선행 PER 밴드") + fwdBandHTML("sg-kfpbr", "12개월 선행 PBR 밴드") : "")
-      + (kt.hist?.length > 20 ? `<h3>PER 밴드 <span class="src">지난 실적 · KRX</span></h3>${hBandHTML("sg-kper")}` : "")
-      + (kt.pbr_hist?.length > 20 ? `<h3>PBR 밴드 <span class="src">지난 실적 · KRX</span></h3>${hBandHTML("sg-kpbr")}` : "") || `<div class="src">밴드 자료가 없어요</div>`;
+    // 순서 (사용자 11/7): 12MF PBR → PBR → 12MF PER → PER
+    box.innerHTML = (M.kospi_fwd_bands ? fwdBandHTML("sg-kfpbr", "12개월 선행 PBR 밴드") : "")
+      + (kt.pbr_hist?.length > 20 ? `<h3>PBR 밴드 <span class="src">지난 실적 · KRX</span></h3>${hBandHTML("sg-kpbr")}` : "")
+      + (M.kospi_fwd_bands ? fwdBandHTML("sg-kfper", "12개월 선행 PER 밴드") : "")
+      + (kt.hist?.length > 20 ? `<h3>PER 밴드 <span class="src">지난 실적 · KRX</span></h3>${hBandHTML("sg-kper")}` : "") || `<div class="src">밴드 자료가 없어요</div>`;
     if (M.kospi_fwd_bands) { wireFwdBand("sg-kfper", "f_eps", kb.per || [5, 6, 7, 8], "PER"); wireFwdBand("sg-kfpbr", "f_bps", kb.pbr || [0.7, 0.8, 0.9, 1.0, 1.1], "PBR"); }
     if (kt.hist?.length > 20) wireHBand("sg-kper", kt.hist, "코스피 PER", "배", 1, 10);
     if (kt.pbr_hist?.length > 20) wireHBand("sg-kpbr", kt.pbr_hist, "코스피 PBR", "배", 2, 10, DASH.settings.kospi_pbr_marks || []);
   } else {
     const kq = M.kosdaq_trailing || {};
-    box.innerHTML = (kq.hist?.length > 20 ? `<h3>PER 밴드 <span class="src">지난 실적 · KRX</span></h3>${hBandHTML("sg-qper")}` : "")
-      + (kq.pbr_hist?.length > 20 ? `<h3>PBR 밴드 <span class="src">지난 실적 · KRX</span></h3>${hBandHTML("sg-qpbr")}` : "") || `<div class="src">밴드 자료가 없어요</div>`;
+    // 코스피와 같은 순서 (PBR → PER) · 코스닥 12MF 밴드는 무료 과거 자료가 없어 빠짐
+    box.innerHTML = ((kq.pbr_hist?.length > 20 ? `<h3>PBR 밴드 <span class="src">지난 실적 · KRX</span></h3>${hBandHTML("sg-qpbr")}` : "")
+      + (kq.hist?.length > 20 ? `<h3>PER 밴드 <span class="src">지난 실적 · KRX</span></h3>${hBandHTML("sg-qper")}` : "") || `<div class="src">밴드 자료가 없어요</div>`)
+      + `<div class="note src">12MF PBR·PER 밴드는 코스닥 선행 실적의 무료 과거 자료가 없어서 아직 없어요 (코스피만)</div>`;
     if (kq.hist?.length > 20) wireHBand("sg-qper", kq.hist, "코스닥 PER", "배", 1, 10);
     if (kq.pbr_hist?.length > 20) wireHBand("sg-qpbr", kq.pbr_hist, "코스닥 PBR", "배", 2, 10);
   }
@@ -4350,14 +4354,14 @@ async function signalHTML() {
       marks: (DASH.settings?.kospi_pbr_marks || []).map((m) => ({ v: m.value, kind: "pbf", t: `12MF PBR ${m.value}배${m.label && !m.label.startsWith("PBR") ? ` (${m.label.split(" (")[0]})` : ""}` })),
       pos: r ? `TTM PBR ${n(kt.pbr, 2)}배 = ${esc(String(r.from || "").slice(0, 4))}년부터 10년 중 아래에서 <b>${n(r.pos, 0)}%</b> 자리 (10년 평균 ${n(r.avg, 2)}배)` : "",
       src: `12MF = 시총 상위 150곳 중 ${kf.used || "-"}곳 컨센서스 합산 (직접 계산) · TTM = KRX 지난 실적 · 📷 비교: 전달 증권사 표(${SIG_REF.d} ${n(SIG_REF.L, 1)}) PBR ${SIG_REF.pbf}·${SIG_REF.pbt} · PER ${SIG_REF.pef}·${SIG_REF.pet}`,
-      extra: idxBandBox("kospi", "12MF PER · 12MF PBR · PER · PBR (지난 실적)") }));
+      extra: idxBandBox("kospi", "12MF PBR · PBR · 12MF PER · PER (지난 실적)") }));
   }
   if (kq.level && kq.pbr) {  // 코스닥: KRX 후행 PER·PBR (+ KRX 선행 PER, 없으면 우산 텔레그램 주간 12MF PER)
     const r = kq.pbr_hist ? pctRank(kq.pbr_hist, kq.pbr) : null, fpe = kq.fwd_per || (ws.kosdaq_pe ? ws.kosdaq_pe : null);
     out.push(sigTable({ name: "코스닥", unit: "지수", L: kq.level, dec: 2, date: `${kq.date} 종가 기준`, m: { pbf: null, pbt: kq.pbr, pef: fpe, pet: kq.per },
       pos: r ? `TTM PBR ${n(kq.pbr, 2)}배 = 10년 중 아래에서 <b>${n(r.pos, 0)}%</b> 자리 (10년 평균 ${n(r.avg, 2)}배)` : "",
       src: `TTM = KRX 지난 실적 · 12MF PER = ${kq.fwd_per ? "KRX 선행 PER" : `우산 텔레그램 주간 숫자 (${esc(ws.date || "")} 기준이라 지수와 날짜가 달라요)`} · 12MF PBR 은 무료 자료가 없어 비워 둠`,
-      extra: idxBandBox("kosdaq", "PER · PBR (지난 실적)") }));
+      extra: idxBandBox("kosdaq", "PBR · PER (지난 실적)") }));
   } else out.push(`<div class="card" style="margin-bottom:10px"><b>코스닥</b> <span class="src">KRX 코스닥 PER·PBR 을 다음 데이터 갱신 때부터 받아요${ws.kosdaq_pe ? ` · 지금은 12MF PER ${n(ws.kosdaq_pe, 1)}배만 (우산 텔레그램 ${esc(ws.date || "")})` : ""}</span></div>`);
   const v = encodeURIComponent(DASH.updated_at);
   for (const code of ["005930", "000660", "005380", "000270"]) {  // 삼성전자 · SK하이닉스 · 현대차 · 기아 (사용자 11/6 순서)
@@ -4448,7 +4452,7 @@ function pbrCard(it, base, i) {
     ${marks}${band}
     <div class="calc"><input id="calc-${i}" inputmode="numeric" placeholder="가격을 넣어 보세요 (예: 200000)" aria-label="${esc(it.name)} 가격 입력"></div>
     <div class="calc-out" id="calc-out-${i}"></div>
-    ${Array.isArray(it.memo) ? `<div class="memo">📝<ul class="irl">${it.memo.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : it.memo ? `<div class="memo">📝 ${esc(it.memo)}</div>` : ""}
+    ${Array.isArray(it.memo) ? `<details class="fvt"><summary class="chart-title">📝 메모·전달받은 글 <span class="src">${it.memo.length}개 · 눌러서 보기</span></summary><ul class="irl">${it.memo.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : it.memo ? `<div class="memo">📝 ${esc(it.memo)}</div>` : ""}
     <div class="note src">${esc(it.source)} · 굵은 칸 = 지금 가격과 10% 이내 · 표의 %는 지금 가격 대비</div>
   </div>`;
 }
