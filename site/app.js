@@ -1505,6 +1505,100 @@ function priceSpark(c, months = 6, inBtn = false) {
     ${g}<path d="${d} L${last[0]},${bot} L${x0},${bot} Z" fill="url(#${gid})"/><path d="${d}" fill="none" stroke="var(--s1)" stroke-width="2.5"/>${maPath}
     <circle cx="${last[0]}" cy="${last[1]}" r="4" fill="var(--s1)"/><rect x="${x1 + 3}" y="${last[1] - 10}" width="${W - x1 - 4}" height="20" rx="4" fill="var(--s1)"/><text x="${x1 + 8}" y="${last[1] + 5}" class="qv b" style="fill:#fff;font-size:13px">${cur}${n(v[v.length - 1], cur ? 2 : 0)}${cur ? "" : "원"}</text></svg>${tl.note}</div>`;  // 지금 값은 오른쪽 눈금 자리에 꼬리표로 (선을 안 가리게)
 }
+// 📐 선 읽기 칸 안 캔들 차트 (사용자 11/7 "일봉·주봉·월봉 + 거래량, 지지·저항·피보나치·채널 온전히") — data/ohlc/{코드}.json (collector/ohlc.py)
+// 꼭짓점 = 고가·저가 · 주봉·월봉은 로그 눈금이라 선도 로그 가격으로 계산 (그림에서 곧게 보이게)
+const TA_TF = [["d", "일봉", 250, 21, [20, 60, 120]], ["w", "주봉", 156, 4.33, [13, 26, 52]], ["m", "월봉", 150, 1, [10, 20]]], OHLC = {};
+function taAnalyze(full, kind, c) {
+  const [, , view, pm, mas] = TA_TF.find((x) => x[0] === kind), M = full.c.length, s0 = Math.max(0, M - view);
+  const ma = Object.fromEntries(mas.map((k) => [k, full.c.map((_, i) => (i >= k - 1 ? full.c.slice(i - k + 1, i + 1).reduce((a, b) => a + b, 0) / k : null)).slice(s0)]));
+  const ch = { ...Object.fromEntries(["t", "o", "h", "l", "c", "v"].map((k) => [k, full[k].slice(s0)])), ma }, N = ch.c.length;
+  const lg = kind !== "d", F = (v) => (lg ? Math.log(v) : v), I = (v) => (lg ? Math.exp(v) : v), last = ch.c[N - 1];
+  const w = kind === "d" ? 5 : kind === "w" ? 3 : 2, tol = kind === "d" ? 0.025 : kind === "w" ? 0.04 : 0.06;
+  const piv = (arr, hi) => { const o = []; for (let i = w; i < N - 1; i++) { const s = arr.slice(i - w, Math.min(N, i + w + 1)); if (arr[i] === (hi ? Math.max(...s) : Math.min(...s)) && (!o.length || i - o.at(-1) > w)) o.push(i); } return o; };
+  const PH = piv(ch.h, true), PL = piv(ch.l, false), fmt = c.currency === "USD" ? (v) => `$${n(v, 2)}` : (v) => n(Math.round(v / (v >= 10000 ? 100 : 1)) * (v >= 10000 ? 100 : 1), 0);
+  const pp = (v) => pct((v / last - 1) * 100, 1, true);
+  const per = (s) => (lg ? (Math.exp(s * pm) - 1) * 100 : ((s * pm) / last) * 100);  // 기울기 → 한 달에 몇 %
+  const iA = ch.h.indexOf(Math.max(...ch.h)), iC = ch.l.indexOf(Math.min(...ch.l)), lines = [], g = [];
+  // 채널: 하락 구조(최고점이 먼저) = 고점선(최고점 → 뒤 꼭짓점 중 다른 고점이 모두 아래인 선) + 평행선(최고점 뒤 최저점) · 상승 구조 = 저점선 + 평행선
+  let ch2 = null;
+  // 최고점이 저점보다 뒤여도, 최고점 뒤로 12% 넘게 빠졌으면 지금은 하락 구조 (삼양식품 9월 고점 → 11월)
+  const dropA = 1 - Math.min(...ch.l.slice(iA)) / ch.h[iA], down = iA < iC || (iA < N - 2 * w && dropA >= 0.12);
+  if (down) {
+    const B = PH.filter((i) => i > iA + w).map((i) => [i, (F(ch.h[i]) - F(ch.h[iA])) / (i - iA)]).sort((a, b) => b[1] - a[1])[0];
+    if (B) { const lo = Math.min(...ch.l.slice(iA).map((v, j) => F(v) - B[1] * j)); ch2 = { kind: "하락", s: B[1], a: iA, b: B[0], top: (i) => F(ch.h[iA]) + B[1] * (i - iA), bot: (i) => lo + B[1] * (i - iA) }; }
+  } else {
+    const D = PL.filter((i) => i > iC + w).map((i) => [i, (F(ch.l[i]) - F(ch.l[iC])) / (i - iC)]).sort((a, b) => a[1] - b[1])[0];
+    if (D) { const hi = Math.max(...ch.h.slice(iC).map((v, j) => F(v) - D[1] * j)); ch2 = { kind: "상승", s: D[1], a: iC, b: D[0], bot: (i) => F(ch.l[iC]) + D[1] * (i - iC), top: (i) => hi + D[1] * (i - iC) }; }
+  }
+  const rs = (P, arr) => (P.length >= 2 ? (F(arr[P.at(-1)]) - F(arr[P.at(-2)])) / (P.at(-1) - P.at(-2)) : null), sH = rs(PH, ch.h);
+  if (ch2) {
+    const main = ch2.kind === "하락" ? ch2.top : ch2.bot, now = I(main(N - 1));
+    g.push(`<path d="M${ch2.a},${I(ch2.top(ch2.a))}L${N - 1},${I(ch2.top(N - 1))}" data-l/>`, `<path d="M${ch2.a},${I(ch2.bot(ch2.a))}L${N - 1},${I(ch2.bot(N - 1))}" data-l/>`);
+    const flat = sH != null && ch2.kind === "하락" && (sH >= 0 || Math.abs(sH) < Math.abs(ch2.s) * 0.5);
+    lines.push(`📐 <b>${ch2.kind} 채널</b> · ${ch2.kind === "하락" ? "고점선" : "저점선"} 기울기 한 달 ${pct(per(ch2.s), 1, true)}${sH != null ? ` · 최근 고점 두 개를 이은 기울기 ${pct(per(sH), 1, true)}${flat ? " → <b>완만해짐</b> (형님 원칙: 고점선이 완만해질수록 뚫고 오를 확률↑)" : ""}` : ""}`);
+    if (ch2.kind === "하락" && last > now) { const k = ch.c.findIndex((v, i) => i > ch2.b && v > I(ch2.top(i))), vb = k >= 0 ? ch.v[k] / (ch.v.slice(Math.max(0, k - 20), k).reduce((a, b) => a + b, 0) / Math.min(20, k) || 1) : null;
+      lines.push(`🔔 <b>하락 채널 고점선 위로 뚫음</b>${k >= 0 ? ` (${ch.t[k]}${vb ? `, 그날 거래량 20봉 평균의 ${n(vb, 1)}배${vb >= 2 ? " — 거래량 터진 돌파" : ""}` : ""})` : ""} · 지금 고점선 ${fmt(now)} (${pp(now)}) — 형님 원칙: 하락 채널 위를 뚫을 때 산 매매가 성공 확률이 높음`); }
+    if (ch2.kind === "상승" && last < now) lines.push(`⚠ <b>상승 채널 저점선 아래로 깨짐</b> · 저점선 ${fmt(now)} (${pp(now)}) — 깨진 지지는 저항이 됨`);
+    if (ch2.kind === "상승") { const hits = PL.filter((i) => i > ch2.a && Math.abs(F(ch.l[i]) - ch2.bot(i)) < tol).length; if (hits >= 3) lines.push(`⚠ 상승 채널 저점선을 <b>${hits}번</b> 맞음 — 형님 원칙: 3~4번 맞으면 다음엔 크게 깨질 확률↑`); }
+  }
+  // 지지·저항: 고가·저가 꼭짓점이 tol 안에서 2번 넘게 모인 가격 — 위 2개 = 저항, 아래 2개 = 지지 · 예전엔 지지(저점)였는데 지금 그 아래 = '깨진 지지 → 저항'
+  const cl = [];
+  [...PH.map((i) => [ch.h[i], "h", i]), ...PL.map((i) => [ch.l[i], "l", i])].sort((a, b) => a[0] - b[0]).forEach(([v, k, i]) => { const x = cl.find((q) => Math.abs(v / q.v - 1) < tol); if (x) { x.n++; x.v = (x.v * (x.n - 1) + v) / x.n; x[k]++; x.lastI = Math.max(x.lastI, i); } else cl.push({ v, n: 1, h: k === "h" ? 1 : 0, l: k === "l" ? 1 : 0, lastI: i }); });
+  const far = kind === "d" ? 0.3 : kind === "w" ? 0.45 : 0.6, lv = cl.filter((q) => q.n >= 2 && Math.abs(q.v / last - 1) <= far), R =lv.filter((q) => q.v > last * 1.003).sort((a, b) => a.v - b.v).slice(0, 2), S = lv.filter((q) => q.v < last * 0.997).sort((a, b) => b.v - a.v).slice(0, 2);
+  R.forEach((q) => { const brk = q.l >= 1 && q.l >= q.h; g.push(`<hr data-v="${q.v}" data-t="${brk ? "깨진 지지→저항" : "저항"} ${q.n}번 · ${fmt(q.v)}" data-c="r"/>`);
+    lines.push(`🧱 ${brk ? "<b>깨진 지지 → 저항</b>" : "저항"} ${fmt(q.v)} (${pp(q.v)}) · <b>${q.n}번</b> 닿음${brk ? " — 형님 원칙: 실패한 매매라도 이 근처까지는 반등해 손실을 메울 수 있음" : q.n >= 3 ? " — 3번 넘게 부딪히면 뚫을 확률↑ (쌍봉·삼봉)" : ""}`); });
+  S.forEach((q) => { g.push(`<hr data-v="${q.v}" data-t="지지 ${q.n}번 · ${fmt(q.v)}" data-c="s"/>`); lines.push(`🧱 지지 ${fmt(q.v)} (${pp(q.v)}) · <b>${q.n}번</b> 닿음${q.n >= 3 ? " — 지지를 3~4번 맞으면 다음엔 크게 깨질 확률↑" : ""}`); });
+  // 박스(횡보): 최근 d 60봉 · w 26봉 · m 12봉의 고가~저가 폭이 좁으면
+  const K = kind === "d" ? 60 : kind === "w" ? 26 : 12, bh = Math.max(...ch.h.slice(-K)), bl = Math.min(...ch.l.slice(-K)), wide = (bh / bl - 1) * 100;
+  if (wide < (kind === "d" ? 18 : kind === "w" ? 30 : 45)) { g.push(`<box data-a="${N - K}" data-hi="${bh}" data-lo="${bl}"/>`);
+    const at = (last - bl) / (bh - bl || 1);
+    lines.push(`📦 최근 ${K}${kind === "d" ? "일" : kind === "w" ? "주" : "개월"} <b>박스권</b> ${fmt(bl)} ~ ${fmt(bh)} (폭 ${n(wide, 0)}%) · 지금 박스의 ${n(at * 100, 0)}% 자리${at <= 0.25 ? " — <b>박스 하단</b>: 횡보장 원칙은 하단 매수 (장대 음봉이어도)" : at >= 0.75 ? " — <b>박스 상단</b>: 횡보장 원칙은 상단 매도 (거래량 터진 장대 양봉이어도)" : ""} · 횡보가 길어질수록 아래로 깰 때 더 크게 빠질 수 있음`); }
+  // 피보나치: 보이는 기간 최고점 → 그 뒤 최저점 (하락) 되돌림 38.2·50·61.8% · 아니면 최저점 → 그 뒤 최고점 (상승) 눌림
+  const lowAfter = Math.min(...ch.l.slice(iA)), hiAfter = Math.max(...ch.h.slice(iC));
+  if (down && lowAfter < ch.h[iA] * 0.85) { const H = ch.h[iA], L = lowAfter;
+    [0.382, 0.5, 0.618].forEach((r) => g.push(`<hr data-v="${L + (H - L) * r}" data-t="피보 ${n(r * 100, 1)}%${r === 0.5 ? " · " + fmt(L + (H - L) * r) : ""}" data-c="${r === 0.5 ? "f" : "f2"}"/>`));
+    lines.push(`🌀 피보나치 (하락 되돌림): 고점 ${fmt(H)} (${ch.t[iA]}) → 저점 ${fmt(L)} · <b>50% = ${fmt(L + (H - L) / 2)}</b> (${pp(L + (H - L) / 2)}) · 38.2% ${fmt(L + (H - L) * 0.382)} · 61.8% ${fmt(L + (H - L) * 0.618)} — 하락장 원칙: 반등하면 1/2 자리를 먼저 봄`); }
+  else if (iC < iA && hiAfter > ch.l[iC] * 1.15) { const H = hiAfter, L = ch.l[iC];
+    [0.382, 0.5, 0.618].forEach((r) => g.push(`<hr data-v="${H - (H - L) * r}" data-t="피보 눌림 ${n(r * 100, 1)}%${r === 0.5 ? " · " + fmt(H - (H - L) * r) : ""}" data-c="${r === 0.5 ? "f" : "f2"}"/>`));
+    lines.push(`🌀 피보나치 (상승 뒤 눌림): 저점 ${fmt(L)} → 고점 ${fmt(H)} · <b>50% 눌림 = ${fmt(H - (H - L) / 2)}</b> (${pp(H - (H - L) / 2)}) · 38.2% ${fmt(H - (H - L) * 0.382)} · 61.8% ${fmt(H - (H - L) * 0.618)}`); }
+  const run = ch.h[iA] / Math.min(...ch.l.slice(0, iA + 1));
+  if (run >= 5) lines.push(`🚫 이 기간 저점에서 고점까지 약 <b>${n(run, 1)}배</b> — 형님 원칙: 짧게 5~10배 오른 종목은 1~2년 쉴 수 있어 쳐다보지 않음${["012450", "003230"].includes(c.code) ? " (단 한화에어로스페이스·삼양식품은 이 원칙에서 빼서 말씀하셨어요)" : ""}`);
+  if (c.market !== "US" && c.market_cap && c.market_cap < 1e12) lines.push(`🚫 시가총액 약 ${n(c.market_cap / 1e8, 0)}억 — 형님 원칙: 1조 미만은 손대지 않음`);
+  // over: 위 표식 → SVG (회색 채널 · 저항 빨강 점선 · 지지 파랑 점선 · 피보 보라 · 박스 연한 칸)
+  const over = (X, Y) => {  // 가로선 꼬리표는 위아래로 11px 넘게 떨어지게 밀어 겹치지 않게
+    const hs = g.filter((s) => s.startsWith("<hr") && !s.includes('data-c="f2"')).map((s) => ({ y: Y(+s.match(/data-v="([\d.e+-]+)"/)[1]) - 3, s })).sort((a, b) => a.y - b.y);
+    hs.forEach((h, i) => { if (i && h.y - hs[i - 1].y < 14) h.y = hs[i - 1].y + 14; });
+    const LY = new Map(hs.map((h) => [h.s, h.y]));
+    return g.filter((s) => !s.includes('data-c="f2"')).map((s) => {
+    if (s.startsWith("<path")) { const m = s.match(/M([\d.]+),([\d.e+-]+)L([\d.]+),([\d.e+-]+)/); return `<line x1="${X(+m[1])}" y1="${Y(+m[2])}" x2="${X(+m[3])}" y2="${Y(+m[4])}" stroke="var(--ink-2)" stroke-width="1.6" stroke-opacity=".75"/>`; }
+    if (s.startsWith("<box")) { const a = +s.match(/data-a="(\d+)"/)[1], hi = +s.match(/data-hi="([\d.]+)"/)[1], lo = +s.match(/data-lo="([\d.]+)"/)[1]; return `<rect x="${X(a)}" y="${Y(hi)}" width="${X(N - 1) - X(a)}" height="${Y(lo) - Y(hi)}" fill="var(--warn)" fill-opacity=".08" stroke="var(--warn)" stroke-opacity=".4" stroke-dasharray="3 3"/>`; }
+    const v = +s.match(/data-v="([\d.e+-]+)"/)[1], t = s.match(/data-t="([^"]*)"/)[1], k = s.match(/data-c="(\w+)"/)[1];
+    const col = { r: "var(--bad)", s: "var(--s1)", f: "var(--s7)", f2: "var(--s7)" }[k];
+    return `<line x1="${X(0)}" x2="${X(N - 1)}" y1="${Y(v)}" y2="${Y(v)}" stroke="${col}" stroke-width="${k === "f2" ? 1 : 1.4}" stroke-opacity="${k === "f2" ? 0.4 : 0.75}" stroke-dasharray="${k.startsWith("f") ? "2 3" : "6 4"}"/><text x="${X(N - 1) - 2}" y="${LY.get(s) ?? Y(v) - 3}" text-anchor="end" class="qx" style="fill:${col};font-size:12px;paint-order:stroke;stroke:var(--surface);stroke-width:3px">${esc(t)}</text>`;
+  }).join(""); };
+  return { ch, over, lines, fmt };
+}
+function taPanel(code, kind) {
+  const d = OHLC[code], c = DASH.stocks.find((x) => x.code === code) || {};
+  if (!d?.[kind]?.c?.length) return `<div class="src">이 봉 자료가 없어요</div>`;
+  const a = taAnalyze(d[kind], kind, c), [, nm, view] = TA_TF.find((x) => x[0] === kind);
+  return `${candleSVG(a.ch, kind, a.fmt, null, a.over)}
+    <div class="src">${nm} 최근 ${a.ch.c.length}봉${kind !== "d" ? " · 로그 눈금" : ""} · 이평선 ${TA_TF.find((x) => x[0] === kind)[4].join("·")}${{ d: "일", w: "주", m: "개월" }[kind]} · 회색 = 채널 · 빨강 점선 = 저항 · 파랑 점선 = 지지 · 보라 = 피보나치 · 노란 칸 = 박스 · 아래 막대 = 거래량 · ${esc(d.at || "")}</div>
+    <ul class="irl" style="margin-top:6px">${a.lines.map((x) => `<li>${x}</li>`).join("") || "<li>뚜렷한 선이 없어요</li>"}</ul>`;
+}
+function taTab(b) {  // 버튼 onclick (선 읽기 칸이 카드 눌림을 막느라 클릭을 위로 안 올려서)
+  const box = b.closest(".tabox"); box.querySelectorAll(".taseg [data-tf]").forEach((x) => x.classList.toggle("on", x === b));
+  box.querySelector(".tain").innerHTML = taPanel(box.dataset.code, b.dataset.tf);
+}
+document.addEventListener("toggle", async (e) => {  // 📐 선 읽기를 열 때 그 종목 캔들 자료를 받음
+  const box = e.target.querySelector?.(":scope > .tabox"); if (!box || !e.target.open || box.dataset.done) return;
+  box.dataset.done = 1;
+  const code = box.dataset.code;
+  try { OHLC[code] = OHLC[code] || await (await fetch(`data/ohlc/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { OHLC[code] = null; }
+  if (!OHLC[code]) { box.remove(); return; }  // 자료가 아직 없으면 아래 종가 선 읽기만
+  box.hidden = false; e.target.querySelector(".tlold")?.setAttribute("hidden", "");
+  box.querySelector(".tain").innerHTML = taPanel(code, "d");
+}, true);
 // 📐 회색 연한 선 (사용자 11/7, 차트 10년 본 형님에게 배운 것): 고점끼리·저점끼리 이은 채널 · 여러 번 닿은 지지·저항 · 고점에서 내린 폭의 50% (피보나치)
 // 종가만 있어서 종가 꼭짓점으로 계산 (장중 고가·저가 아님) — 그림 아래 닫힌 칸에 읽는 법
 function trendLines(v, wk, c, X, Y, x1) {
@@ -1545,8 +1639,10 @@ function trendLines(v, wk, c, X, Y, x1) {
   // 보유 탭 카드(카드 전체가 버튼이라 접는 칸이 안 열림)용 한 줄
   const sh = [kind && `${kind.split(" (")[0]}${up?.prev != null && Math.abs(up.s) < Math.abs(up.prev) * 0.6 ? " · 고점선 완만해짐" : ""}`, up && last > up.at(N - 1) * 1.01 && "🔔 고점선 돌파", dn && last < dn.at(N - 1) * 0.99 && "⚠ 저점선 이탈",
     res && `저항 ${fx(res.v)} (${pp(res.v)}, ${res.n}번)`, sup && `지지 ${fx(sup.v)} (${pp(sup.v)}, ${sup.n}번)`, fib && `50% ${fx(fib)} (${pp(fib)})`, run >= 5 && `🚫 ${n(run, 1)}배 급등`].filter(Boolean);
-  return { svg, short: `<div class="src" style="padding:2px 4px 4px">📐 ${sh.join(" · ")} <span style="opacity:.7">— 회색 선 · 자세히는 종목 상세</span></div>`, note:`<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title">📐 선 읽기 <span class="src">회색 선 = 고점끼리·저점끼리 · 지지·저항 · 50% (종가로 자동 계산 · 추천 아님)</span></summary><ul class="irl">${li.map((x) => `<li>${x}</li>`).join("")}</ul>
-    <div class="note src">원칙 전체는 📈 차트 탭 맨 위 '📚 차트 원칙'. 종가 꼭짓점이라 장중 고가·저가 선과 조금 달라요.</div></details>` };
+  return { svg, short: `<div class="src" style="padding:2px 4px 4px">📐 ${sh.join(" · ")} <span style="opacity:.7">— 회색 선 · 자세히는 종목 상세</span></div>`, note: `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title">📐 선 읽기 <span class="src">일봉·주봉·월봉 캔들 + 거래량 · 채널 · 지지·저항 · 피보나치 · 박스 (자동 계산 · 추천 아님)</span></summary>
+    <div class="tabox" data-code="${esc(c.code)}" hidden><div class="seg taseg" style="margin-top:6px">${TA_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === "d" ? "on" : ""}" onclick="taTab(this)">${l}</button>`).join("")}</div><div class="tain"><div class="src">불러오는 중…</div></div></div>
+    <div class="tlold"><ul class="irl">${li.map((x) => `<li>${x}</li>`).join("")}</ul></div>
+    <div class="note src">원칙 전체는 📈 차트 탭 맨 위 '📚 차트 원칙'. 선은 같은 규칙으로 자동으로 그어서 사람이 긋는 선과 다를 수 있어요.</div></details>` };
 }
 // 📈 200일 이동평균선 상태 (미국 주식에서 특히 중요): 🟢 선 위 + 선 오름 · 🟡 하나만 · 🔴 선 아래 + 선 내림 · 🔔 최근 아래→위로 다시 올라옴
 function ma200Sig(m) { return !m ? null : m.gap >= 0 && m.rising && !m.turning ? "🟢" : m.gap < 0 && (!m.rising || m.turning) ? "🔴" : "🟡"; }

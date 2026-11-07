@@ -1116,6 +1116,13 @@ def main():
     import pbr_watch
     write_json(DATA / "pbr_watch.json", pbr_watch.collect())
 
+    print("■ 📐 일·주·월봉 캔들 (선 읽기)")
+    try:
+        import ohlc
+        ohlc.collect()
+    except Exception as e:  # noqa: BLE001 - 캔들이 없어도 나머지 화면은 그대로 (선 읽기는 종가 선으로)
+        REPORT.block("📐 일·주·월봉 캔들", str(e)[:80])
+
     out = {
         "updated_at": t0.strftime("%Y-%m-%d %H:%M"),
         "rates": r, "market": m, "signals": {"us": us_sig, "kr": kr_sig},
