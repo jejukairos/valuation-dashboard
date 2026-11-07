@@ -1496,7 +1496,7 @@ function priceSpark(c, months = 6, inBtn = false) {
   const lbl = (PX_TABS.find((x) => x[0] === months) || [0, `${months}개월`])[1];
   const tl = trendLines(v, wk, c, (i) => X(i), Y, x1), cid = `tl-${c.code}-${months}`;
   g += `<clipPath id="${cid}"><rect x="${x0}" y="${top}" width="${x1 - x0}" height="${bot - top}"/></clipPath><g clip-path="url(#${cid})">${tl.svg}</g>`;  // 늘린 선이 그림 밖으로 안 나가게
-  if (inBtn) tl.note = "";  // 카드 전체가 <button> 이면 접는 칸이 안 열려서 (선만 보이고 읽기는 종목 상세·실적 탭에서)
+  if (inBtn) tl.note = tl.short || "";  // 카드 전체가 <button> 이면 접는 칸이 안 열려서 한 줄 요약만 (자세히는 종목 상세·실적 탭)
   const maPts =ma.map((y, i) => (y == null ? null : [X(i), Y(y)])), mseg = maPts.filter(Boolean);
   const maPath = mseg.length > 1 ? `<path d="${mseg.map((p, j) => `${j ? "L" : "M"}${p[0]},${p[1]}`).join(" ")}" fill="none" stroke="var(--s2)" stroke-width="2" stroke-dasharray="6 3"/>` : "";
   return `<div class="qp" style="margin-top:8px"><div class="qt"><b>주가 (${lbl}, ${wk ? "주봉" : "일봉"} 종가)</b>${wk && new Date(ds[0]) - cut > 60 * 864e5 ? `<span class="src">${esc(ds[0])} 부터 (자료 있는 기간)</span>` : ""}</div>
@@ -1542,7 +1542,10 @@ function trendLines(v, wk, c, X, Y, x1) {
   if (run >= 5) li.push(`🚫 이 기간 저점에서 고점까지 약 <b>${n(run, 1)}배</b> — 형님 원칙: 짧은 기간 5~10배 오른 종목은 1~2년 쉴 수 있어 쳐다보지 않음`);
   if (c.market !== "US" && c.market_cap && c.market_cap < 1e12) li.push(`🚫 시가총액 약 ${n(c.market_cap / 1e8, 0)}억 — 형님 원칙: 국장은 1조 미만은 손대지 않음 (거래대금·수급 때문)`);
   if (!li.length) return { svg, note: "" };
-  return { svg, note: `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title">📐 선 읽기 <span class="src">회색 선 = 고점끼리·저점끼리 · 지지·저항 · 50% (종가로 자동 계산 · 추천 아님)</span></summary><ul class="irl">${li.map((x) => `<li>${x}</li>`).join("")}</ul>
+  // 보유 탭 카드(카드 전체가 버튼이라 접는 칸이 안 열림)용 한 줄
+  const sh = [kind && `${kind.split(" (")[0]}${up?.prev != null && Math.abs(up.s) < Math.abs(up.prev) * 0.6 ? " · 고점선 완만해짐" : ""}`, up && last > up.at(N - 1) * 1.01 && "🔔 고점선 돌파", dn && last < dn.at(N - 1) * 0.99 && "⚠ 저점선 이탈",
+    res && `저항 ${fx(res.v)} (${pp(res.v)}, ${res.n}번)`, sup && `지지 ${fx(sup.v)} (${pp(sup.v)}, ${sup.n}번)`, fib && `50% ${fx(fib)} (${pp(fib)})`, run >= 5 && `🚫 ${n(run, 1)}배 급등`].filter(Boolean);
+  return { svg, short: `<div class="src" style="padding:2px 4px 4px">📐 ${sh.join(" · ")} <span style="opacity:.7">— 회색 선 · 자세히는 종목 상세</span></div>`, note:`<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title">📐 선 읽기 <span class="src">회색 선 = 고점끼리·저점끼리 · 지지·저항 · 50% (종가로 자동 계산 · 추천 아님)</span></summary><ul class="irl">${li.map((x) => `<li>${x}</li>`).join("")}</ul>
     <div class="note src">원칙 전체는 📈 차트 탭 맨 위 '📚 차트 원칙'. 종가 꼭짓점이라 장중 고가·저가 선과 조금 달라요.</div></details>` };
 }
 // 📈 200일 이동평균선 상태 (미국 주식에서 특히 중요): 🟢 선 위 + 선 오름 · 🟡 하나만 · 🔴 선 아래 + 선 내림 · 🔔 최근 아래→위로 다시 올라옴
