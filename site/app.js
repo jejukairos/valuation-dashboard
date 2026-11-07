@@ -1419,7 +1419,7 @@ function irBriefHTML(code, name, k) {
   if (k && (!e || qk(e.quarter) < k.latest)) e = irAuto(k) || e;  // 이번 분기 회사 IR 요약이 아직 없으면 숫자로 먼저
   if (!e) return "";
   const box = (t, secs) => `<details class="fvt"><summary class="chart-title"><b>${esc(name || code)} (${esc(code)}) ${t}</b> <span class="src">${esc(e.period || e.quarter || "")}</span></summary>
-    ${(secs || []).map((s) => `<div style="margin-top:6px"><b>${esc(s.h)}</b><ul class="irl">${(s.l || []).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;
+    ${(secs || []).map((s) => `<div style="margin-top:6px"><b>${esc(s.h)}</b><ul class="irl">${(s.l || []).map((x) => (typeof x === "string" ? x : Object.entries(x || {}).map(([k, v]) => `${k}: ${v}`).join(" "))).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;  // YAML 이 '제목: 글' 줄을 표로 읽어도 화면이 안 멈추게
   const src = e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.src || "회사 IR 자료")}</a>` : esc(e.src || "");
   return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${box("IR 요약", e.sum)}${box("IR 분석", e.ana)}
     <div class="src" style="margin-top:6px">📋 ${esc(e.date || "")} · ${src} · ${e.auto ? "회사 설명·해석은 발표가 끝나면 예약 작업이 바꿔 넣어요" : "증감률·이익률은 발표 숫자로 계산한 값"} · 분석은 해석이고 매매 추천이 아니에요</div></div>`;
@@ -1508,7 +1508,8 @@ function priceSpark(c, months = 6, inBtn = false) {
 // 📐 선 읽기 칸 안 캔들 차트 (사용자 11/7 "일봉·주봉·월봉 + 거래량, 지지·저항·피보나치·채널 온전히") — data/ohlc/{코드}.json (collector/ohlc.py)
 // 꼭짓점 = 고가·저가 · 주봉·월봉은 로그 눈금이라 선도 로그 가격으로 계산 (그림에서 곧게 보이게)
 // 이평선 (사용자 11/7): 일봉 20·60·120·200일 · 주봉 4·13·26·52주 · 월봉 5개월 — 색은 [기간, 색] (그림 아래 범례와 같음)
-const TA_TF = [["d", "일봉", 250, 21, [[20, "var(--s3)"], [60, "var(--warn)"], [120, "var(--bad)"], [200, "var(--ink)"]]],
+// 일봉 색 (사용자 11/7 다시): 20일 빨강 · 50일 보라 · 100일 주황 · 200일 검정
+const TA_TF = [["d", "일봉", 250, 21, [[20, "var(--bad)"], [50, "var(--s7)"], [100, "var(--warn)"], [200, "var(--ink)"]]],
   ["w", "주봉", 156, 4.33, [[4, "var(--bad)"], [13, "var(--s4)"], [26, "var(--s3)"], [52, "var(--s7)"]]], ["m", "월봉", 150, 1, [[5, "var(--s3)"]]]], OHLC = {};
 function taAnalyze(full, kind, c) {
   const [, , view, pm, mas] = TA_TF.find((x) => x[0] === kind), M = full.c.length, s0 = Math.max(0, M - view);
@@ -1574,7 +1575,10 @@ function taAnalyze(full, kind, c) {
   const tap = (x1, y1, x2, y2, col, dash, v, t) => `<g class="tamk" onclick="event.stopPropagation();this.classList.toggle('on')"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="1.5" stroke-opacity=".8"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`
     + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="transparent" stroke-width="14" pointer-events="stroke"/><circle cx="${x2}" cy="${y2}" r="7" fill="transparent"/><circle cx="${x2}" cy="${y2}" r="3.5" fill="${col}"/>`
     + `<text class="tamt" x="${x2 - 8}" y="${y2 - 6}" text-anchor="end" style="fill:${col}">${esc(t)} ${esc(fmt(v))} (${esc(pp(v))})</text></g>`;
-  const over = (X, Y) => g.filter((s) => !s.includes('data-c="f2"')).map((s) => {
+  // 가장 최근 봉(당일 종가)을 잘 보이게: 굵은 몸통 + 검은 테두리 (사용자 11/7)
+  const lastBar = (X, Y) => { const o = ch.o[N - 1], c2 = ch.c[N - 1], w = Math.max(5, (X(N - 1) - X(N - 2)) * 2.2), col = c2 >= o ? "var(--bad)" : "var(--s1)";
+    return `<line x1="${X(N - 1)}" x2="${X(N - 1)}" y1="${Y(ch.h[N - 1])}" y2="${Y(ch.l[N - 1])}" stroke="${col}" stroke-width="1.8"/><rect x="${X(N - 1) - w / 2}" y="${Math.min(Y(o), Y(c2))}" width="${w}" height="${Math.max(2, Math.abs(Y(o) - Y(c2)))}" fill="${col}" stroke="var(--ink)" stroke-width="1.2"/>`; };
+  const over = (X, Y) => lastBar(X, Y) + g.filter((s) => !s.includes('data-c="f2"')).map((s) => {
     if (s.startsWith("<path")) { const m = s.match(/M([\d.]+),([\d.e+-]+)L([\d.]+),([\d.e+-]+)/); return tap(X(+m[1]), Y(+m[2]), X(+m[3]), Y(+m[4]), "var(--ink-2)", "", +m[4], s.match(/data-t="([^"]*)"/)?.[1] || "채널"); }
     if (s.startsWith("<box")) { const a = +s.match(/data-a="(\d+)"/)[1], hi = +s.match(/data-hi="([\d.]+)"/)[1], lo = +s.match(/data-lo="([\d.]+)"/)[1]; return `<rect x="${X(a)}" y="${Y(hi)}" width="${X(N - 1) - X(a)}" height="${Y(lo) - Y(hi)}" fill="var(--warn)" fill-opacity=".08" stroke="var(--warn)" stroke-opacity=".4" stroke-dasharray="3 3"/>`; }
     const v = +s.match(/data-v="([\d.e+-]+)"/)[1], k = s.match(/data-c="(\w+)"/)[1], t = s.match(/data-t="([^"]*)"/)[1].split(" · ")[0];

@@ -18,4 +18,8 @@ if sys.argv[1] == "export_ir":
     bad = [f"{c} {e.get('quarter')}" for c, l in ir.items() for e in l if not (e.get("sum") and e.get("ana"))]
     if bad:
         sys.exit(f"ir_brief.yaml: IR 요약(sum)·IR 분석(ana) 둘 다 있어야 함 — {bad}")
+    for l in ir.values():  # '제목: 글' 처럼 따옴표 없이 콜론+띄어쓰기가 든 줄은 YAML 이 표로 읽음 → 다시 글자로 (11/7 실적 탭 멈춤)
+        for e in l:
+            for s in (e.get("sum") or []) + (e.get("ana") or []):
+                s["l"] = [x if isinstance(x, str) else " ".join(f"{k}: {v}" for k, v in (x or {}).items()) for x in s.get("l") or []]
     write_json(DATA / "ir_brief.json", ir)
