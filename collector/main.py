@@ -1123,6 +1123,13 @@ def main():
     except Exception as e:  # noqa: BLE001 - 캔들이 없어도 나머지 화면은 그대로 (선 읽기는 종가 선으로)
         REPORT.block("📐 일·주·월봉 캔들", str(e)[:80])
 
+    print("■ 📉 고점 대비 낙폭 사이클 (삼성전자·SK하이닉스)")
+    try:
+        import cycle_dd
+        cycle_dd.collect()
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("📉 고점 대비 낙폭 사이클", str(e)[:80])
+
     out = {
         "updated_at": t0.strftime("%Y-%m-%d %H:%M"),
         "rates": r, "market": m, "signals": {"us": us_sig, "kr": kr_sig},

@@ -4203,7 +4203,7 @@ async function openStock(code) {
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
     const growHtml = await growthBlock(code, d);
-    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
+    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + cycHTML(code) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : DR_CODES.includes(code) ? (await drGet(), drHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬 · 💾 메모리 회사는 D램 값
     await consGet();
@@ -5074,7 +5074,7 @@ async function loadIndustry() {
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + expHTML("ramen") + expHTML("food")],
-    ["💾 반도체", () => drHTML() + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
+    ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
@@ -5606,6 +5606,51 @@ function patSVG(d) {  // 최근 3년 주봉 종가 + 추세선·전고점·손�
   return `<svg viewBox="0 0 ${W} 166" role="img" aria-label="최근 3년 주봉 종가와 추세선">${g}</svg>
     <div class="src" style="padding:0 4px 4px">── 주봉 종가 · <span style="color:var(--s2)">━</span> 고점끼리 이은 하락 추세선 · <span style="color:var(--s2)">┅</span> 저점끼리 이은 선 · <span style="color:var(--warn)">┅</span> 전고점·손잡이 고점 · <span style="color:var(--good)">━</span> 컵 모양</div>`;
 }
+// 📉 고점 대비 낙폭: 지금 vs 과거 큰 하락 사이클 (사용자 11/7 삼성전자 그림처럼, SK하이닉스도) — data/cycle_dd.json ← collector/cycle_dd.py (갱신 때마다)
+// x = 고점 뒤 몇 개월 · y = 고점 대비 % · 빨강 굵은 선 = 지금 · 점 = 각 사이클 바닥 · 종목 상세(주봉 모양 위) + 🏭 산업 탭 반도체
+let CYC = null;
+const CYC_COL = ["#a3a3a3", "#c9a27a", "#9cb8d8", "#5b8fd1", "#2a9d8f", "#b39ddb", "#e0a458", "#7fb8a8"];
+const CYC_NOTE = {  // 전달받은 시각 (닫힘) — 사용자 11/7
+  "005930": ["최악이면 '진짜 바닥'은 10만원 중후반으로 봄 — 28년 이익 60% 넘게 역성장 + PBR 0.9배를 가정", "컨센서스를 안 믿고 28년을 보수적으로 잡아도 PBR 은 1배 수준", "지금 50% 넘는 고점 대비 낙폭은 닷컴버블 수준 — 'AI 버블'이 이미 터진 걸 가정한 주가·밸류라는 시각 (연쇄 청산이 나면 더 빠질 수도)", "내년 배당수익률이 10% 가까울 수 있다고 봄"],
+};
+function cycHTML(code, open = false) {
+  const S = CYC?.stocks?.[code];
+  if (!S?.cycles?.length) return "";
+  const cur = S.cycles.find((x) => x.now), past = S.cycles.filter((x) => !x.now), L = S.last;
+  const all = S.cycles.flatMap((x) => x.pts.map((p) => p[1])), lo = Math.max(-95, Math.floor(Math.min(-60, ...all) / 10) * 10), hi = 30;
+  const W = 640, x0 = 44, x1 = 600, top = 12, bot = 250, X = (m) => x0 + ((x1 - x0) * Math.min(m, 30)) / 30, Y = (v) => bot - ((Math.min(v, hi) - lo) / (hi - lo)) * (bot - top);
+  const lab = (x) => `${x.peak_d.slice(0, 4)}.${+x.peak_d.slice(5, 7)}`, wonK = (v) => (v >= 10000 ? `${n(v / 10000, 2)}만원` : `${n(v, 0)}원`);
+  let g = "";
+  for (let v = lo; v <= hi; v += 20) g += `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? "var(--ink-2)" : "var(--grid)"}"/><text x="${x0 - 4}" y="${Y(v) + 4}" text-anchor="end" class="qx">${v > 0 ? "+" : ""}${v}%</text>`;
+  for (let m = 0; m <= 30; m += 5) g += `<text x="${X(m)}" y="${bot + 16}" text-anchor="middle" class="qx">${m}</text>`;
+  const path = (pts) => pts.map(([m, v], j) => `${j ? "L" : "M"}${X(m).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+  past.forEach((x, i) => { const col = CYC_COL[i % CYC_COL.length], t = [x.trough_m, x.trough];  // 바닥 점 = 일봉 바닥 (주 1점 그림보다 정확)
+    g += `<path d="${path(x.pts)}" fill="none" stroke="${col}" stroke-width="1.8"/><circle cx="${X(t[0])}" cy="${Y(t[1])}" r="3" fill="${col}"/><text x="${X(t[0])}" y="${Y(t[1]) + 13}" text-anchor="middle" class="qx" style="fill:${col}">${n(t[1], 0)}%</text>`; });
+  if (cur) { const e = cur.pts.at(-1);
+    g += `<path d="${path(cur.pts)}" fill="none" stroke="var(--bad)" stroke-width="3.5"/><circle cx="${X(e[0])}" cy="${Y(e[1])}" r="5" fill="var(--bad)"/>`
+      + `<text x="${X(e[0]) + 8}" y="${Y(e[1]) + 4}" class="qv b" style="fill:var(--bad)">${n(e[1], 1)}% (${wonK(L.px)})</text>`; }
+  g += `<text x="${(x0 + x1) / 2}" y="${bot + 30}" text-anchor="middle" class="qx">고점 뒤 몇 개월</text>`;
+  // 같은 시점 과거 낙폭 · 과거 바닥 → 이번 고점 기준 가격
+  const at = (x, m) => { const p = x.pts.reduce((a, q) => (Math.abs(q[0] - m) < Math.abs(a[0] - m) ? q : a)); return Math.abs(p[0] - m) <= 0.6 ? p[1] : null; };
+  const tr = past.map((x) => x.trough).sort((a, b) => a - b), med = tr[tr.length >> 1], deeper = past.filter((x) => x.trough < (L.dd ?? 0));
+  const px = (dd) => wonK(cur.peak * (1 + dd / 100));
+  const lines = cur ? [
+    `지금: <b>${lab(cur)} 고점 ${wonK(cur.peak)}</b> → ${esc(L.d.slice(5).replace("-", "/"))} ${wonK(L.px)} = <b style="color:var(--bad-ink)">${n(L.dd, 1)}%</b> · 고점 뒤 ${n(L.m, 1)}개월`,
+    `같은 ${n(L.m, 1)}개월 시점 과거 낙폭: ${past.map((x) => [lab(x), at(x, L.m)]).filter(([, v]) => v != null).map(([l, v]) => `${l} ${n(v, 0)}%`).join(" · ")}`,
+    `지난 사이클 바닥: ${n(tr[0], 0)}% ~ ${n(tr.at(-1), 0)}% (가운데 ${n(med, 0)}%) → 이번 고점에 대 보면 <b>${px(tr[0])} ~ ${px(tr.at(-1))}</b> (가운데 ${px(med)}) — 참고용 계산, 예측 아님`,
+    deeper.length ? `지금 낙폭보다 깊었던 사이클: ${deeper.map((x) => `${lab(x)} ${esc(x.label)} ${n(x.trough, 0)}%`).join(" · ")} — 나머지 ${past.length - deeper.length}개보다는 이미 깊음` : `지금 낙폭이 지난 ${past.length}개 사이클 바닥보다 모두 깊음`,
+  ] : [];
+  const leg = [...past.map((x, i) => `<span style="display:inline-block;width:16px;height:0;border-top:3px solid ${CYC_COL[i % CYC_COL.length]};vertical-align:middle;margin-right:4px"></span>${lab(x)} 고점 (${esc(x.label)}) 바닥 ${n(x.trough, 0)}% · ${n(x.trough_m, 1)}개월 뒤${x.back_m != null ? ` · 고점 되찾는 데 ${n(x.back_m, 0)}개월` : ""}`),
+    ...(cur ? [`<span style="display:inline-block;width:16px;height:0;border-top:4px solid var(--bad);vertical-align:middle;margin-right:4px"></span><b>${lab(cur)} 고점 (지금, ${esc(cur.label)})</b>`] : [])];
+  const note = CYC_NOTE[code];
+  return `<details class="fvt"${open ? " open" : ""}><summary class="chart-title"><b>📉 ${esc(S.name)} 고점 대비 낙폭: 지금 vs 과거 하락 사이클</b> <span class="src">${cur ? `지금 ${n(L.dd, 1)}% · 고점 뒤 ${n(L.m, 1)}개월 · ` : ""}매일 자동 · 눌러서 열기</span></summary>
+    <svg viewBox="0 0 ${W} ${bot + 36}" role="img" aria-label="${esc(S.name)} 고점 대비 낙폭">${g}</svg>
+    <div class="src" style="line-height:1.7">${leg.join("<br>")}</div>
+    <ul class="irl" style="margin-top:6px">${lines.map((x) => `<li>${x}</li>`).join("")}</ul>
+    <div class="kidbox" style="margin-top:6px">🐣 고점을 0%로 놓고, 고점 뒤 몇 달 동안 얼마나 빠졌는지를 사이클마다 겹쳐 그린 거예요. 빨간 굵은 선(지금)이 과거 선들 중 어디쯤 있는지 보면 '이번 하락이 얼마나 깊고 빠른지'를 비교할 수 있어요. 과거에 여기서 멈췄다고 이번에도 멈춘다는 뜻은 아니에요.</div>
+    ${note ? `<details class="fvt"><summary class="chart-title">📌 전달받은 시각 (11/7) <span class="src">그 글의 생각 · 추천 아님 · 눌러서 보기</span></summary><ul class="irl">${note.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}
+    <div class="note src">고점 = 앞 1년 중 가장 높은 종가이면서 그 뒤 30개월 안에 33% 넘게 빠진 자리 · 바닥 = 고점 뒤 30개월 안 가장 낮은 종가 · 일봉 종가(장중 저가 아님) · ${esc(CYC.src || "")} · ${esc(CYC.updated_at || "")}</div></details>`;
+}
 function patHTML(d) {  // 종목 상세: 차트 + 조건 설명
   const p = d.pattern;
   if (!p?.w?.length) return "";
@@ -6061,6 +6106,7 @@ async function load() {
     try { IRCAL = await (await fetch("data/ir_calendar.json?t=" + Date.now(), { cache: "no-store" })).json() || { items: [] }; } catch (_) { IRCAL = { items: [] }; }
     try { IRB = await (await fetch("data/ir_brief.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { IRB = {}; }
     try { PBR = await (await fetch("data/pbr_watch.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { /* 📌 코멘트·기준선만 빠짐 */ }
+    try { CYC = await (await fetch("data/cycle_dd.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CYC = null; }  // 📉 고점 대비 낙폭 사이클
     try { EVENTS = await (await fetch("data/events.json?t=" + Date.now(), { cache: "no-store" })).json() || []; } catch (_) { EVENTS = []; }
     try { SOMONG = await (await fetch("data/somong.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { SOMONG = {}; }
     try { CAPEX = await (await fetch("data/capex.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { CAPEX = {}; }  // 🇺🇸 탭 빅테크 현금흐름
