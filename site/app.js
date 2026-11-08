@@ -1804,12 +1804,11 @@ const earnOk = (code) => {  // 지금 고른 탭(보유/관심)·시장(전체/�
   if (EARN_MKT !== "ALL" && mktOf(code) !== EARN_MKT) return false;
   const c = DASH.stocks.find((s) => s.code === code);
   if (!c) return true;
-  const gs = [grp(c), ...(c.also || [])];
-  return EARN_GRP === "관심" ? gs.includes("관심") : gs.some((g) => g !== "관심");
+  return [grp(c), ...(c.also || [])].includes(EARN_GRP);  // 11/8: 공동자산은 '실적 공동' 탭에 따로 (여러 묶음에 든 종목은 그 탭 모두)
 };
 function renderEarn() {
   const h = kqNewsHTML() + irCalHTML();  // 사용자 11/5: 제일 최신 발표가 맨 위 — 쉬운 요약은 그 회사 카드 안·날짜순 목록 안으로
-  const where = `${EARN_MKT === "US" ? "미국 " : EARN_MKT === "KR" ? "한국 " : ""}${EARN_GRP === "관심" ? "관심" : "보유·공동"}`;
+  const where = `${EARN_MKT === "US" ? "미국 " : EARN_MKT === "KR" ? "한국 " : ""}${EARN_GRP === "공동" ? "공동자산" : EARN_GRP}`;
   $("#earnBody").innerHTML = `<div class="seg earnmk" style="margin-bottom:8px">${[["ALL", "전체"], ["KR", "🇰🇷 한국"], ["US", "🇺🇸 미국"]].map(([k, l]) => `<button data-mk="${k}" class="${k === EARN_MKT ? "on" : ""}">${l}</button>`).join("")}</div>`
     + `<div id="earnJump"></div><div id="earnList">${h || `<div class="empty">최근 3일 안에 나온 ${where} 종목 실적이 없어요.</div>`}</div>`;
   jumpBar("#earnList", "#earnJump");
@@ -2448,7 +2447,7 @@ function irCalHTML() {
   const items = (IRCAL.items || []).filter((e) => e.dday >= -2 && e.dday <= 30 && earnOk(e.code));
   if (!items.length) return "";
   const gl = { 보유: "", 관심: " ⭐", 공동: " 🤝" };
-  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">${EARN_GRP === "관심" ? "관심" : "보유·공동"} · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
+  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">${EARN_GRP === "공동" ? "공동자산" : EARN_GRP} · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
     <ul class="irl">${items.map((e) => `<li>${irWhen(e)} <a href="#stock/${esc(e.code)}">${esc(e.name)}</a>${gl[e.group] || ""} · ${esc(e.title || "")}${e.live ? " · 🔴 라이브" : ""}${e.segc ? ` · <a href="#stock/${esc(e.code)}">🎯 ${esc(e.segc)} 부문 예상</a>` : ""}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${e.script_url ? ` · <a href="${esc(e.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</li>`).join("")}</ul></details>`;
 }
 // 🐣 쉬운 요약 (최근 3일 실적발표 easy + config/events.yaml 공시·촉매·전망 변화) — 11/5 부터 🧾 실적 발표 목록 안에 날짜순으로 (kqNewsHTML)
@@ -4620,9 +4619,10 @@ function showView() {
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
-  $("#earnView").hidden = view !== "earn" && view !== "earnw";
-  if (view === "earn" || view === "earnw") { const g = view === "earnw" ? "관심" : "보유"; if (g !== EARN_GRP) { EARN_GRP = g; EARN_MKT = "ALL"; } $("#earnTitle").textContent = `🧾 실적 ${g}`; renderEarn(); }
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const eg = { earn: "보유", earnw: "관심", earnj: "공동" }[view];  // 🧾 실적 보유 · 관심 · 공동 (같은 화면, 종목 묶음만 바꿈)
+  $("#earnView").hidden = !eg;
+  if (eg) { if (eg !== EARN_GRP) { EARN_GRP = eg; EARN_MKT = "ALL"; } $("#earnTitle").textContent = `🧾 실적 ${eg}`; renderEarn(); }
   $("#chartView").hidden = view !== "chart";
   if (view === "chart") loadAlign();
   $("#reportsView").hidden = view !== "reports";
