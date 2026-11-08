@@ -1798,14 +1798,20 @@ function accSecFill() {
   });
 }
 // 🧾 실적 탭 (예전엔 보유 탭 맨 위): 쉬운 요약 · 실적 발표(최근 3일) · 실적발표·컨콜 일정 — 🇰🇷/🇺🇸 버튼
-let EARN_MKT = "KR";
+// 사용자 11/8: 첫 화면 탭을 '🧾 실적 보유'(#earn, 공동자산 포함) · '🧾 실적 관심'(#earnw) 둘로, 탭 안에서 전체 · 🇰🇷 한국 · 🇺🇸 미국
+let EARN_MKT = "ALL", EARN_GRP = "보유";
+const earnOk = (code) => {  // 지금 고른 탭(보유/관심)·시장(전체/한국/미국)에 들어가는 종목인지 — 목록에 없는 코드는 두 탭 모두
+  if (EARN_MKT !== "ALL" && mktOf(code) !== EARN_MKT) return false;
+  const c = DASH.stocks.find((s) => s.code === code);
+  if (!c) return true;
+  const gs = [grp(c), ...(c.also || [])];
+  return EARN_GRP === "관심" ? gs.includes("관심") : gs.some((g) => g !== "관심");
+};
 function renderEarn() {
-  const keep = MKT;
-  MKT = EARN_MKT;  // 아래 함수들은 MKT 로 시장을 고름
   const h = kqNewsHTML() + irCalHTML();  // 사용자 11/5: 제일 최신 발표가 맨 위 — 쉬운 요약은 그 회사 카드 안·날짜순 목록 안으로
-  MKT = keep;
-  $("#earnBody").innerHTML = `<div class="seg earnmk" style="margin-bottom:8px">${[["KR", "🇰🇷 한국"], ["US", "🇺🇸 미국"]].map(([k, l]) => `<button data-mk="${k}" class="${k === EARN_MKT ? "on" : ""}">${l}</button>`).join("")}</div>`
-    + `<div id="earnJump"></div><div id="earnList">${h || `<div class="empty">최근 3일 안에 나온 ${EARN_MKT === "US" ? "미국" : "한국"} 종목 실적이 없어요.</div>`}</div>`;
+  const where = `${EARN_MKT === "US" ? "미국 " : EARN_MKT === "KR" ? "한국 " : ""}${EARN_GRP === "관심" ? "관심" : "보유·공동"}`;
+  $("#earnBody").innerHTML = `<div class="seg earnmk" style="margin-bottom:8px">${[["ALL", "전체"], ["KR", "🇰🇷 한국"], ["US", "🇺🇸 미국"]].map(([k, l]) => `<button data-mk="${k}" class="${k === EARN_MKT ? "on" : ""}">${l}</button>`).join("")}</div>`
+    + `<div id="earnJump"></div><div id="earnList">${h || `<div class="empty">최근 3일 안에 나온 ${where} 종목 실적이 없어요.</div>`}</div>`;
   jumpBar("#earnList", "#earnJump");
 }
 document.addEventListener("click", (e) => { const b = e.target.closest(".earnmk button"); if (b) { EARN_MKT = b.dataset.mk; renderEarn(); } });
@@ -1815,8 +1821,8 @@ function kqNewsHTML() {
   const easyOf = (code) => { const l = EARNINGS[code]?.[0]; return l?.easy?.length && l.date >= cut ? l : null; };
   const kid = (e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">🐣 쉬운 요약 · ${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
       <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`;
-  const list = DASH.stocks.filter((c) => c.kq_brief && mktOf(c.code) === MKT);
-  const wait = DASH.stocks.filter((c) => !c.kq_brief && c.kq_wait && mktOf(c.code) === MKT);
+  const list = DASH.stocks.filter((c) => c.kq_brief && earnOk(c.code));
+  const wait = DASH.stocks.filter((c) => !c.kq_brief && c.kq_wait && earnOk(c.code));
   const rows = list.map((c) => {
     const k = c.kq_brief, ez = easyOf(c.code);
     const head = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:18px;color:var(--s1)">${esc(c.name)} (${esc(c.code)})</b>
@@ -1835,9 +1841,9 @@ function kqNewsHTML() {
   const shown = new Set(list.map((c) => c.code));
   Object.entries(EARNINGS).forEach(([code, l]) => {  // 실적 카드는 없는데 쉬운 요약은 있는 회사
     const ez = easyOf(code);
-    if (ez && !shown.has(code) && mktOf(code) === MKT) rows.push({ date: ez.date, html: `<div class="card" data-jump="${esc(code)}" data-jname="${esc(nm(code) || code)}">${kid({ date: ez.date, code, title: `${ez.quarter} 실적발표`, easy: ez.easy, sum: true })}</div>` });
+    if (ez && !shown.has(code) && earnOk(code)) rows.push({ date: ez.date, html: `<div class="card" data-jump="${esc(code)}" data-jname="${esc(nm(code) || code)}">${kid({ date: ez.date, code, title: `${ez.quarter} 실적발표`, easy: ez.easy, sum: true })}</div>` });
   });
-  (EVENTS || []).filter((e) => e.date >= cut && e.easy?.length && (!(e.market || e.code) || (e.market || mktOf(e.code)) === MKT))  // 종목·시장이 없는 이벤트(업종 전체)는 두 탭 모두
+  (EVENTS || []).filter((e) => e.date >= cut && e.easy?.length && (e.code ? earnOk(e.code) : !e.market || EARN_MKT === "ALL" || e.market === EARN_MKT))  // 종목이 없는 이벤트(업종 전체)는 보유·관심 두 탭 모두
     .forEach((e) => rows.push({ date: e.date, html: `<div class="card"${e.code ? ` data-jump="${esc(e.code)}" data-jname="${esc(nm(e.code) || e.code)}"` : ""}>${kid(e)}</div>` }));
   if (!rows.length && !wait.length) return "";
   rows.sort((a, b) => b.date.localeCompare(a.date));
@@ -2439,10 +2445,10 @@ function irWhen(e) {
   return `<b>${esc(e.when.slice(5, 10).replace("-", "/"))}${t}</b> <span class="pill ${e.dday === 0 ? "red" : e.dday > 0 && e.dday <= 7 ? "yellow" : ""}">${dd}</span>`;
 }
 function irCalHTML() {
-  const items = (IRCAL.items || []).filter((e) => e.dday >= -2 && e.dday <= 30 && mktOf(e.code) === MKT);
+  const items = (IRCAL.items || []).filter((e) => e.dday >= -2 && e.dday <= 30 && earnOk(e.code));
   if (!items.length) return "";
   const gl = { 보유: "", 관심: " ⭐", 공동: " 🤝" };
-  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">보유·관심·공동 · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
+  return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📅 실적발표·컨퍼런스콜 일정</b> <span class="src">${EARN_GRP === "관심" ? "관심" : "보유·공동"} · 앞으로 30일 · 네이버 증권 IR / 야후 · ${esc(IRCAL.updated_at || "")}</span></summary>
     <ul class="irl">${items.map((e) => `<li>${irWhen(e)} <a href="#stock/${esc(e.code)}">${esc(e.name)}</a>${gl[e.group] || ""} · ${esc(e.title || "")}${e.live ? " · 🔴 라이브" : ""}${e.segc ? ` · <a href="#stock/${esc(e.code)}">🎯 ${esc(e.segc)} 부문 예상</a>` : ""}${e.url ? ` · <a href="${esc(e.url)}" target="_blank" rel="noopener">IR 보기</a>` : ""}${e.script_url ? ` · <a href="${esc(e.script_url)}" target="_blank" rel="noopener">📜 실시간 자막</a>` : ""}</li>`).join("")}</ul></details>`;
 }
 // 🐣 쉬운 요약 (최근 3일 실적발표 easy + config/events.yaml 공시·촉매·전망 변화) — 11/5 부터 🧾 실적 발표 목록 안에 날짜순으로 (kqNewsHTML)
@@ -4613,10 +4619,10 @@ function showView() {
   const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
-  // 처음 열면 🧾 실적 탭 (사용자 11/5) — 🇰🇷 보유는 #kr
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
-  $("#earnView").hidden = view !== "earn";
-  if (view === "earn") renderEarn();
+  // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  $("#earnView").hidden = view !== "earn" && view !== "earnw";
+  if (view === "earn" || view === "earnw") { const g = view === "earnw" ? "관심" : "보유"; if (g !== EARN_GRP) { EARN_GRP = g; EARN_MKT = "ALL"; } $("#earnTitle").textContent = `🧾 실적 ${g}`; renderEarn(); }
   $("#chartView").hidden = view !== "chart";
   if (view === "chart") loadAlign();
   $("#reportsView").hidden = view !== "reports";
