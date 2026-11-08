@@ -5082,7 +5082,7 @@ async function loadIndustry() {
     ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + expHTML("ramen") + expHTML("food")],
     ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
-    ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
+    ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🎤 엔터", () => key("엔터")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
   secs.push(["🔑 그 밖의 업종", Object.keys(K).filter((k) => !used.has(k)).map((k) => keyGroup(k, K[k])).join("")], ["⚖️ 고정비·변동비 (전 업종)", costIndHTML()]);
   $("#industryBody").innerHTML = secs.filter(([, h]) => h).map(([t, h]) => `<section data-jump="${esc(t)}" data-jname="${esc(t)}" style="margin-top:18px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">${t}</h2>${h}</section>`).join("");
@@ -5237,6 +5237,7 @@ function keyCard(c, open) {
   const li = (x) => `<li>${esc(x)}</li>`;
   return `<details class="card" style="margin-top:8px;background:var(--surface-2)"${c.id ? ` id="kc-${esc(c.id)}"` : ""}${open ? " open" : ""}><summary><b>📌 ${esc(c.t)}</b> <span class="src">${esc(c.d || "")}</span></summary>
     <div class="qgrid" style="margin-top:6px">${(c.charts || []).map(keyChart).join("")}${(c.wf || []).map(keyWf).join("")}</div>
+    ${(c.img || []).map((x) => `<figure style="margin:6px 0"><img src="${esc(x.src)}" alt="${esc(x.alt || c.t)}" loading="lazy" style="width:100%;height:auto;border-radius:8px;background:#fff"><figcaption class="src">${esc(x.cap || "")}</figcaption></figure>`).join("")}
     ${(c.lines || []).length ? `<ul class="irl">${c.lines.map(li).join("")}</ul>` : ""}${keyTrack(c.track)}
     ${c.go ? `<div class="note"><a href="#industry" data-kc="${esc(c.go)}">👉 자세한 내용: 산업 탭 '${esc(c.go_t || "전체 카드")}' 보기 →</a></div>` : ""}
     ${(c.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>변곡점 체크</b><ul class="irl">${c.turn.map(li).join("")}</ul></div>` : ""}
