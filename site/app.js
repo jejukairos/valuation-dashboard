@@ -3645,7 +3645,7 @@ function per12mfSeries(d, yrs = "5", key = "eps") {  // key = eps → 12MF PER �
 /* ---------- 🌍 글로벌 동종 대비 12MF PER (data/global_pe.json ← collector/global_pe.py · config/global_peers.yaml) ---------- */
 let GPE = null;
 const gpeGet = async () => { if (!GPE) GPE = await (await fetch("data/global_pe.json?t=" + Date.now(), { cache: "no-store" })).json(); return GPE; };
-const GPE_COL = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s7)", "var(--bad)"];
+const GPE_COL = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s7)", "var(--bad)", "var(--muted)"];
 const monOf = (ds) => { const t = new Date(ds + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
 const ym = (ds) => `${ds.slice(2, 4)}.${+ds.slice(5, 7)}`;
 // 주간 선 그림: lines [{n, v:[…], col, w, dash}] (왼쪽 = 배) + prem [… %] (오른쪽 축, 면) + marks [{i, t, up}] 작은 글씨 + 프리미엄 구간 빨간 상자
@@ -3736,14 +3736,21 @@ function globalPeHTML(d) {
 // 🏭 산업 탭: 업종마다 글로벌 대표 3~6곳 12MF PER + 가운데 값
 // 🏭 산업 탭 업종 칸 하나: 🌍 글로벌 대표 기업 12MF PER (config/global_peers.yaml 그룹)
 function gpeCard(k) {
-  const g = GPE?.groups?.[k], ds = Object.keys(g?.avg || {}).sort();
+  const g = GPE?.groups?.[k], ds = Object.keys(g?.avg || {}).sort().filter((x) => !g.since || x >= g.since);  // since = 그림 시작 (M7 최근 2년)
   if (ds.length < 12) return "";
   const nm = (c) => DASH.stocks.find((x) => x.code === c)?.name || c;
-  const lines = g.peers.map((p, i) => ({ n: p.n, v: ds.map((x) => p.pe[x] ?? null), col: GPE_COL[i % GPE_COL.length], w: 1.6 })).concat([{ n: "가운데 값", v: ds.map((x) => g.avg[x]), col: "var(--ink)", w: 2.6, dash: "5 3" }]);
+  const avn = g.avg_name || "가운데 값", last = g.avg[ds.at(-1)];
+  const lines = g.peers.map((p, i) => ({ n: p.n, t: p.t, v: ds.map((x) => p.pe[x] ?? null), col: GPE_COL[i % GPE_COL.length], w: 1.6 })).filter((l) => !(g.skip || []).includes(l.t))  // 평균에서 뺀 회사(테슬라)는 그림에서도 빼서 눈금이 눌리지 않게
+    .concat([{ n: avn, v: ds.map((x) => g.avg[x]), col: "var(--ink)", w: 2.6, dash: "5 3" }]);
+  // table (M7, 사용자 11/9 전달 표 모양): 시가총액 큰 순 · 이번 주 등락 · 지금 12MF PER (100배 넘어도 그대로)
+  const fx = DASH.fx, tbl = g.table ? `<table class="compact" style="margin:6px 0"><tr><th>회사</th><th>시가총액</th><th>이번 주</th><th>12MF PER</th></tr>
+    ${[...g.peers].sort((a, b) => (b.cap || 0) - (a.cap || 0)).map((p) => `<tr><td>${esc(p.n)}</td><td>${p.cap && fx ? `${n((p.cap * fx) / 1e12, 0)}조원` : "-"}</td><td style="color:${p.wk < 0 ? "var(--s1)" : "var(--bad-ink)"}">${p.wk == null ? "-" : pct(p.wk, 2, true)}</td><td><b>${p.pe_now == null ? "-" : n(p.pe_now, 1) + "배"}</b></td></tr>`).join("")}
+    <tr><td colspan="3"><b>${esc(avn)}</b></td><td><b>${n(last, 1)}배</b></td></tr></table>
+    <div class="src">시가총액 = 야후 달러 시가총액 × 오늘 환율 · 이번 주 = 지난주 금요일 종가 대비 · 12MF PER = 지금 주가 ÷ 앞으로 12개월 예상 EPS (이번·다음 회계연도 섞음)</div>` : "";
   return `<h3>🌍 글로벌 대표 기업 12MF PER <span class="src">${esc(g.title)} · 주간 · 야후 · ${esc(GPE.updated_at || "")}</span></h3><div class="card">
-    <div class="note" style="margin-top:0">지금 가운데 값 <b>${n(g.avg[ds.at(-1)], 1)}배</b> · ${g.peers.map((p) => `${esc(p.n)} ${p.now == null ? "-" : n(p.now, 1) + "배"}`).join(" · ")}</div>
-    ${gpeChart(ds, lines)}${g.codes.length ? `<div class="src">우리 종목과 할인·프리미엄은 종목 상세 맨 위 '🌍 글로벌 동종 대비': ${g.codes.map((c) => `<a href="#stock/${esc(c)}">${esc(nm(c))}</a>`).join(" · ")}</div>` : ""}
-    <div class="note src">검은 점선 = 가운데 값(중앙값) · ${esc(GPE.how || "")}</div></div>`;
+    <div class="note" style="margin-top:0">지금 ${esc(avn)} <b>${n(last, 1)}배</b>${g.table ? "" : ` · ${g.peers.map((p) => `${esc(p.n)} ${p.now == null ? "-" : n(p.now, 1) + "배"}`).join(" · ")}`}</div>
+    ${tbl}${gpeChart(ds, lines)}${g.codes.length ? `<div class="src">우리 종목과 할인·프리미엄은 종목 상세 맨 위 '🌍 글로벌 동종 대비': ${g.codes.map((c) => `<a href="#stock/${esc(c)}">${esc(nm(c))}</a>`).join(" · ")}</div>` : ""}
+    <div class="note src">검은 점선 = ${esc(avn)}${g.avg_name ? "" : "(중앙값)"} · ${esc(GPE.how || "")}${g.skip?.length ? ` · 그림에는 평균에서 뺀 ${esc(g.peers.filter((p) => g.skip.includes(p.t)).map((p) => p.n).join("·"))} 선이 없어요 (지금 값은 표에)` : ""}</div></div>`;
 }
 // 📦 라면·화장품 수출 (config/exports.yaml → data/exports.json): 이번 달 나라별 표(전년·전월비, 영업일수 감안 일평균) + 2020년부터 월별 금액 + 전년비
 let EXP = null;
@@ -4502,9 +4509,51 @@ document.addEventListener("toggle", (e) => {
     if (kq.pbr_hist?.length > 20) wireHBand("sg-qpbr", kq.pbr_hist, "코스닥 PBR", "배", 2, 10);
   }
 }, true);
+/* ---------- 😱 CNN 공포·탐욕 지수 (📡 신호 탭 맨 위, 사용자 11/9: '숫자 바로 아래 선, 기간 탭에 따라 바뀌게') ← data/fng.json ---------- */
+let FNG = null;
+const FNG_TF = [["1m", "1개월", 1], ["3m", "3개월", 3], ["6m", "6개월", 6], ["1y", "1년", 12], ["all", "전체", 0]];
+const fngRate = (v) => (v < 25 ? "극단적 공포" : v < 45 ? "공포" : v <= 55 ? "중립" : v <= 75 ? "탐욕" : "극단적 탐욕");
+const fngCol = (v) => (v < 45 ? "var(--bad-ink)" : v <= 55 ? "var(--ink-2)" : "var(--s3)");
+function fngChart(tf) {
+  const H0 = FNG.hist, mo = FNG_TF.find((x) => x[0] === tf)?.[2], ex = new Set(FNG.exact || []);
+  let from = "";
+  if (mo) { const t = new Date(H0.at(-1)[0] + "T00:00:00Z"); t.setUTCMonth(t.getUTCMonth() - mo); from = t.toISOString().slice(0, 10); }
+  const h = H0.filter((r) => r[0] > from), N = h.length, W = 380, H = 200, x0 = 26, x1 = W - 10, top = 8, bot = H - 20;
+  const X = (i) => x0 + ((x1 - x0) * i) / Math.max(1, N - 1), Y = (v) => bot - (v / 100) * (bot - top);
+  let g = `<rect x="${x0}" y="${Y(25)}" width="${x1 - x0}" height="${Y(0) - Y(25)}" fill="var(--bad)" fill-opacity=".08"/><rect x="${x0}" y="${Y(100)}" width="${x1 - x0}" height="${Y(75) - Y(100)}" fill="var(--s3)" fill-opacity=".08"/>`;
+  g += [0, 25, 50, 75, 100].map((v) => `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"${v % 50 ? ' stroke-dasharray="3 3"' : ""}/><text x="${x0 - 3}" y="${Y(v) + 3}" text-anchor="end" class="qx">${v}</text>`).join("");
+  g += `<text x="${x0 + 3}" y="${Y(25) + 10}" class="qx" style="fill:var(--bad-ink)">극단적 공포</text><text x="${x0 + 3}" y="${Y(100) + 10}" class="qx" style="fill:var(--s3)">극단적 탐욕</text>`;
+  const step = Math.max(1, Math.ceil(N / 6));  // 아래 날짜: 1개월은 며칠마다, 길면 달이 바뀔 때
+  h.forEach(([d], i) => {
+    const lab = mo === 1 ? (i % step === 0 ? `${+d.slice(5, 7)}/${+d.slice(8)}` : "") : i && d.slice(5, 7) !== h[i - 1][0].slice(5, 7) && (mo !== 0 || ["01", "07"].includes(d.slice(5, 7))) && (mo <= 6 || +d.slice(5, 7) % 3 === 1) ? ym(d) : "";
+    if (lab) g += `<line x1="${X(i)}" x2="${X(i)}" y1="${top}" y2="${bot}" stroke="var(--grid)"/><text x="${X(i)}" y="${bot + 13}" text-anchor="middle" class="qx">${lab}</text>`;
+  });
+  g += `<path d="${h.map((r, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(r[1]).toFixed(1)}`).join("")}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>`;
+  g += `<circle cx="${X(N - 1)}" cy="${Y(h[N - 1][1])}" r="4" fill="var(--s1)"/>`;
+  g += tipCols(X, (x1 - x0) / Math.max(1, N - 1), top, bot, h.map(([d, v]) => `${d}\n${v} · ${fngRate(v)}${ex.has(d) ? "" : "\n(그림에서 읽은 값 ±3)"}`));
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="CNN 공포·탐욕 지수 추이">${g}</svg>`;
+}
+function fngTab(b) {
+  const box = b.closest(".fngbox"); box.querySelectorAll(".fngseg [data-tf]").forEach((x) => x.classList.toggle("on", x === b));
+  box.querySelector(".fngin").innerHTML = fngChart(b.dataset.tf);
+}
+function fngHTML() {
+  if (!FNG?.hist?.length) return "";
+  const [d, v] = FNG.hist.at(-1), wk = {};
+  FNG.hist.forEach(([x, y]) => { wk[monOf(x)] = y; });  // 주마다 마지막 날 값 → 최근 4주
+  const span = (new Date(d) - new Date(FNG.hist[0][0])) / 864e5 > 400;
+  return `<h3 style="margin-top:0">😱 CNN 공포·탐욕 지수 <span class="src">미국 주식시장 분위기 · 0~100 · ${esc(FNG.updated || d)}</span></h3><div class="card fngbox" style="margin-bottom:10px">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="font-size:40px;line-height:1;color:${fngCol(v)}">${v}</b><b style="font-size:17px;color:${fngCol(v)}">${fngRate(v)}</b><span class="src">${esc(d)} 기준</span></div>
+    <div class="src" style="margin-top:4px">최근 4주 (주마다 마지막 날): <b>${Object.values(wk).slice(-4).join(" → ")}</b></div>
+    <div class="seg fngseg" style="margin-top:8px">${FNG_TF.filter((x) => x[0] !== "all" || span).map(([k, l]) => `<button data-tf="${k}" class="${k === "1y" ? "on" : ""}" onclick="fngTab(this)">${l}</button>`).join("")}</div>
+    <div class="fngin">${fngChart("1y")}</div>
+    <div class="kidbox" style="margin-top:6px">🐣 미국 투자자들이 지금 얼마나 겁먹었는지(0쪽)·들떴는지(100쪽)를 CNN 이 7가지 시장 숫자(주가 흐름·변동성·옵션·안전자산 등)로 매긴 점수예요. 25 아래(빨간 띠) = 겁이 아주 큰 때, 75 위(초록 띠) = 아주 들뜬 때. 선을 누르면 그날 숫자가 나와요.</div>
+    <div class="note src">출처 CNN Fear &amp; Greed Index · ${esc(FNG.how || "")} · ⚠ CNN 이 프로그램 접속을 막아 두어 자동 갱신은 안 돼요 — 새 숫자를 보내 주시면 이어 붙여요</div></div>`;
+}
 const pctRank = (h, v, yrs = 10) => { const ds = h.map((x) => x[0]), a = h.slice(sliceYears(ds, yrs)).map((x) => x[1]).filter((x) => x > 0); return a.length ? { pos: (a.filter((x) => x < v).length / a.length) * 100, avg: a.reduce((s, x) => s + x, 0) / a.length, from: h[sliceYears(ds, yrs)]?.[0] } : null; };
 async function signalHTML() {
   const M = DASH.market || {}, kf = M.kospi_forward || {}, kt = M.kospi_trailing || {}, kq = M.kosdaq_trailing || {}, ws = M.woosan || {}, out = [];
+  try { FNG = FNG || await (await fetch("data/fng.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { /* 😱 공포·탐욕 칸만 빠짐 */ }
   if (kf.level && kf.value) {  // 코스피: 12MF = 시총 상위 150 컨센서스 합산(직접 계산) · TTM = KRX (같은 날 종가로 맞춤)
     const L = kf.level, adj = kt.level ? L / kt.level : 1, r = kt.pbr_hist ? pctRank(kt.pbr_hist, kt.pbr) : null;
     out.push(sigTable({ name: "코스피", unit: "지수", L, dec: 1, date: `${kt.date || kf.date} 종가 기준`,
@@ -4539,7 +4588,7 @@ async function signalHTML() {
   const row = (c) => `<details class="fvt bandall" data-code="${esc(c.code)}" style="margin-top:4px"><summary class="chart-title"><b>${c.market === "US" ? "🇺🇸" : "🇰🇷"} ${esc(c.name)}</b> <span class="src">${money(c.price, c.currency)}${c.band_pos != null ? ` · 10년 자리 ${n(c.band_pos, 0)}%` : ""}${c.scen?.base ? ` · 적정주가 대비 ${pct((c.price / c.scen.base - 1) * 100, 0, true)}` : ""}</span></summary><div class="bwb src">불러오는 중…</div></details>`;
   const bands = `<details class="card" style="margin-top:12px"><summary class="chart-title" style="margin-top:0"><b>📈 밴드 차트 — 보유 종목</b> <span class="src">눌러서 열기 · 종목을 누르면 12MF·PBR·PER 밴드 · 선행 PER·PBR 추이 + 적정주가 표 · 5년·10년·최대</span></summary>
     <div class="kidbox" style="margin-top:6px">🐣 밴드 선은 '그 배수를 받으면 주가가 얼마인지'예요. 오른쪽(앞으로)은 증권사 이익 추정치로 그린 선이라, 지금 주가가 어느 선 근처인지 볼 수 있어요. 그림을 누르면 그 날 숫자가 나와요.</div>${own.map(row).join("")}</details>`;
-  return `<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
+  return `${fngHTML()}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
 }
 
 /* ---------- PBR 계산기 (📡 신호 탭 아래쪽) ---------- */
@@ -5081,7 +5130,7 @@ async function loadIndustry() {
   const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + expHTML("ramen") + expHTML("food")],
     ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
-    ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => key("AI 자금줄") + capexHTML()],
+    ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => gpeCard("M7") + key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🎤 엔터", () => key("엔터")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
   secs.push(["🔑 그 밖의 업종", Object.keys(K).filter((k) => !used.has(k)).map((k) => keyGroup(k, K[k])).join("")], ["⚖️ 고정비·변동비 (전 업종)", costIndHTML()]);

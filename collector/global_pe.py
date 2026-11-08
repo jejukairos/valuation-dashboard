@@ -83,20 +83,26 @@ def collect():
                 tk = yf.Ticker(p["t"])
                 info = tk.info
                 close = px[p["t"]]["Close"].dropna()
-                pe = pe_series(close, *annual_eps(tk, info))
-                peers.append({**p, "pe": pe, "now": list(pe.values())[-1] if pe else None, "fwd_yahoo": info.get("forwardPE")})
+                eps, act = annual_eps(tk, info)
+                pe = pe_series(close, eps, act)
+                e12 = fwd12_at(pd.Timestamp.now().normalize(), sorted(eps.items()))  # 표용 지금 값: 100배 넘어도 그대로 (테슬라)
+                peers.append({**p, "pe": pe, "now": list(pe.values())[-1] if pe else None, "fwd_yahoo": info.get("forwardPE"),
+                              "pe_now": round(float(close.iloc[-1]) / e12, 1) if e12 and e12 > 0 else None,
+                              "cap": info.get("marketCap"), "wk": round((float(close.iloc[-1]) / float(close.iloc[-2]) - 1) * 100, 2) if len(close) > 1 else None})
             except Exception as e:  # noqa: BLE001 - 한 회사가 막혀도 나머지로 평균
                 fails.append(f"{p['t']}: {str(e)[:60]}")
         ds = sorted({d for x in peers for d in x["pe"]})
-        avg = {}
+        avg, skip = {}, set(g.get("skip") or [])
         for i, d in enumerate(ds):  # 그 주 값이 아직 없는 회사는 바로 전 주 값 (마지막 주가 일부 거래소만 있어 평균이 튀지 않게)
-            vs = [x["pe"].get(d, x["pe"].get(ds[i - 1]) if i else None) for x in peers]
+            vs = [x["pe"].get(d, x["pe"].get(ds[i - 1]) if i else None) for x in peers if x["t"] not in skip]
             vs = sorted(v for v in vs if v is not None)
-            if len(vs) >= 2:  # 3곳 이상이면 중앙값 (이익이 크게 흔들린 한 곳이 평균을 끌고 가지 않게), 2곳이면 평균
+            if len(vs) >= 2 and g.get("mean"):  # M7 처럼 '평균'으로 보는 묶음 (전달 표와 같은 방식)
+                avg[d] = round(sum(vs) / len(vs), 2)
+            elif len(vs) >= 2:  # 3곳 이상이면 중앙값 (이익이 크게 흔들린 한 곳이 평균을 끌고 가지 않게), 2곳이면 평균
                 k = len(vs) // 2
                 avg[d] = round(vs[k] if len(vs) % 2 else (vs[k - 1] + vs[k]) / 2, 2)
         groups[name] = {"title": g.get("title") or name, "codes": g.get("codes") or [], "notes": g.get("notes") or {},
-                        "peers": peers, "avg": avg}
+                        "peers": peers, "avg": avg, "avg_name": g.get("avg_name"), "table": bool(g.get("table")), "skip": sorted(skip), "since": g.get("since")}
         print(f"  {name}: {len(peers)}곳 · 평균 {len(avg)}주 · 지금 {list(avg.values())[-1] if avg else '-'}배")
     return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "groups": groups, "fails": fails,
             "how": "12MF EPS = 이번·다음 회계연도 EPS 를 남은 기간 비율로 섞음 · 과거는 실제 이익(일회성 뺀 정상화 이익), 뒤에 이익이 무너진 해는 그때 알던 마지막 실적 · 적자·100배 넘는 칸은 빼고 가운데 값(중앙값) · 야후"}

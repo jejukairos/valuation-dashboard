@@ -62,3 +62,21 @@ CCL·기판:
     - {t: 6506.T, n: 야스카와}
     - {t: ABBN.SW, n: ABB}
   codes: []
+# 🤖 M7 빅테크 (사용자 11/9: 'Magnificent 7 Valuation' 표 — 12m fwd PER 로 나란히, 테슬라 빼고 평균) → 🏭 산업 탭 🤖 AI·빅테크
+#   mean = 가운데 값 대신 평균 · skip = 평균에서 뺄 회사 · table = 시가총액·이번 주 등락·지금 12MF PER 표
+M7:
+  title: 매그니피센트 7 (알파벳·애플·엔비디아·마이크로소프트·아마존·메타·테슬라)
+  peers:
+    - {t: GOOGL, n: 알파벳}
+    - {t: AAPL, n: 애플}
+    - {t: NVDA, n: 엔비디아}
+    - {t: MSFT, n: 마이크로소프트}
+    - {t: AMZN, n: 아마존}
+    - {t: META, n: 메타}
+    - {t: TSLA, n: 테슬라}
+  codes: []
+  mean: true
+  skip: [TSLA]
+  avg_name: "M7 평균 (테슬라 제외)"
+  table: true
+  since: "2025-04-01"   # 그림 시작: 그 전은 엔비디아·아마존 과거 칸이 '1.6배 묶기' 어림 때문에 50~85배로 부풀어 보여서 뺌
