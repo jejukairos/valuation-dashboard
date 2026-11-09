@@ -248,6 +248,7 @@ def kospi_fwd_bands(kf, kt):
     kl = pd.Timestamp(kt["pbr_hist"][-1][0])
     if lw.index[-1] != kl and lw.index[-1] - kl < pd.Timedelta(days=7):
         lw = pd.concat([lw.iloc[:-1], pd.Series([lv[lv.index <= kl].iloc[-1]], index=[kl])])
+        lw = lw[~lw.index.duplicated(keep="last")].sort_index()  # KRX 가 금요일까지면 금요일이 두 번 → float(Series) 실패 (11/9 월요일 갱신)
     per = pd.Series({pd.Timestamp(d): v for d, v in kt["hist"]})
     pbr = pd.Series({pd.Timestamp(d): v for d, v in kt["pbr_hist"]})
     df = pd.DataFrame({"level": lw, "per": per, "pbr": pbr}).dropna()

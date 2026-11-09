@@ -213,6 +213,7 @@ watchlist:
   - {name: 삼성중공업, market: KR, code: "010140", industry: 조선, methods: [PER]}
   - {name: 삼성전기, market: KR, code: "009150", industry: 기판·전자부품, methods: [PER]}
   - {name: 대덕전자, market: KR, code: "353200", industry: 기판, methods: [PER]}
+  - {name: 이수페타시스, market: KR, code: "007660", industry: 기판, methods: [PER]}   # 2026-11-09 사용자: "관심종목에 이수페타시스·대덕전자·삼성전기" (AI 서버용 고다층 기판 MLB)
   - {name: HD현대마린엔진, market: KR, code: "071970", industry: 조선기자재, methods: [PER]}
   # 🔋 2차전지 — 27년 코스피 업종 순이익 증가율 1위 (하나증권 표) · 2026-11-04 사용자: "2차전지가 힌트, 계속 트래킹" · 적자·이익 들쭉날쭉이라 PBR 로 적정가
   - {name: LG에너지솔루션, market: KR, code: "373220", industry: 2차전지, methods: [PBR, PER], fair_methods: [PBR]}

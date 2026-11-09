@@ -142,7 +142,7 @@ groups:
       - {name: 한미반도체, market: KR, code: "042700"}
 
   - name: 기판·전자부품
-    holdings: ["009150", "353200"]
+    holdings: ["009150", "353200", "007660"]
     why: AI 서버용 기판·MLCC
     peers:
       - {name: 삼성전기, market: KR, code: "009150"}

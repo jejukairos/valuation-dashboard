@@ -5111,7 +5111,36 @@ document.addEventListener("toggle", (e) => {  // toggle 은 버블링이 안 돼
     + `<div class="src"><a href="https://finance.naver.com/item/fchart.naver?code=${esc(c)}" target="_blank" rel="noopener">네이버 차트</a>${s ? ` · <a href="#stock/${esc(c)}">우리 상세</a>` : ""}</div>`;
   d.dataset.done = 1;
 }, true);
+// 📊 기판 3사 26E~28E 비교 (사용자 11/9 메리츠 대덕전자 NDR 표 모양 — 경쟁사는 빼고 3종목만, 26년 추가, 영업이익·EPS 증가율)
+//   휴대폰에서 옆으로 밀지 않게 회사를 칸(열)으로 · 숫자 = peers.json ann (와이즈리포트 컨센서스)
+const CMP3 = ["009150", "353200", "007660"];
+function cmp3HTML() {
+  const rs = CMP3.map((c) => (PEERS?.groups || []).flatMap((g) => g.rows).find((r) => r.code === c && r.ann)).filter(Boolean);
+  if (rs.length < 2) return "";
+  const a = (r, y, k) => r.ann[y]?.[k] ?? null, gr = (x, y) => (x > 0 && y > 0 ? (x / y - 1) * 100 : null);  // 적자였거나 적자로 가면 비움 (table._g 와 같은 규칙)
+  const yrs = Object.keys(rs[0].ann).sort().slice(1, 4);  // 올해E ~ 2년 뒤E (첫 해 = 작년 실적, 증가율 계산용)
+  const M = [["P/E (배)", "낮을수록 이익에 비해 쌈", (r, y) => (a(r, y, "eps") > 0 && r.price ? r.price / a(r, y, "eps") : null), (v) => n(v, 1), -1],
+    ["P/B (배)", "낮을수록 자산에 비해 쌈", (r, y) => (a(r, y, "bps") > 0 && r.price ? r.price / a(r, y, "bps") : null), (v) => n(v, 2), -1],
+    ["영업이익 증가율 (%)", "전년 대비", (r, y) => gr(a(r, y, "op"), a(r, y - 1, "op")), (v) => sg(v, 1), 1],
+    ["EPS 증가율 (%)", "전년 대비 주당순이익", (r, y) => gr(a(r, y, "eps"), a(r, y - 1, "eps")), (v) => sg(v, 1), 1],
+    ["ROE (%)", "자기자본 대비 순이익", (r, y) => a(r, y, "roe"), (v) => n(v, 1), 1],
+    ["매출액 (억원)", "", (r, y) => a(r, y, "sales"), (v) => n(v, 0), 0],
+    ["영업이익 (억원)", "", (r, y) => a(r, y, "op"), (v) => n(v, 0), 0]];
+  const nm = (r) => (DASH.stocks.some((s) => s.code === r.code) ? `<a href="#stock/${esc(r.code)}">${esc(r.name)}</a>` : esc(r.name));
+  const body = M.map(([t, why, f, fm, best]) => `<tr><th colspan="${rs.length + 1}" style="text-align:left">${esc(t)}${why ? ` <span class="src">${esc(why)}</span>` : ""}</th></tr>`
+    + yrs.map((y) => {
+      const v = rs.map((r) => f(r, +y)), ok = v.filter((x) => x != null), b = best && ok.length > 1 ? (best < 0 ? Math.min(...ok) : Math.max(...ok)) : null;
+      return `<tr><td>${y.slice(2)}E</td>${v.map((x) => `<td>${x == null ? "-" : x === b ? `<b>${fm(x)}</b>` : fm(x)}</td>`).join("")}</tr>`;
+    }).join("")).join("");
+  return `<h3>📊 기판 3사 ${yrs[0].slice(2)}E~${yrs.at(-1).slice(2)}E 비교 <span class="src">컨센서스 · ${esc(PEERS.updated_at || "")}</span></h3><div class="card">
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th></th>${rs.map((r) => `<th>${nm(r)}</th>`).join("")}</tr>
+    <tr><td>시가총액</td>${rs.map((r) => `<td>${r.cap_krw ? n(r.cap_krw / 1e12, 1) + "조원" : "-"}</td>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>
+    <div class="kidbox">🐣 굵은 글씨 = 세 회사 중 가장 싸거나(P/E·P/B) 가장 높은 값이에요. 이익이 빨리 크는데(증가율↑) P/E 가 낮으면 이익에 비해 덜 비싼 거예요.</div>
+    <div class="note src">P/E·P/B = 지금 주가 ÷ 그해 예상 EPS·BPS · 증가율 = 전년 대비 (적자였으면 비움) · 예상 = 와이즈리포트(에프앤가이드) 증권사 평균 · ${esc(yrs[0].slice(2))}E 는 3분기까지 실적 + 4분기 예상 ·
+    EV/EBITDA 는 안 넣음: 세 회사 모두 빚이 적어 P/E 와 순서가 같아요 (메리츠 11/9 표 27E: 대덕전자 5.7 · 이수페타시스 7.4 · 삼성전기 10.1배)</div></div>`;
+}
 async function loadIndustry() {
+  if (!PEERS) { try { PEERS = await (await fetch("data/peers.json?t=" + encodeURIComponent(DASH.updated_at))).json(); } catch (_) { /* 📊 기판 3사 표만 빠짐 */ } }
   if (!AMZ) {
     try { AMZ = await (await fetch("data/amazon_kbeauty.json?t=" + Date.now(), { cache: "no-store" })).json(); }
     catch (e) { $("#industryBody").innerHTML = `<div class="empty">산업 데이터를 불러오지 못했어요.</div>`; return; }
@@ -5129,7 +5158,7 @@ async function loadIndustry() {
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + expHTML("ramen") + expHTML("food")],
-    ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
+    ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => gpeCard("M7") + key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🎤 엔터", () => key("엔터")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);

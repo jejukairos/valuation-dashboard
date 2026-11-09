@@ -43,7 +43,9 @@ def kr_row(p):
             "roe": roe, "div": now.get("div_yield"), "currency": "KRW",
             # 사진의 글로벌 피어 표처럼: EPS TTM·12MF, PER TTM·12MF, 영업이익률
             "eps_ttm": now.get("eps"), "eps_12mf": f12, "per_ttm": now.get("per"),
-            "opm": w[opm_y]["opm"] if opm_y else None,
+            "opm": w[opm_y]["opm"] if opm_y else None, "price": now.get("price"),
+            # 🧱 기판 3사 비교표 (사용자 11/9 메리츠 표 모양): 작년 실적 + 올해~2년 뒤 컨센서스 (억원·원·%)
+            "ann": {str(y): {k: r.get(k) for k in ("sales", "op", "eps", "bps", "roe")} for y, r in w.items() if y >= t.year - 1},
             "src": f"네이버 증권 · ROE {max(actual)}년 와이즈리포트" if actual else "네이버 증권"}
 
 
