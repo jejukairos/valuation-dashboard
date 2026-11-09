@@ -204,6 +204,7 @@ watchlist:
   - {name: 현대건설, market: KR, code: "000720", industry: 건설·원전, methods: [PBR, PER], fair_methods: [PBR]}
   - {name: 씨어스, market: KR, code: "458870", industry: 의료기기, methods: [PER]}
   - {name: 클래시스, market: KR, code: "214150", industry: 의료기기, methods: [PER]}
+  - {name: 파마리서치, market: KR, code: "214450", industry: 의료기기, methods: [PER]}   # 2026-11-10 사용자: "파마리서치 트래킹하기 좋은 데이터들" (리쥬란 수출·시가총액 사건)
   - {name: 비나텍, market: KR, code: "126340", industry: ESS·부품, methods: [PER]}
   - {name: 두산, market: KR, code: "000150", industry: 지주, methods: [PBR, PER], fair_methods: [PBR]}
   - {name: 한화오션, market: KR, code: "042660", industry: 조선, methods: [PER]}

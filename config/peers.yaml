@@ -390,9 +390,10 @@ groups:
       - {name: 도쿄전력, market: JP, code: 9501.T}
 
   - name: 💉 미용 의료기기
-    holdings: ["214150"]
+    holdings: ["214150", "214450"]
     peers:
       - {name: 클래시스, market: KR, code: "214150"}
+      - {name: 파마리서치, market: KR, code: "214450"}
       - {name: 휴젤, market: KR, code: "145020"}
       - {name: 인모드(이스라엘), market: US, code: INMD}
       - {name: 엘엔(이탈리아), market: EU, code: ELN.MI}

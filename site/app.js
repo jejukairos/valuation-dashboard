@@ -5294,7 +5294,29 @@ function chgChart(ch) {
     ${ch.note ? `<div class="src" style="padding:4px">${esc(ch.note)}</div>` : ""}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
 // 그림: 쌓은 막대(bars) · 같은 단위 선(lines) · 위쪽 띠의 % 선(pct). 억원이 1조를 넘으면 조원, 칸이 많으면 연도는 1Q 에만
+// 📈 kind: mcap — 시가총액 주봉 (collector/mcap.py 가 q·v 채움) + 사건 번호 (ev [{d: "2025-08", t}]) · 휴대폰이라 글은 그림 아래 번호 목록으로
+function evLine(ch) {
+  const q = ch.q || [], v = ch.v || [], N = q.length;
+  if (N < 10) return "";
+  const W = 340, x0 = 34, x1 = W - 8, top = 14, bot = 150, hi = Math.max(...v) * 1.1, X = (i) => x0 + ((x1 - x0) * i) / (N - 1), Y = (y) => bot - (y / hi) * (bot - top);
+  const t0 = 10 ** Math.floor(Math.log10(hi / 4)), tk = [1, 2, 5, 10].map((m) => m * t0).find((s) => hi / s <= 5);
+  let g = "";
+  for (let y = 0; y <= hi; y += tk) g += `<line x1="${x0}" x2="${x1}" y1="${Y(y)}" y2="${Y(y)}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${Y(y) + 3}" text-anchor="end" class="qx">${n(y, 0)}</text>`;
+  q.forEach((d, i) => { if (!i || d.slice(0, 4) !== q[i - 1].slice(0, 4)) g += `${i ? `<line x1="${X(i)}" x2="${X(i)}" y1="${top}" y2="${bot}" stroke="var(--grid)"/>` : ""}<text x="${X(i)}" y="${bot + 14}" text-anchor="${i ? "middle" : "start"}" class="qx">'${d.slice(2, 4)}</text>`; });
+  g += `<path d="${v.map((y, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(y).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--s1)" stroke-width="2"/>`;
+  const ev = (ch.ev || []).map((e, k) => { const i = q.findIndex((d) => d >= (e.d.length === 7 ? `${e.d}-15` : e.d)); return { ...e, k: k + 1, i: i < 0 ? N - 1 : i }; });
+  ev.forEach((e) => { const x = X(e.i), y = Y(v[e.i]), up = e.k % 2; g += `<line x1="${x}" x2="${x}" y1="${y}" y2="${y + (up ? -14 : 14)}" stroke="var(--ink-2)" stroke-dasharray="2 2"/><circle cx="${x}" cy="${y}" r="2.5" fill="var(--ink)"/>`
+    + `<text x="${x}" y="${y + (up ? -17 : 24)}" text-anchor="middle" class="qv b" style="font-size:9px">${e.k}</text>`; });
+  const mx = Math.max(...v), im = v.indexOf(mx), last = v.at(-1);
+  g += tipCols(X, (x1 - x0) / (N - 1), 0, bot + 16, q.map((d, i) => `${d}\n시가총액 ${n(v[i], 0)}${ch.u ? " " + ch.u : ""}${ev.filter((e) => e.i === i).map((e) => `\n${e.k}. ${e.t}`).join("")}`));
+  return `<div class="qp" style="grid-column:1/-1"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}
+    <div class="note">지금 <b>${n(last, 0)}${esc(ch.u || "")}</b> (${esc(q.at(-1))}) · 최고 ${n(mx, 0)} (${esc(q[im])}) 대비 <b>${pct((last / mx - 1) * 100, 0, true)}</b></div>
+    <svg viewBox="0 0 ${W} ${bot + 20}" width="100%" role="img" aria-label="${esc(ch.t)}">${g}</svg>
+    <ol class="irl" style="font-size:12px;margin:4px 0 0;padding-left:22px">${ev.map((e) => `<li value="${e.k}"><span class="src">${esc(e.d.slice(2).replace("-", "."))}</span> ${esc(e.t)}</li>`).join("")}</ol>
+    ${ch.kid ? `<div class="kidbox">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
+}
 function keyChart(ch) {
+  if (ch.kind === "mcap") return evLine(ch);
   // kind: line → 0 아래(적자)도 그리는 꺾은선 + 칸마다 숫자 (종목 그래프와 같은 모양)
   if (ch.kind === "line") return kpiChart({ ...ch, s: (ch.lines || []).map((s) => ({ n: s.n, v: Object.fromEntries((ch.q || []).map((q, i) => [q, s.v[i]]).filter(([, v]) => v != null)) })) });
   if (ch.kind === "chg") return chgChart(ch);
@@ -5309,7 +5331,7 @@ function keyChart(ch) {
   let g = `<line x1="${x0}" x2="${W - x0}" y1="${bot}" y2="${bot}" stroke="var(--axis)"/>`;
   L.forEach((q, i) => {
     const isG = gq.has(q), fill = (c) => (isG ? `fill="${c}" fill-opacity=".22" stroke="${c}" stroke-dasharray="3 2"` : `fill="${c}" opacity=".8"`);
-    g += `<text x="${X(i)}" y="${bot + 15}" text-anchor="middle" class="qx"${isG ? ' style="font-weight:700"' : ""}>${esc(N <= 8 || i === 0 || q.startsWith("1Q") ? q : q.slice(0, 2))}</text>`;
+    g += `<text x="${X(i)}" y="${bot + 15}" text-anchor="middle" class="qx"${isG ? ' style="font-weight:700"' : ""}>${esc(ch.every ? ((N - 1 - i) % ch.every === 0 ? q : "") : N <= 8 || i === 0 || q.startsWith("1Q") ? q : q.slice(0, 2))}</text>`;  // every = 몇 칸마다 이름 (분기 39칸 수출 비중)
     if (!bars.length) return;
     if (side) {  // 나란히: 칸마다 막대 여러 개, 숫자는 마지막 두 칸만 (나머지는 위 표·누르면 보기)
       const w = (bw * 0.76) / bars.length;
