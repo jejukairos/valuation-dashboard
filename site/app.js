@@ -3307,6 +3307,43 @@ function guideOf(G, d, key, si = 0) {  // growth.yaml guide → 그래프 끝 �
   if (key === "opm" && !r && x.op && x.rev) r = x.op.map((v, i) => rnd1((v / x.rev[i]) * 100));  // 영업이익 금액으로 준 가이던스(아마존) → 이익률로 계산
   return r ? { q: x.q, lo: Math.min(...r), hi: Math.max(...r), si } : null;
 }
+// 💰 매출원가율·판관비율 + 판관비 쪼개 보기 (사용자 11/10, 한화 삼양 리포트처럼 광고선전비율·운반비율 — 모든 종목)
+//   비율 = 10년 분기 실적(longq) · 쪼개기: 한국 = 전자공시 연결 주석 '판매비와관리비' 표 (tools/dart_sga.py, 억원), 미국 = 야후 분기 연구개발·판매마케팅·일반관리
+const SGA_CAT = [["인건비", /급여|상여|퇴직|복리후생|주식보상|종업원|인건비/], ["광고·판촉비", /광고|판매촉진|판촉|마케팅|홍보|견본/],
+  ["운반·물류비", /운반|운송|물류|수출제비|보관|배송/], ["연구개발비", /연구|개발비/], ["감가상각비", /^(?!.*대손).*상각/], ["수수료·용역비", /수수료|용역|위탁|외주/]];
+function costCards(d, pts) {
+  const L = d.longq || {}, usd = d.currency === "USD", out = [];
+  const lq = Object.keys(L).sort().filter((q) => L[q].rev > 0 && L[q].gp != null && L[q].op != null).slice(-6);  // 매출총이익이 아직 없는 잠정 실적 분기는 빼고
+  const cg = Object.fromEntries(lq.map((q) => [q, rnd1(100 - (L[q].gp / L[q].rev) * 100)]));
+  const sg = Object.fromEntries(lq.map((q) => [q, rnd1(((L[q].gp - L[q].op) / L[q].rev) * 100)]));
+  const sn = usd ? "판관비율 (연구개발 포함)" : "판관비율", tt = turnOf(sg, 0.8, ["상승", "하락"]);
+  if (tt?.pt) pts.push(`${sn} <b>${esc(tt.t)}</b> (${n(tt.f, 1)}% → ${n(tt.a, 1)}%)`);
+  if (Object.keys(cg).length >= 2) out.push(kpiChart({ t: "매출원가율 · 판관비율", u: "%", s: [{ n: "매출원가율", v: cg }, { n: sn, v: sg }], col: ["var(--s3)", "var(--s4)"],
+    tag: tt ? growTag(`판관비율 ${tt.t}`, /상승|반등/.test(tt.t)) : "", why: "100원어치 팔 때 재료·생산비(원가)와 인건비·광고·운반비(판관비)로 몇 원 나가나 · 100 − 둘 = 영업이익률" }));
+  // 쪼개기 {분기: {묶음: 금액}} — 한국 억원(DART), 미국 달러(야후 qtrs, 분기 끝 날짜 → '26.3Q')
+  const parts = {}, names = {};
+  if (d.sga?.q) for (const [q, it] of Object.entries(d.sga.q)) {
+    parts[q] = {};
+    for (const [nm, v] of Object.entries(it)) {
+      const c = (SGA_CAT.find(([, re]) => re.test(nm)) || ["기타"])[0];
+      parts[q][c] = (parts[q][c] || 0) + v;
+      (names[c] ??= new Set()).add(nm.replace(/,\s*판관비$/, ""));
+    }
+  } else if (usd) for (const [e, x] of Object.entries(d.qtrs || {})) {
+    if (!x.rev || (x.rnd == null && x.sm == null && x.ga == null)) continue;
+    parts[`${e.slice(2, 4)}.${Math.ceil(+e.slice(5, 7) / 3)}Q`] = { 연구개발비: x.rnd || 0, "판매·마케팅비": x.sm || 0, 일반관리비: x.ga || 0, rev: x.rev };
+  }
+  const rev = (q) => (usd && !d.sga ? parts[q].rev : L[q]?.rev);
+  const qs = Object.keys(parts).filter((q) => rev(q) > 0).sort().slice(-6);
+  if (qs.length < 2) return out;
+  const cats = [...new Set(qs.flatMap((q) => Object.keys(parts[q])))].filter((c) => c !== "rev" && (parts[qs.at(-1)][c] || 0) / rev(qs.at(-1)) >= 0.003)  // 매출의 0.3% 넘는 묶음만
+    .sort((a, b) => (parts[qs.at(-1)][b] || 0) - (parts[qs.at(-1)][a] || 0));
+  const s = cats.slice(0, 7).map((c) => ({ n: c, v: Object.fromEntries(qs.map((q) => [q, parts[q][c] == null ? null : rnd1((parts[q][c] / rev(q)) * 100)])) }));
+  const grp = ["운반·물류비", "광고·판촉비", "수수료·용역비"].filter((c) => names[c]).map((c) => `${c} = ${[...names[c]].slice(0, 4).join("·")}`).join(" · ");
+  out.push(kpiChart({ t: "판관비 쪼개 보기 (매출 대비 %)", u: "%", s, col: ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s7)", "var(--muted)", "var(--ink-2)"],
+    why: d.sga ? `전자공시(DART) 연결 주석 판관비 표 · 손익계산서와 15% 넘게 안 맞는 분기는 뺌${grp ? ` · ${grp}` : ""}` : "야후 분기 실적 (회사가 나눈 연구개발·판매마케팅·일반관리비)" }));
+  return out;
+}
 function growAllHTML(code, d, k) {
   const G = GROWTH?.[code] || GROWTH?.[KPI_ALIAS[code]] || {}, st = new Set((G.star || []).map((s) => s.split(":")[0]));
   const starLine = (kind) => (G.star || []).filter((s) => s.startsWith(kind + ":")).map((s) => s.slice(kind.length + 1));
@@ -3333,6 +3370,7 @@ function growAllHTML(code, d, k) {
   };
   mg("gp", "매출총이익률", "var(--s2)", "gm");
   mg("op", "영업이익률", "var(--s4)", "opm", G.adj_opm);
+  cards.push(...costCards(d, pts));
   // ④ 제품·부문별 성장률 (segments.yaml 금액, 비중 3% 넘는 큰 제품 5개까지)
   const ps = segPeriods(d.seg);
   if (ps.length) {

@@ -30,6 +30,7 @@ SEGS = read_json(CACHE / "segments.json") or {}  # 한국 '주요제품 매출�
 SEG_US = load_yaml("segments.yaml") or {}  # 분기 제품·부문별 매출 (공식 실적 자료를 보고 직접 적음, 미국 + 한국 보유종목)
 SEGQ = read_json(CACHE / "segq.json") or {}  # 🧱 분기 제품군·지역 매출을 쌓아 둔 것 (collector/segq.py — 미국 stockanalysis)
 SEGL = {**(read_json(CACHE / "sec_seg.json") or {}), **(read_json(CACHE / "dart_seg.json") or {})}  # 🧱 10년: 미국 10-Q·10-K (tools/sec_segments.py) · 한국 DART 보고서
+SGA = read_json(CACHE / "dart_sga.json") or {}  # 💰 한국 분기 판관비 항목 (tools/dart_sga.py — DART 연결 주석, 억원)
 KPI_CFG = load_yaml("kpi.yaml") or {}  # 🔑 핵심 지표 (fcf_add = 야후에 아직 없는 최신 분기 FCF, 보도자료)
 NOTES = load_yaml("notes.yaml") or {}  # 적정주가 칸 메모 (증권사 의견, 28E 칸 등)
 SEGC = load_yaml("seg_cons.yaml") or {}  # 🎯 사업부문별 컨센서스 vs 실적
@@ -566,6 +567,9 @@ def stock_detail(h, rates_now, fx):
     if s:
         det["seg"] = {"unit": "amt", "src": s.get("src"), "hist": {q: {k: v * (1e6 if mkt == "US" else 1e8) for k, v in m.items()} for q, m in s["quarters"].items()}}
     det["segq"] = seg_quarters(SEGQ.get(code) or SEGQ.get(oc), det["seg"], det["longq"], mkt, SEGL.get(code) or SEGL.get(oc))
+    sg = SGA.get(code) or SGA.get(oc)
+    if sg:  # 💰 판관비 항목 최근 8분기 (⭐ 성장률 한눈에 비용 칸)
+        det["sga"] = {"src": sg.get("src"), "q": dict(sorted(sg["q"].items())[-8:])}
     ls = det.get("longq_seg")
     if ls and det["segq"]:  # 삼성전자: 부문 금액이 없는 예전 분기는 10년 치가 있는 DS(반도체) + 나머지 부문으로 (DS 는 부문 사이 거래 포함)
         p = det["segq"].setdefault("prod", {})

@@ -72,11 +72,15 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: cd tools && python -u dart_seg.py
+      - name: 💰 판관비 주석 표 → 분기 판관비 항목
+        env:
+          PYTHONIOENCODING: utf-8
+        run: cd tools && python -u dart_sga.py
       - name: 저장
         run: |
           git config user.name "valuation-bot"
           git config user.email "valuation-bot@users.noreply.github.com"
-          git add cache/dart_seg.json
+          git add cache/dart_seg.json cache/dart_sga.json
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "한국 분기 제품군·지역 매출 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           for i in 1 2 3 4 5; do git push && exit 0; sleep $((i * 10)); git pull --rebase -X theirs -q || exit 1; done
