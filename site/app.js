@@ -3804,6 +3804,23 @@ const EXP_K = { ramen: ["🍜 라면 수출", "HS 1902.30.1010", ["전체", "미
     `표·선 그림 = 산업통상부 월별 자동차 수출액 (다올투자증권 글, 사용자 전달) · 아래 월별 그림 = 관세청 수출입실적 API (매일 확인 · 확정치는 다음 달 중순쯤) · 승용차 = HS 8703 (중고차 포함이라 산업부 '자동차'와 금액이 다를 수 있어요) · 화물차 = 8704 · 자동차부품 = 8708`],
   food: ["🥫 소스·아이스크림·담배 수출", "나라 합계", ["소스", "담배", "아이스크림"], "품목 · 지역", false,
     `${EXP_NOTE} · 소스 = HS 2103 전체 (후보: 2103.90.9090 기타 소스) · 아이스크림 = 2105 · 담배 = 2402.20 필터담배 · 라면은 위 🍜 라면 칸 · 표(맨 위)는 증권사 1일 잠정치 (전월비·전년비만)`] };
+// 🍜 올해 1~N월 라면 지역별 수출 증가율 (한화 그림14 모양, 사용자 11/10 "트래킹 할 수 있는 것만") — 관세청 숫자로 자동
+//   두 해 모두 1~N월이 다 있는 지역만 (나라별 API 가 열리면 중국·미국·유럽이 저절로 들어옴) · 유럽 = 아래 나라 합
+const EU_C = ["영국", "네덜란드", "독일", "프랑스", "스페인", "이탈리아", "폴란드", "스웨덴"];
+function ramenYtdHTML() {
+  const R = EXP?.ramen, last = Object.keys(R?.["전체"] || {}).sort().at(-1);
+  if (!last) return "";
+  const y = +last.slice(0, 4), m = +last.slice(5), ms = (yy) => Array.from({ length: m }, (_, i) => `${yy}-${String(i + 1).padStart(2, "0")}`);
+  const sum = (cs, yy) => (cs.length && cs.every((c) => ms(yy).every((k) => R[c]?.[k] != null)) ? cs.reduce((t, c) => t + ms(yy).reduce((a, k) => a + R[c][k], 0), 0) : null);
+  const reg = [["전체", ["전체"]], ["중국", ["중국"]], ["미국", ["미국"]], ["유럽", EU_C.filter((c) => R[c])]];
+  const rows = reg.map(([nm, cs]) => [nm, sum(cs, y), sum(cs, y - 1)]).filter(([, a, b]) => a != null && b > 0).map(([nm, a, b]) => [nm, rnd1((a / b - 1) * 100), a]);
+  if (!rows.length) return "";
+  const miss = reg.map(([nm]) => nm).filter((nm) => !rows.some(([r]) => r === nm));
+  return `<div class="card" style="margin-top:8px"><div class="chart-title"><b>🍜 ${y}년 1~${m}월 라면 지역별 수출 증가율</b> <span class="src">관세청 · 매달 자동 · 1년 전 같은 기간보다</span></div>
+    ${rows.length >= 2 ? keyChart({ q: rows.map((r) => r[0]), u: "%", d: 1, col: ["#f39a2e"], bars: [{ n: "증가율", v: rows.map((r) => r[1]) }] }) : ""}
+    <div class="note">${rows.map(([nm, g, a]) => `${esc(nm)} <b>${sg(g, 1)}</b> <span class="src">(${n(a / 100, 1)}억$)</span>`).join(" · ")}</div>
+    <div class="note src">${miss.length ? `${miss.join("·")}: 올해 달마다 숫자가 다 있지 않아 아직 계산 못 함 — 관세청 나라별 API(공공데이터포털 '품목별 국가별 수출입실적')를 신청하면 자동으로 들어와요 · ` : ""}유럽 = ${EU_C.join("·")} 합 · 한화 그림14 (1~10월): 전체 26.2 · 중국 23.8 · 미국 29.1 · 유럽 45.7%</div></div>`;
+}
 function expHTML(kind) {
   const E = EXP?.[kind], L = EXP?.[`${kind}_latest`] || EXP?.latest, [title, hs, show, col1, eok, note] = EXP_K[kind];
   if (!L || (!E && !L[kind])) return "";  // 월별 그림(E)이 아직 없어도 증권사 표만 먼저
@@ -5195,7 +5212,7 @@ async function loadIndustry() {
   // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
-    ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + expHTML("ramen") + expHTML("food")],
+    ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + expHTML("ramen") + ramenYtdHTML() + expHTML("food")],
     ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => gpeCard("M7") + key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🎤 엔터", () => key("엔터")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
@@ -5325,7 +5342,7 @@ function keyChart(ch) {
       + pv.map((v, i) => (v == null ? "" : `<circle cx="${X(i)}" cy="${PY(v)}" r="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${X(i)}" y="${clearY(pp, i)}" text-anchor="middle" class="qv${i === pv.length - 1 ? " b" : ""}"${v < 0 || v < lh / 4 ? ' style="fill:var(--bad-ink)"' : ""}>${n(v, 0)}%</text>`)).join("");
   }
   g += tipCols(X, bw, 0, 166, L.map((q, i) => [q, ...[...bars, ...lines].map((s) => (s.v[i] == null ? null : `${s.n}: ${V(s.v[i])}${un && un !== "%" ? " " + un : un}`)), ch.pct?.v[i] != null ? `${ch.pct.n}: ${n(ch.pct.v[i], 1)}%` : null].filter(Boolean).join("\n")));
-  const leg = [...bars.map((s, si) => `<span style="color:${BC[si % 4]}">■</span> ${esc(s.n)}`), ...lines.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`),
+  const leg = [...bars.map((s, si) => `<span style="color:${BC[si % BC.length]}">■</span> ${esc(s.n)}`), ...lines.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`),
     ...(ch.pct ? [`● ${esc(ch.pct.n)}`] : [])].join(" · ");
   // tbl: true → 그림 위에 모든 칸 숫자 표 (수치 먼저 → 그림 → 🐣 kid)
   const tb = ch.tbl ? `<div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:11px"><tr><th></th>${L.map((q) => `<th>${esc(q)}</th>`).join("")}</tr>
