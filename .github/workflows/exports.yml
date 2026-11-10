@@ -35,11 +35,17 @@ jobs:
           PYTHONIOENCODING: utf-8
           MODE: ${{ github.event.inputs.mode }}
         run: cd collector && python -u customs.py $MODE
+      - name: ✈️ 국적별 방한 외래관광객 (관광지식정보시스템, 키 없음)
+        if: ${{ always() && github.event.inputs.mode != 'probe' }}
+        env:
+          PYTHONIOENCODING: utf-8
+        run: cd collector && python -u tour_stats.py
       - name: 저장
+        if: ${{ always() }}
         run: |
           git config user.name "valuation-bot"
           git config user.email "valuation-bot@users.noreply.github.com"
-          git add config/exports.yaml site/data/exports.json 2>/dev/null || true
+          git add config/exports.yaml site/data/exports.json site/data/tour_nat.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "관세청 수출 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done

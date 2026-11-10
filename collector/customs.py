@@ -44,14 +44,21 @@ GROUPS = {"tech": TECH, "power": POWER, "food": FOOD, "car": CAR}  # 나라 합�
 Y0 = 2020
 
 
-def get(hs, cnty, a, b):
-    p = {"serviceKey": KEY, "strtYymm": a, "endYymm": b, "hsSgn": hs, "numOfRows": 1000, "pageNo": 1}
+SGG = "https://apis.data.go.kr/1220000/sigunguperprlstperacrs/getSigunguPerPrlstPerAcrs"  # 시군구별 (HS 6자리 · 시도 하나씩, 따로 활용신청)
+# 💉 시군구 수출 (사용자 11/10 '파마리서치는 의료기기 수출 강릉'): 이름 → (시도코드, HS 6자리, 시군구 이름에 들어간 글자)
+#   강릉 3304.99 = 증권가가 리쥬란(파마리서치) 신호로 보는 칸 ('필러' 3304.99.9000 — 회사와 딱 맞진 않지만 흐름이 비슷) · 강원 = 51 (2023-06 전 42)
+SGG_JOBS = {"강릉 3304.99 (리쥬란)": ("330499", "강릉")}
+
+
+def get(hs, cnty, a, b, sido=None):
+    p = {"serviceKey": KEY, "strtYymm": a, "endYymm": b, "numOfRows": 1000, "pageNo": 1}
+    p.update({"HsSgn": hs, "sidoCd": sido} if sido else {"hsSgn": hs})
     if cnty:
         p["cntyCd"] = cnty
     err = ""
     for _ in range(2):
         try:
-            r = requests.get(URL if cnty else ITEM, params=p, timeout=(10, 40))
+            r = requests.get(SGG if sido else URL if cnty else ITEM, params=p, timeout=(10, 40))
             break
         except requests.RequestException as e:  # 메시지에 주소(=키)가 들어갈 수 있어 종류만 남김
             err = type(e).__name__
@@ -83,6 +90,14 @@ def year_rows(hs, cnty, y):
         return get(hs, cnty, f"{y}01", f"{y}06") + get(hs, cnty, f"{y}07", f"{y}12")
 
 
+def year_rows_sgg(hs, sido, y):
+    """시군구 한 해 (시군구 × 달이라 줄이 많으면 석 달씩)."""
+    try:
+        return get(hs, "", f"{y}01", f"{y}12", sido=sido)
+    except Full:
+        return [r for a in range(1, 13, 3) for r in get(hs, "", f"{y}{a:02d}", f"{y}{a + 2:02d}", sido=sido)]
+
+
 def monthly(rows, kinds):
     """HS 10자리 줄 → {kind: {YYYY-MM: 백만 달러}}. '총계' 줄·10자리가 아닌 줄은 빼서 겹쳐 세지 않음."""
     out = {k: {} for k in kinds}
@@ -103,6 +118,21 @@ _t = monthly([{"year": "2026.09", "hsCode": "3304101000", "expDlr": "7500000"}, 
 assert _t == {"cosmetics": {"2026-09": 1133.1}, "skincare": {"2026-09": 595.2}, "makeup": {"2026-09": 96.8}}, _t
 
 
+def sgg_monthly(rows, key):
+    """시군구 줄 → {YYYY-MM: 백만 달러} (이름에 key 가 든 시군구만, 같은 달은 더함 · '총계'·빈 줄은 뺌)."""
+    out = {}
+    for r in rows:
+        m, v = re.match(r"(\d{4})\D*(\d{1,2})", r.get("priodTitle", "")), (r.get("expUsdAmt") or "").replace(",", "")
+        if m and key in (r.get("sggNm") or "") and v.isdigit():
+            ym = f"{m[1]}-{int(m[2]):02d}"
+            out[ym] = out.get(ym, 0) + int(v)
+    return {ym: round(v / 1e6, 2) for ym, v in out.items()}
+
+
+assert sgg_monthly([{"priodTitle": "2026.09", "sggNm": "강원특별자치도 강릉시", "expUsdAmt": "4396347"}, {"priodTitle": "2026.09", "sggNm": "원주시", "expUsdAmt": "9"},
+                    {"priodTitle": "총계", "sggNm": "", "expUsdAmt": "9"}], "강릉") == {"2026-09": 4.4}
+
+
 def pct(a, b):
     return round((a / b - 1) * 100) if a is not None and b else None
 
@@ -117,7 +147,7 @@ def table(d, ym, keys=("ramen", "cosmetics", "skincare", "makeup")):
     """새 달 표: 나라(반도체·IT 는 품목)마다 [금액, 전년비, 전월비]."""
     y, m = int(ym[:4]), int(ym[5:])
     ly, pm = f"{y - 1}-{m:02d}", (f"{y}-{m - 1:02d}" if m > 1 else f"{y - 1}-12")
-    lat = {"ym": ym, "src": f"관세청 수출입실적 API ({ym}, 자동)"}
+    lat = {"ym": ym, "src": f"관세청 수출입실적 API ({ym}, 자동 · 받은 날 {now_kst():%Y-%m-%d})"}  # 받은 날 = 카드 '‼️ 수출 데이터 나옴' 7일 (app.js expNew)
     for k in keys:
         lat[k] = {c: [s[ym], pct(s[ym], s.get(ly)), pct(s[ym], s.get(pm))] for c, s in d.get(k, {}).items() if s.get(ym) is not None}
     return lat
@@ -135,6 +165,14 @@ def probe():
                     print("   ", r.get("hsCode"), r.get("statKor"), round(int(r.get("expDlr") or 0) / 1e6, 2))
         except Exception as e:  # noqa: BLE001
             print(nm, "실패:", e)
+    # 💉 시군구 (강원 강릉 = 파마리서치 · 홍천 = 클래시스 · 춘천 = 휴젤): 시도코드 51(강원특별자치도)·42(옛 강원) × HS 3304.99 · 9018.90 · 3002.49
+    for sido, ym, hs in [("51", "202609", "330499"), ("42", "202209", "330499"), ("51", "202609", "901890"), ("51", "202609", "300249")]:
+        try:
+            rows = get(hs, "", ym, ym, sido=sido)
+            print(f"시군구 {sido} {hs} {ym}", len(rows), "줄", *[f"{r.get('priodTitle')} {r.get('sggNm')} {r.get('hsSgn')} {r.get('korePrlstNm')} {r.get('expUsdAmt')}" for r in rows
+                                                              if any(k in (r.get("sggNm") or "") for k in ("강릉", "홍천", "춘천"))][:12], sep="\n   ")
+        except Exception as e:  # noqa: BLE001
+            print(f"시군구 {sido} {hs} {ym} 실패:", e)
 
 
 def main():
@@ -160,6 +198,24 @@ def main():
                 (d.setdefault(k, {}).setdefault(nm, {}) if nm else d.setdefault(grp, {}).setdefault(k, {})).update(s)
                 got += len(s)
             time.sleep(0.3)
+    for nm, (hs, key) in SGG_JOBS.items():  # 💉 시군구 — 활용신청 전이면 첫 해에 '등록되지 않은 서비스키' → 나머지 해는 건너뜀
+        for y in range(Y0, now.year + 1):
+            try:
+                v = {}
+                for sido in ("51", "42"):  # 강원특별자치도(2023-06~) 코드로 먼저, 없으면 옛 코드
+                    v = sgg_monthly(year_rows_sgg(hs, sido, y), key)
+                    if v:
+                        break
+                print("시군구", nm, y, len(v), "칸")
+            except Exception as e:  # noqa: BLE001
+                print("시군구", nm, y, "실패", e)
+                fail.append(f"시군구/{nm}/{y}: {e}")
+                if "등록되지 않은" in str(e):
+                    break
+                continue
+            d.setdefault("med", {}).setdefault(nm, {}).update(v)
+            got += len(v)
+            time.sleep(0.3)
     print(f"관세청 {got}칸 · 실패 {len(fail)}", *fail[:12], sep="\n")
     if not got:
         sys.exit("관세청에서 받은 숫자 없음")
@@ -173,7 +229,7 @@ def main():
     if ch:  # 표를 새로 쓰면 손으로 단 줄 끝 메모는 사라짐 (power_latest·food_latest 같은 손으로 적은 표도 그대로 다시 씀)
         head = "".join(x + "\n" for x in head.splitlines() if x.startswith("#")) + yaml.safe_dump(
             {k: d[k] for k in d if (k == "latest" or k.endswith("_latest")) and d[k]}, allow_unicode=True, sort_keys=False, width=1000, default_flow_style=None)
-    body = yaml.safe_dump({k: {s: dict(sorted(v.items())) for s, v in d[k].items()} for k in ("ramen", "cosmetics", "skincare", "makeup", *GROUPS) if k in d},
+    body = yaml.safe_dump({k: {s: dict(sorted(v.items())) for s, v in d[k].items()} for k in ("ramen", "cosmetics", "skincare", "makeup", *GROUPS, "med") if k in d},
                           allow_unicode=True, sort_keys=False, width=1000)
     PATH.write_text(head.rstrip() + "\n" + body, encoding="utf-8")
     write_json(DATA / "exports.json", yaml.safe_load(PATH.read_text(encoding="utf-8")))
