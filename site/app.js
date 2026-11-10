@@ -5298,25 +5298,27 @@ function chgChart(ch) {
 function evLine(ch) {
   const q = ch.q || [], v = ch.v || [], N = q.length;
   if (N < 10) return "";
-  const W = 340, x0 = 34, x1 = W - 8, top = 14, bot = 150, hi = Math.max(...v) * 1.1, X = (i) => x0 + ((x1 - x0) * i) / (N - 1), Y = (y) => bot - (y / hi) * (bot - top);
-  const t0 = 10 ** Math.floor(Math.log10(hi / 4)), tk = [1, 2, 5, 10].map((m) => m * t0).find((s) => hi / s <= 5);
-  let g = "";
-  for (let y = 0; y <= hi; y += tk) g += `<line x1="${x0}" x2="${x1}" y1="${Y(y)}" y2="${Y(y)}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${Y(y) + 3}" text-anchor="end" class="qx">${n(y, 0)}</text>`;
+  const lo = ch.lo || 0, W = 340, x0 = 34, x1 = W - 8, top = 14, bot = 150, hi = Math.max(...v) * (lo ? 1.03 : 1.1), X = (i) => x0 + ((x1 - x0) * i) / (N - 1), Y = (y) => bot - ((y - lo) / (hi - lo)) * (bot - top);
+  const t0 = 10 ** Math.floor(Math.log10((hi - lo) / 4)), tk = [1, 2, 5, 10].map((m) => m * t0).find((s) => (hi - lo) / s <= 5);
+  let g = ch.base ? `<line x1="${x0}" x2="${x1}" y1="${Y(ch.base)}" y2="${Y(ch.base)}" stroke="var(--ink-2)" stroke-dasharray="4 3"/>` : "";  // base = 기준선 (소비자심리 100)
+  for (let y = lo; y <= hi; y += tk) g += `<line x1="${x0}" x2="${x1}" y1="${Y(y)}" y2="${Y(y)}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${Y(y) + 3}" text-anchor="end" class="qx">${n(y, 0)}</text>`;
   q.forEach((d, i) => { if (!i || d.slice(0, 4) !== q[i - 1].slice(0, 4)) g += `${i ? `<line x1="${X(i)}" x2="${X(i)}" y1="${top}" y2="${bot}" stroke="var(--grid)"/>` : ""}<text x="${X(i)}" y="${bot + 14}" text-anchor="${i ? "middle" : "start"}" class="qx">'${d.slice(2, 4)}</text>`; });
   g += `<path d="${v.map((y, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(y).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--s1)" stroke-width="2"/>`;
   const ev = (ch.ev || []).map((e, k) => { const i = q.findIndex((d) => d >= (e.d.length === 7 ? `${e.d}-15` : e.d)); return { ...e, k: k + 1, i: i < 0 ? N - 1 : i }; });
   ev.forEach((e) => { const x = X(e.i), y = Y(v[e.i]), up = e.k % 2; g += `<line x1="${x}" x2="${x}" y1="${y}" y2="${y + (up ? -14 : 14)}" stroke="var(--ink-2)" stroke-dasharray="2 2"/><circle cx="${x}" cy="${y}" r="2.5" fill="var(--ink)"/>`
     + `<text x="${x}" y="${y + (up ? -17 : 24)}" text-anchor="middle" class="qv b" style="font-size:9px">${e.k}</text>`; });
-  const mx = Math.max(...v), im = v.indexOf(mx), last = v.at(-1);
+  const mx = Math.max(...v), im = v.indexOf(mx), last = v.at(-1), m6 = Math.min(...v.slice(-7));
+  // 🛍 소비자심리: 지금 반등 신호인지 (6개월 최저 < 100 에서 +5 이상) · 예전에 롯데쇼핑 주가가 오른 건 최저 80 아래였을 때
+  const stat = ch.kind === "ccsi" ? `<div class="note">${last - m6 >= 5 && m6 < 100 ? `🔔 <b>반등 신호</b> — 6개월 최저 ${n(m6, 1)} → 지금 ${n(last, 1)}${m6 < 80 ? " · 최저가 80 아래 (예전에 주가가 오른 조건)" : " · 최저가 80 위 (예전엔 이때 주가가 대부분 안 오름)"}` : `신호 없음 — 6개월 최저 ${n(m6, 1)} · 지금 ${n(last, 1)} (100 = 보통)`}${ch.src_auto ? ` <span class="src">${esc(ch.src_auto)}</span>` : ""}</div>` : "";
   g += tipCols(X, (x1 - x0) / (N - 1), 0, bot + 16, q.map((d, i) => `${d}\n시가총액 ${n(v[i], 0)}${ch.u ? " " + ch.u : ""}${ev.filter((e) => e.i === i).map((e) => `\n${e.k}. ${e.t}`).join("")}`));
   return `<div class="qp" style="grid-column:1/-1"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}
-    <div class="note">지금 <b>${n(last, 0)}${esc(ch.u || "")}</b> (${esc(q.at(-1))}) · 최고 ${n(mx, 0)} (${esc(q[im])}) 대비 <b>${pct((last / mx - 1) * 100, 0, true)}</b></div>
+    ${stat || `<div class="note">지금 <b>${n(last, 0)}${esc(ch.u || "")}</b> (${esc(q.at(-1))}) · 최고 ${n(mx, 0)} (${esc(q[im])}) 대비 <b>${pct((last / mx - 1) * 100, 0, true)}</b></div>`}
     <svg viewBox="0 0 ${W} ${bot + 20}" width="100%" role="img" aria-label="${esc(ch.t)}">${g}</svg>
-    <ol class="irl" style="font-size:12px;margin:4px 0 0;padding-left:22px">${ev.map((e) => `<li value="${e.k}"><span class="src">${esc(e.d.slice(2).replace("-", "."))}</span> ${esc(e.t)}</li>`).join("")}</ol>
+    <ol class="irl" style="font-size:12px;margin:4px 0 0;padding-left:22px">${ev.map((e) => `<li value="${e.k}"><span class="src">${esc(e.d.slice(2, 7).replace("-", "."))}</span> ${esc(e.t)}</li>`).join("")}</ol>
     ${ch.kid ? `<div class="kidbox">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
 function keyChart(ch) {
-  if (ch.kind === "mcap") return evLine(ch);
+  if (ch.kind === "mcap" || ch.kind === "ccsi") return evLine(ch);
   // kind: line → 0 아래(적자)도 그리는 꺾은선 + 칸마다 숫자 (종목 그래프와 같은 모양)
   if (ch.kind === "line") return kpiChart({ ...ch, s: (ch.lines || []).map((s) => ({ n: s.n, v: Object.fromEntries((ch.q || []).map((q, i) => [q, s.v[i]]).filter(([, v]) => v != null)) })) });
   if (ch.kind === "chg") return chgChart(ch);

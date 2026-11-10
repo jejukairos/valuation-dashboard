@@ -20,11 +20,35 @@ def series(close, shares_q, now_shares):
     return out_d, out_v
 
 
+def ccsi(ch):
+    """🛍 kind: ccsi — 한국은행 ECOS 소비자심리지수 (511Y002 · FME 소비자심리지수 · 99988 전체, 월) 로 q·v 이어 붙임 (YAML 시작값 위에 덮어씀).
+    키는 GitHub Secrets 에만 → 이 컴퓨터에선 건너뜀 · 실패해도 시작값 그대로."""
+    import os
+
+    from common import HTTP, now_kst
+    key = os.environ.get("ECOS_KEY")
+    if not key:
+        return
+    try:
+        rows = HTTP.get(f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/1000/511Y002/M/200807/{now_kst():%Y%m}/FME/99988", timeout=20).json() \
+            .get("StatisticSearch", {}).get("row") or []
+        got = {f"{r['TIME'][:4]}-{r['TIME'][4:6]}-01": float(r["DATA_VALUE"]) for r in rows}
+        if len(got) < 12:
+            raise RuntimeError(f"ECOS 줄 {len(got)}개")
+        m = {**dict(zip(ch.get("q") or [], ch.get("v") or [])), **got}
+        ch["q"], ch["v"] = sorted(m), [m[x] for x in sorted(m)]
+        ch["src_auto"] = f"ECOS {max(got)[:7]}"
+    except Exception as e:  # noqa: BLE001
+        print(f"  ⚠ 소비자심리지수 ECOS: {type(e).__name__}: {str(e)[-80:]}")
+
+
 def fill(k):
     from kr_stock import naver_now, price_history
     for grp in [*(k.get("industry") or {}).values(), *(k.get("stock") or {}).values()]:
         for card in grp.get("cards") or []:
             for ch in card.get("charts") or []:
+                if ch.get("kind") == "ccsi":
+                    ccsi(ch)
                 if ch.get("kind") != "mcap":
                     continue
                 code = str(ch["code"])
