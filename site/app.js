@@ -4832,7 +4832,9 @@ function showView() {
   $("#cmpTitle").textContent = MKT === "US" ? "미국 보유종목 비교표" : "한국 보유종목 비교표";
   $("#cardTitle").textContent = MKT === "US" ? "미국 보유종목 신호등" : "한국 보유종목 신호등";
   $("#mainView").hidden = !(view === "main" || view === "us");
-  document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.view === (eg ? "earn" : view)));
+  // 💼 보유 · ⭐ 관심 탭 하나씩, 안에서 🇰🇷 한국 · 🇺🇸 미국 (사용자 11/10: 실적 탭처럼) — #kr·#us·#watch·#uswatch 주소는 그대로
+  document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.view === (eg ? "earn" : { us: "main", uswatch: "watch" }[view] || view)));
+  document.querySelectorAll(".mktseg a").forEach((a) => a.classList.toggle("on", a.dataset.v === view));
   $("#watchView").hidden = !(view === "watch" || view === "uswatch");
   $("#jointView").hidden = view !== "joint";
   if (view === "market") drawMarketCharts(); // 숨겨진 상태에서 그린 차트는 크기가 0이라 보일 때 다시 그림

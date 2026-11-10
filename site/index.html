@@ -21,10 +21,8 @@
   <nav class="tabbar" id="tabbar">
     <a href="#signal" data-view="pbr">📡 신호</a>
     <a href="#earn" data-view="earn" class="on">🧾 실적</a>
-    <a href="#kr" data-view="main">🇰🇷 보유</a>
-    <a href="#us" data-view="us">🇺🇸 보유</a>
-    <a href="#watch" data-view="watch">⭐🇰🇷 관심</a>
-    <a href="#uswatch" data-view="uswatch">⭐🇺🇸 관심</a>
+    <a href="#kr" data-view="main">💼 보유</a>
+    <a href="#watch" data-view="watch">⭐ 관심</a>
     <a href="#reports" data-view="reports">📑 리포트</a>
     <a href="#industry" data-view="industry">🏭 산업</a>
 <a href="#chart" data-view="chart">📈 차트</a>
@@ -37,6 +35,7 @@
 </header>
 <div class="wrap" id="runAlert"></div>
 <main class="wrap" id="watchView" hidden>
+  <div class="seg mktseg" style="margin-bottom:8px"><a href="#watch" data-v="watch" class="segl">🇰🇷 한국</a><a href="#uswatch" data-v="uswatch" class="segl">🇺🇸 미국</a></div>
   <h2 id="watchTitle">관심종목</h2>
   <div id="watchJump"></div>
   <div id="watchAccel"></div>
@@ -147,6 +146,7 @@
   <div class="grid g2" id="scoreCards"></div>
 </main>
 <main class="wrap" id="mainView">
+  <div class="seg mktseg" style="margin-bottom:8px"><a href="#kr" data-v="main" class="segl">🇰🇷 한국</a><a href="#us" data-v="us" class="segl">🇺🇸 미국</a></div>
   <div id="cardJump"></div>
   <div id="failBox"></div>
   <div id="estAlert"></div>
