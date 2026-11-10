@@ -554,10 +554,14 @@ function stockCard(c) {
   const pbr = (c.fwd_mult?.PBR || {})["12MF"];
   if (pbr > 0 && (c.methods || []).includes("PBR")) pe.push(`12MF BPS ${money(c.price / pbr, c.currency)} × PBR <b>${n(pbr, 2)}배</b>`);
   // 📐 PEG (사용자 11/11): 12MF PER ÷ ② 보정값 성장률(시킹알파 3~5년) + 사람들이 많이 보는 값 (Finviz 자동 · 시킹알파 화면은 somong.yaml my.sa_peg 에 적은 값)
-  const gA = (c.scen?.ways || []).find((w) => w.name === "보정값")?.g, fvp = c.us_tpl?.finviz_peg, sp = smData(c)?.my?.sa_peg;
-  if (c.fwd_per > 0 && gA > 0) {
+  //    미국은 모든 종목 (사용자 11/11): 보정값이 없으면 Finviz 5년 성장률로, 12MF EPS 적자면 '-' + 이유
+  const gB = (c.scen?.ways || []).find((w) => w.name === "보정값")?.g, fv5 = c.us_tpl?.finviz_5y, fvp = c.us_tpl?.finviz_peg, sp = smData(c)?.my?.sa_peg;
+  const [gA, gL] = gB > 0 ? [gB, "② 보정값"] : c.currency === "USD" && fv5 > 0 ? [fv5, "Finviz 5년 성장률"] : [null, ""];
+  if (c.currency === "USD" || (c.fwd_per > 0 && gA)) {
     const seen = [fvp != null ? `Finviz ${n(fvp, 2)}` : "", sp ? `시킹알파 ${[sp.ngaap != null ? `${n(sp.ngaap, 2)} (Non-GAAP 예상)` : "", sp.gaap != null ? `${n(sp.gaap, 2)} (GAAP 지난 1년)` : ""].filter(Boolean).join(" · ")}${sp.date ? ` ${esc(String(sp.date).slice(5).replace("-", "/"))}` : ""}` : ""].filter(Boolean);
-    pe.push(`PEG <b>${n(c.fwd_per / gA, 2)}</b> <span class="src">= PER ${n(c.fwd_per, 1)} ÷ 성장률 ${n(gA, 1)}% (② 보정값)${seen.length ? ` · 많이 보는 값: ${seen.join(" · ")}` : ""}</span>`);
+    const tail = seen.length ? ` · 많이 보는 값: ${seen.join(" · ")}` : "";
+    pe.push(c.fwd_per > 0 && gA ? `PEG <b>${n(c.fwd_per / gA, 2)}</b> <span class="src">= PER ${n(c.fwd_per, 1)} ÷ 성장률 ${n(gA, 1)}% (${gL})${tail}</span>`
+      : `PEG <b>-</b> <span class="src">${c.fwd_per > 0 ? "성장률 추정이 없어" : "앞으로 12개월 EPS 가 적자라"}계산 안 됨${tail}</span>`);
   }
   if (c.naver_per > 0) pe.push(`<span class="src">참고: 네이버 추정 PER (올해 ${String(new Date().getFullYear()).slice(2)}E 기준) ${n(c.naver_per, 2)}배</span>`);
   return `<button class="card stock" data-code="${esc(c.code)}" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">
