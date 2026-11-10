@@ -1809,14 +1809,18 @@ const earnOk = (code) => {  // 지금 고른 탭(보유/관심)·시장(전체/�
 function renderEarn() {
   const h = kqNewsHTML() + irCalHTML();  // 사용자 11/5: 제일 최신 발표가 맨 위 — 쉬운 요약은 그 회사 카드 안·날짜순 목록 안으로
   const where = `${EARN_MKT === "US" ? "미국 " : EARN_MKT === "KR" ? "한국 " : ""}${EARN_GRP === "공동" ? "공동자산" : EARN_GRP}`;
-  $("#earnBody").innerHTML = `<div class="seg earnmk" style="margin-bottom:8px">${[["ALL", "전체"], ["KR", "🇰🇷 한국"], ["US", "🇺🇸 미국"]].map(([k, l]) => `<button data-mk="${k}" class="${k === EARN_MKT ? "on" : ""}">${l}</button>`).join("")}</div>`
-    + `<div id="earnJump"></div><div id="earnList">${h || `<div class="empty">최근 3일 안에 나온 ${where} 종목 실적이 없어요.</div>`}</div>`;
+  // 사용자 11/10: 탭이 많아서 🧾 실적 하나로 — 안에서 보유 · 관심 · 공동, 그 아래 전체 · 한국 · 미국
+  $("#earnBody").innerHTML = `<div class="seg" style="margin-bottom:6px">${[["#earn", "보유"], ["#earnw", "관심"], ["#earnj", "공동"]].map(([hs, g]) => `<a href="${hs}" class="segl${g === EARN_GRP ? " on" : ""}">${g === "공동" ? "🤝 공동자산" : g === "관심" ? "⭐ 관심" : "💼 보유"}</a>`).join("")}</div>`
+    + `<div class="seg earnmk" style="margin-bottom:8px">${[["ALL", "전체"], ["KR", "🇰🇷 한국"], ["US", "🇺🇸 미국"]].map(([k, l]) => `<button data-mk="${k}" class="${k === EARN_MKT ? "on" : ""}">${l}</button>`).join("")}</div>`
+    + `<div id="earnJump"></div><div id="earnList">${h || `<div class="empty">이번 분기에 나온 ${where} 종목 실적이 없어요.</div>`}</div>`;
   jumpBar("#earnList", "#earnJump");
 }
 document.addEventListener("click", (e) => { const b = e.target.closest(".earnmk button"); if (b) { EARN_MKT = b.dataset.mk; renderEarn(); } });
 function kqNewsHTML() {
   // 최신 날짜 먼저 (사용자 11/5) — 실적 카드 · 쉬운 요약만 있는 회사 · 공시·전망 변화(events.yaml)를 한 목록에서 (같은 날이면 실적 카드 → 보유 → 관심 순서 그대로)
-  const cut = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10), nm = (c) => DASH.stocks.find((s) => s.code === c)?.name;
+  const t0 = new Date(), q0 = `${t0.getFullYear()}-${String(Math.floor(t0.getMonth() / 3) * 3 + 1).padStart(2, "0")}-01`, d3 = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10);
+  // 사용자 11/10: 이번 분기(달력 분기 시작 뒤) 발표·요약·공시 다 보이게 (분기 첫 3일은 지난 3일도)
+  const cut = d3 < q0 ? d3 : q0, nm = (c) => DASH.stocks.find((s) => s.code === c)?.name;
   const easyOf = (code) => { const l = EARNINGS[code]?.[0]; return l?.easy?.length && l.date >= cut ? l : null; };
   const kid = (e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">🐣 쉬운 요약 · ${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
       <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`;
@@ -1847,7 +1851,7 @@ function kqNewsHTML() {
   if (!rows.length && !wait.length) return "";
   rows.sort((a, b) => b.date.localeCompare(a.date));
   const waitHtml = wait.length ? `<div class="note">⏳ 잠정실적 공시는 났고 숫자를 읽는 중 (다음 갱신 때 반영): ${wait.map((c) => `<a href="#stock/${esc(c.code)}">${esc(c.name)}</a> ${esc(c.kq_wait || "")}`).join(" · ")}</div>` : "";
-  return `<h2>🧾 실적 발표 <span class="src">최근 3일 · 최신 발표 먼저 · 🐣 = 쉬운 요약 · 회색 = 발표 전 예상(컨센서스), 색 = 실적</span></h2>${waitHtml}<div class="grid">${rows.map((r) => r.html).join("")}</div>`;
+  return `<h2>🧾 실적 발표 <span class="src">이번 분기 (${esc(cut.slice(5).replace("-", "/"))}~) · 최신 발표 먼저 · 🐣 = 쉬운 요약 · 회색 = 발표 전 예상(컨센서스), 색 = 실적</span></h2>${waitHtml}<div class="grid">${rows.map((r) => r.html).join("")}</div>`;
 }
 // ⚠ 회계 기준 바뀜 메모 (keychart.yaml acct) — 이익률을 1년 전·다른 회사와 맞댈 때 꼭 볼 것. full = 🧾 최신 분기 실적 안, 아니면 그림 위 한 줄
 function acctHTML(code, full = true) {
@@ -4726,7 +4730,7 @@ function showView() {
   const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   const eg = { earn: "보유", earnw: "관심", earnj: "공동" }[view];  // 🧾 실적 보유 · 관심 · 공동 (같은 화면, 종목 묶음만 바꿈)
   $("#earnView").hidden = !eg;
-  if (eg) { if (eg !== EARN_GRP) { EARN_GRP = eg; EARN_MKT = "ALL"; } $("#earnTitle").textContent = `🧾 실적 ${eg}`; renderEarn(); }
+  if (eg) { EARN_GRP = eg; renderEarn(); }  // 보유·관심·공동을 바꿔도 전체/한국/미국 고른 건 그대로
   $("#chartView").hidden = view !== "chart";
   if (view === "chart") loadAlign();
   $("#reportsView").hidden = view !== "reports";
@@ -4749,7 +4753,7 @@ function showView() {
   $("#cmpTitle").textContent = MKT === "US" ? "미국 보유종목 비교표" : "한국 보유종목 비교표";
   $("#cardTitle").textContent = MKT === "US" ? "미국 보유종목 신호등" : "한국 보유종목 신호등";
   $("#mainView").hidden = !(view === "main" || view === "us");
-  document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.view === view));
+  document.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.view === (eg ? "earn" : view)));
   $("#watchView").hidden = !(view === "watch" || view === "uswatch");
   $("#jointView").hidden = view !== "joint";
   if (view === "market") drawMarketCharts(); // 숨겨진 상태에서 그린 차트는 크기가 0이라 보일 때 다시 그림
