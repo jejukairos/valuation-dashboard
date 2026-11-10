@@ -230,6 +230,8 @@ watchlist:
   - {name: 펌텍코리아, market: KR, code: "251970", industry: 화장품 용기, methods: [PER], sector: 화장품 ODM}
   # 🧴 더마 화장품 브랜드(제로이드·아토팜·리얼베리어·더마비) — 2026-11-10 사용자: "네오팜 관심종목 추가, 실적발표 참고" (3Q26 영업이익 +48%, 이익률 25.5%)
   - {name: 네오팜, market: KR, code: "092730", industry: 화장품, methods: [PER], sector: 화장품 브랜드}
+  # 💾 데이터센터 SSD 컨트롤러 팹리스 — 2026-11-11 사용자: "파두도 관심종목 넣어줘" (3Q26 매출 1,436억 · 영업이익 361억 흑자전환, 2023년 상장)
+  - {name: 파두, market: KR, code: "440110", industry: 반도체, methods: [PER], note: "2023년 상장 · 25년까지 적자라 밴드는 가능한 기간만으로 계산해요."}
   # M7 빅테크 — 보유·공동자산에 있는 종목은 한 번만 계산하고 ⭐ 관심 탭에도 같이 보여요
   - {name: 애플, market: US, code: AAPL, industry: 하드웨어, methods: [PER]}
   - {name: 마이크로소프트, market: US, code: MSFT, industry: 소프트웨어, methods: [PER]}

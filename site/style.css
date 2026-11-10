@@ -257,6 +257,23 @@ table.cmp .dim { color: var(--muted); }
 .pd-l i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: 0; }
 .pd-l b { color: var(--ink); }
 .irl { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }
+/* 🧾 IR 큰 숫자 카드 (사용자 11/11: 텔레그램 실적 그림처럼) — 한국식: 오름 빨강 · 내림 파랑 */
+.irc { display: grid; gap: 8px; margin: 8px 0 6px; }
+.irc-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.irc-l { color: var(--muted); font-size: 13px; }
+.irc-big { font-size: 26px; line-height: 1.25; }
+.irc-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.irc-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.irc-2 > div + div { border-left: 1px solid var(--border); padding-left: 12px; }
+.irc-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center; margin: 6px 0; }
+.irc-3 b { display: block; font-size: 20px; margin-top: 2px; }
+.irc .irU { color: var(--bad); } .irc .irD { color: var(--s1); }  /* .fvt .up(초록) 과 겹치지 않게 이름을 따로 */
+.irc-pill { font-size: 12px; font-weight: 700; color: #fff; background: var(--bad); border-radius: 999px; padding: 4px 10px; }
+.irc-pill.pdn { background: var(--s1); }
+.irc-head { font-size: 18px; font-weight: 800; text-align: center; line-height: 1.45; }
+.irc-one { font-weight: 700; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; line-height: 1.5; }
+.irc ul { margin: 4px 0 0; padding-left: 16px; font-size: 13px; line-height: 1.6; }
+.irc .c { text-align: center; }
 .irl a, .pd a, .note a { color: var(--s1); }
 /* 분기 실적 한눈에 */
 .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

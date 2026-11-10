@@ -1414,15 +1414,42 @@ function irAuto(k) {
   if (o?.qoq != null && ni?.qoq != null && (o.qoq > 0) !== (ni.qoq > 0)) ana.push({ h: "영업이익과 순이익의 차이", l: [`영업이익 QoQ ${n(o.qoq, 1)}% · 순이익 ${n(ni.qoq, 1)}% — 방향이 달라요. 영업 밖 손익(환율·이자·지분법·평가손익 등) 영향일 수 있어 분기보고서로 확인`] });
   return { quarter: k.latest, period: `${k.latest}${k.prelim ? " 잠정" : ""} · 숫자로 먼저`, date: k.filing?.date, src: "잠정실적 숫자로 자동 요약 (네이버·DART)", u: k.filing?.url, sum, ana, auto: true };
 }
+// 🧾 큰 숫자 카드 (사용자 11/11: 셀트리온제약·원익IPS 텔레그램 그림처럼, 보유·관심 전 종목) — 숫자는 잠정실적 표(k, 같은 분기일 때만), 글은 IR 요약·분석의 첫 줄들 · 한국식 오름 빨강·내림 파랑
+function irCards(e, k) {
+  const L = (re, nn = 2) => ((e.ana || []).concat(e.sum || []).find((s) => re.test(s.h || ""))?.l || []).filter((x) => typeof x === "string" && !/^잠정 공시|없음$/.test(x)).slice(0, nn);
+  const ul = (a) => (a.length ? `<ul>${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
+  let N = null;
+  if (k?.rows?.length && k.latest === String(e.quarter || "").replace(/^(\d)Q(\d\d)$/, "$2.$1Q")) {
+    const T = kqTurns(k), qs = k.quarters || [], at = (lb) => qs.find((q) => q.q === lb), om = (q) => (q?.sales > 0 && q.op != null ? (q.op / q.sales) * 100 : null);
+    const R = {}; k.rows.forEach((r, j) => { R[r.f || { 매출액: "sales", 영업이익: "op", 순이익: "ni", 당기순이익: "ni" }[r.item]] = { ...r, t: T[j].yoy }; });
+    const Y = (r) => (!r ? null : r.t ? { s: r.t, up: /흑자|축소/.test(r.t) } : r.yoy == null ? null : { s: `${r.yoy >= 0 ? "+" : ""}${n(r.yoy, 1)}%`, up: r.yoy >= 0 });
+    N = { R, Y, F: (r) => (r?.act == null ? "-" : kqF(r.f, k.cur)(r.act)), m: [om(at(k.latest)), om(at(qAgo(k.latest)))] };
+  }
+  const one = L(/회사 설명|실적 해석/, 1)[0], head = L(/한 줄 평가/, 1)[0];
+  let s = "", a = "";
+  if (N) {
+    const { R, Y, F, m } = N, ys = Y(R.sales), yc = (y) => (y ? `<div class="${y.up ? "irU" : "irD"}">전년 동기 대비 ${esc(y.s)}</div>` : "");
+    const col = (lb, r) => `<div><div class="irc-l">${lb}</div><b class="irc-big">${F(r)}</b>${yc(Y(r))}</div>`;
+    s = `<div class="irc-box"><div class="irc-l">매출액</div><div class="irc-row"><b class="irc-big">${F(R.sales)}</b>${ys ? `<span class="irc-pill${ys.up ? "" : " pdn"}">전년 동기 대비 ${esc(ys.s)}</span>` : ""}</div></div>
+      <div class="irc-box irc-2">${col("영업이익", R.op)}${col("순이익", R.ni)}</div>`;
+    const big = (lb, r) => { const y = Y(r); return `<div><div class="irc-l">${lb}</div><b class="${y ? (y.up ? "irU" : "irD") : ""}">${y ? esc(y.s) : "-"}</b></div>`; };
+    a = `<div class="irc-box"><div class="irc-l c">전년 동기 대비</div><div class="irc-3">${big("매출액", R.sales)}${big("영업이익", R.op)}${big("순이익", R.ni)}</div>${m[0] != null ? `<div class="c" style="border-top:1px solid var(--border);padding-top:6px">영업이익률 ${m[1] != null ? `${n(m[1], 1)}% → ` : ""}<b>${n(m[0], 1)}%</b></div>` : ""}</div>`;
+    if (m[0] != null || one) s += `<div class="irc-box">${m[0] != null ? `<div class="irc-row"><span class="irc-l" style="font-size:15px">영업이익률</span><b style="font-size:20px">${n(m[0], 1)}%</b></div>` : ""}${one ? `<div class="irc-one"${m[0] == null ? ' style="border:0;margin:0;padding:0"' : ""}>${esc(one)}</div>` : ""}</div>`;
+  } else if (one) s = `<div class="irc-box"><div class="irc-one" style="border:0;margin:0;padding:0">${esc(one)}</div></div>`;
+  const pos = L(/긍정/), neg = L(/우려/), nx = L(/다음 실적에서 볼 것/);
+  a = (head ? `<div class="irc-box irc-head">${esc(head)}</div>` : "") + a + (pos.length || neg.length ? `<div class="irc-box irc-2"><div><b class="irU" style="font-size:17px">긍정</b>${ul(pos)}</div><div><b class="irD" style="font-size:17px">우려</b>${ul(neg)}</div></div>` : "") + (nx.length ? `<div class="irc-box"><div class="irc-l c">다음 실적에서 볼 것</div>${ul(nx)}</div>` : "");
+  return { s: s && `<div class="irc">${s}</div>`, a: a && `<div class="irc">${a}</div>` };
+}
 function irBriefHTML(code, name, k) {
   let e = (IRB[code] || IRB[PREF_COMMON[code]] || [])[0];  // 우선주는 보통주 실적 그대로
   const qk = (q) => String(q || "").replace(/^(\d)Q(\d\d)$/, "$2.$1Q");  // '3Q26' → '26.3Q'
   if (k && (!e || qk(e.quarter) < k.latest)) e = irAuto(k) || e;  // 이번 분기 회사 IR 요약이 아직 없으면 숫자로 먼저
   if (!e) return "";
-  const box = (t, secs) => `<details class="fvt"><summary class="chart-title"><b>${esc(name || code)} (${esc(code)}) ${t}</b> <span class="src">${esc(e.period || e.quarter || "")}</span></summary>
+  const cd = irCards(e, k);
+  const box = (t, secs, top = "") => `<details class="fvt"><summary class="chart-title"><b>${esc(name || code)} (${esc(code)}) ${t}</b> <span class="src">${esc(e.period || e.quarter || "")}</span></summary>${top}
     ${(secs || []).map((s) => `<div style="margin-top:6px"><b>${esc(s.h)}</b><ul class="irl">${(s.l || []).map((x) => (typeof x === "string" ? x : Object.entries(x || {}).map(([k, v]) => `${k}: ${v}`).join(" "))).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;  // YAML 이 '제목: 글' 줄을 표로 읽어도 화면이 안 멈추게
   const src = e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.src || "회사 IR 자료")}</a>` : esc(e.src || "");
-  return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${box("IR 요약", e.sum)}${box("IR 분석", e.ana)}
+  return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${box("IR 요약", e.sum, cd.s)}${box("IR 분석", e.ana, cd.a)}
     <div class="src" style="margin-top:6px">📋 ${esc(e.date || "")} · ${src} · ${e.auto ? "회사 설명·해석은 발표가 끝나면 예약 작업이 바꿔 넣어요" : "증감률·이익률은 발표 숫자로 계산한 값"} · 분석은 해석이고 매매 추천이 아니에요</div></div>`;
 }
 // ✦ 포인트 (collector/kq.py points — 텔레그램 실적 알림과 같은 규칙: 5개 분기 최대·영업이익률 / QoQ 엇갈림·동반 성장)
