@@ -4375,7 +4375,7 @@ async function openStock(code) {
     drawHolders(code);
     drawPeers(code);
     drawTour();
-    if (GOTO) { document.getElementById(GOTO)?.scrollIntoView({ behavior: "smooth", block: "start" }); GOTO = null; }
+    if (GOTO) { const g = GOTO; GOTO = null; setTimeout(() => document.getElementById(g)?.scrollIntoView({ block: "start" }), 300); }  // 위 그림이 다 그려진 뒤 바로 이동 (부드럽게 움직이면 중간에 멈춤)
   } catch (e) {
     $("#sheetBody").innerHTML = `<div class="empty">상세 데이터를 불러오지 못했어요.</div>`;
   }
