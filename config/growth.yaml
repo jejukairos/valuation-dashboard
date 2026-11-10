@@ -135,4 +135,8 @@ O:
   guide: {q: "2026", affo: [4.45, 4.46], date: "2026-11-02", src: "https://www.sec.gov/Archives/edgar/data/726728/000072672826000056/o-991q32026.htm", note: "연간 주당 AFFO 가이던스 올림 (전 $4.44~4.45) · 매출 가이던스는 없음"}
 "041510": {star: [rev, opm], why: "앨범·공연 성장과 이익률"}
 "035900": {star: [rev, opm], why: "해외(일본·미국) 공연·앨범 성장"}
+CRWV:
+  star: [rev, opm]
+  why: "매출이 빚(이자비용)보다 빨리 늘어 이익률이 오르는지"
+  guide: {q: "2026", rev: [13000, 13300], date: "2026-11-10", src: "https://www.sec.gov/Archives/edgar/data/0001769628/000176962826000461/coreweave3q26earningspress.htm", note: "연간만 줌 (지난번 124억~132억$에서 올림) — 연간 − 1~9월 = 4Q 매출 약 46.9억~49.9억$ (우리 계산) · 조정 영업이익 12.75억~13.75억$ · 설비투자 370억~390억$ · 4Q 이자비용 10.5억~11.5억$"}
 "213420": {star: [rev, opm], why: "OLED 소재(IT·폰용) 성장"}
