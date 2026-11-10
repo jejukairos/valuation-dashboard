@@ -530,6 +530,7 @@ function stockCard(c) {
     pills.push(`<span class="pill ${x.chg < 0 ? "red" : "green"}">👥 ${esc(x.name.replace("공단", ""))} 지분 ${x.chg < 0 ? "▼" : "▲"}${n(Math.abs(x.chg), 2)}%p (${esc(x.date.slice(5))})</span>`);
   }
   if ((c.checks || []).some((x) => x.warn)) pills.push(`<span class="pill yellow">⚠ 출처 간 EPS 차이 큼</span>`);
+  for (const x of expNew(c.code)) pills.unshift(`<span class="pill red" data-go="expw" style="font-weight:700">‼️ ${EXPW_K[x.k].t} ${+x.r.ym.slice(5)}월 나옴 · 누르면 그래프</span>`);  // 가장 중요한 표시라 맨 앞
   const ac = accelOf(c), aw = ac && accVerd(ac.v[1], ac.v[2]);  // 🚀 내년 이익 증가율이 올해보다 높아지나 (accelHTML 과 같은 잣대)
   if (aw === 1 || aw === -1) pills.push(`<span class="pill ${aw === 1 ? "green" : "yellow"}">${ACC_E[aw + 1]} ${ac.b} 증가율 ${esc(ac.ys[1])} ${accVal(ac.v[1])} → ${esc(ac.ys[2])} ${accVal(ac.v[2])}</span>`);
   const newPosts = (c.us_tpl?.street?.posts || []).filter((p) => p.new).length;
@@ -1812,8 +1813,15 @@ function renderEarn() {
   // 사용자 11/10: 탭이 많아서 🧾 실적 하나로 — 안에서 보유 · 관심 · 공동, 그 아래 전체 · 한국 · 미국
   $("#earnBody").innerHTML = `<div class="seg" style="margin-bottom:6px">${[["#earn", "보유"], ["#earnw", "관심"], ["#earnj", "공동"]].map(([hs, g]) => `<a href="${hs}" class="segl${g === EARN_GRP ? " on" : ""}">${g === "공동" ? "🤝 공동자산" : g === "관심" ? "⭐ 관심" : "💼 보유"}</a>`).join("")}</div>`
     + `<div class="seg earnmk" style="margin-bottom:8px">${[["ALL", "전체"], ["KR", "🇰🇷 한국"], ["US", "🇺🇸 미국"]].map(([k, l]) => `<button data-mk="${k}" class="${k === EARN_MKT ? "on" : ""}">${l}</button>`).join("")}</div>`
-    + `<div id="earnJump"></div><div id="earnList">${h || `<div class="empty">이번 분기에 나온 ${where} 종목 실적이 없어요.</div>`}</div>`;
+    + expBanner() + `<div id="earnJump"></div><div id="earnList">${h || `<div class="empty">이번 분기에 나온 ${where} 종목 실적이 없어요.</div>`}</div>`;
   jumpBar("#earnList", "#earnJump");
+}
+// ‼️ 첫 화면 맨 위 한 줄: 7일 안에 새 수출·입국 숫자가 들어온 묶음과 그 종목 (누르면 상세 '📦 수출·입국' 칸으로)
+function expBanner() {
+  const by = {};
+  [...new Map((DASH?.stocks || []).map((s) => [s.code, s])).values()].forEach((s) => expNew(s.code).forEach((x) => (by[x.k] ||= { r: x.r, s: [] }).s.push(s)));
+  const ks = Object.keys(by);
+  return ks.length ? `<div class="warnbox" style="margin-bottom:8px;border-color:var(--bad);font-weight:600">‼️ 📦 새 숫자 나옴 — ${ks.map((k) => `${EXPW_K[k].t} ${+by[k].r.ym.slice(5)}월 (${by[k].s.map((s) => `<a href="#stock/${esc(s.code)}" onclick="GOTO='expw'">${esc(s.name)}</a>`).join("·")})`).join(" · ")} <span class="src" style="font-weight:400">누르면 그래프 · 7일 동안 보여요</span></div>` : "";
 }
 document.addEventListener("click", (e) => { const b = e.target.closest(".earnmk button"); if (b) { EARN_MKT = b.dataset.mk; renderEarn(); } });
 function kqNewsHTML() {
@@ -3860,6 +3868,78 @@ function expHTML(kind) {
     ${E ? ych("전년 같은 달 대비 %", show.slice(0, 3)) : ""}${E && show.length > 5 ? ych("전년 같은 달 대비 % (부품·장비)", show.slice(5)) : ""}
     <div class="note src">${note}</div></div>`;
 }
+// ‼️ 📦 종목별 수출·입국 추적 (사용자 11/10 "수출 발표 뜨는 날 빨간 느낌표 → 누르면 그동안 트래킹한 그래프, 막대·선으로 · 숫자만 보면 머리에 안 남음")
+//   카드 꼬리표 = 새 숫자를 받은 지 7일 안 (최신 표 src 의 날짜 · 관세청 확정치 seen · 입국자 seen) → 누르면 상세 '📦 수출·입국 데이터 추적' 칸으로 바로
+let TN = null, GOTO = null;  // TN = data/tour_nat.json (국적별 입국, collector/tour_stats.py) · GOTO = 상세를 열고 갈 칸
+const EXPW = { "003230": ["ramen"], "278470": ["cosmetics", "tour"], "483650": ["cosmetics", "tour"], "241710": ["cosmetics"], "251970": ["cosmetics"],
+  "214450": ["med", "tour"], "214150": ["tour"], "005930": ["tech"], "005935": ["tech"], "000660": ["tech"], "009150": ["mlcc"],
+  "005380": ["car"], "000270": ["car"], "012330": ["car"], "023530": ["tour"], "004170": ["tour"], "069960": ["tour"], "003490": ["tour"] };
+// s = 월별 줄 묶음 · m = 큰 줄 · sub = 나눠 볼 줄 · L = 최신 표 (lk = 표 안 이름, timeline 표는 날짜만 씀) · dv·u·dg = 그림 단위 · seen = 확정치 받은 날 묶음
+const EXPW_K = {
+  ramen: { t: "🍜 라면 수출", s: () => EXP?.ramen, m: "전체", sub: ["미국", "중국", "일본"], L: () => EXP?.latest, lk: "ramen", dv: 100, u: "억$", dg: 2, seen: "ramen", hs: "관세청 HS 1902.30.1010" },
+  cosmetics: { t: "💄 화장품 수출", s: () => EXP?.cosmetics && { ...EXP.cosmetics, "기초(스킨케어)": EXP.skincare?.["전체"] }, m: "전체", sub: ["기초(스킨케어)", "미국", "중국", "일본"],
+    L: () => EXP?.latest, lk: "cosmetics", dv: 100, u: "억$", dg: 1, seen: "cosmetics", hs: "관세청 HS 3304 · 기초 = 3304.99.10" },
+  tech: { t: "💾 메모리 반도체 수출", s: () => EXP?.tech, m: "메모리", sub: ["D램", "MCP·HBM", "낸드"], L: () => EXP?.tech_latest, lk: "tech", dv: 100, u: "억$", dg: 0, seen: "tech", hs: "관세청 HS 8542.32 · HBM 은 MCP 칸 · 표 = 증권사 묶음" },
+  mlcc: { t: "🔋 MLCC 수출", s: () => EXP?.tech, m: "MLCC", sub: [], dv: 100, u: "억$", dg: 1, seen: "tech", hs: "관세청 HS 8532.24" },
+  car: { t: "🚗 자동차 수출", s: () => EXP?.car, m: "승용차 (HS 8703)", sub: ["자동차부품 (HS 8708)"], L: () => EXP?.car_latest, dv: 100, u: "억$", dg: 0, seen: "car", hs: "관세청 HS 8703·8708" },
+  med: { t: "💉 강릉 화장품·필러 수출 (리쥬란 신호)", s: () => EXP?.med, m: "강릉 3304.99 (리쥬란)", sub: [], dv: 0.01, u: "만$", dg: 0, seen: "med", hs: "관세청 시군구 · 강릉 HS 3304.99 (회사와 딱 맞진 않지만 흐름이 비슷하다고 보는 칸)" },
+  tour: { t: "✈️ 외국인 입국자 수", s: () => TN?.nat, m: "전체", sub: ["중국", "일본", "미국", "유럽", "대만"], dv: 1e4, u: "만 명", dg: 0, hs: "관광지식정보시스템 국적별 입국 (원자료 법무부)" } };
+const ymAdd = (x, d) => { const t = +x.slice(0, 4) * 12 + +x.slice(5) - 1 + d; return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`; };
+const kDays = (d) => (Date.now() - Date.parse(`${d}T00:00:00+09:00`)) / 864e5;
+function expRel(k) {  // 가장 최근에 새 숫자를 받은 날 {ym, d}
+  const K = EXPW_K[k], L = K.L?.(), ld = L?.src?.match(/\d{4}-\d{2}-\d{2}/)?.[0], out = [];
+  if (L?.ym && ld) out.push({ ym: L.ym, d: ld });
+  const sn = k === "tour" ? TN?.seen : EXP?.seen?.[K.seen], ym = sn && Object.keys(sn).sort().at(-1);
+  if (ym) out.push({ ym, d: sn[ym] });
+  return out.sort((a, b) => b.d.localeCompare(a.d))[0] || null;
+}
+const expNew = (code) => (EXPW[code] || []).map((k) => ({ k, r: expRel(k) })).filter((x) => x.r && kDays(x.r.d) >= -1 && kDays(x.r.d) <= 7);
+function expwOne(k, isNew) {
+  const K = EXPW_K[k], S = K.s(), M = S[K.m], last = Object.keys(M).sort().at(-1), lab = Array.from({ length: 25 }, (_, i) => ymAdd(last, i - 24));
+  const V = (s, x) => (s?.[x] == null ? null : s[x] / K.dv), ch = (a, b) => (a != null && b ? (a / b - 1) * 100 : null);
+  const yo = (s, x) => ch(s?.[x], s?.[ymAdd(x, -12)]), mo = (s, x) => ch(s?.[x], s?.[ymAdd(x, -1)]), fv = (v) => `${n(v, K.dg)}${K.u}`;
+  const tk = (i) => ((lab.length - 1 - i) % 6 === 0 ? `${lab[i].slice(2, 4)}.${+lab[i].slice(5)}` : "");
+  const c1 = lineChart({ t: `월별 ${K.t.replace(/^\S+\s/, "")} (막대) · 1년 전보다 % (선)`, why: `막대 단위 = ${K.u} · 예) ${fv(V(M, last))} = ${+last.slice(5)}월`, labels: lab, zero: true, tick: tk,
+    fl: (v) => n(v, K.dg), fr: (v) => `${n(v, 0)}%`, s: [{ n: `${K.m} (${K.u})`, v: lab.map((x) => V(M, x)), bar: true, col: "var(--s1)" }, { n: "1년 전보다 %", v: lab.map((x) => yo(M, x)), right: true, col: "#e8692f" }] });
+  // 분기 합계 (세 달이 다 있는 분기만) + 1년 전 같은 분기보다 % · 아직 덜 찬 이번 분기는 글로
+  const qOf = (x) => `${x.slice(2, 4)}.${Math.ceil(+x.slice(5) / 3)}Q`, qMs = (q) => [1, 2, 3].map((j) => `20${q.slice(0, 2)}-${String((q[3] - 1) * 3 + j).padStart(2, "0")}`);
+  const qSum = (q, upto = 3) => { const xs = qMs(q).slice(0, upto); return xs.every((x) => M[x] != null) ? xs.reduce((a, x) => a + M[x], 0) : null; };
+  const qs = [...new Set(Object.keys(M).sort().map(qOf))].filter((q) => qSum(q) != null).slice(-12), qy = qAgo;
+  const c2 = qs.length >= 5 ? lineChart({ t: "분기 합계 (막대) · 1년 전 같은 분기보다 % (선)", why: `막대 단위 = ${K.u}`, labels: qs, zero: true, fl: (v) => n(v, K.dg), fr: (v) => `${n(v, 0)}%`,
+    s: [{ n: `분기 합계 (${K.u})`, v: qs.map((q) => qSum(q) / K.dv), bar: true, col: "var(--s3)" }, { n: "1년 전보다 %", v: qs.map((q) => ch(qSum(q), qSum(qy(q)))), right: true, col: "#e8692f" }] }) : "";
+  const cq = qOf(last), cn = qMs(cq).indexOf(last) + 1, part = cn < 3 ? ch(qSum(cq, cn), qSum(qy(cq), cn)) : null;
+  // 나눠 보기 (나라·국적·품목): 1년 전 같은 달보다 % 선 · 입국자는 사람 수 선도
+  const subs = K.sub.filter((c) => S[c] && lab.filter((x) => yo(S[c], x) != null).length >= 6);
+  const what = k === "tour" ? "국적별" : k === "tech" ? "품목별" : "나라별";
+  const c3 = subs.length ? lineChart({ t: `${what} — 1년 전 같은 달보다 %`, labels: lab, zero: true, tick: tk, fl: (v) => `${n(v, 0)}%`, s: subs.map((c, i) => ({ n: c, v: lab.map((x) => yo(S[c], x)), col: GPE_COL[i % GPE_COL.length] })) }) : "";
+  const c3b = k === "tour" ? lineChart({ t: "국적별 입국자 수 (만 명)", labels: lab, zero: true, tick: tk, fl: (v) => n(v, 0), s: subs.map((c, i) => ({ n: c, v: lab.map((x) => V(S[c], x)), col: GPE_COL[i % GPE_COL.length] })) }) : "";
+  // 최신 달 한눈에: 글로 받은 표(나라별 전년·전월비)가 있으면 그것, 없으면 월별 숫자로 계산
+  const L = K.L?.(), T = L && !L.timeline && K.lk && L[K.lk];
+  const rows = T ? Object.entries(T).map(([c, [v, y, m]]) => ({ n: c, now: v == null ? null : v / K.dv, u: K.u, d: K.dg, yoy: y, qoq: m }))
+    : [K.m, ...K.sub].filter((c) => S[c]?.[last] != null).map((c) => ({ n: c, now: S[c][last] / K.dv, u: K.u, d: K.dg, yoy: yo(S[c], last), qoq: mo(S[c], last) }));
+  const tm = T ? L.ym : last, c4 = rows.length > 1 ? chgChart({ t: `${+tm.slice(5)}월 한눈에 — ${what}`, qh: "지난달보다", rows, note: T ? L.src : `${K.hs} · ${tm}` }) : "";
+  // 🐣 쉬운 요약: 이번 달 · 속도가 빨라지나(최근 3개월 vs 그 전 3개월) · 가장 빨리 느는 곳 · 이번 분기 지금까지
+  const avg3 = (o) => { const v = [0, 1, 2].map((i) => yo(M, ymAdd(last, -i - o))).filter((x) => x != null); return v.length === 3 ? (v[0] + v[1] + v[2]) / 3 : null; };
+  const r3 = avg3(0), p3 = avg3(3), best = rows.filter((r) => K.sub.includes(r.n) && r.yoy != null).sort((a, b) => b.yoy - a.yoy)[0];  // 작은 나라(네덜란드 +70%)는 빼고 큰 나라끼리
+  const speed = r3 > p3 + 3 ? (r3 > 0 ? "🚀 더 빨리 늘고 있어요" : "덜 줄고 있어요 (회복 신호인지 다음 달 확인)") : r3 < p3 - 3 ? (r3 > 0 ? "🐢 느는 속도가 느려졌어요 (변곡점인지 다음 달 확인)" : "📉 더 많이 줄고 있어요") : "비슷한 속도예요";
+  const kid = [`${+last.slice(5)}월 ${K.m === "전체" ? "" : `${K.m} `}${fv(V(M, last))} — 1년 전보다 ${sg(yo(M, last))}, 지난달보다 ${sg(mo(M, last))}`,
+    r3 != null && p3 != null ? `최근 3개월 평균 ${sg(r3)} (그 전 3개월 ${sg(p3)}) → ${speed}` : "",
+    best ? `${K.sub.length < 2 ? "나눠 보면" : best.yoy > 0 ? "가장 빨리 느는 곳" : "가장 덜 줄어든 곳"}: ${best.n} ${sg(best.yoy)} (${+tm.slice(5)}월)` : "", part != null ? `${cq[3]}분기 지금까지 (${cn}개월) 1년 전 같은 기간보다 ${sg(part)}` : ""].filter(Boolean);
+  return `<div class="card" style="margin-top:8px"><div class="chart-title"><b>${K.t}</b> ${isNew ? `<span class="pill red">‼️ 새로 나옴</span> ` : ""}<span class="src">${esc(K.hs)} · ${last}까지</span></div>
+    <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div>
+    <div class="qgrid">${c1}${c2}</div>${c4}<div class="qgrid">${c3}${c3b}</div>
+    ${k === "ramen" || k === "cosmetics" ? `<div class="note src">2026년 1~8월 나라별 칸은 비어 있어요 — 관세청 '품목별 국가별 수출입실적' API 를 신청하면 자동으로 채워져요 (9·10월은 글로 받은 숫자)</div>` : ""}
+    ${k === "tech" ? `<div class="note src">💾 D램 현물 가격(매일)은 이 화면 맨 위 칸에 있어요 · 산업 탭 💾 반도체 칸에 품목 전체</div>` : ""}</div>`;
+}
+function expwHTML(code) {
+  const all = EXPW[code] || [], ks = all.filter((k) => EXPW_K[k].s()?.[EXPW_K[k].m]);
+  if (!all.length) return "";
+  const nw = expNew(code).map((x) => x.k), open = nw.length || GOTO === "expw";
+  const wait = all.includes("med") && !ks.includes("med") ? `<div class="warnbox" style="margin-top:8px">💉 강릉 화장품·필러 수출(리쥬란 신호): 관세청 '시군구별 품목별 수출입실적' API 를 공공데이터포털에서 활용신청하면 2020년부터 자동으로 들어와요 (11/10 시험: '등록되지 않은 서비스키')</div>` : "";
+  return `<details class="fvt" id="expw"${open ? " open" : ""}><summary class="chart-title" style="margin-top:12px"><b>📦 수출·입국 데이터 추적</b> ${nw.length ? `<span class="pill red">‼️ 새로 나옴</span> ` : ""}<span class="src">${all.map((k) => EXPW_K[k].t).join(" · ")} · 기관도 개인도 같이 보는 원천 숫자 · 누르면 펼침</span></summary>
+    ${ks.map((k) => expwOne(k, nw.includes(k))).join("")}${wait}
+    <div class="note src">📅 발표: 매달 1일 지난달 잠정 (증권사 글로 들어옴) · 11일·21일 1~10일·1~20일 잠정 (관세청 보도자료, 반도체·자동차 같은 큰 품목 위주 — 라면·화장품 품목 숫자는 자동으로 못 받아요, 글을 보내 주시면 표에 넣어요) · 15일쯤 지난달 확정 (관세청 API, 여기 그림에 자동) · 외국인 입국자는 다음 달 하순 (자동) · 빨간 ‼️ 는 새 숫자를 받은 뒤 7일 · 사고팔 판단이 아니라 숫자 확인용이에요</div></details>`;
+}
 // 12MF 밴드 (key eps = PER · bps = PBR): 선 = 배수 × 그 시점의 12개월 선행 EPS·BPS, 오른쪽은 추정치로 그린 앞으로의 선
 const P12K = (key) => (key === "bps" ? { k: "PBR", v: "BPS", id: "b12", dg: 2 } : { k: "PER", v: "EPS", id: "p12", dg: 1 });
 function per12mfHTML(d, px = "", tag = "button", key = "eps") {
@@ -4284,7 +4364,7 @@ async function openStock(code) {
       ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
@@ -4295,6 +4375,7 @@ async function openStock(code) {
     drawHolders(code);
     drawPeers(code);
     drawTour();
+    if (GOTO) { document.getElementById(GOTO)?.scrollIntoView({ behavior: "smooth", block: "start" }); GOTO = null; }
   } catch (e) {
     $("#sheetBody").innerHTML = `<div class="empty">상세 데이터를 불러오지 못했어요.</div>`;
   }
@@ -5293,7 +5374,7 @@ function chgChart(ch) {
     : `<span class="cbar"><i style="width:${Math.max(2, (Math.min(Math.abs(v), cap) / mx) * 36)}px;background:${v < 0 ? "var(--bad)" : "var(--good)"}${r.g ? ";opacity:.4;outline:1px dashed var(--ink-2)" : ""}"></i><b style="color:${v < 0 ? "var(--bad-ink)" : "var(--good-ink)"}">${v > 0 ? "+" : ""}${n(v, Math.abs(v) < 10 ? 1 : 0)}${r.pp ? "%p" : "%"}</b></span>`);
   const val = (r) => (r.now == null ? "" : `${n(r.now, r.d ?? (Math.abs(r.now) < 100 && !Number.isInteger(r.now) ? 1 : 0))}${r.u || ""}`);
   return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b>${ch.tag || ""}</div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}
-    <div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:12px"><tr><th style="text-align:left"></th><th>지금</th><th style="text-align:left">1년 전보다</th><th style="text-align:left">지난 분기보다</th></tr>
+    <div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:12px"><tr><th style="text-align:left"></th><th>지금</th><th style="text-align:left">1년 전보다</th><th style="text-align:left">${ch.qh || "지난 분기보다"}</th></tr>
     ${R.map((r) => `<tr${r.g ? ' style="background:var(--surface-2)"' : ""}><td style="text-align:left">${r.g ? "🧭 " : ""}${esc(r.n)}</td><td style="white-space:nowrap"><b>${esc(val(r))}</b></td><td style="text-align:left">${bar(r.y, r)}</td><td style="text-align:left">${bar(r.q, r)}</td></tr>`).join("")}</table></div>
     ${ch.note ? `<div class="src" style="padding:4px">${esc(ch.note)}</div>` : ""}${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
@@ -6297,6 +6378,7 @@ async function load() {
     try { EARNINGS = await (await fetch("data/earnings.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { EARNINGS = {}; }
     try { IRCAL = await (await fetch("data/ir_calendar.json?t=" + Date.now(), { cache: "no-store" })).json() || { items: [] }; } catch (_) { IRCAL = { items: [] }; }
     try { IRB = await (await fetch("data/ir_brief.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { IRB = {}; }
+    try { [EXP, TN] = await Promise.all(["exports", "tour_nat"].map((f) => fetch(`data/${f}.json?t=` + Date.now(), { cache: "no-store" }).then((r) => r.json()).catch(() => ({})))); } catch (_) { EXP = {}; TN = {}; }  // ‼️ 📦 카드 꼬리표
     try { PBR = await (await fetch("data/pbr_watch.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { /* 📌 코멘트·기준선만 빠짐 */ }
     try { CYC = await (await fetch("data/cycle_dd.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CYC = null; }  // 📉 고점 대비 낙폭 사이클
     try { EVENTS = await (await fetch("data/events.json?t=" + Date.now(), { cache: "no-store" })).json() || []; } catch (_) { EVENTS = []; }
@@ -6315,6 +6397,7 @@ async function load() {
 
 for (const id of ["#stockCards", "#watchFull", "#jointCards"]) $(id).addEventListener("click", (e) => {
   const b = e.target.closest(".stock"); if (!b || e.target.closest(".pseg, .scenseg")) return;  // 주가 기간·강세장 탭은 상세로 넘어가지 않음
+  GOTO = e.target.closest("[data-go]")?.dataset.go || null;  // ‼️ 수출 꼬리표 → 상세 '📦 수출·입국' 칸으로
   location.hash = `#stock/${b.dataset.code}`;
 });
 $("#watchSort").addEventListener("change", (e) => {

@@ -179,7 +179,8 @@ def main():
     if not KEY:
         sys.exit("CUSTOMS_KEY 없음")
     d = yaml.safe_load(PATH.read_text(encoding="utf-8"))
-    got, fail, now = 0, [], now_kst()
+    got, fail, now, api = 0, [], now_kst(), {}  # api = 이번에 관세청에서 받은 가장 새 달 (묶음별) → seen
+
     jobs = ([(hs, kinds, nm, None) for hs, (kinds, names) in HS.items() for nm in names]
             + [(hs, items, "", g) for g, G in GROUPS.items() for hs, items in G.items()])  # "" = 나라 합계 묶음 (반도체·IT · 전력기기 · 음식료)
     for hs, kinds, nm, grp in jobs:
@@ -197,6 +198,8 @@ def main():
             for k, s in v.items():  # 관세청 숫자가 Comtrade·사용자 글 숫자보다 우선
                 (d.setdefault(k, {}).setdefault(nm, {}) if nm else d.setdefault(grp, {}).setdefault(k, {})).update(s)
                 got += len(s)
+                if s and (grp or nm == "전체"):
+                    api[grp or k] = max(api.get(grp or k, ""), max(s))
             time.sleep(0.3)
     for nm, (hs, key) in SGG_JOBS.items():  # 💉 시군구 — 활용신청 전이면 첫 해에 '등록되지 않은 서비스키' → 나머지 해는 건너뜀
         for y in range(Y0, now.year + 1):
@@ -215,7 +218,14 @@ def main():
                 continue
             d.setdefault("med", {}).setdefault(nm, {}).update(v)
             got += len(v)
+            if v:
+                api["med"] = max(api.get("med", ""), max(v))
             time.sleep(0.3)
+    # seen = 묶음별 '관세청 확정치로 그 달을 처음 받은 날' (카드 ‼️ 7일, app.js expRel) · 처음 보는 묶음은 옛날 날짜로 (거짓 '새로 나옴' 방지)
+    seen = d.setdefault("seen", {})
+    for k, ym in api.items():
+        if ym not in seen.setdefault(k, {}):
+            seen[k][ym] = now.strftime("%Y-%m-%d") if seen[k] else "2000-01-01"
     print(f"관세청 {got}칸 · 실패 {len(fail)}", *fail[:12], sep="\n")
     if not got:
         sys.exit("관세청에서 받은 숫자 없음")
@@ -229,7 +239,7 @@ def main():
     if ch:  # 표를 새로 쓰면 손으로 단 줄 끝 메모는 사라짐 (power_latest·food_latest 같은 손으로 적은 표도 그대로 다시 씀)
         head = "".join(x + "\n" for x in head.splitlines() if x.startswith("#")) + yaml.safe_dump(
             {k: d[k] for k in d if (k == "latest" or k.endswith("_latest")) and d[k]}, allow_unicode=True, sort_keys=False, width=1000, default_flow_style=None)
-    body = yaml.safe_dump({k: {s: dict(sorted(v.items())) for s, v in d[k].items()} for k in ("ramen", "cosmetics", "skincare", "makeup", *GROUPS, "med") if k in d},
+    body = yaml.safe_dump({k: {s: dict(sorted(v.items())) for s, v in d[k].items()} for k in ("ramen", "cosmetics", "skincare", "makeup", *GROUPS, "med", "seen") if k in d},
                           allow_unicode=True, sort_keys=False, width=1000)
     PATH.write_text(head.rstrip() + "\n" + body, encoding="utf-8")
     write_json(DATA / "exports.json", yaml.safe_load(PATH.read_text(encoding="utf-8")))
