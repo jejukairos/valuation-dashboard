@@ -228,6 +228,8 @@ watchlist:
   - {name: 코스메카코리아, market: KR, code: "241710", industry: 화장품 ODM, methods: [PER], sector: 화장품 ODM}
   # 🧴 화장품 용기(펌프·튜브) — 2026-11-10 사용자: "펌텍코리아 관심 종목, 실적발표 커버" (3Q26 영업이익률 20% 돌파, 전달 글: 용기 해자)
   - {name: 펌텍코리아, market: KR, code: "251970", industry: 화장품 용기, methods: [PER], sector: 화장품 ODM}
+  # 🧴 더마 화장품 브랜드(제로이드·아토팜·리얼베리어·더마비) — 2026-11-10 사용자: "네오팜 관심종목 추가, 실적발표 참고" (3Q26 영업이익 +48%, 이익률 25.5%)
+  - {name: 네오팜, market: KR, code: "092730", industry: 화장품, methods: [PER], sector: 화장품 브랜드}
   # M7 빅테크 — 보유·공동자산에 있는 종목은 한 번만 계산하고 ⭐ 관심 탭에도 같이 보여요
   - {name: 애플, market: US, code: AAPL, industry: 하드웨어, methods: [PER]}
   - {name: 마이크로소프트, market: US, code: MSFT, industry: 소프트웨어, methods: [PER]}

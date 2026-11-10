@@ -3871,7 +3871,7 @@ function expHTML(kind) {
 // ‼️ 📦 종목별 수출·입국 추적 (사용자 11/10 "수출 발표 뜨는 날 빨간 느낌표 → 누르면 그동안 트래킹한 그래프, 막대·선으로 · 숫자만 보면 머리에 안 남음")
 //   카드 꼬리표 = 새 숫자를 받은 지 7일 안 (최신 표 src 의 날짜 · 관세청 확정치 seen · 입국자 seen) → 누르면 상세 '📦 수출·입국 데이터 추적' 칸으로 바로
 let TN = null, GOTO = null;  // TN = data/tour_nat.json (국적별 입국, collector/tour_stats.py) · GOTO = 상세를 열고 갈 칸
-const EXPW = { "003230": ["ramen"], "278470": ["cosmetics", "tour"], "483650": ["cosmetics", "tour"], "241710": ["cosmetics"], "251970": ["cosmetics"],
+const EXPW = { "003230": ["ramen"], "278470": ["cosmetics", "tour"], "483650": ["cosmetics", "tour"], "241710": ["cosmetics"], "251970": ["cosmetics"], "092730": ["cosmetics"],
   "214450": ["med", "tour"], "214150": ["tour"], "005930": ["tech"], "005935": ["tech"], "000660": ["tech"], "009150": ["mlcc"],
   "005380": ["car"], "000270": ["car"], "012330": ["car"], "023530": ["tour"], "004170": ["tour"], "069960": ["tour"], "003490": ["tour"] };
 // s = 월별 줄 묶음 · m = 큰 줄 · sub = 나눠 볼 줄 · L = 최신 표 (lk = 표 안 이름, timeline 표는 날짜만 씀) · dv·u·dg = 그림 단위 · seen = 확정치 받은 날 묶음
