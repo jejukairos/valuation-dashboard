@@ -9,8 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "collector"))
 from common import DATA, load_yaml, write_json  # noqa: E402
 
 d = load_yaml("earnings.yaml") or {}
-if sys.argv[1] == "has":
-    sys.exit(0 if any(x.get("quarter") == sys.argv[3] for x in d.get(sys.argv[2]) or []) else 1)
+if sys.argv[1] == "has":  # has 코드 분기 [script] — script = 네이버 발표 자막으로 쓴 요약만 (출처에 '발표 자막', tools/ir_live.ps1)
+    sys.exit(0 if any(x.get("quarter") == sys.argv[3] and (len(sys.argv) < 5 or "발표 자막" in str(x.get("source") or "")) for x in d.get(sys.argv[2]) or []) else 1)
 if sys.argv[1] == "export":
     write_json(DATA / "earnings.json", d)
 if sys.argv[1] == "export_ir":

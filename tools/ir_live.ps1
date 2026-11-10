@@ -44,8 +44,36 @@ function Publish($msg, $files =@("config/earnings.yaml", "config/segments.yaml",
     Log "push 실패"; return $false
 }
 
+function Grab($code, $name, $ec, $date) {
+    # 네이버 '발표 자막' 받기 (라이브 중엔 10분마다 다시) → 끝난 발표면 claude 로 요약. 공시·기사로 먼저 쓴 요약이 있으면 자막으로 보강 (사용자 11/11: 스크립트로 핵심 요약 + 포인트)
+    $qtr = "$($ec.fiscalQuarter)Q$($ec.fiscalYear.Substring(2))"
+    $txt = Join-Path $td "$($code)_$($ec.fiscalYear)Q$($ec.fiscalQuarter).txt"
+    if (Test-Path "$txt.done") { return }
+    if (-not ($ec.mediaStatus -eq "DONE" -and (Test-Path $txt) -and (Get-Item $txt).Length -ge 2000)) {  # 다 받아 둔 자막은 다시 안 받음
+        $p = Start-Process -FilePath $edge -ArgumentList "--headless=new", "--disable-gpu", "--user-data-dir=$td\.edge", "--remote-debugging-port=$port", "--window-size=1280,1400", "about:blank" -PassThru
+        Start-Sleep 4
+        node tools\ec_read.mjs $ec.aspUrl $txt $port 2>&1 | ForEach-Object { Log "$name $_" }
+        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+    }
+    if ($ec.mediaStatus -ne "DONE" -or -not (Test-Path $txt) -or (Get-Item $txt).Length -lt 2000) { return }  # 아직 진행 중이면 다음 실행 때 다시
+    & $py tools\earnings_check.py has $code $qtr script
+    if ($LASTEXITCODE -eq 0) { New-Item "$txt.done" -ItemType File -Force | Out-Null; return }
+    $tf = "$txt.tries"; $n = if (Test-Path $tf) { [int](Get-Content $tf) } else { 0 }
+    if ($n -ge 3) { return }  # 3번 해도 안 되면 그만 (매시간 claude 를 부르지 않게) — 로그에 남아 있음
+    Set-Content $tf ($n + 1)
+    & $py tools\earnings_check.py has $code $qtr
+    $what = if ($LASTEXITCODE -eq 0) {
+        "config/earnings.yaml 의 `"$code`" $qtr 요약은 이미 있는데 공시·보도자료·기사로 쓴 거야. 이 자막 원문으로 tools/earnings_task.md 3번 형식대로 보강해줘 — 핵심 요약(short·easy)·포인트(keys)·경영진 말(q)·질의응답(qa)·지난 콜과 달라진 점(diff)·어조(tone)를 자막 기준으로 채우고, 숫자는 자막과 다를 때만 고치고, source 맨 앞에 '네이버 증권 IR 어닝콜 발표 자막 + ' 를 붙이고 transcript: $($ec.aspUrl)"
+    } else { "tools/earnings_task.md 3번 형식 그대로 config/earnings.yaml 의 `"$code`" 맨 위에 quarter: $qtr 요약을 추가해줘 (date: $date, source: 네이버 증권 IR 어닝콜 발표 자막, transcript: $($ec.aspUrl))" }
+    $prompt = "transcripts\$(Split-Path $txt -Leaf) 는 $name($code) $qtr 어닝콜 발표 자막 원문이야. $what. 그리고 3-0 형식으로 config/ir_brief.yaml 의 `"$code`" $qtr IR 요약·IR 분석도 자막 내용으로 (있으면 보강, 없으면 맨 위에 추가). 원문에 없는 숫자는 만들지 말고 쉬운 한국어로. 파일 수정만 하고 git 은 하지 마."
+    & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
+    & $py tools\earnings_check.py has $code $qtr script
+    if ($LASTEXITCODE -eq 0 -and (Publish "$name $qtr 실적발표 요약 (발표 자막)")) { New-Item "$txt.done" -ItemType File -Force | Out-Null; Log "$name $qtr 요약 올림 (발표 자막)" }
+    else { Log "$name $qtr 자막 요약 실패 ($($n + 1)/3) - 다음 시간에 다시" }
+}
+
 git pull --rebase --autostash -q 2>$null
-$cal = Get-Content (Join-Path $repo "site\data\ir_calendar.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+$cal =Get-Content (Join-Path $repo "site\data\ir_calendar.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 $now = Get-Date
 foreach ($e in @($cal.items | Where-Object { $_.market -eq "KR" })) {
     $when = ([DateTimeOffset]::Parse($e.when)).LocalDateTime
@@ -58,21 +86,22 @@ foreach ($e in @($cal.items | Where-Object { $_.market -eq "KR" })) {
         if (-not (Test-Path $ns)) { New-Item $ns -ItemType File -Force | Out-Null; Log "$($e.name) 자막 화면 없음 (네이버가 자막을 안 주는 발표) - 저녁·아침 매일 점검이 공시·IR 자료·기사로 요약" }
         continue
     }
-    $qtr = "$($ec.fiscalQuarter)Q$($ec.fiscalYear.Substring(2))"
-    $txt = Join-Path $td "$($e.code)_$($ec.fiscalYear)Q$($ec.fiscalQuarter).txt"
-    if (Test-Path "$txt.done") { continue }
-    $p = Start-Process -FilePath $edge -ArgumentList "--headless=new", "--disable-gpu", "--user-data-dir=$td\.edge", "--remote-debugging-port=$port", "--window-size=1280,1400", "about:blank" -PassThru
-    Start-Sleep 4
-    node tools\ec_read.mjs $ec.aspUrl $txt $port 2>&1 | ForEach-Object { Log "$($e.name) $_" }
-    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-    if ($ec.mediaStatus -ne "DONE" -or -not (Test-Path $txt) -or (Get-Item $txt).Length -lt 2000) { continue }  # 아직 진행 중이면 다음 실행 때 다시
-    & $py tools\earnings_check.py has $e.code $qtr
-    if ($LASTEXITCODE -eq 0) { New-Item "$txt.done" -ItemType File -Force | Out-Null; continue }
-    $prompt = "transcripts\$(Split-Path $txt -Leaf) 는 $($e.name)($($e.code)) $qtr 어닝콜 발표 자막 원문이야. tools/earnings_task.md 3번 형식 그대로 config/earnings.yaml 의 `"$($e.code)`" 맨 위에 quarter: $qtr 요약을 추가해줘 (date: $($when.ToString('yyyy-MM-dd')), source: 네이버 증권 IR 어닝콜 발표 자막, transcript: $($ec.aspUrl)). 그리고 3-0 형식으로 config/ir_brief.yaml 의 `"$($e.code)`" 맨 위에 IR 요약·IR 분석도 넣어줘. 원문에 없는 숫자는 만들지 말고 쉬운 한국어로. 파일 수정만 하고 git 은 하지 마."
-    & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
-    & $py tools\earnings_check.py has $e.code $qtr
-    if ($LASTEXITCODE -eq 0 -and (Publish "$($e.name) $qtr 실적발표 요약 (발표 자막)")) { New-Item "$txt.done" -ItemType File -Force | Out-Null; Log "$($e.name) $qtr 요약 올림" }
-    else { Log "$($e.name) $qtr 요약 실패 - 다음 실행 때 다시" }
+    Grab $e.code $e.name $ec $when.ToString('yyyy-MM-dd')
+}
+
+# 🔁 놓친 자막 다시 받기 (사용자 11/11 "네이버 실적발표 스크립트 요새 없음"): 위 일정표 시간 창 밖에서 끝난 발표
+#    (늦게 넣은 종목·일정표에 없던 발표 — 11/11 삼성SDI·삼성전기·현대모비스·SK이노베이션·LG엔솔 자막을 놓쳤음)도
+#    네이버가 다시보기를 주는 동안(DONE → 얼마 뒤 EXPIRED 로 사라짐) 매시간 한 번 우리 한국 종목 전부 확인
+$cstamp = Join-Path $td ".catchup_$(Get-Date -Format yyyyMMddHH)"
+if (-not (Test-Path $cstamp)) {
+    New-Item $cstamp -ItemType File -Force | Out-Null
+    $kr = & $py -X utf8 -c "import yaml; d = yaml.safe_load(open('config/stocks.yaml', encoding='utf-8')); print('\n'.join(sorted({s['code'] + '|' + s['name'] for k in ('holdings', 'watchlist', 'joint') for s in (d.get(k) or []) if s.get('market') == 'KR'})))"
+    foreach ($row in @($kr)) {
+        $code, $name = $row -split '\|', 2
+        try { $ec = (Invoke-RestMethod "https://stock.naver.com/api/stockSecurity/earning-calls/v1/$code" -TimeoutSec 20).earningCall } catch { continue }
+        if (-not $ec -or -not $ec.aspUrl -or $ec.mediaStatus -ne "DONE") { continue }
+        Grab $code $name $ec ([DateTimeOffset]::Parse($ec.eventDatetime)).LocalDateTime.ToString('yyyy-MM-dd')
+    }
 }
 
 # 매일 아침: 다올 'Amazon K-Beauty 데일리' 그림 표 → Claude 가 옮김 → 합계 점검(tools/amazon_img.py) → 🏭 산업 탭 (하루 3번까지)
