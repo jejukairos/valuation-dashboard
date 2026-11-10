@@ -4679,12 +4679,10 @@ function fngTab(b) {
 }
 function fngHTML() {
   if (!FNG?.hist?.length) return "";
-  const [d, v] = FNG.hist.at(-1), wk = {};
-  FNG.hist.forEach(([x, y]) => { wk[monOf(x)] = y; });  // 주마다 마지막 날 값 → 최근 4주
+  const [d, v] = FNG.hist.at(-1);
   const span = (new Date(d) - new Date(FNG.hist[0][0])) / 864e5 > 400;
   return `<h3 style="margin-top:0">😱 CNN 공포·탐욕 지수 <span class="src">미국 주식시장 분위기 · 0~100 · ${esc(FNG.updated || d)}</span></h3><div class="card fngbox" style="margin-bottom:10px">
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="font-size:40px;line-height:1;color:${fngCol(v)}">${v}</b><b style="font-size:17px;color:${fngCol(v)}">${fngRate(v)}</b><span class="src">${esc(d)} 기준</span></div>
-    <div class="src" style="margin-top:4px">최근 4주 (주마다 마지막 날): <b>${Object.values(wk).slice(-4).join(" → ")}</b></div>
     <div class="seg fngseg" style="margin-top:8px">${FNG_TF.filter((x) => x[0] !== "all" || span).map(([k, l]) => `<button data-tf="${k}" class="${k === "1y" ? "on" : ""}" onclick="fngTab(this)">${l}</button>`).join("")}</div>
     <div class="fngin">${fngChart("1y")}</div>
     <div class="kidbox" style="margin-top:6px">🐣 미국 투자자들이 지금 얼마나 겁먹었는지(0쪽)·들떴는지(100쪽)를 CNN 이 7가지 시장 숫자(주가 흐름·변동성·옵션·안전자산 등)로 매긴 점수예요. 25 아래(빨간 띠) = 겁이 아주 큰 때, 75 위(초록 띠) = 아주 들뜬 때. 선을 누르면 그날 숫자가 나와요.</div>
