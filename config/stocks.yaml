@@ -247,6 +247,8 @@ watchlist:
   - {name: 코어위브, market: US, code: CRWV, industry: AI 클라우드, methods: [PER]}
   - {name: 네비우스, market: US, code: NBIS, industry: AI 클라우드, methods: [PER]}
   - {name: 어플라이드 머티리얼즈, market: US, code: AMAT, industry: 반도체장비, methods: [PER]}
+  # 🪙 스테이블코인(USDC) — 2026-11-10 사용자: "써클 실적발표했대, 관심종목 넣어주고 실적 정리" · 매출 대부분이 준비금 이자라 금리에 민감
+  - {name: 서클, market: US, code: CRCL, industry: 스테이블코인, methods: [PER]}
 
 # ---------- 공동자산 — 🤝 공동자산 탭 ----------
 # 형식은 holdings 와 같아요 (예: - {name: 삼성전자, market: KR, code: "005930", industry: 반도체, methods: [PBR, PER], fair_methods: [PBR]})
