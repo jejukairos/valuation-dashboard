@@ -153,7 +153,7 @@ GROWTH_MULT = {"bear": 1, "base": 1.25, "bull": 1.5}
 
 def per_anchor(g, cands=()):
     """기준 PER (사용자 2026-11-06): 3년 성장률(13% → 13배) · 업종 중앙값 · 업종 바닥 중 가장 낮은(보수적인) 값 → (값, 무엇)."""
-    return min([(g, "성장률")] + [(v, s) for v, s in cands if v and v > 0], key=lambda t: t[0])
+    return min(([(g, "성장률")] if g else []) + [(v, s) for v, s in cands if v and v > 0], key=lambda t: t[0])
 
 
 def growth_fair(hist, adj_candidates=(), force_adj=False, cands=()):
@@ -188,12 +188,14 @@ def growth_fair(hist, adj_candidates=(), force_adj=False, cands=()):
         g, src = adj_v, f"보정값({adj_src}) — {why}"
     elif med is not None and med > 0:
         g, src = med, "기본값 (보정값 없음, 변동 큼 주의)"
+    elif any(v and v > 0 for v, _ in cands):  # 적자였던 해가 있어 성장률을 못 구해도 업종 PER 로는 계산 (파두, 사용자 11/10)
+        g, src = None, "성장률 없음 — 적자였던 해가 있어 성장률을 구할 수 없어 업종 PER 만으로"
     else:
         return None
     x, xs = per_anchor(g, cands)
     x = rnd(x, 1)  # 화면 숫자(12.1배)와 곱하는 숫자를 같게
     return {"g": rnd(g, 1), "src": src, "median": rnd(med, 1), "adj": rnd(adj_v, 1), "adj_src": adj_src,
-            "x": rnd(x, 1), "x_src": xs, "cands": [["성장률", rnd(g, 1)]] + [[s, rnd(v, 1)] for v, s in cands if v and v > 0],
+            "x": rnd(x, 1), "x_src": xs, "cands": ([["성장률", rnd(g, 1)]] if g else []) + [[s, rnd(v, 1)] for v, s in cands if v and v > 0],
             "mult": {k: rnd(x * f, 2) for k, f in GROWTH_MULT.items()},
             "years": [ylabel(yy) if (hist.get(yy) or {}).get("estimate") else str(yy)[2:] for yy in years],
             "eps": [eps[yy] for yy in years], "yoy": [None] + [rnd(yoy.get(yy), 1) for yy in years[1:]],
@@ -260,7 +262,7 @@ def scenarios(price, hist, bands, kinds, sector=None, per_growth=None, keep=Fals
             continue
         if kind == "PER" and per_growth:
             m = dict(per_growth["mult"])
-            src = per_growth.get("part_src") or f"성장률 {per_growth['g']:g}%"
+            src = per_growth.get("part_src") or (f"성장률 {per_growth['g']:g}%" if per_growth["g"] else per_growth["x_src"])
             x = per_growth.get("x") or per_growth["g"]
             cs = per_growth.get("cands") or [["성장률", per_growth["g"]]]
             how = per_growth.get("how") or (f"기준 PER {x:g}배 × 1 · 1.25 · 1.5 — 가장 낮은 값: "
@@ -540,6 +542,12 @@ if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% �
     # 기준 PER (11/6) = 성장률 · 업종 중앙값 · 업종 바닥 중 가장 낮은 값: NAVER 12.2% vs 중앙값 12.8 · 바닥 13 → 12.2 · 현대로템 11.4% vs 방산 바닥 11 → 11
     assert per_anchor(12.2, [(12.8, "업종 중앙값"), (13, "업종 바닥")]) == (12.2, "성장률")
     assert per_anchor(11.4, [(36, "업종 중앙값"), (11, "방산 업종 바닥"), (None, "x")]) == (11, "방산 업종 바닥")
+    # 적자였던 해가 있어 성장률이 없으면 업종 중앙값만으로 (파두 11/11): EPS -500 → 1000 · 업종 중앙값 11.3 → 11.3 · 14.1 · 17.0
+    gn = growth_fair({y - 1: {"eps": -500}, y: {"eps": 1000, "estimate": 1}, y + 1: {"eps": 1000, "estimate": 1}}, cands=[(11.3, "업종 중앙값")])
+    assert gn["g"] is None and gn["x"] == 11.3 and gn["cands"] == [["업종 중앙값", 11.3]], gn
+    s = scenarios(10000, h, {}, ["PER"], per_growth=gn)
+    assert s["bear"] == 11300 and s["parts"][0]["src"] == "업종 중앙값", s
+    assert growth_fair({y - 1: {"eps": -500}}, cands=[]) is None
     gr = {"g": 11.4, "x": 11, "cands": [["성장률", 11.4], ["업종 중앙값", 36], ["방산 업종 바닥", 11]], "mult": {k: 11 * f for k, f in GROWTH_MULT.items()}}
     s = scenarios(10000, h, {}, ["PER"], per_growth=gr)  # 지금 11 · 13.75 · 16.5 · 강세장 16.5 · 19.25 · 22
     assert (s["bear"], s["base"], s["bull"]) == (11000, 13750, 16500) and s["bull_mkt"] == {"lo": 16500, "mid": 19250, "hi": 22000}, s
