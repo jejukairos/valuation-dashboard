@@ -5,6 +5,7 @@
 #   my_per(내가 정한 PER, 엑셀 '③ 직접 계산') · my_per_note(이유) 를 적으면 적정주가 4가지 비교표 ④ 에 나와요.
 #   sa_ltg(미국): 시킹알파 → 종목 → Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)' 의 % 숫자, sa_ltg_date 는 확인한 날. 있으면 적정주가 성장률로 써요.
 #     같은 줄의 'Sector Median' 은 sa_ltg_sector, '5Y Avg' 는 sa_ltg_5y — 화면에 참고로 작게 보여요.
+#   sa_peg(미국): 시킹알파 → Valuation 탭 'PEG Non-GAAP (FWD)' = ngaap, 'PEG GAAP (TTM)' = gaap, date = 확인한 날 → 카드 PEG 줄 '많이 보는 값'
 #   sa_div(배당주): 시킹알파 Dividends 탭 숫자 (리얼티 인컴 등) — 카드에 '배당 점검' 칸으로 보여요.
 '003230':
   name: 삼양식품
@@ -598,6 +599,7 @@ NVDA:
     my_per_note: 하방잡기
     sa_ltg: 49.99
     sa_ltg_date: '2026-10-26'
+    sa_peg: {ngaap: 0.38, gaap: 0.18, date: '2026-11-10'}  # 시킹알파 밸류에이션 탭 PEG Non-GAAP (FWD) · PEG GAAP (TTM) — 사용자 11/11 화면
 MSFT:
   name: 마이크로소프트
   wallet:

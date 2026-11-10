@@ -189,7 +189,7 @@ def stock_detail(h, rates_now, fx):
     # 적정가 = Bear/Base/Bull 의 Base (12MF 실적 × 업종 배수 또는 10년 밴드 배수). 배당만 보는 종목은 위 값 그대로
     # 성장률 방식 적정 PER (내 엑셀 템플릿). 보정값: 미국 = 시킹알파 3~5Y CAGR(직접 입력), 한국 = 컨센서스 앞으로 3년 EPS 성장률
     y0 = now_kst().year
-    fv5 = ltg = None
+    fv5 = fvp = ltg = None
     ests = sorted(yy for yy, r in hist.items() if r.get("estimate") and r.get("eps"))
     e_now = (hist.get(y0) or {}).get("eps")
     if ests and ests[-1] > y0 and e_now and e_now > 0 and (hist[ests[-1]].get("eps") or 0) > 0:
@@ -197,6 +197,7 @@ def stock_detail(h, rates_now, fx):
     if mkt == "US":
         try:
             fv5 = us_stock.finviz_eps_5y(code)
+            fvp = us_stock.finviz_peg(code)  # 카드 PEG 줄 '많이 보는 값' (같은 화면이라 다시 안 받음)
         except Exception as e:  # noqa: BLE001
             REPORT.block("Finviz", f"EPS next 5Y 접속 실패 ({str(e)[:50]})")
         # 엑셀 ② 보정값 = 시킹알파 Growth 탭 'EPS FWD Long Term Growth (3-5Y CAGR)': somong.yaml my.sa_ltg 에 적은 값.
@@ -477,7 +478,7 @@ def stock_detail(h, rates_now, fx):
         e28 = (hist.get(y0 + 2) or {}).get("eps")
         try:
             us_tpl = {"somong": score.somong(hist, price, ltg, fv5),
-                      "finviz_5y": fv5, "tipranks": tr, "street": street_info,
+                      "finviz_5y": fv5, "finviz_peg": fvp, "tipranks": tr, "street": street_info,
                       # 내 엑셀: '28년(3년 뒤) 주가 가정' = 28E EPS × PER 20~110
                       "per_grid": {"year": C.ylabel(y0 + 2), "eps": e28,
                                    "rows": [[m, rnd(m * e28, 2)] for m in range(20, 120, 10)] if e28 and e28 > 0 else []},

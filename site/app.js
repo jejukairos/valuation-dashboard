@@ -213,7 +213,7 @@ function scenHTML(c) {
   const bm = s.bull_mkt, reg = s.regime;
   const bv = bm ? { bear: bm.lo, base: bm.mid ?? (bm.lo + bm.hi) / 2, bull: bm.hi } : null;
   const bparts = (s.parts || []).map((p) => ({ ...p, mult: p.bm ? { bear: p.bm.lo, base: p.bm.mid ?? (p.bm.lo + p.bm.hi) / 2, bull: p.bm.hi } : p.mult }));
-  const m0 = bv && reg?.mode === "easy" ? "bull" : "now";  // 지금 시장 국면 쪽 탭을 먼저
+  const m0 = "now";  // 처음엔 늘 '지금 시장' (사용자 11/11) — 강세장 배수는 눌러서 보기
   const regLine = reg ? `<div class="note src">지금 시장: <b>${reg.mode === "tight" ? "🔴" : "🟢"} ${esc(reg.label)}</b> — ${reg.why.map(esc).join(" · ")}</div>` : "";
   // 카드(button) 안에도 들어가서 버튼 대신 span 탭
   const tabs = bv ? `<span class="seg scenseg" style="margin-top:6px;display:inline-flex"><span data-sm="now" class="${m0 === "now" ? "on" : ""}">${reg?.mode === "tight" ? "🔴 지금 (긴축·약세장)" : "지금 시장"}</span><span data-sm="bull" class="${m0 === "bull" ? "on" : ""}">🐂 강세장일 때</span></span>` : "";
@@ -553,6 +553,12 @@ function stockCard(c) {
   if (c.fwd_per > 0) pe.push(`12MF EPS ${money(c.price / c.fwd_per, c.currency)} × PER <b>${n(c.fwd_per, 1)}배</b>`);
   const pbr = (c.fwd_mult?.PBR || {})["12MF"];
   if (pbr > 0 && (c.methods || []).includes("PBR")) pe.push(`12MF BPS ${money(c.price / pbr, c.currency)} × PBR <b>${n(pbr, 2)}배</b>`);
+  // 📐 PEG (사용자 11/11): 12MF PER ÷ ② 보정값 성장률(시킹알파 3~5년) + 사람들이 많이 보는 값 (Finviz 자동 · 시킹알파 화면은 somong.yaml my.sa_peg 에 적은 값)
+  const gA = (c.scen?.ways || []).find((w) => w.name === "보정값")?.g, fvp = c.us_tpl?.finviz_peg, sp = smData(c)?.my?.sa_peg;
+  if (c.fwd_per > 0 && gA > 0) {
+    const seen = [fvp != null ? `Finviz ${n(fvp, 2)}` : "", sp ? `시킹알파 ${[sp.ngaap != null ? `${n(sp.ngaap, 2)} (Non-GAAP 예상)` : "", sp.gaap != null ? `${n(sp.gaap, 2)} (GAAP 지난 1년)` : ""].filter(Boolean).join(" · ")}${sp.date ? ` ${esc(String(sp.date).slice(5).replace("-", "/"))}` : ""}` : ""].filter(Boolean);
+    pe.push(`PEG <b>${n(c.fwd_per / gA, 2)}</b> <span class="src">= PER ${n(c.fwd_per, 1)} ÷ 성장률 ${n(gA, 1)}% (② 보정값)${seen.length ? ` · 많이 보는 값: ${seen.join(" · ")}` : ""}</span>`);
+  }
   if (c.naver_per > 0) pe.push(`<span class="src">참고: 네이버 추정 PER (올해 ${String(new Date().getFullYear()).slice(2)}E 기준) ${n(c.naver_per, 2)}배</span>`);
   return `<button class="card stock" data-code="${esc(c.code)}" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">
     <div class="row1"><span class="name">${esc(c.name)}</span><span class="price">${money(c.price, c.currency)}</span></div>
@@ -5837,7 +5843,7 @@ function tpCnt(code) {  // 최근 30일 목표가 올린 곳·내린 곳
   return [X.filter((x) => (x.tp_prev && x.tp > x.tp_prev) || x.tp_dir === "상향").length, X.filter((x) => (x.tp_prev && x.tp < x.tp_prev) || x.tp_dir === "하향").length];
 }
 function estAlertHTML() {  // 첫 화면: 방향 개수 + 변곡점 종목만
-  const L = (DASH?.stocks || []).filter((c) => c.est?.sig && mktOf(c.code) === MKT);
+  const L = (DASH?.stocks || []).filter((c) => c.est?.sig && mktOf(c.code) === MKT && c.group === "보유");  // 보유 탭이라 보유 종목만 (사용자 11/11)
   if (!L.length) return "";
   const cnt = (s) => L.filter((c) => c.est.sig === s).length, turn = L.filter((c) => /전환|꺾임/.test(c.est.sig));
   return `<div class="card" style="margin-bottom:12px"><b>📈 이익 추정치 방향</b> <span class="src">증권사 예상 이익이 올라가면 기대감·수급이 따라올 수 있어요 · 매일 갱신 · 참고용</span>

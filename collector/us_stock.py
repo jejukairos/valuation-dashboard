@@ -184,10 +184,24 @@ def nasdaq_eps(t):
     return out
 
 
+_FV = {}  # 같은 종목 Finviz 화면은 한 번만 받음 (EPS next 5Y · EPS next Y · PEG)
+
+
+def _finviz(t):
+    if t not in _FV:
+        _FV[t] = HTTP.get(f"https://finviz.com/quote.ashx?t={t}").text
+    return _FV[t]
+
+
 def finviz_eps_5y(t):
     """Finviz 'EPS next 5Y' (향후 5년 연평균 EPS 성장률 %, 애널리스트 추정)."""
-    txt = HTTP.get(f"https://finviz.com/quote.ashx?t={t}").text
-    m = re.search(r"EPS next 5Y.{0,300}?>(-?[\d.]+)%<", txt, re.S)
+    m = re.search(r"EPS next 5Y.{0,300}?>(-?[\d.]+)%<", _finviz(t), re.S)
+    return num(m.group(1)) if m else None
+
+
+def finviz_peg(t):
+    """Finviz 'PEG' (지난 12개월 PER ÷ EPS next 5Y — 사람들이 많이 보는 값, 사용자 11/11)."""
+    m = re.search(r">PEG<.{0,300}?>(-?[\d.]+)<", _finviz(t), re.S)
     return num(m.group(1)) if m else None
 
 
@@ -216,7 +230,7 @@ def tipranks(t):
 
 def finviz_next_eps(t):
     """Finviz 의 'EPS next Y'(내년 EPS 추정, 달러)."""
-    txt = HTTP.get(f"https://finviz.com/quote.ashx?t={t}").text
+    txt = _finviz(t)
     m = re.search(r"EPS next Y(?:</div>)?</td>\s*<td[^>]*>(?:<[^>]+>)*\s*(-?[\d.]+)\s*<", txt)
     if not m:
         m = re.search(r"EPS next Y.{0,300}?>(-?\d+\.\d+)<", txt, re.S)
