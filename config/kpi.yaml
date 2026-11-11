@@ -1882,13 +1882,13 @@ PLTR:
 '213420':
   name: 덕산네오룩스
   key: 플래그십·폴더블 스마트폰 OLED 패널용 발광소재와 Black PDL 출하가 늘어 본업(별도) 매출과 이익률이 오르는지
-  latest: 26.2Q
+  latest: 26.3Q
   charts:
   - t: 매출 성장률 (YoY)
     u: '%'
     s:
     - n: 매출
-      v: {25.3Q: 79.2, 25.4Q: 143.6, 26.1Q: 92.1, 26.2Q: 16.9}
+      v: {25.3Q: 79.2, 25.4Q: 143.6, 26.1Q: 92.1, 26.2Q: 16.9, 26.3Q: 8.6}
   - t: 부문별 성장률 (YoY)
     u: '%'
     s:
@@ -1911,11 +1911,12 @@ PLTR:
     u: '%'
     s:
     - n: 연결
-      v: {25.3Q: 17.8, 25.4Q: 18.1, 26.1Q: 23.5, 26.2Q: 19.6}
+      v: {25.3Q: 17.8, 25.4Q: 18.1, 26.1Q: 23.5, 26.2Q: 19.6, 26.3Q: 22.5}
     - n: 별도(OLED 소재)
-      v: {25.3Q: 21.4, 25.4Q: 29.8, 26.1Q: 24.6, 26.2Q: 23.5}
+      v: {25.3Q: 21.4, 25.4Q: 29.8, 26.1Q: 24.6, 26.2Q: 23.5, 26.3Q: 23.4}
     why: 고수익 Black PDL 비중과 제품 믹스가 이익률을 크게 바꿔서
   src:
+  - {t: 26.3Q IR 자료 PDF (회사 IR) · 숫자는 잠정 공시·치킨스탁 IR 분석으로 (PDF 글자 못 읽어 부문·응용처 성장률은 비움), u: 'https://www.dsnl.co.kr/IR_Reference/IR_Report/kr/2026/DSNL_26.3Q(KR).pdf'}
   - {t: 26.2Q IR 자료 PDF (회사 IR), u: 'https://www.dsnl.co.kr/IR_Reference/IR_Report/kr/2026/DSNL_26.2Q(KR).pdf'}
   - {t: 26.1Q IR 자료 PDF (회사 IR), u: 'https://www.dsnl.co.kr/IR_Reference/IR_Report/kr/2026/DSNL_26.1Q(KR).pdf'}
   - {t: 25.3Q IR 자료 PDF (회사 IR), u: 'https://www.dsnl.co.kr/IR_Reference/IR_Report/kr/2025/DSNL_25.3Q(KR).pdf'}
