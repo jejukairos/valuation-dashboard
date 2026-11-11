@@ -530,7 +530,7 @@ function stockCard(c) {
     pills.push(`<span class="pill ${x.chg < 0 ? "red" : "green"}">👥 ${esc(x.name.replace("공단", ""))} 지분 ${x.chg < 0 ? "▼" : "▲"}${n(Math.abs(x.chg), 2)}%p (${esc(x.date.slice(5))})</span>`);
   }
   if ((c.checks || []).some((x) => x.warn)) pills.push(`<span class="pill yellow">⚠ 출처 간 EPS 차이 큼</span>`);
-  for (const x of expNew(c.code)) pills.unshift(`<span class="pill red" data-go="expw" style="font-weight:700">‼️ ${EXPW_K[x.k].t} ${+x.r.ym.slice(5)}월 나옴 · 누르면 그래프</span>`);  // 가장 중요한 표시라 맨 앞
+  for (const x of expNew(c.code)) pills.unshift(`<span class="pill red" data-go="expw" style="font-weight:700">‼️ ${EXPW_K[x.k].t} ${x.r.p || `${+x.r.ym.slice(5)}월`} 나옴 · 누르면 그래프</span>`);  // 가장 중요한 표시라 맨 앞
   const ac = accelOf(c), aw = ac && accVerd(ac.v[1], ac.v[2]);  // 🚀 내년 이익 증가율이 올해보다 높아지나 (accelHTML 과 같은 잣대)
   if (aw === 1 || aw === -1) pills.push(`<span class="pill ${aw === 1 ? "green" : "yellow"}">${ACC_E[aw + 1]} ${ac.b} 증가율 ${esc(ac.ys[1])} ${accVal(ac.v[1])} → ${esc(ac.ys[2])} ${accVal(ac.v[2])}</span>`);
   const newPosts = (c.us_tpl?.street?.posts || []).filter((p) => p.new).length;
@@ -1871,7 +1871,7 @@ function expBanner() {
   const by = {};
   [...new Map((DASH?.stocks || []).map((s) => [s.code, s])).values()].forEach((s) => expNew(s.code).forEach((x) => (by[x.k] ||= { r: x.r, s: [] }).s.push(s)));
   const ks = Object.keys(by);
-  return ks.length ? `<div class="warnbox" style="margin-bottom:8px;border-color:var(--bad);font-weight:600">‼️ 📦 새 숫자 나옴 — ${ks.map((k) => `${EXPW_K[k].t} ${+by[k].r.ym.slice(5)}월 (${by[k].s.map((s) => `<a href="#stock/${esc(s.code)}" onclick="GOTO='expw'">${esc(s.name)}</a>`).join("·")})`).join(" · ")} <span class="src" style="font-weight:400">누르면 그래프 · 7일 동안 보여요</span></div>` : "";
+  return ks.length ? `<div class="warnbox" style="margin-bottom:8px;border-color:var(--bad);font-weight:600">‼️ 📦 새 숫자 나옴 — ${ks.map((k) => `${EXPW_K[k].t} ${by[k].r.p || `${+by[k].r.ym.slice(5)}월`} (${by[k].s.map((s) => `<a href="#stock/${esc(s.code)}" onclick="GOTO='expw'">${esc(s.name)}</a>`).join("·")})`).join(" · ")} <span class="src" style="font-weight:400">누르면 그래프 · 7일 동안 보여요 · 기간별은 <a href="#exports">📦 수출입 탭</a></span></div>` : "";
 }
 document.addEventListener("click", (e) => { const b = e.target.closest(".earnmk button"); if (b) { EARN_MKT = b.dataset.mk; renderEarn(); } });
 function kqNewsHTML() {
@@ -3922,7 +3922,7 @@ function expHTML(kind) {
 //   카드 꼬리표 = 새 숫자를 받은 지 7일 안 (최신 표 src 의 날짜 · 관세청 확정치 seen · 입국자 seen) → 누르면 상세 '📦 수출·입국 데이터 추적' 칸으로 바로
 let TN = null, GOTO = null;  // TN = data/tour_nat.json (국적별 입국, collector/tour_stats.py) · GOTO = 상세를 열고 갈 칸
 const EXPW = { "003230": ["ramen"], "278470": ["cosmetics", "tour"], "483650": ["cosmetics", "tour"], "241710": ["cosmetics"], "251970": ["cosmetics"], "092730": ["cosmetics"],
-  "214450": ["med", "tour"], "214150": ["tour"], "005930": ["tech"], "005935": ["tech"], "000660": ["tech"], "009150": ["mlcc"],
+  "214450": ["med", "medx", "tour"], "214150": ["medx", "tour"], "005930": ["tech"], "005935": ["tech"], "000660": ["tech"], "009150": ["mlcc"],
   "005380": ["car"], "000270": ["car"], "012330": ["car"], "023530": ["tour"], "004170": ["tour"], "069960": ["tour"], "003490": ["tour"] };
 // s = 월별 줄 묶음 · m = 큰 줄 · sub = 나눠 볼 줄 · L = 최신 표 (lk = 표 안 이름, timeline 표는 날짜만 씀) · dv·u·dg = 그림 단위 · seen = 확정치 받은 날 묶음
 const EXPW_K = {
@@ -3932,6 +3932,10 @@ const EXPW_K = {
   tech: { t: "💾 메모리 반도체 수출", s: () => EXP?.tech, m: "메모리", sub: ["D램", "MCP·HBM", "낸드"], L: () => EXP?.tech_latest, lk: "tech", dv: 100, u: "억$", dg: 0, seen: "tech", hs: "관세청 HS 8542.32 · HBM 은 MCP 칸 · 표 = 증권사 묶음" },
   mlcc: { t: "🔋 MLCC 수출", s: () => EXP?.tech, m: "MLCC", sub: [], dv: 100, u: "억$", dg: 1, seen: "tech", hs: "관세청 HS 8532.24" },
   car: { t: "🚗 자동차 수출", s: () => EXP?.car, m: "승용차 (HS 8703)", sub: ["자동차부품 (HS 8708)"], L: () => EXP?.car_latest, dv: 100, u: "억$", dg: 0, seen: "car", hs: "관세청 HS 8703·8708" },
+  medx: { t: "💉 미용 의료기기 수출", s: () => EXP?.medx, m: "톡신 (3002.49 후보)", sub: ["미용의료기기 (9018.90 후보)", "필러·기타 화장품 (3304.99.9000)"], lk: "medx", dv: 100, u: "억$", dg: 2, seen: "medx",
+    hs: "관세청 톡신 HS 3002.49 · 미용의료기기 9018.90 (둘 다 다올 숫자와 맞춰 보는 후보) · 필러 = 기타 화장품 3304.99.9000 · 치과·임플란트는 뺌" },
+  power: { t: "⚡ 대형 변압기 수출", s: () => EXP?.power, m: "초고압변압기", sub: ["배전변압기 650~10,000kVA", "초고압케이블 (8544.60.3)"], lk: "power", dv: 100, u: "억$", dg: 2, seen: "power",
+    hs: "관세청 HS 8504.23 (10,000kVA 초과) · TRASS-BF '대형변압기(10,000KVA 이상)'" },
   med: { t: "💉 강릉 화장품·필러 수출 (리쥬란 신호)", s: () => EXP?.med, m: "강릉 3304.99 (리쥬란)", sub: [], dv: 0.01, u: "만$", dg: 0, seen: "med", hs: "관세청 시군구 · 강릉 HS 3304.99 (회사와 딱 맞진 않지만 흐름이 비슷하다고 보는 칸)" },
   tour: { t: "✈️ 외국인 입국자 수", s: () => TN?.nat, m: "전체", sub: ["중국", "일본", "미국", "유럽", "대만"], dv: 1e4, u: "만 명", dg: 0, hs: "관광지식정보시스템 국적별 입국 (원자료 법무부)" } };
 const ymAdd = (x, d) => { const t = +x.slice(0, 4) * 12 + +x.slice(5) - 1 + d; return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`; };
@@ -3941,7 +3945,9 @@ function expRel(k) {  // 가장 최근에 새 숫자를 받은 날 {ym, d}
   if (L?.ym && ld) out.push({ ym: L.ym, d: ld });
   const sn = k === "tour" ? TN?.seen : EXP?.seen?.[K.seen], ym = sn && Object.keys(sn).sort().at(-1);
   if (ym) out.push({ ym, d: sn[ym] });
-  return out.sort((a, b) => b.d.localeCompare(a.d))[0] || null;
+  const T = K.lk && xTen().find((t) => t[K.lk]), td = T?.src?.match(/\d{4}-\d{2}-\d{2}/)?.[0];  // 📦 채널 1~10일·1~20일 잠정 (exp_ten.json)
+  if (td) out.push({ ym: T.ym, d: td, p: T.p });
+  return out.sort((a, b) => b.d.localeCompare(a.d) || b.ym.localeCompare(a.ym))[0] || null;
 }
 const expNew = (code) => (EXPW[code] || []).map((k) => ({ k, r: expRel(k) })).filter((x) => x.r && kDays(x.r.d) >= -1 && kDays(x.r.d) <= 7);
 function expwOne(k, isNew) {
@@ -3988,7 +3994,107 @@ function expwHTML(code) {
   const wait = all.includes("med") && !ks.includes("med") ? `<div class="warnbox" style="margin-top:8px">💉 강릉 화장품·필러 수출(리쥬란 신호): 관세청 '시군구별 품목별 수출입실적' API 를 공공데이터포털에서 활용신청하면 2020년부터 자동으로 들어와요 (11/10 시험: '등록되지 않은 서비스키')</div>` : "";
   return `<details class="fvt" id="expw"${open ? " open" : ""}><summary class="chart-title" style="margin-top:12px"><b>📦 수출·입국 데이터 추적</b> ${nw.length ? `<span class="pill red">‼️ 새로 나옴</span> ` : ""}<span class="src">${all.map((k) => EXPW_K[k].t).join(" · ")} · 기관도 개인도 같이 보는 원천 숫자 · 누르면 펼침</span></summary>
     ${ks.map((k) => expwOne(k, nw.includes(k))).join("")}${wait}
-    <div class="note src">📅 발표: 매달 1일 지난달 잠정 (증권사 글로 들어옴) · 11일·21일 1~10일·1~20일 잠정 (관세청 보도자료, 반도체·자동차 같은 큰 품목 위주 — 라면·화장품 품목 숫자는 자동으로 못 받아요, 글을 보내 주시면 표에 넣어요) · 15일쯤 지난달 확정 (관세청 API, 여기 그림에 자동) · 외국인 입국자는 다음 달 하순 (자동) · 빨간 ‼️ 는 새 숫자를 받은 뒤 7일 · 사고팔 판단이 아니라 숫자 확인용이에요</div></details>`;
+    <div class="note src">📅 발표: 매달 1일 지난달 잠정 · 11일·21일 1~10일·1~20일 잠정 (교보·다올·TRASS-BF 텔레그램 글을 자동으로 읽어 <a href="#exports">📦 수출입 탭</a>에 기간별로) · 15일쯤 지난달 확정 (관세청 API, 여기 그림에 자동) · 외국인 입국자는 다음 달 하순 (자동) · 빨간 ‼️ 는 새 숫자를 받은 뒤 7일 · 사고팔 판단이 아니라 숫자 확인용이에요</div></details>`;
+}
+// 📦 수출입 탭 (사용자 11/11 "수출입 탭 — 화장품·라면·의료기기, 1개월·3개월·6개월·1년·3년·5년·전체, 시각화 · 채널 글로 크로스 체크")
+//   월별 = exports.yaml (관세청 API, 2020-01~) · 1개월 = data/exp_ten.json (collector/exp_ten.py: 교보·다올·TRASS-BF 1~10일·1~20일·한 달 잠정 + 한투·한화 글)
+//   새 품목은 XP_ITEMS 에 EXPW_K 묶음 이름 한 줄
+let XT = null;
+const DRAM_UP = "D램 단가 (천$/kg)";  // collector/customs.py 와 같은 이름
+const XP_ITEMS = ["ramen", "cosmetics", "medx", "tech", "power"];
+const XP_TABS = [["1개월", 1], ["3개월", 3], ["6개월", 6], ["1년", 12], ["3년", 36], ["5년", 60], ["전체", 0]];
+const xTen = () => XT?.ten || [];
+const xUnit = (nm) => (nm.includes("단가") ? ["천$/kg", 1, 1] : ["억$", 100, 2]);  // [단위, 나눌 값, 소수] — 금액은 백만$ → 억$
+function xTabs(labels, htmls, on = labels.length - 1, cls = "seg") {  // 기간 버튼 + 칸 (누르면 그 칸만 보임 · 키차트 tabs 도 같이 씀)
+  return `<div style="grid-column:1/-1"><div class="${cls}" style="margin-bottom:4px">${labels.map((l, i) => `<button class="${i === on ? "on" : ""}" onclick="event.stopPropagation();const p=this.parentNode.parentNode;p.querySelectorAll(':scope>.seg>button').forEach((b,j)=>b.classList.toggle('on',j===${i}));p.querySelectorAll(':scope>.kct').forEach((d,j)=>d.style.display=j===${i}?'':'none')">${l}</button>`).join("")}</div>
+    ${htmls.map((h, i) => `<div class="kct qgrid"${i === on ? "" : ' style="display:none"'}>${h}</div>`).join("")}</div>`;
+}
+function xpTenOne(k, T, main) {  // 한 글(한 채널·한 기간)의 표 + 같은 기간끼리 막대
+  const R = T[k], run = T.how === "run", D = T.days, mo = +T.ym.slice(5), pm = mo === 1 ? 12 : mo - 1, full = !/1~/.test(T.p), ath = T.ath?.[k] || [];
+  const rows = Object.entries(R).map(([c, [v, y, m]]) => { const [u, dv, d] = xUnit(c); return { n: `${ath.includes(c) ? "🏆 " : ""}${c}`, now: v == null ? null : v / dv, u, d, yoy: y, qoq: m }; });
+  const how = run ? `한 달로 늘린 값(1~${T.upto}일 × ${n(30 / T.upto, 1)})을 작년 ${mo}월·${pm}월 한 달 전체와 비교` : full ? `작년 ${mo}월·${pm}월 한 달과 비교` : `작년 ${mo}월·${pm}월 같은 기간(1~${T.upto}일)과 비교`;
+  const tops = rows.filter((r) => !r.n.includes(" · ") && !r.n.includes("모듈 제외") && r.u === "억$" && r.now != null && r.yoy != null && r.qoq != null).slice(0, 6);
+  const three = tops.length ? keyChart({ t: `${T.p} — ${run ? "한 달로 늘린 값" : "같은 기간"}끼리`, u: "억$", d: 2, side: true, col: ["#9cc0ea", "var(--muted)", "#e8692f"], q: tops.map((r) => r.n.replace("🏆 ", "")),
+    bars: [{ n: `작년 ${mo}월`, v: tops.map((r) => r.now / (1 + r.yoy / 100)) }, { n: `${pm}월`, v: tops.map((r) => r.now / (1 + r.qoq / 100)) }, { n: `${mo}월${run ? " (늘린 값)" : ""}`, v: tops.map((r) => r.now) }] }) : "";
+  const dy = (v, base) => (v == null || !D ? null : ((1 + v / 100) * base / D.this - 1) * 100);  // 영업일수 감안 하루 평균
+  const daily = D && rows.some((r) => r.now != null) ? chgChart({ t: `하루 평균 (영업일수 ${D.this}일 · 지난달 ${D.prev}일 · 작년 ${D.ly}일)`, qh: "지난달보다",
+    rows: rows.filter((r) => r.u === "억$").map((r) => ({ ...r, now: r.now == null ? null : r.now / D.this, d: 3, yoy: dy(r.yoy, D.ly), qoq: dy(r.qoq, D.prev) })) }) : "";
+  return `${main ? "" : `<div class="note" style="grid-column:1/-1;margin-top:8px"><b>🔁 같은 기간 다른 채널: ${esc(T.who)}</b></div>`}${three}
+    ${chgChart({ t: `${T.p} ${run ? "(한 달로 늘린 값)" : ""}`, qh: run ? `${pm}월 한 달보다` : full ? "지난달보다" : "지난달 같은 기간보다", rows, note: `${how} · ${T.src}` })}${daily}
+    <div class="src" style="grid-column:1/-1"><a href="${esc(T.u)}" target="_blank" rel="noopener">원문 글 열기</a>${run ? " · ⚠ 다올 숫자는 한 달로 늘린 값이라 같은 기간끼리 비교한 교보·TRASS 숫자와 % 가 달라요" : ""}${k === "medx" && R["필러"] ? " · ⚠ 다올 '필러' 줄은 '기타 화장품'(3304.99.9000) 줄과 숫자가 똑같아요 — 필러만의 숫자가 아니라 기타 화장품 전체예요" : ""}</div>`;
+}
+function xpTen(k) {
+  const K = EXPW_K[k], all = xTen().filter((t) => t[k]), T0 = all[0];
+  if (!T0) return `<div class="note" style="grid-column:1/-1">아직 1~10일·1~20일 숫자가 없어요 — 11일·21일쯤 채널 글이 올라오면 자동으로 들어와요.</div>`;
+  const cur = all.filter((t) => t.ym === T0.ym && t.upto === T0.upto).sort((a, b) => (Object.values(b[k]).some((r) => r[0] != null) - Object.values(a[k]).some((r) => r[0] != null)) || (a.how === "same" ? -1 : 1));
+  const M = cur[0], tot = M[k]["전체"] || Object.values(M[k])[0], tn = M[k]["전체"] ? "전체" : Object.keys(M[k])[0], D = M.days;
+  // 🔁 크로스 체크: 같은 기간 '전체' 줄을 채널끼리 (교보 vs TRASS) — 1%p 안이면 ✅
+  const ck = cur.slice(1).filter((t) => t[k]["전체"] && M[k]["전체"]).map((t) => { const [, y, m] = t[k]["전체"], ok = Math.abs(y - tot[1]) <= 1 && Math.abs(m - tot[2]) <= 1;
+    return `${esc(t.who)} 전년비 ${sg(y)} · 전월비 ${sg(m)} ${ok ? "✅ 같아요" : `⚠ 달라요 (정의가 다를 수 있어요)`}`; });
+  const subs = Object.entries(M[k]).filter(([c, r]) => c !== tn && !c.includes(" · ") && !c.includes("단가") && r[1] != null).sort((a, b) => b[1][1] - a[1][1]);
+  const run = M.how === "run", up = Object.entries(M[k]).find(([c]) => c.includes("단가 (모듈 제외"));
+  const kid = [`${M.p} ${tn === "전체" ? K.t.replace(/^\S+\s/, "") : tn} ${tot[0] == null ? "" : `${n(tot[0] / 100, 2)}억$${run ? " (한 달로 늘린 값)" : ""} — `}1년 전보다 ${sg(tot[1])}, 지난달보다 ${sg(tot[2])}`,
+    D ? `영업일수 ${D.this}일 (지난달 ${D.prev}일 · 작년 ${D.ly}일) → 하루 평균으로 맞추면 1년 전보다 ${sg(((1 + tot[1] / 100) * D.ly / D.this - 1) * 100)}, 지난달보다 ${sg(((1 + tot[2] / 100) * D.prev / D.this - 1) * 100)}` : "",
+    up ? `💾 D램 수출 단가(모듈 제외) ${n(up[1][0], 1)}천$/kg — 1년 전보다 ${sg(up[1][1])}, 지난달보다 ${sg(up[1][2])}${(M.ath?.[k] || []).includes("디램") ? " · 디램 수출액 사상 최고 🏆" : ""}` : "",
+    subs.length ? `가장 빨리 느는 곳: ${subs[0][0]} ${sg(subs[0][1][1])}${subs.length > 1 ? ` · 가장 느린 곳: ${subs.at(-1)[0]} ${sg(subs.at(-1)[1][1])}` : ""}` : "",
+    ...ck.map((x) => `🔁 ${x}`)].filter(Boolean);
+  const P = (XT?.posts || []).filter((p) => p.items.includes(k)).slice(0, 4);
+  const posts = P.length ? `<details class="fvt" style="grid-column:1/-1"><summary class="chart-title">📨 다른 증권사 채널 글 (크로스 체크) <span class="src">한투 김명주 · 한화 한유정 · ${P.length}개 · 한화는 원화 기준</span></summary>
+    ${P.map((p) => `<div class="note"><b>${esc(p.d.slice(5))} ${esc(p.t)}</b> <a href="${esc(p.u)}" target="_blank" rel="noopener">원문</a>${p.lines.length ? `<ul class="irl">${p.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}</div>`).join("")}</details>` : "";
+  const more = cur.slice(1).filter((t) => Object.keys(t[k]).some((c) => c !== "전체"));  // '전체' 한 줄뿐인 채널은 위 🔁 줄로 충분
+  return `<div class="kidbox" style="grid-column:1/-1;margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div>${xpTenOne(k, M, true)}${more.map((t) => xpTenOne(k, t, false)).join("")}${xpTenHist(k, all, M)}${posts}`;
+}
+function xpTenHist(k, all, M) {  // 지난 10일·20일·한 달 잠정 기록 (같은 채널끼리) → 1년 전보다 % 선
+  const H = all.filter((t) => t.who === M.who).reverse(), tn = M[k]["전체"] ? ["전체"] : Object.keys(M[k]).filter((c) => !c.includes(" · ") && !c.includes("단가")).slice(0, 4);
+  if (H.length < 3) return "";
+  const lb = H.map((t) => `${+t.ym.slice(5)}.${/1~/.test(t.p) ? `1~${t.upto}` : "월"}`);
+  return lineChart({ t: `지난 잠정 기록 — 1년 전보다 % (${M.who})`, why: `점 = 그달 1~10일 · 1~20일 · 한 달 · ${M.how === "run" ? "한 달로 늘린 값 기준" : "같은 기간끼리"}`, labels: lb, zero: true,
+    fl: (v) => `${n(v, 0)}%`, tick: (i) => (i === 0 || H[i].ym !== H[i - 1].ym ? `${+H[i].ym.slice(5)}월` : ""), s: tn.map((c, i) => ({ n: c, v: H.map((t) => t[k][c]?.[1] ?? null), col: i ? GPE_COL[(i - 1) % GPE_COL.length] : "#e8692f" })) });
+}
+function xpMonths(k, km, lbl) {  // 월별 (관세청 확정) — 막대 = 금액 · 선 = 1년 전보다 % · 이 기간 합계
+  const K = EXPW_K[k], S = K.s() || {}, M = S[K.m];
+  if (!M) return `<div class="note" style="grid-column:1/-1">월별 확정치는 관세청 API 자동 갱신 뒤 들어와요 (${esc(K.hs)}).</div>`;
+  const ms = Object.keys(M).sort(), last = ms.at(-1), lab = km ? Array.from({ length: km }, (_, i) => ymAdd(last, i - km + 1)) : ms;
+  const V = (s, x) => (s?.[x] == null ? null : s[x] / K.dv), yo = (s, x) => (s?.[x] != null && s?.[ymAdd(x, -12)] ? (s[x] / s[ymAdd(x, -12)] - 1) * 100 : null);
+  const ev = Math.max(1, Math.round(lab.length / 6)), tk = (i) => ((lab.length - 1 - i) % ev === 0 ? `${lab[i].slice(2, 4)}.${+lab[i].slice(5)}` : "");
+  const c1 = lineChart({ t: `월별 ${K.m} (막대) · 1년 전보다 % (선)`, why: `막대 단위 = ${K.u} · 예) ${n(V(M, last), K.dg)}${K.u} = ${last.slice(2, 4)}년 ${+last.slice(5)}월`, labels: lab, zero: true, tick: tk,
+    fl: (v) => n(v, K.dg), fr: (v) => `${n(v, 0)}%`, s: [{ n: `${K.m} (${K.u})`, v: lab.map((x) => V(M, x)), bar: true, col: "var(--s1)" }, { n: "1년 전보다 %", v: lab.map((x) => yo(M, x)), right: true, col: "#e8692f" }] });
+  const subs = K.sub.filter((c) => S[c] && lab.some((x) => S[c][x] != null));
+  const c2 = subs.length ? lineChart({ t: `나눠 보기 — 월별 (${K.u})`, labels: lab, zero: true, tick: tk, fl: (v) => n(v, K.dg), s: subs.map((c, i) => ({ n: c, v: lab.map((x) => V(S[c], x)), col: GPE_COL[i % GPE_COL.length] })) }) : "";
+  const up = k === "tech" && S[DRAM_UP] ? lineChart({ t: "💾 D램 수출 단가 (천$/kg) — 수출 금액 ÷ 무게", why: "관세청 HS 8542.32.1010 (모듈 제외) · 메리츠·TRASS 가 보는 그 단가", labels: lab, zero: true, tick: tk, fl: (v) => n(v, 0),
+    s: [{ n: "D램 단가", v: lab.map((x) => S[DRAM_UP][x] ?? null), col: "#2f6db5" }] }) : "";
+  // 이 기간 합계: 1년 이하 = 1년 전 같은 기간보다 · 3년 이상 = 연평균 (처음 12개월 합 → 최근 12개월 합)
+  const sum = (xs) => (xs.every((x) => M[x] != null) ? xs.reduce((a, x) => a + M[x], 0) : null), w = lab.length;
+  const now = sum(lab), ago = sum(lab.map((x) => ymAdd(x, -12))), hi = lab.reduce((b, x) => (M[x] != null && (b == null || M[x] > M[b]) ? x : b), null);
+  const cagr = w >= 36 ? (() => { const a = sum(lab.slice(0, 12)), b = sum(lab.slice(-12)); return a && b ? ((b / a) ** (1 / ((w - 12) / 12)) - 1) * 100 : null; })() : null;
+  const gap = subs.some((c) => lab.some((x) => S[c][x] == null) && lab.some((x) => S[c][x] != null));
+  const kid = [now != null ? `${lbl} 합계 ${n(now / K.dv, K.dg)}${K.u}${w <= 12 && ago ? ` — 1년 전 같은 기간보다 ${sg((now / ago - 1) * 100)}` : ""}` : "",
+    gap ? "나눠 보기 빈 칸 = 관세청 나라별 숫자가 아직 없는 달 (나라별 API 신청 뒤 자동으로 채워져요)" : "",
+    cagr != null ? `연평균 ${sg(cagr, 1)} 성장 (처음 12개월 합 → 최근 12개월 합)` : "", hi ? `이 기간 가장 많이 판 달: ${hi.slice(2, 4)}년 ${+hi.slice(5)}월 ${n(V(M, hi), K.dg)}${K.u}` : ""].filter(Boolean);
+  return `${kid.length ? `<div class="kidbox" style="grid-column:1/-1;margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div>` : ""}${c1}${c2}${up}`;
+}
+function xpItem(k) {
+  const K = EXPW_K[k];
+  if (!K.s()?.[K.m] && !xTen().some((t) => t[k])) return "";
+  const body = xTabs(XP_TABS.map((t) => t[0]), XP_TABS.map(([l, km]) => (km === 1 ? xpTen(k) : xpMonths(k, km, l))), 0, "seg lseg");
+  const MT = EXP?.medtour_latest, DN = EXP?.dram_latest;
+  const extra = k === "ramen" ? expHTML("ramen") + ramenYtdHTML() : k === "cosmetics" ? expHTML("cosmetics")
+    : k === "medx" && MT ? `<h3>🏥 외국인 의료관광 소비 <span class="src">${esc(MT.ym)} · 억원 · ${esc(MT.src)}</span></h3><div class="card">${chgChart({ t: `${+MT.ym.slice(5)}월 의료관광 카드 소비`, qh: "지난달보다",
+      rows: Object.entries(MT.rows).map(([c, [v, y, m]]) => ({ n: c, now: v, u: "억원", d: 0, yoy: y, qoq: m })) })}${(MT.notes || []).length ? `<ul class="irl">${MT.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}</div>`
+    : k === "tech" ? `${DN ? `<div class="card" style="margin-top:8px"><div class="chart-title"><b>📝 ${esc(DN.p || DN.ym)} 증권사 코멘트</b> <span class="src">${esc(DN.src)}</span></div><ul class="irl">${DN.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}<div class="note"><a href="#industry" data-kc="exp-tech">💾 반도체·IT 품목 전체 월별 그림 → 산업 탭</a></div>`
+    : k === "power" ? `<div class="note"><a href="#industry" data-kc="exp-power">⚡ 전력기기 품목 전체 월별 그림 → 산업 탭</a></div>` : "";
+  const nw = expRel(k), isNew = nw && kDays(nw.d) >= -1 && kDays(nw.d) <= 7;
+  return `<section data-jump="${esc(K.t)}" data-jname="${esc(K.t)}" id="kc-xp-${k}" style="margin-top:18px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">${K.t} ${isNew ? `<span class="pill red">‼️ ${esc(nw.p || `${+nw.ym.slice(5)}월`)} 새로 나옴</span>` : ""}</h2>
+    <div class="card">${body}<div class="note src">${esc(K.hs)} · 1개월 = 채널 글 자동 (교보 음식료·화장품 · 다올 의료기기·화장품 · TRASS-BF) · 3개월~전체 = 관세청 월별 확정치 (다음 달 중순)</div></div>${extra}</section>`;
+}
+async function renderExports() {
+  const get = (f) => fetch(`data/${f}.json?t=` + Date.now(), { cache: "no-store" }).then((r) => r.json()).catch(() => ({}));
+  if (!EXP || !EXP.ramen) EXP = await get("exports");
+  if (!XT) XT = await get("exp_ten");
+  const h = XP_ITEMS.map(xpItem).join("");
+  $("#exportsBody").innerHTML = h ? expBanner() + h : `<div class="empty">수출 데이터를 불러오지 못했어요.</div>`;
+  jumpBar("#exportsBody", "#expJump", "🔎 품목 검색 (예: 화장품) → Enter");
+  setTimeout(kcGo, 50);
 }
 // 12MF 밴드 (key eps = PER · bps = PBR): 선 = 배수 × 그 시점의 12개월 선행 EPS·BPS, 오른쪽은 추정치로 그린 앞으로의 선
 const P12K = (key) => (key === "bps" ? { k: "PBR", v: "BPS", id: "b12", dg: 2 } : { k: "PER", v: "EPS", id: "p12", dg: 1 });
@@ -4413,7 +4519,8 @@ async function openStock(code) {
     const EXP_CODE = { "003230": ["ramen", "🍜 라면 수출"], "278470": ["cosmetics", "💄 화장품 수출"], "483650": ["cosmetics", "💄 화장품 수출"], "034020": ["power", "⚡ 전력기기 수출 (변압기·GIS·케이블)"],
       ...Object.fromEntries(["005380", "000270", "012330"].map((c) => [c, ["car", "🚗 자동차 수출 (산업부 월별·관세청)"]])),
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
-    const expLink = EXP_CODE ? `<div class="note"><a href="#industry" data-kc="exp-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} 월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기</a></div>` : "";
+    const xp = EXP_CODE && ["ramen", "cosmetics"].includes(EXP_CODE[0]);  // 라면·화장품은 11/11 📦 수출입 탭으로 옮김
+    const expLink = EXP_CODE ? `<div class="note"><a href="${xp ? "#exports" : "#industry"}" data-kc="${xp ? "xp" : "exp"}-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} ${xp ? "1~10일 잠정·월별 (1개월~전체) → 수출입 탭에서 보기" : "월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기"}</a></div>` : "";
     $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     prefFill();
@@ -4856,7 +4963,7 @@ function showView() {
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#exports": "exports" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   const eg = { earn: "보유", earnw: "관심", earnj: "공동" }[view];  // 🧾 실적 보유 · 관심 · 공동 (같은 화면, 종목 묶음만 바꿈)
   $("#earnView").hidden = !eg;
   if (eg) { EARN_GRP = eg; renderEarn(); }  // 보유·관심·공동을 바꿔도 전체/한국/미국 고른 건 그대로
@@ -4873,6 +4980,8 @@ function showView() {
   if (view === "industry") loadIndustry();
   $("#policyView").hidden = view !== "policy";
   if (view === "policy") renderPolicy();
+  $("#exportsView").hidden = view !== "exports";
+  if (view === "exports") renderExports();
   $("#marketView").hidden = view !== "market";
   $("#scoreView").hidden = view !== "score";
   if (view === "score") renderScore();
@@ -5346,8 +5455,9 @@ async function loadIndustry() {
   await consGet();
   // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
-  const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + expHTML("cosmetics") + gpeCard("화장품") + amzHTML()],
-    ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + expHTML("ramen") + ramenYtdHTML() + expHTML("food")],
+  const xpL = (k, t) => `<div class="note" style="margin-top:8px"><a href="#exports" data-kc="xp-${k}">📦 ${t} (1~10일 잠정 · 월별 · 나라별, 1개월~전체) → 수출입 탭</a></div>`;  // 11/11 수출입 탭으로 옮김
+  const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + xpL("cosmetics", "화장품 수출") + gpeCard("화장품") + amzHTML()],
+    ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + xpL("ramen", "라면 수출") + expHTML("food")],
     ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => gpeCard("M7") + key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🎤 엔터", () => key("엔터")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
@@ -5532,8 +5642,7 @@ function kcTabs(ch) {
     return keyChart({ ...ch, q: ch.q.slice(-k), bars: (ch.bars || []).map(s), lines: (ch.lines || []).map(s), pct: s(ch.pct) }); };
   const tabs = ch.tabs ? [...KC_TABS.filter(([, k]) => k < N), ["전체", N]] : [];
   if (tabs.length < 2) return keyChart(ch);
-  return `<div style="grid-column:1/-1"><div class="seg" style="margin-bottom:4px">${tabs.map(([l], i) => `<button class="${i === tabs.length - 1 ? "on" : ""}" onclick="event.stopPropagation();const p=this.parentNode.parentNode;p.querySelectorAll(':scope>.seg>button').forEach((b,j)=>b.classList.toggle('on',j===${i}));p.querySelectorAll(':scope>.kct').forEach((d,j)=>d.style.display=j===${i}?'':'none')">${l}</button>`).join("")}</div>
-    ${tabs.map(([, k], i) => `<div class="kct qgrid"${i === tabs.length - 1 ? "" : ' style="display:none"'}>${cut(k)}</div>`).join("")}</div>`;  // hidden 대신 style — .qgrid display 와 옛 style.css 캐시에도 안 겹치게
+  return xTabs(tabs.map((t) => t[0]), tabs.map(([, k]) => cut(k)));  // hidden 대신 style — .qgrid display 와 옛 style.css 캐시에도 안 겹치게
 }
 function keyCard(c, open) {
   const li = (x) => `<li>${esc(x)}</li>`;
@@ -5714,7 +5823,7 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("a[data-kc]");
   if (!a) return;
   KC_GO = a.dataset.kc;
-  if (location.hash === "#industry") { e.preventDefault(); kcGo(); }
+  if (location.hash === a.getAttribute("href")) { e.preventDefault(); kcGo(); }  // 이미 그 탭(산업·수출입)이면 바로 스크롤
 });
 function kcGo() {
   const el = KC_GO && document.getElementById(`kc-${KC_GO}`);
@@ -6438,7 +6547,7 @@ async function load() {
     try { EARNINGS = await (await fetch("data/earnings.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { EARNINGS = {}; }
     try { IRCAL = await (await fetch("data/ir_calendar.json?t=" + Date.now(), { cache: "no-store" })).json() || { items: [] }; } catch (_) { IRCAL = { items: [] }; }
     try { IRB = await (await fetch("data/ir_brief.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { IRB = {}; }
-    try { [EXP, TN] = await Promise.all(["exports", "tour_nat"].map((f) => fetch(`data/${f}.json?t=` + Date.now(), { cache: "no-store" }).then((r) => r.json()).catch(() => ({})))); } catch (_) { EXP = {}; TN = {}; }  // ‼️ 📦 카드 꼬리표
+    try { [EXP, TN, XT] = await Promise.all(["exports", "tour_nat", "exp_ten"].map((f) => fetch(`data/${f}.json?t=` + Date.now(), { cache: "no-store" }).then((r) => r.json()).catch(() => ({})))); } catch (_) { EXP = {}; TN = {}; XT = {}; }  // ‼️ 📦 카드 꼬리표 (1~10일 잠정 포함)
     try { PBR = await (await fetch("data/pbr_watch.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { /* 📌 코멘트·기준선만 빠짐 */ }
     try { CYC = await (await fetch("data/cycle_dd.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CYC = null; }  // 📉 고점 대비 낙폭 사이클
     try { EVENTS = await (await fetch("data/events.json?t=" + Date.now(), { cache: "no-store" })).json() || []; } catch (_) { EVENTS = []; }

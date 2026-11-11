@@ -25,6 +25,7 @@
     <a href="#watch" data-view="watch">⭐ 관심</a>
     <a href="#reports" data-view="reports">📑 리포트</a>
     <a href="#industry" data-view="industry">🏭 산업</a>
+    <a href="#exports" data-view="exports">📦 수출입</a>
 <a href="#chart" data-view="chart">📈 차트</a>
     <a href="#compare" data-view="compare">⚖️ 비교</a>
     <a href="#score" data-view="score">✅ 점수</a>
@@ -111,6 +112,12 @@
   <p class="sub">함께 투자하는 종목이에요. 보유종목과 똑같이 적정주가·분기 실적·실적발표 요약까지 봐요. 종목은 config/stocks.yaml 의 joint 에 넣어요.</p>
   <div id="jointAccel"></div>
   <div class="grid g3" id="jointCards"></div>
+</main>
+<main class="wrap" id="exportsView" hidden>
+  <h2>📦 수출입</h2>
+  <p class="sub">보유·관심 종목과 이어진 수출 숫자예요 — 기관도 개인도 같이 보는 원천 숫자. 1개월 = 11일·21일·1일 잠정 (교보·다올·TRASS-BF 텔레그램 글 자동, 채널끼리 크로스 체크) · 3개월~전체 = 관세청 월별 확정치 · 매수·매도 추천 아님</p>
+  <div id="expJump"></div>
+  <div id="exportsBody"><div class="empty">불러오는 중…</div></div>
 </main>
 <main class="wrap" id="policyView" hidden>
   <h2>🏛 정책</h2>

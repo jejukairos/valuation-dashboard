@@ -40,7 +40,12 @@ POWER = {"8504": {"초고압변압기": ("850423",), "배전변압기 650~10,000
 FOOD = {"2103": {"소스": ("2103",), "기타 소스 (2103.90.9090)": ("2103909090",)}, "2105": {"아이스크림": ("2105",)}, "2402": {"담배": ("240220",)}}
 # 🚗 자동차 (사용자 전달 다올 '월별 한국 자동차 수출액', 산업부 숫자 2026-11-02): 산업부 월별은 car_latest 표, 여기는 관세청 HS 로 2020년부터
 CAR = {"8703": {"승용차 (HS 8703)": ("8703",)}, "8704": {"화물차 (HS 8704)": ("8704",)}, "8708": {"자동차부품 (HS 8708)": ("8708",)}}
-GROUPS = {"tech": TECH, "power": POWER, "food": FOOD, "car": CAR}  # 나라 합계만 · d[묶음][품목]
+# 💉 미용 의료기기 (사용자 11/11 다올 박종현 '1-10일 의료기기 수출데이터', 치과·임플란트는 관심 없음 · 📦 수출입 탭):
+#   필러 = 3304.99.9000 기타 화장품 (다올 표의 '필러'·'기타 화장품' 줄 숫자가 똑같음) · 톡신 3002.49 · 미용의료기기 9018.90 은 후보 —
+#   다올 9월 한 달(톡신 42.7백만$)·10월 표와 맞으면 '후보'를 뗌
+MEDX = {"3002": {"톡신 (3002.49 후보)": ("300249",)}, "3304": {"필러·기타 화장품 (3304.99.9000)": ("3304999",)}, "9018": {"미용의료기기 (9018.90 후보)": ("901890",)}}
+GROUPS = {"tech": TECH, "power": POWER, "food": FOOD, "car": CAR, "medx": MEDX}  # 나라 합계만 · d[묶음][품목]
+DRAM_UP = "D램 단가 (천$/kg)"  # 💾 수출 금액 ÷ 수출 무게 (사용자 11/11 메리츠 'DRAM 중량 기준 수출 단가 사상 최고') — tech 묶음에 같이
 Y0 = 2020
 
 
@@ -111,6 +116,20 @@ def monthly(rows, kinds):
                 out[k][ym] = out[k].get(ym, 0) + int(r["expDlr"])
     return {k: {ym: round(v / 1e6, 1) for ym, v in s.items()} for k, s in out.items()}
 
+
+def unit_price(rows, pre):
+    """HS 10자리 줄 → {YYYY-MM: 천 달러/kg} = 수출 금액 ÷ 수출 무게(expWgt, kg) · 무게가 0·없는 달은 뺌."""
+    usd, kg = {}, {}
+    for r in rows:
+        m, h = re.fullmatch(r"(\d{4})\.(\d{2})", r.get("year", "")), r.get("hsCode") or r.get("hsCd") or ""
+        if m and h.startswith(pre) and r.get("expDlr", "").isdigit() and r.get("expWgt", "").isdigit():
+            ym = f"{m[1]}-{m[2]}"
+            usd[ym], kg[ym] = usd.get(ym, 0) + int(r["expDlr"]), kg.get(ym, 0) + int(r["expWgt"])
+    return {ym: round(usd[ym] / kg[ym] / 1000, 1) for ym in usd if kg[ym]}
+
+
+assert unit_price([{"year": "2026.10", "hsCode": "8542321010", "expDlr": "5000000000", "expWgt": "62500"}, {"year": "2026.10", "hsCode": "8542323000", "expDlr": "9", "expWgt": "1"},
+                   {"year": "2026.09", "hsCode": "8542321010", "expDlr": "7", "expWgt": "0"}], "8542321010") == {"2026-10": 80.0}
 
 _t = monthly([{"year": "2026.09", "hsCode": "3304101000", "expDlr": "7500000"}, {"year": "2026.09", "hsCode": "3304991000", "expDlr": "595200000"},
               {"year": "2026.09", "hsCode": "3304992000", "expDlr": "89300000"}, {"year": "2026.09", "hsCode": "3304999000", "expDlr": "441100000"},
@@ -187,7 +206,10 @@ def main():
         for y in range(Y0, now.year + 1):
             t0 = time.time()
             try:
-                v = monthly(year_rows(hs, CN.get(nm, ""), y), kinds)
+                rows = year_rows(hs, CN.get(nm, ""), y)
+                v = monthly(rows, kinds)
+                if grp == "tech" and hs == "854232":
+                    v[DRAM_UP] = unit_price(rows, TECH["854232"]["D램"][0])
                 print(hs, nm or grp, y, sum(map(len, v.values())), "칸", f"{time.time() - t0:.0f}초")
             except Exception as e:  # noqa: BLE001
                 print(hs, nm or grp, y, "실패", e, f"{time.time() - t0:.0f}초")

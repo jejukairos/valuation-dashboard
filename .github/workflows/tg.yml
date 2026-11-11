@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["collector/tg_reports.py", ".github/workflows/tg.yml"]
+    paths: ["collector/tg_reports.py", "collector/exp_ten.py", ".github/workflows/tg.yml"]
 
 permissions:
   contents: write
@@ -36,6 +36,11 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: cd collector && python -u tg_reports.py
+      - name: 📦 수출 1~10일·1~20일 잠정 (교보·다올·TRASS-BF 글 → exp_ten.json, 사용자 11/11)
+        if: always()
+        env:
+          PYTHONIOENCODING: utf-8
+        run: cd collector && python -u exp_ten.py --test && python -u exp_ten.py
       - name: 한경 리포트 목록 · 뉴스 (본 갱신 07:30·18:30 사이에도 새 글)
         if: always()
         env:
@@ -46,7 +51,7 @@ jobs:
         run: |
           git config user.name "valuation-bot"
           git config user.email "valuation-bot@users.noreply.github.com"
-          git add site/data/tg_reports.json site/data/reports.json site/data/news.json cache/news.json cache/reports_pdf.json site/data/rep_all.json cache/ind_pages.json 2>/dev/null || true
+          git add site/data/tg_reports.json site/data/exp_ten.json site/data/reports.json site/data/news.json cache/news.json cache/reports_pdf.json site/data/rep_all.json cache/ind_pages.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "리포트·뉴스 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done
