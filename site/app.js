@@ -1456,12 +1456,20 @@ function irBriefHTML(code, name, k) {
   if (k && (!e || qk(e.quarter) < k.latest)) e = irAuto(k) || e;  // 이번 분기 회사 IR 요약이 아직 없으면 숫자로 먼저
   if (!e) return "";
   const cd = irCards(e, k);
-  const box = (t, secs, top = "") => `<details class="fvt"><summary class="chart-title"><b>${esc(name || code)} (${esc(code)}) ${t}</b> <span class="src">${esc(e.period || e.quarter || "")}</span></summary>${top}
-    ${(secs || []).map((s) => `<div style="margin-top:6px"><b>${esc(s.h)}</b><ul class="irl">${(s.l || []).map((x) => (typeof x === "string" ? x : Object.entries(x || {}).map(([k, v]) => `${k}: ${v}`).join(" "))).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : x.startsWith("Q.") ? ' style="font-weight:700"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</details>`;  // YAML 이 '제목: 글' 줄을 표로 읽어도 화면이 안 멈추게
-  const src = (e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.src || "회사 IR 자료")}</a>` : esc(e.src || ""))
-    // 📄 어닝콜 원문(영어) 링크 (사용자 11/11) — 저장소가 공개라 원문·번역은 사이트에 안 올림, 휴대폰 크롬 '번역'으로 한국어
-    + (e.t_u ? ` · <a href="${esc(e.t_u)}" target="_blank" rel="noopener">📄 어닝콜 원문(영어)</a>` : "");
-  return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${box("IR 요약", e.sum, cd.s)}${box("IR 분석", e.ana, cd.a)}${e.qa?.length ? box("🎤 어닝콜 질의응답", e.qa) : ""}
+  // 모든 종목 같은 순서 (사용자 11/11): 📄 원문 → 📖 핵심 요약(이야기) → IR 요약 → IR 분석 → 🎤 질의응답 → ⚖️ 반대 의견·리스크 → ⭐ 핵심 포인트 (모두 닫힘)
+  const det = (t, inner) => `<details class="fvt"><summary class="chart-title"><b>${esc(name || code)} (${esc(code)}) ${t}</b> <span class="src">${esc(e.period || e.quarter || "")}</span></summary>${inner}</details>`;
+  const tag = (s) => esc(s).replace(/\((직접 찾아본 내용[^)]*|직접 계산|전달받은 글[^)]*)\)/g, '<span class="pill">$1</span>');  // 우리가 찾은 것·전달받은 글 표시
+  const li = (x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : x.startsWith("Q.") ? ' style="font-weight:700"' : ""}>${tag(x)}</li>`;
+  const box = (t, secs, top = "") => det(t, `${top}
+    ${(secs || []).map((s) => `<div style="margin-top:6px">${s.h ? `<b>${esc(s.h)}</b>` : ""}<ul class="irl">${(s.l || []).map((x) => (typeof x === "string" ? x : Object.entries(x || {}).map(([k, v]) => `${k}: ${v}`).join(" "))).map(li).join("")}</ul></div>`).join("")}`);  // YAML 이 '제목: 글' 줄을 표로 읽어도 화면이 안 멈추게
+  // 📄 원문: 저장소가 공개라 녹취록·자막 글은 사이트에 옮기지 않고 원문 화면 링크 (한국 = 네이버 발표 자막, 미국 = 녹취록 · 휴대폰 크롬 '번역')
+  const tu = e.t_u || (EARNINGS[code] || []).find((x) => x.quarter === e.quarter)?.transcript;
+  const raw = tu ? det("📄 원문 스크립트", `<div class="note" style="margin-top:6px">📜 <a href="${esc(tu)}" target="_blank" rel="noopener">발표·질의응답 전체 원문 열기</a></div>
+    <div class="note src">영어 원문은 휴대폰 크롬 메뉴의 '번역' → 한국어로 볼 수 있어요. 사이트 저장소가 공개라 원문 글을 그대로 옮겨 담지는 않아요.</div>`) : "";
+  const story = e.story?.length ? det("📖 핵심 요약", e.story.map((p) => `<p class="note" style="margin:8px 0;line-height:1.6">${tag(p)}</p>`).join("")) : "";
+  const src = e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.src || "회사 IR 자료")}</a>` : esc(e.src || "");
+  return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${raw}${story}${box("IR 요약", e.sum, cd.s)}${box("IR 분석", e.ana, cd.a)}${e.qa?.length ? box("🎤 어닝콜 질의응답", e.qa) : ""}
+    ${e.bear?.length ? box("⚖️ 반대 의견 · 리스크", e.bear) : ""}${e.pts?.length ? box("⭐ 핵심 포인트", [{ l: e.pts }]) : ""}
     <div class="src" style="margin-top:6px">📋 ${esc(e.date || "")} · ${src} · ${e.auto ? "회사 설명·해석은 발표가 끝나면 예약 작업이 바꿔 넣어요" : "증감률·이익률은 발표 숫자로 계산한 값"} · 분석은 해석이고 매매 추천이 아니에요</div></div>`;
 }
 // ✦ 포인트 (collector/kq.py points — 텔레그램 실적 알림과 같은 규칙: 5개 분기 최대·영업이익률 / QoQ 엇갈림·동반 성장)

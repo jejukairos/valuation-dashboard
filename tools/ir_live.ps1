@@ -65,8 +65,8 @@ function Grab($code, $name, $ec, $date) {
     $what = if ($LASTEXITCODE -eq 0) {
         "config/earnings.yaml 의 `"$code`" $qtr 요약은 이미 있는데 공시·보도자료·기사로 쓴 거야. 이 자막 원문으로 tools/earnings_task.md 3번 형식대로 보강해줘 — 핵심 요약(short·easy)·포인트(keys)·경영진 말(q)·질의응답(qa)·지난 콜과 달라진 점(diff)·어조(tone)를 자막 기준으로 채우고, 숫자는 자막과 다를 때만 고치고, source 맨 앞에 '네이버 증권 IR 어닝콜 발표 자막 + ' 를 붙이고 transcript: $($ec.aspUrl)"
     } else { "tools/earnings_task.md 3번 형식 그대로 config/earnings.yaml 의 `"$code`" 맨 위에 quarter: $qtr 요약을 추가해줘 (date: $date, source: 네이버 증권 IR 어닝콜 발표 자막, transcript: $($ec.aspUrl))" }
-    $prompt = "transcripts\$(Split-Path $txt -Leaf) 는 $name($code) $qtr 어닝콜 발표 자막 원문이야. $what. 그리고 3-0 형식으로 config/ir_brief.yaml 의 `"$code`" $qtr IR 요약·IR 분석도 자막 내용으로 (있으면 보강, 없으면 맨 위에 추가). 원문에 없는 숫자는 만들지 말고 쉬운 한국어로. 파일 수정만 하고 git 은 하지 마."
-    & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
+    $prompt = "transcripts\$(Split-Path $txt -Leaf) 는 $name($code) $qtr 어닝콜 발표 자막 원문이야. $what. 그리고 3-0 형식으로 config/ir_brief.yaml 의 `"$code`" $qtr IR 요약·IR 분석도 자막 내용으로 (있으면 보강, 없으면 맨 위에 추가) — story(핵심 요약)·qa(질의응답 전부)·bear(반대 의견·리스크, 직접 찾은 건 '(직접 찾아본 내용)')·pts(핵심 포인트)·t_u: $($ec.aspUrl) 까지. 원문에 없는 숫자는 만들지 말고 쉬운 한국어로. 파일 수정만 하고 git 은 하지 마."
+    & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write,WebSearch,WebFetch" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
     & $py tools\earnings_check.py has $code $qtr script
     if ($LASTEXITCODE -eq 0 -and (Publish "$name $qtr 실적발표 요약 (발표 자막)")) { New-Item "$txt.done" -ItemType File -Force | Out-Null; Log "$name $qtr 요약 올림 (발표 자막)" }
     else { Log "$name $qtr 자막 요약 실패 ($($n + 1)/3) - 다음 시간에 다시" }
@@ -122,10 +122,10 @@ if (-not (Test-Path $ustamp)) {
         $prompt = "transcripts/us/$($f.Name) 는 $code 의 $date 실적발표 어닝콜 녹취록 원문(영어, 첫 줄 = Motley Fool 공개 녹취록 주소)이야. " +
             "1) 전체를 빠짐없이 쉬운 한국어로 번역해서 $ko 에 써 (말한 사람 이름·직함 그대로, 줄이지 말 것, 숫자는 원문 그대로 · 길면 Write 로 앞부분을 쓰고 Edit 로 이어 붙이기 · 이 파일은 이 컴퓨터에만 둠). " +
             "2) tools/earnings_task.md 3-0 형식으로 config/ir_brief.yaml 의 `"$code`" 이번 분기 IR 요약·IR 분석을 녹취록 기준으로 (있으면 보강, 없으면 맨 위에 추가) — t_u: $url 를 넣고, " +
-            "qa 에 질의응답을 빠짐없이 질문마다 {h: '증권사 — 질문 주제', l: ['Q. 질문 한 줄', 'A. 답 2~4줄 (숫자 포함)']} 로 (예시 = ir_brief.yaml CRWV 3Q26 qa). " +
+            "qa 에 질의응답을 빠짐없이 질문마다 {h: '증권사 — 질문 주제', l: ['Q. 질문 한 줄', 'A. 답 2~4줄 (숫자 포함)']} 로, story(핵심 요약)·bear(반대 의견·리스크, 직접 찾은 건 '(직접 찾아본 내용)')·pts(핵심 포인트)도 (예시 = ir_brief.yaml CRWV 3Q26). " +
             "3) config/earnings.yaml 의 `"$code`" 이번 분기도 3번 형식대로 녹취록 기준으로 (있으면 보강, 없으면 맨 위에 추가, transcript: $url). " +
             "원문 문장을 길게 옮기지 말고 우리 말로, 원문에 없는 숫자는 만들지 말고, 매수·매도 추천 금지. 파일 수정만 하고 git 은 하지 마."
-        & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
+        & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write,WebSearch,WebFetch" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
         & $py -X utf8 tools\us_call.py check $code $url
         if ($LASTEXITCODE -eq 0 -and (Publish "$code 어닝콜 녹취록 요약·질의응답 (Motley Fool 공개 녹취록)")) { New-Item "$($f.FullName).done" -ItemType File -Force | Out-Null; Log "$code $date 녹취록 요약 올림" }
         else { Log "$code $date 녹취록 요약 실패 ($($n + 1)/3) - 다음 시간에 다시" }

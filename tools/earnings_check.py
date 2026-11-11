@@ -20,6 +20,10 @@ if sys.argv[1] == "export_ir":
         sys.exit(f"ir_brief.yaml: IR 요약(sum)·IR 분석(ana) 둘 다 있어야 함 — {bad}")
     for l in ir.values():  # '제목: 글' 처럼 따옴표 없이 콜론+띄어쓰기가 든 줄은 YAML 이 표로 읽음 → 다시 글자로 (11/7 실적 탭 멈춤)
         for e in l:
-            for s in (e.get("sum") or []) + (e.get("ana") or []) + (e.get("qa") or []):
-                s["l"] = [x if isinstance(x, str) else " ".join(f"{k}: {v}" for k, v in (x or {}).items()) for x in s.get("l") or []]
+            txt = lambda ls: [x if isinstance(x, str) else " ".join(f"{k}: {v}" for k, v in (x or {}).items()) for x in ls or []]  # noqa: E731
+            for s in (e.get("sum") or []) + (e.get("ana") or []) + (e.get("qa") or []) + (e.get("bear") or []):
+                s["l"] = txt(s.get("l"))
+            for k in ("story", "pts"):  # 📖 핵심 요약 문단 · ⭐ 핵심 포인트 줄 (사용자 11/11)
+                if e.get(k):
+                    e[k] = txt(e[k])
     write_json(DATA / "ir_brief.json", ir)
