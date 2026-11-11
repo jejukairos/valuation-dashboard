@@ -34,6 +34,10 @@ SGA = read_json(CACHE / "dart_sga.json") or {}  # 💰 한국 분기 판관비 �
 KPI_CFG = load_yaml("kpi.yaml") or {}  # 🔑 핵심 지표 (fcf_add = 야후에 아직 없는 최신 분기 FCF, 보도자료)
 NOTES = load_yaml("notes.yaml") or {}  # 적정주가 칸 메모 (증권사 의견, 28E 칸 등)
 SEGC = load_yaml("seg_cons.yaml") or {}  # 🎯 사업부문별 컨센서스 vs 실적
+try:  # 실적 정리 (PC 작업이 회사 발표로 씀) — 야후·네이버가 늦은 최신 분기 숫자를 먼저 채우는 데 씀 (kq.fill) · 깨진 YAML 이면 건너뜀
+    EARN = load_yaml("earnings.yaml") or {}
+except Exception:  # noqa: BLE001
+    EARN = {}
 SEC_LONG = read_json(CACHE / "sec_longq.json") or {}  # 미국 10년 분기 실적 (tools/sec_backfill.py 로 받아 둠, 백만 달러)
 CMP = load_yaml("compare.yaml") or {}  # ⚖️ 비교 탭 설정·손으로 적는 자료 (삼성 DS·낸드·클라우드)
 DEBT_NEWS = load_yaml("debt.yaml") or {}  # 🏦 회사채 발행 뉴스 메모 (종목 코드 → [{date, text, url}])
@@ -499,15 +503,21 @@ def stock_detail(h, rates_now, fx):
             det["kq"] = kq.collect_us(code, QTRS.get(tkr), hist)
         except Exception as e:  # noqa: BLE001
             REPORT.block("최신 분기 실적 (미국)", f"{name}: {str(e)[:60]}")
-    if mkt == "KR" and det["kq"] and det["qtrs"]:  # 야후에 아직 없는 최신 분기는 잠정실적(매출·영업이익·순이익, 억원 → 원)으로 먼저 — 원가·비용은 분기보고서 뒤
+    if det["kq"]:  # 야후·네이버가 아직 안 준 최신 분기 → 실적 정리(회사 발표) 숫자로 먼저 (11/11 코어위브 '그래프는 2Q26')
+        try:
+            det["kq"] = kq.fill(det["kq"], EARN.get(oc) or EARN.get(code) or [], mkt)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("최신 분기 실적 (실적 정리로 채우기)", f"{name}: {str(e)[:60]}")
+    if det["kq"] and det["qtrs"]:  # 야후에 아직 없는 최신 분기는 잠정실적·실적 정리(매출·영업이익·순이익)로 먼저 — 원가·비용은 분기보고서 뒤
         det["qtrs"] = dict(det["qtrs"])  # 쌓아 두는 야후 캐시(QTRS)는 건드리지 않음
+        mul = 1e8 if mkt == "KR" else 1  # 한국 kq 는 억원, 미국은 달러
         for q in det["kq"].get("quarters") or []:
             lb = q.get("q") or ""
             if not re.fullmatch(r"\d\d\.[1-4]Q", lb) or not q.get("sales"):
                 continue
             e = f"20{lb[:2]}-{('03-31', '06-30', '09-30', '12-31')[int(lb[3]) - 1]}"
-            if e > max(det["qtrs"]):
-                det["qtrs"][e] = {"rev": q["sales"] * 1e8, "prelim": True, **{k: q[f] * 1e8 for k, f in (("op", "op"), ("ni", "ni")) if q.get(f) is not None}}
+            if e > max(det["qtrs"]) and (mkt == "KR" or (pd.Timestamp(e) - pd.Timestamp(max(det["qtrs"]))).days > 60):  # 미국은 결산 달이 달라도 같은 분기를 두 번 넣지 않게
+                det["qtrs"][e] = {"rev": q["sales"] * mul, "prelim": True, **{k: q[f] * mul for k, f in (("op", "op"), ("ni", "ni")) if q.get(f) is not None}}
     oc = str(h.get("data_code") or code)  # 우선주는 보통주 실적으로
     dq = None
     if mkt == "KR":  # DART 분기보고서 (2015년~, 예전 분기는 갱신마다 조금씩 채움)
@@ -516,7 +526,7 @@ def stock_detail(h, rates_now, fx):
         except Exception as e:  # noqa: BLE001
             REPORT.block("DART 분기 실적", f"{name}: {str(e)[:60]}")
     det["op_yoy"] = op_yoy(oc, mkt, det["kq"], QTRS.get(tkr), (KPI_CFG.get(oc) or {}).get("op_yoy"), dq=dq)
-    det["longq"] = long_q(mkt, dq, det["kq"], QTRS.get(tkr), SEC_LONG.get(code))  # 📈 10년 실적 추이
+    det["longq"] = long_q(mkt, dq, det["kq"], det["qtrs"], SEC_LONG.get(code))  # 📈 10년 실적 추이 (미국 최신 분기는 실적 정리 숫자로 먼저)
     LONGQ[code] = det["longq"]
     det["shq"] = None  # 📉 주식 수 증가율(YoY)용 분기 주식 수 {분기 끝 날짜: 주}
     if mkt == "KR":  # 보통주 유통주식수 (발행 − 자기주식, 분기 말) — DART 정기보고서

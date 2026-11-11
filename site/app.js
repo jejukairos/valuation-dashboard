@@ -1422,7 +1422,7 @@ function irAuto(k) {
   const o = R.op, s = R.sales, ni = R.ni, ana = [{ h: "한 줄 평가", l: [[o?.vs_est != null ? `영업이익 예상 대비 ${n(o.vs_est, 1)}% ${vsTag(o.vs_est)}` : "", s?.vs_est != null ? `매출 ${n(s.vs_est, 1)}% ${vsTag(s.vs_est)}` : ""].filter(Boolean).join(" · ") || "예상(컨센서스)이 없어 비교 못 함"] }];
   if ((k.points || []).length) ana.push({ h: "✦ 숫자로 본 점 (최근 5개 분기)", l: k.points });
   if (o?.qoq != null && ni?.qoq != null && (o.qoq > 0) !== (ni.qoq > 0)) ana.push({ h: "영업이익과 순이익의 차이", l: [`영업이익 QoQ ${n(o.qoq, 1)}% · 순이익 ${n(ni.qoq, 1)}% — 방향이 달라요. 영업 밖 손익(환율·이자·지분법·평가손익 등) 영향일 수 있어 분기보고서로 확인`] });
-  return { quarter: k.latest, period: `${k.latest}${k.prelim ? " 잠정" : ""} · 숫자로 먼저`, date: k.filing?.date, src: "잠정실적 숫자로 자동 요약 (네이버·DART)", u: k.filing?.url, sum, ana, auto: true };
+  return { quarter: k.latest, period: `${k.latest}${k.prelim ? " 잠정" : ""} · 숫자로 먼저`, date: k.filing?.date || k.date, src: "잠정실적 숫자로 자동 요약 (네이버·DART)", u: k.filing?.url, sum, ana, auto: true };
 }
 // 🧾 큰 숫자 카드 (사용자 11/11: 셀트리온제약·원익IPS 텔레그램 그림처럼, 보유·관심 전 종목) — 숫자는 잠정실적 표(k, 같은 분기일 때만), 글은 IR 요약·분석의 첫 줄들 · 한국식 오름 빨강·내림 파랑
 function irCards(e, k) {
@@ -1926,6 +1926,7 @@ function kqHTML(d) {
   return `<h3>🧾 최신 분기 실적 <span class="src">${esc(k.latest)}${k.prelim ? " 잠정" : ""} · ${k.cur === "USD" ? "야후 파이낸스 · 달러 · EPS = 야후 발표 EPS" : "네이버 증권(FnGuide) · 억원"}${k.est_date ? ` · 예상 = ${esc(k.est_date)} 저장한 컨센서스` : ""}</span></h3><div class="card">
     ${k.waiting && nx ? `<div class="warnbox">🧾 ${esc(nx.q)} 잠정실적 공시가 났어요 (${esc(k.filing.date)}). 네이버 숫자에 반영되면 예상 대비가 자동으로 계산돼요. <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">공시 보기</a></div>` : ""}
     ${k.prelim && k.filing ? `<div class="note">🧾 ${esc(k.latest)} 숫자는 <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">DART 잠정실적 공시(${esc(k.filing.date)})</a> 값이에요. 네이버에 확정 숫자가 들어오면 자동으로 바뀌어요 (EPS 는 그때 채워짐).</div>` : ""}
+    ${k.fill ? `<div class="note">🧾 ${esc(k.latest)} ${k.fill.f.map((f) => ({ sales: "매출", op: "영업이익", ni: "순이익" })[f]).join("·")}은 회사 발표 숫자예요 (실적 정리 ${esc(k.fill.date)}${k.fill.f.includes("op") && k.cur === "USD" ? " · 회계 기준 영업이익" : ""}). ${k.cur === "USD" ? "야후 재무제표" : "네이버"}에 들어오면 자동으로 바뀌어요.</div>` : ""}
     ${kqTable(k)}
     ${kqPtHTML(k)}
     ${acctHTML(d.code)}
