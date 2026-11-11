@@ -55,6 +55,13 @@ jobs:
       - name: 갱신 상태 기록 (실패하면 사이트 모든 탭 맨 위에 🚨 알림)
         if: always()
         run: python collector/run_status.py "${{ steps.collect.outcome }}" "${{ inputs.attempt || 1 }}" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      - name: 🔔 새 소식 (7일 변화 → feed.json, 사용자 11/11)
+        if: always()
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          git fetch -q --shallow-since="$(date -u -d '8 days ago' +%Y-%m-%d)" origin main || true
+          cd collector && python -u feed.py || true
       - name: 저장 (실패해도 일부 결과는 저장)
         if: always()
         run: |

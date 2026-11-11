@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["collector/tg_reports.py", "collector/exp_ten.py", ".github/workflows/tg.yml"]
+    paths: ["collector/tg_reports.py", "collector/exp_ten.py", "collector/feed.py", ".github/workflows/tg.yml"]
 
 permissions:
   contents: write
@@ -46,12 +46,19 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: cd collector && python -u reports.py --all && python -u news.py
+      - name: 🔔 새 소식 (7일 변화 → feed.json, 사용자 11/11 — 리포트·수출 글이 들어온 뒤라 맨 끝)
+        if: always()
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          git fetch -q --shallow-since="$(date -u -d '8 days ago' +%Y-%m-%d)" origin main || true
+          cd collector && python -u feed.py --test && python -u feed.py
       - name: 저장
         if: always()
         run: |
           git config user.name "valuation-bot"
           git config user.email "valuation-bot@users.noreply.github.com"
-          git add site/data/tg_reports.json site/data/exp_ten.json site/data/reports.json site/data/news.json cache/news.json cache/reports_pdf.json site/data/rep_all.json cache/ind_pages.json 2>/dev/null || true
+          git add site/data/tg_reports.json site/data/exp_ten.json site/data/feed.json site/data/reports.json site/data/news.json cache/news.json cache/reports_pdf.json site/data/rep_all.json cache/ind_pages.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "리포트·뉴스 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs -q || exit 1; done

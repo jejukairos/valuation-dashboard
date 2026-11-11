@@ -3864,8 +3864,8 @@ const EXP_K = { ramen: ["🍜 라면 수출", "HS 1902.30.1010", ["전체", "미
     `${EXP_NOTE} · 초고압변압기 = HS 8504.23 (10,000kVA 초과) · 배전변압기 = 8504.22 (650~10,000kVA) · 8504.21 (650kVA 이하) · 증권사 정의 확인 전 후보: GIS·차단기 = 8535.29 (72.5kV 이상) · 배전반 = 8537.20.3000 (1kV 초과 배전용) · 초고압케이블 = 8544.60.3 · 표(맨 위)는 증권사 1일 잠정치 (전월비·전년비만)`],
   car: ["🚗 자동차 수출", "산업부 월별 · 관세청 HS", ["승용차 (HS 8703)", "자동차부품 (HS 8708)", "화물차 (HS 8704)"], "달", 1,
     `표·선 그림 = 산업통상부 월별 자동차 수출액 (다올투자증권 글, 사용자 전달) · 아래 월별 그림 = 관세청 수출입실적 API (매일 확인 · 확정치는 다음 달 중순쯤) · 승용차 = HS 8703 (중고차 포함이라 산업부 '자동차'와 금액이 다를 수 있어요) · 화물차 = 8704 · 자동차부품 = 8708`],
-  food: ["🥫 소스·아이스크림·담배 수출", "나라 합계", ["소스", "담배", "아이스크림"], "품목 · 지역", false,
-    `${EXP_NOTE} · 소스 = HS 2103 전체 (후보: 2103.90.9090 기타 소스) · 아이스크림 = 2105 · 담배 = 2402.20 필터담배 · 라면은 위 🍜 라면 칸 · 표(맨 위)는 증권사 1일 잠정치 (전월비·전년비만)`] };
+  food: ["🥫 소스·아이스크림 수출", "나라 합계", ["소스", "아이스크림"], "품목 · 지역", false,
+    `${EXP_NOTE} · 소스 = HS 2103 전체 (후보: 2103.90.9090 기타 소스) · 아이스크림 = 2105 · 담배는 뺌 (11/11) · 라면은 📦 수출입 탭 · 표(맨 위)는 증권사 1일 잠정치 (전월비·전년비만)`] };
 // 🍜 올해 1~N월 라면 지역별 수출 증가율 (한화 그림14 모양, 사용자 11/10 "트래킹 할 수 있는 것만") — 관세청 숫자로 자동
 //   두 해 모두 1~N월이 다 있는 지역만 (나라별 API 가 열리면 중국·미국·유럽이 저절로 들어옴) · 유럽 = 아래 나라 합
 const EU_C = ["영국", "네덜란드", "독일", "프랑스", "스페인", "이탈리아", "폴란드", "스웨덴"];
@@ -3923,7 +3923,7 @@ function expHTML(kind) {
 let TN = null, GOTO = null;  // TN = data/tour_nat.json (국적별 입국, collector/tour_stats.py) · GOTO = 상세를 열고 갈 칸
 const EXPW = { "003230": ["ramen"], "278470": ["cosmetics", "tour"], "483650": ["cosmetics", "tour"], "241710": ["cosmetics"], "251970": ["cosmetics"], "092730": ["cosmetics"],
   "214450": ["med", "medx", "tour"], "214150": ["medx", "tour"], "005930": ["tech"], "005935": ["tech"], "000660": ["tech"], "009150": ["mlcc"],
-  "005380": ["car"], "000270": ["car"], "012330": ["car"], "023530": ["tour"], "004170": ["tour"], "069960": ["tour"], "003490": ["tour"] };
+  "005380": ["car"], "000270": ["car"], "012330": ["car"], "034020": ["power"], "023530": ["tour"], "004170": ["tour"], "069960": ["tour"], "003490": ["tour"] };
 // s = 월별 줄 묶음 · m = 큰 줄 · sub = 나눠 볼 줄 · L = 최신 표 (lk = 표 안 이름, timeline 표는 날짜만 씀) · dv·u·dg = 그림 단위 · seen = 확정치 받은 날 묶음
 const EXPW_K = {
   ramen: { t: "🍜 라면 수출", s: () => EXP?.ramen, m: "전체", sub: ["미국", "중국", "일본"], L: () => EXP?.latest, lk: "ramen", dv: 100, u: "억$", dg: 2, seen: "ramen", hs: "관세청 HS 1902.30.1010" },
@@ -3934,8 +3934,8 @@ const EXPW_K = {
   car: { t: "🚗 자동차 수출", s: () => EXP?.car, m: "승용차 (HS 8703)", sub: ["자동차부품 (HS 8708)"], L: () => EXP?.car_latest, dv: 100, u: "억$", dg: 0, seen: "car", hs: "관세청 HS 8703·8708" },
   medx: { t: "💉 미용 의료기기 수출", s: () => EXP?.medx, m: "톡신 (3002.49 후보)", sub: ["미용의료기기 (9018.90 후보)", "필러·기타 화장품 (3304.99.9000)"], lk: "medx", dv: 100, u: "억$", dg: 2, seen: "medx",
     hs: "관세청 톡신 HS 3002.49 · 미용의료기기 9018.90 (다올 숫자보다 5~12% 커서 '후보' — 흐름 확인용) · 필러 = 기타 화장품 3304.99.9000 (다올과 같음 ✅) · 치과·임플란트는 뺌" },
-  power: { t: "⚡ 대형 변압기 수출", s: () => EXP?.power, m: "초고압변압기", sub: ["배전변압기 650~10,000kVA", "초고압케이블 (8544.60.3)"], lk: "power", dv: 100, u: "억$", dg: 2, seen: "power",
-    hs: "관세청 HS 8504.23 (10,000kVA 초과) · TRASS-BF '대형변압기(10,000KVA 이상)'" },
+  power: { t: "⚡ 변압기·GIS 수출", s: () => EXP?.power, m: "초고압변압기", sub: ["GIS·차단기 (72.5kV 이상)", "배전변압기 650~10,000kVA", "초고압케이블 (8544.60.3)", "배전반 (1kV 초과)"], lk: "power", dv: 100, u: "억$", dg: 2, seen: "power",
+    hs: "관세청 초고압변압기 HS 8504.23 (10,000kVA 초과) · GIS·차단기 8535.29 (72.5kV 이상) · 배전변압기 8504.22 · 초고압케이블 8544.60.3 · 배전반 8537.20.3 · TRASS-BF '대형변압기' · 증권사 코멘트 = HJS_YSK" },
   med: { t: "💉 강릉 화장품·필러 수출 (리쥬란 신호)", s: () => EXP?.med, m: "강릉 3304.99 (리쥬란)", sub: [], dv: 0.01, u: "만$", dg: 0, seen: "med", hs: "관세청 시군구 · 강릉 HS 3304.99 (회사와 딱 맞진 않지만 흐름이 비슷하다고 보는 칸)" },
   tour: { t: "✈️ 외국인 입국자 수", s: () => TN?.nat, m: "전체", sub: ["중국", "일본", "미국", "유럽", "대만"], dv: 1e4, u: "만 명", dg: 0, hs: "관광지식정보시스템 국적별 입국 (원자료 법무부)" } };
 const ymAdd = (x, d) => { const t = +x.slice(0, 4) * 12 + +x.slice(5) - 1 + d; return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`; };
@@ -4039,7 +4039,7 @@ function xpTen(k) {
     subs.length ? `가장 빨리 느는 곳: ${subs[0][0]} ${sg(subs[0][1][1])}${subs.length > 1 ? ` · 가장 느린 곳: ${subs.at(-1)[0]} ${sg(subs.at(-1)[1][1])}` : ""}` : "",
     ...ck.map((x) => `🔁 ${x}`)].filter(Boolean);
   const P = (XT?.posts || []).filter((p) => p.items.includes(k)).slice(0, 4);
-  const posts = P.length ? `<details class="fvt" style="grid-column:1/-1"><summary class="chart-title">📨 다른 증권사 채널 글 (크로스 체크) <span class="src">한투 김명주 · 한화 한유정 · ${P.length}개 · 한화는 원화 기준</span></summary>
+  const posts = P.length ? `<details class="fvt" style="grid-column:1/-1"><summary class="chart-title">📨 다른 증권사 채널 글 (크로스 체크) <span class="src">한투 김명주 · 한화 한유정 · HJS 전력기기·음식료 · ${P.length}개 · 한화는 원화 기준 · HJS 표는 그림이라 코멘트만</span></summary>
     ${P.map((p) => `<div class="note"><b>${esc(p.d.slice(5))} ${esc(p.t)}</b> <a href="${esc(p.u)}" target="_blank" rel="noopener">원문</a>${p.lines.length ? `<ul class="irl">${p.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}</div>`).join("")}</details>` : "";
   const more = cur.slice(1).filter((t) => Object.keys(t[k]).some((c) => c !== "전체"));  // '전체' 한 줄뿐인 채널은 위 🔁 줄로 충분
   return `<div class="kidbox" style="grid-column:1/-1;margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div>${xpTenOne(k, M, true)}${more.map((t) => xpTenOne(k, t, false)).join("")}${xpTenHist(k, all, M)}${posts}`;
@@ -4095,6 +4095,42 @@ async function renderExports() {
   $("#exportsBody").innerHTML = h ? expBanner() + h : `<div class="empty">수출 데이터를 불러오지 못했어요.</div>`;
   jumpBar("#exportsBody", "#expJump", "🔎 품목 검색 (예: 화장품) → Enter");
   setTimeout(kcGo, 50);
+}
+// 🔔 새 소식 탭 (사용자 11/11 "오늘·어제·그 주에 바뀐 것·올라온 것을 가장 최신이 위로 — 놓치지 않게 · 자동으로 업데이트한 것도 · 보유 → 관심 → 공동")
+//   ← data/feed.json (collector/feed.py: 실적·IR·리포트·증권사 요약·공시·수출·추정치 + 사이트 반영 커밋, 7일 · tg.yml·update.yml)
+let FEED = null;
+const FG = { 보유: "💼 보유", 관심: "⭐ 관심", 공동: "🤝 공동자산", 공통: "🌐 시장·공통" };
+const SITE_K = "🛠 사이트 반영";
+const kstToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+async function feedGet() {
+  if (!FEED) FEED = await fetch("data/feed.json?t=" + Date.now(), { cache: "no-store" }).then((r) => r.json()).catch(() => ({}));
+  return FEED;
+}
+function feedBadge() {  // 탭 이름 옆 = 오늘 새 소식 수 (사이트 반영 빼고)
+  const n = (FEED?.items || []).filter((x) => x.d === kstToday() && x.k !== SITE_K).length, a = document.querySelector('#tabbar a[data-view="feed"]');
+  if (a) a.innerHTML = `🔔 새 소식${n ? ` <b style="color:var(--bad-ink)">${n}</b>` : ""}`;
+}
+const feedRow = (x) => `<div class="note" style="margin:6px 0;line-height:1.55${x.bad ? ";color:var(--bad-ink)" : ""}"><span class="pill">${esc(x.k)}</span> ${x.name ? `<a href="${esc(x.go || "#")}"><b>${esc(x.name)}</b></a> ` : ""}${esc(x.t)}${!x.name && x.go ? ` <a href="${esc(x.go)}">보기</a>` : ""}${x.u ? ` <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a>` : ""}${x.hm ? ` <span class="src">${esc(x.hm)}</span>` : ""}</div>`;
+async function renderFeed() {
+  const F = await feedGet(), it = F.items || [], today = kstToday();
+  feedBadge();
+  if (!it.length) { $("#feedBody").innerHTML = `<div class="empty">최근 7일 새 소식이 없어요.</div>`; return; }
+  const dl = (d) => { const df = Math.round((Date.parse(today) - Date.parse(d)) / 864e5), w = "일월화수목금토"[new Date(`${d}T12:00:00Z`).getUTCDay()];
+    return `${df === 0 ? "오늘" : df === 1 ? "어제" : `${df}일 전`} (${+d.slice(5, 7)}/${+d.slice(8)} ${w})`; };
+  const isData = (x) => x.k !== SITE_K;
+  // 맨 위: 💼 보유 종목 최근 2일 (가장 먼저 봐야 할 것)
+  const d2 = [...new Set(it.map((x) => x.d))].slice(0, 2), top = it.filter((x) => d2.includes(x.d) && x.g === "보유" && isData(x));
+  const cnt = (xs) => Object.keys(FG).map((g) => [g, xs.filter((x) => x.g === g).length]).filter(([, c]) => c).map(([g, c]) => `${FG[g]} ${c}`).join(" · ");
+  const head = `<div class="kidbox" style="margin-bottom:10px">🐣 최근 7일 바뀐 것 ${it.filter(isData).length}개 (${cnt(it.filter(isData))}) · 같은 날 안에서는 보유 → 관심 → 공동 → 공통 순서
+    ${top.length ? `<div style="margin-top:6px"><b>💼 보유 종목 — ${esc(d2.map(dl).join(" · "))}</b>${top.map(feedRow).join("")}</div>` : `<div class="note">💼 보유 종목은 최근 이틀 새 소식이 없어요.</div>`}</div>`;
+  const day = (d, i) => {
+    const xs = it.filter((x) => x.d === d), data = xs.filter(isData), site = xs.filter((x) => !isData(x));
+    const grp = Object.keys(FG).map((g) => { const ys = data.filter((x) => x.g === g); return ys.length ? `<div style="margin-top:8px"><b>${FG[g]}</b> <span class="src">${ys.length}개</span>${ys.map(feedRow).join("")}</div>` : ""; }).join("");
+    return `<details class="fvt"${i < 2 ? " open" : ""}><summary class="chart-title" style="margin-top:12px"><b>${dl(d)}</b> <span class="src">${data.length}개${data.length ? ` (${cnt(data)})` : ""}${site.length ? ` · 🛠 반영 ${site.length}` : ""}</span></summary>
+      <div class="card">${grp || '<div class="note">데이터 변화 없음</div>'}${site.length ? `<details class="fvt"><summary class="chart-title">🛠 사이트에 반영한 것 ${site.length}개 <span class="src">전달받은 글 반영 · 화면·계산 고침 (Claude)</span></summary>${site.map(feedRow).join("")}</details>` : ""}</div></details>`;
+  };
+  $("#feedBody").innerHTML = head + [...new Set(it.map((x) => x.d))].map(day).join("")
+    + `<div class="note src" style="margin-top:10px">자동 갱신 ${esc(F.updated_at || "")} (하루 여러 번) · 🧾 실적 = 잠정실적 숫자·IR 요약·컨콜 정리 · 📑 리포트 = 한경 목표가 · 🌏 증권사 요약 = 리포트 탭 한 장 요약 · 📢 공시 = 중요 공시 · 📦 수출 = 채널 1~10일 잠정·관세청 확정 · 📈 추정치 = 1주 3% 넘게 바뀐 이익 추정 · 🤖 자동 정리 = PC 예약 작업이 스스로 정리 · 매수·매도 추천 아님</div>`;
 }
 // 12MF 밴드 (key eps = PER · bps = PBR): 선 = 배수 × 그 시점의 12개월 선행 EPS·BPS, 오른쪽은 추정치로 그린 앞으로의 선
 const P12K = (key) => (key === "bps" ? { k: "PBR", v: "BPS", id: "b12", dg: 2 } : { k: "PER", v: "EPS", id: "p12", dg: 1 });
@@ -4963,7 +4999,7 @@ function showView() {
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#exports": "exports" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#exports": "exports", "#feed": "feed" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   const eg = { earn: "보유", earnw: "관심", earnj: "공동" }[view];  // 🧾 실적 보유 · 관심 · 공동 (같은 화면, 종목 묶음만 바꿈)
   $("#earnView").hidden = !eg;
   if (eg) { EARN_GRP = eg; renderEarn(); }  // 보유·관심·공동을 바꿔도 전체/한국/미국 고른 건 그대로
@@ -4982,6 +5018,8 @@ function showView() {
   if (view === "policy") renderPolicy();
   $("#exportsView").hidden = view !== "exports";
   if (view === "exports") renderExports();
+  $("#feedView").hidden = view !== "feed";
+  if (view === "feed") renderFeed();
   $("#marketView").hidden = view !== "market";
   $("#scoreView").hidden = view !== "score";
   if (view === "score") renderScore();
@@ -6548,6 +6586,7 @@ async function load() {
     try { IRCAL = await (await fetch("data/ir_calendar.json?t=" + Date.now(), { cache: "no-store" })).json() || { items: [] }; } catch (_) { IRCAL = { items: [] }; }
     try { IRB = await (await fetch("data/ir_brief.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { IRB = {}; }
     try { [EXP, TN, XT] = await Promise.all(["exports", "tour_nat", "exp_ten"].map((f) => fetch(`data/${f}.json?t=` + Date.now(), { cache: "no-store" }).then((r) => r.json()).catch(() => ({})))); } catch (_) { EXP = {}; TN = {}; XT = {}; }  // ‼️ 📦 카드 꼬리표 (1~10일 잠정 포함)
+    feedGet().then(feedBadge);  // 🔔 탭 이름 옆 오늘 새 소식 수
     try { PBR = await (await fetch("data/pbr_watch.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { /* 📌 코멘트·기준선만 빠짐 */ }
     try { CYC = await (await fetch("data/cycle_dd.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { CYC = null; }  // 📉 고점 대비 낙폭 사이클
     try { EVENTS = await (await fetch("data/events.json?t=" + Date.now(), { cache: "no-store" })).json() || []; } catch (_) { EVENTS = []; }

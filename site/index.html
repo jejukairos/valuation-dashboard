@@ -19,6 +19,7 @@
   <h1>🚦 밸류 신호등</h1>
   <div class="updated"><div id="updated">불러오는 중…</div><button id="statusChip" class="status-chip ok" hidden></button></div>
   <nav class="tabbar" id="tabbar">
+    <a href="#feed" data-view="feed">🔔 새 소식</a>
     <a href="#signal" data-view="pbr">📡 신호</a>
     <a href="#earn" data-view="earn" class="on">🧾 실적</a>
     <a href="#kr" data-view="main">💼 보유</a>
@@ -112,6 +113,11 @@
   <p class="sub">함께 투자하는 종목이에요. 보유종목과 똑같이 적정주가·분기 실적·실적발표 요약까지 봐요. 종목은 config/stocks.yaml 의 joint 에 넣어요.</p>
   <div id="jointAccel"></div>
   <div class="grid g3" id="jointCards"></div>
+</main>
+<main class="wrap" id="feedView" hidden>
+  <h2>🔔 새 소식</h2>
+  <p class="sub">오늘·어제·이번 주(7일)에 바뀐 것만 모았어요 — 가장 최신이 위, 같은 날은 보유 → 관심 → 공동 순서. 실적·리포트·공시·수출 숫자와 사이트에 자동으로 반영한 것까지 · 매수·매도 추천 아님</p>
+  <div id="feedBody"><div class="empty">불러오는 중…</div></div>
 </main>
 <main class="wrap" id="exportsView" hidden>
   <h2>📦 수출입</h2>

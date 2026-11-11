@@ -12,10 +12,11 @@ import tg_reports
 from common import DATA, now_kst, write_json
 
 KYOBO, DAOL = "kyobofnbcosmetic", "alexppark"
-CROSS = ["kmj_retailcosmetics", "hanwha_yujunghan"]  # 한투 김명주 · 한화 한유정 (사용자 2026-11-11, 한화는 원화 기준)
+# 한투 김명주 · 한화 한유정 (원화 기준) · HJS_YSK '[전력기기/음식료 수출입 통계 Update]' (표는 그림이라 코멘트 줄만, 사용자 11/11 "라면 트래킹 · 변압기·GIS 관심, 담배는 관심 없음")
+CROSS = ["kmj_retailcosmetics", "hanwha_yujunghan", "HJS_YSK"]
 ITEM = {"라면": "ramen", "화장품": "cosmetics", "음식료/담배": "ramen", "의료기기": "medx"}
 SKIP = ("임플란트", "치과영상장비", "지혈제", "콘택트렌즈")  # 사용자 11/11 "치과·임플란트 이런 건 관심 없어"
-KW = {"ramen": "라면", "cosmetics": "화장품|기초|색조|마스크팩", "medx": "톡신|필러|미용의료기기|의료기기"}  # 글이 어느 칸 얘기인지
+KW = {"ramen": "라면", "cosmetics": "화장품|기초|색조|마스크팩", "medx": "톡신|필러|미용의료기기|의료기기", "power": "변압기|GIS|배전반|케이블"}  # 글이 어느 칸 얘기인지
 TITLE = re.compile(r"(\d{4})년\s*(\d{1,2})(?:/1\s*~\s*(\d{1,2})|월)\s*(라면|화장품|음식료/담배)\s*수출")
 ROW = re.compile(r"^>?\s*([^$>]+?)\s*\$([\d,.]+)m\s*\(yy\s*([+-]?[\d.]+)%,\s*mm\s*([+-]?[\d.]+)%\)")
 WD = re.compile(r"\d+월 영업일수\s*:\s*(\d+)일\s*/\s*\d+월 영업일수\s*:\s*(\d+)일\s*/\s*작년\s*\d+월 영업일수\s*:\s*(\d+)일")
@@ -121,10 +122,13 @@ def parse_daol(text):
 def cross(x):
     """다른 증권사 채널의 수출 데이터 글 → 제목 + 숫자 줄 (없으면 None)."""
     t = x["text"].strip()
-    head = " ".join(t.split("\n")[:2])
-    if "수출" not in head or not re.search(r"잠정|데이터|확정|\d+\s*[~-]\s*\d+일", head):
+    head = " ".join([s for s in t.split("\n") if s.strip()][:3])
+    if "수출" not in head or not re.search(r"잠정|데이터|확정|Update|\d+\s*[~-]\s*\d+일", head):
         return None
-    lines = [ln.strip()[:200] for ln in t.split("\n")[1:] if re.search(r"\d", ln) and re.search(r"%|억|\$|달러", ln)][:14]
+    # 숫자 줄 + '(초고압변압기) …' 같은 코멘트 줄 · 담배 문장은 뺌 (사용자 관심 없음 — '(라면 및 담배)' 줄은 라면 문장만)
+    no_tob = lambda ln: " ".join(p for p in re.split(r"(?<=\.)\s+", ln.replace("라면 및 담배", "라면")) if "담배" not in p).strip()  # noqa: E731
+    lines = [no_tob(ln)[:220] for ln in t.split("\n")[1:] if re.search(r"\d", ln) and re.search(r"%|억|\$|달러", ln) or ln.strip().startswith("(")]
+    lines = [ln for ln in lines if ln][:14]
     return {"d": x["d"], "hm": x["hm"], "u": f"https://t.me/{x['id']}", "t": " · ".join([s.strip() for s in t.split("\n") if s.strip()][:2])[:160],
             "items": [k for k, kw in KW.items() if re.search(kw, t)], "lines": lines}
 
@@ -198,6 +202,9 @@ if __name__ == "__main__":
                    "text": "[한화투자증권 한유정] 음식료/화장품 10월 1~10일 수출 잠정치 발표\n\n라면: 603억(74.7% yoy, -32.3% mom)\n뉴스 링크"})
         assert c["items"] == ["ramen", "cosmetics"] and c["lines"] == ["라면: 603억(74.7% yoy, -32.3% mom)"], c
         assert cross({"d": "2026-10-14", "hm": "08:51", "id": "a/1", "text": "[다올] 10/14 화장품 뉴스\n수출 늘어"}) is None
+        c = cross({"d": "2026-10-12", "hm": "09:00", "id": "HJS_YSK/866", "text": "[전력기기/음식료 수출입 통계 Update]\n\n※ 10/1~10/10 잠정치\n\n*Comment\n"
+                   "(초고압변압기) 미국향 수출 호조세 · GIS YoY 상승률에 주목\n(라면 및 담배) 라면 YoY 수출 지속. 담배는 미국향 MoM 상승\n(담배) 인도네시아 MoM (+) 전환"})
+        assert c["items"] == ["ramen", "power"] and c["lines"] == ["(초고압변압기) 미국향 수출 호조세 · GIS YoY 상승률에 주목", "(라면) 라면 YoY 수출 지속."], c
         print("ok")
     else:
         d = collect()
