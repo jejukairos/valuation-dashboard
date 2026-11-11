@@ -216,16 +216,106 @@ def checklist(code, c, tbl, f, per5_avg, pbr10_avg, psr):
             "manual": bool(m), "memo": m.get("memo")}
 
 
+def _split_div(d):
+    """야후 배당 내역 → (정기 Series, 특별 [(배당락일, 금액)]). 특별 = 앞뒤 4번 가운데 값의 2.5배 넘는 한 번
+    (코스트코 $7·$5·$7·$10·$15 — 정기 1달러 안팎). 앞뒤를 같이 봐서 크게 올린 정기배당(계속 이어짐)은 특별로 안 봐요."""
+    import pandas as pd
+    t = d.index.tz_localize(None) if getattr(d.index, "tz", None) is not None else pd.DatetimeIndex(d.index)
+    vals = [float(v) for v in d.values]
+    reg, spc = [], []
+    for i, (dt, v) in enumerate(zip(t.normalize(), vals)):
+        nb = vals[max(0, i - 4):i] + vals[i + 1:i + 5]
+        twin = any(abs(x / v - 1) < 0.2 for x in vals[max(0, i - 1):i] + vals[i + 1:i + 2])  # 바로 앞·뒤가 비슷한 금액 = 올린 정기배당 (엔비디아 0.01 → 0.25 두 번)
+        # shortcut: 크게 올린 첫 정기배당이 맨 끝(다음 배당 전)이면 특별로 보임, 다음 배당이 들어오면 저절로 고쳐짐
+        (spc if nb and not twin and v > statistics.median(nb) * 2.5 else reg).append((dt, v))
+    return pd.Series([v for _, v in reg], index=pd.DatetimeIndex([x for x, _ in reg]), dtype=float), spc
+
+
+def _annual(reg):
+    """정기배당 → {연도: 연간 합}. 매달 주는 종목(리얼티 인컴 등)은 배당락일이 1월 2일·12월 31일로 오가서 한 해에 11번·13번이 잡히므로 (평균 × 12)."""
+    g = reg.groupby(reg.index.year)
+    s = g.mean() * 12 if g.count().median() >= 10 else g.sum()
+    return {int(y): float(v) for y, v in s.items()}
+
+
 def us_dps(code):
-    """미국: 야후 배당 지급 내역 → {연도: 연간 주당배당금} (올해는 아직 다 안 줬으니 뺌).
-    매달 주는 종목(리얼티 인컴 등)은 배당락일이 1월 2일·12월 31일로 오가서 한 해에 11번·13번이 잡히므로 (평균 × 12)."""
+    """미국: 야후 배당 지급 내역 → {연도: 연간 정기 주당배당금} (올해는 아직 다 안 줬으니 뺌 · 특별배당은 빼야 '삭감'으로 안 잡힘)."""
     d = yf.Ticker(code).dividends
     if d is None or d.empty:
         return {}
-    g = d.groupby(d.index.year)
-    monthly = g.count().median() >= 10
-    s = g.mean() * 12 if monthly else g.sum()
-    return {int(y): float(v) for y, v in s.items() if int(y) < now_kst().year}
+    reg, _ = _split_div(d)
+    return {y: v for y, v in _annual(reg).items() if y < now_kst().year} if len(reg) else {}
+
+
+def us_div(code, new=None, ann_dates=None):
+    """💰 배당 추적 (사용자 11/12 코스트코 그림 4장): 정기·특별 나눈 연간 배당 · 정기 인상률 · 연속 지급/인상 · 5년 평균 인상률
+    · 올해 배당률 · 특별배당 때 배당률 · 올해 주가(200일선·52주 고점 대비 -10%).
+    new = stocks.yaml div_new (발표됐지만 야후에 아직 없는 특별배당 [{date, amt, pay, src}]) — 야후에 같은 금액이 들어오면 자동으로 빠짐."""
+    import pandas as pd
+    tk = yf.Ticker(code)
+    d = tk.dividends
+    if d is None or d.empty:
+        return None
+    reg, spc = _split_div(d)
+    px = tk.history(period="max", auto_adjust=False)["Close"].dropna()  # 배당으로 깎지 않은 주가 (깎은 주가면 옛 배당률이 부풀어요)
+    px.index = px.index.tz_localize(None).normalize()
+    y0 = now_kst().year
+    cnt = reg.groupby(reg.index.year).count()
+    freq = int(cnt.iloc[1:-1].median()) if len(cnt) > 2 else int(cnt.max())  # 한 해 몇 번 (첫해·올해는 덜 줄 수 있어 뺌)
+    ann = _annual(reg)
+    if cnt.get(y0, 0) < freq:
+        ann.pop(y0, None)  # 올해 정기배당을 아직 다 안 줬으면 뺌
+    pend = [x for x in (new or []) if not any(pd.Timestamp(x["date"]) <= t <= pd.Timestamp(x["date"]) + pd.Timedelta(days=60)
+                                              and abs(v - float(x["amt"])) < 0.01 for t, v in spc)]
+    sy = {}
+    for t, v in spc:
+        sy[t.year] = sy.get(t.year, 0) + v
+    for x in pend:
+        yy = int(str(x.get("pay") or x["date"])[:4])
+        sy[yy] = sy.get(yy, 0) + float(x["amt"])
+    ys = sorted(ann)
+    gr = {y: (ann[y] / ann[y - 1] - 1) * 100 for y in ys if ann.get(y - 1)}
+    last = ys[-1]
+    n_pay = 1
+    while last - n_pay in ann:
+        n_pay += 1
+    n_inc = 0
+    while last - n_inc - 1 in ann and ann[last - n_inc] > ann[last - n_inc - 1] * 1.001:
+        n_inc += 1
+    g5 = [gr[y] for y in ys[-5:] if y in gr]
+    price, rate = float(px.iloc[-1]), float(reg.iloc[-1]) * freq
+    recent = sum(v for t, v in spc if t >= px.index[-1] - pd.Timedelta(days=365)) + sum(float(x["amt"]) for x in pend)
+
+    def at(t, before=True):  # 그날(배당락일이면 하루 전) 종가 · 그때 정기배당 1년치
+        p = px[px.index < t] if before else px[px.index <= t]
+        r = reg[reg.index <= t]
+        return (float(p.iloc[-1]) if len(p) else None), (float(r.iloc[-1]) * freq if len(r) else None)
+    sp = []
+    for t, v in spc:  # ann_dates = 발표일 목록 (stocks.yaml div_ann) → 배당락일 45일 안의 발표일 종가로 (사람들이 보는 '발표 때 배당률')
+        a = next((pd.Timestamp(x) for x in (ann_dates or []) if t - pd.Timedelta(days=45) <= pd.Timestamp(x) <= t), None)
+        p, r = at(a, before=False) if a is not None else at(t)
+        if p:
+            sp.append({"d": (a or t).strftime("%Y-%m-%d"), "amt": rnd(v, 2), "p": rnd(p, 2), "ry": rnd(r / p * 100, 2) if r else None,
+                       "sy": rnd(v / p * 100, 2), "ex": t.strftime("%Y-%m-%d"), **({"ann": True} if a is not None else {})})
+    for x in pend:
+        p, r = at(pd.Timestamp(x["date"]), before=False)
+        sp.append({"d": str(x["date"]), "amt": float(x["amt"]), "p": rnd(p, 2), "ry": rnd(r / p * 100, 2) if r else None,
+                   "sy": rnd(float(x["amt"]) / p * 100, 2), "ann": True, "pay": x.get("pay"), "src": x.get("src")})
+    ma = px.rolling(200).mean()
+    lr = reg.reindex(px.index.union(reg.index)).ffill().reindex(px.index) * freq  # 그날까지 마지막 정기배당 × 한 해 횟수
+    m = px.index.year == y0
+    s, prev = px[m], px[px.index.year < y0]
+    hi = s.cummax()  # 올해 고점 (그림처럼 '고점 대비 -10%' 아래면 빨강)
+    yrs = sorted(set(ann) | set(sy))[-15:]
+    nn = lambda v, k=2: None if v != v else round(float(v), k)  # noqa: E731 — 200일 전·첫 배당 전은 빈 칸 (NaN 은 JSON 에 못 씀)
+    return {"freq": freq, "price": rnd(price, 2), "rate": rnd(rate, 2), "yld": rnd(rate / price * 100, 2),
+            "yld_all": rnd((rate + recent) / price * 100, 2) if recent else None,
+            "years": [[y, rnd(ann.get(y), 2), rnd(sy.get(y, 0), 2)] for y in yrs], "growth": [[y, rnd(gr.get(y), 1)] for y in yrs],
+            "pay": [n_pay, last - n_pay + 1], "inc": [n_inc, last - n_inc + 1], "avg5": rnd(sum(g5) / len(g5), 1) if len(g5) == 5 else None,
+            "spc": sp[-8:], "ytd_pct": rnd((s.iloc[-1] / prev.iloc[-1] - 1) * 100, 1) if len(s) and len(prev) else None,
+            "ytd": {"d": [t.strftime("%m-%d") for t in s.index], "p": [rnd(v, 2) for v in s], "ma": [nn(v) for v in ma[m]],
+                    "dd": [rnd(v, 2) if v <= h * 0.9 else None for v, h in zip(s, hi)], "y": [nn(v, 3) for v in (lr[m] / s * 100)]},
+            "date": px.index[-1].strftime("%Y-%m-%d")}
 
 
 def dividend_check(dps):
@@ -328,3 +418,12 @@ def roic_more(f, qtrs, fwd):
         k = max(0, 2000 + int(lab[:2]) - fy) if fy else 0  # 마지막 확정 연도부터 몇 년 뒤인지
         out["roic_e"].append([lab, rnd(v / (ic + reinvest * k) * 100, 1) if v is not None else None])
     return out
+
+if __name__ == "__main__":  # 특별배당 가르기 자체 점검 (python score.py)
+    import pandas as pd
+    ix = pd.date_range("2012-01-01", periods=12, freq="91D", tz="America/New_York")
+    _, sp = _split_div(pd.Series([0.27] * 4 + [7.0] + [0.31] * 7, index=ix))  # 코스트코 모양: 가운데 한 번 $7
+    assert [v for _, v in sp] == [7.0], sp
+    _, sp = _split_div(pd.Series([0.01] * 9 + [0.25] * 3, index=ix))  # 엔비디아 모양: 0.01 → 0.25 로 올림 (특별 아님)
+    assert sp == [], sp
+    print("ok")

@@ -462,6 +462,11 @@ def stock_detail(h, rates_now, fx):
     except Exception as e:  # noqa: BLE001
         REPORT.block("배당 이력", f"{name}: {str(e)[:60]}")
         div_check = None
+    if mkt == "US" and h.get("div_track"):  # 💰 배당 추적 — 특별배당 포함 (사용자 11/12 코스트코 그림 4장, stocks.yaml div_track)
+        try:
+            det["dtrack"] = score.us_div(code, h.get("div_new"), h.get("div_ann"))
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("배당 추적", f"{name}: {str(e)[:60]}")
     us_tpl = None
     if mkt == "US":  # ltg·fv5 는 위 적정가 계산에서 받아 둔 값
         try:
@@ -493,6 +498,7 @@ def stock_detail(h, rates_now, fx):
     det["pl_year"] = (fins or {}).get("pl")  # 최근 연간 손익 (돈의 흐름 연간판)
     det["qtrs_y"] = (fins or {}).get("annual")  # 실적 요약 그림 연간 보기
     det["kq"] = None
+    oc = str(h.get("data_code") or code)  # 우선주는 보통주 실적으로 (아래 kq.fill 이 먼저 씀 — 11/11 뒤에 두어 채우기가 전 종목 'oc' 오류로 건너뛰어졌음)
     if mkt == "KR" and not h.get("data_code"):  # 최신 분기 실적(잠정) vs 컨센서스
         try:
             det["kq"] = kq.collect(code)
@@ -518,7 +524,6 @@ def stock_detail(h, rates_now, fx):
             e = f"20{lb[:2]}-{('03-31', '06-30', '09-30', '12-31')[int(lb[3]) - 1]}"
             if e > max(det["qtrs"]) and (mkt == "KR" or (pd.Timestamp(e) - pd.Timestamp(max(det["qtrs"]))).days > 60):  # 미국은 결산 달이 달라도 같은 분기를 두 번 넣지 않게
                 det["qtrs"][e] = {"rev": q["sales"] * mul, "prelim": True, **{k: q[f] * mul for k, f in (("op", "op"), ("ni", "ni")) if q.get(f) is not None}}
-    oc = str(h.get("data_code") or code)  # 우선주는 보통주 실적으로
     dq = None
     if mkt == "KR":  # DART 분기보고서 (2015년~, 예전 분기는 갱신마다 조금씩 채움)
         try:

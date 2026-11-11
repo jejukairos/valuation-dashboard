@@ -255,6 +255,16 @@ watchlist:
   - {name: 어플라이드 머티리얼즈, market: US, code: AMAT, industry: 반도체장비, methods: [PER]}
   # 🪙 스테이블코인(USDC) — 2026-11-10 사용자: "써클 실적발표했대, 관심종목 넣어주고 실적 정리" · 매출 대부분이 준비금 이자라 금리에 민감
   - {name: 서클, market: US, code: CRCL, industry: 스테이블코인, methods: [PER]}
+  # 🛒 회원제 창고형 할인점 — 2026-11-12 사용자: "코스트코 관심종목 넣고 이미지대로 트래킹" (특별배당 3년에 한 번쯤 · 정기배당 매년 두 자릿수 인상)
+  # div_track = 종목 상세 💰 배당 추적 (야후 배당 내역 자동) · div_ann = 특별배당 발표일 (발표 때 배당률 계산) · div_new = 발표됐지만 야후에 아직 없는 특별배당 (들어오면 자동으로 빠짐)
+  - name: 코스트코
+    market: US
+    code: COST
+    industry: 유통
+    methods: [PER]
+    div_track: true
+    div_ann: ["2012-11-28", "2015-01-30", "2017-04-25", "2020-11-16", "2023-12-14"]
+    div_new: [{date: "2026-11-10", amt: 30, pay: "2026-12-04", src: "전달받은 글 11/11 (회사 발표 원문은 확인 전)"}]
 
 # ---------- 공동자산 — 🤝 공동자산 탭 ----------
 # 형식은 holdings 와 같아요 (예: - {name: 삼성전자, market: KR, code: "005930", industry: 반도체, methods: [PBR, PER], fair_methods: [PBR]})

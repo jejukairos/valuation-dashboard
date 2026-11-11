@@ -2063,7 +2063,7 @@ function lineChart(o) {
   // 끝 숫자: 그림 안 마지막 점 옆에 — 숫자 칸 너비 안에서 모든 선보다 위(lab: "above", 기본) 또는 아래(lab: "below")로 비켜서 선을 안 가리게
   const lp = S.filter((s) => !s.bar).flatMap((s) => s.v.map((v, i) => (v == null ? null : [X(i), Y(!!s.right, v)])).filter(Boolean));
   const placed = [];
-  S.filter((s) => !s.bar && s.last).sort((a, b) => (b.lab === "below") - (a.lab === "below")).forEach((s) => {  // 아래 숫자 먼저 → 위 숫자가 그 위로 (매출 위 · 영업이익 아래 순서 유지)
+  S.filter((s) => !s.bar && s.last && !s.nolab).sort((a, b) => (b.lab === "below") - (a.lab === "below")).forEach((s) => {  // nolab = 중간에 끝나는 선(고점 대비 -10% 구간)은 그림 안 숫자 없이  // 아래 숫자 먼저 → 위 숫자가 그 위로 (매출 위 · 영업이익 아래 순서 유지)
     const t = s.last[0], xr = X(s.last[1]) + 4, w = String(t).length * 7 + 4, ys = lp.filter(([x]) => x >= xr - w - 8 && x <= xr + 8).map(([, y]) => y);
     const up = Math.min(...ys) - 6, dn = Math.max(...ys) + 14;
     let y = s.lab === "below" ? (dn <= bot + 2 ? dn : up) : up >= 12 ? up : dn;
@@ -3338,6 +3338,36 @@ function intHTML(d) {
     bars: [{ n: "영업이익 (회계 기준)", v: op }, { n: "이자비용", v: ix }],
     why: `야후 분기 재무제표 · 영업이익 ÷ 이자 = 이자보상배율 (1배 아래면 번 돈으로 이자를 다 못 냄)${go != null && gi != null ? ` · 1년 새 영업이익 ${pct(go, 0, true)}, 이자 ${pct(gi, 0, true)}` : ""} · 야후 반영 전 최신 분기는 빠져요`, kid });
 }
+// 💰 배당 추적 (사용자 11/12 코스트코 그림 4장, stocks.yaml div_track → det.dtrack = score.us_div): 3개 숫자 → 특별 포함 연간 배당 → 정기 & 인상률 → 특별배당 때 배당률 → 올해 배당률·주가
+function divHTML(d) {
+  const v = d.dtrack;
+  if (!v?.years?.length) return "";
+  const Y = v.years, yl = (y) => String(y).slice(2), pend = (v.spc || []).filter((s) => s.ann && s.pay);
+  const big = (l, x, s) => `<div><div class="irc-l">${l}</div><b style="font-size:20px">${x}</b>${s ? ` <span class="src">${s}</span>` : ""}</div>`;
+  const top = `<div class="irc"><div class="irc-box"><div class="irc-3">${big("연속 배당 지급", `${v.pay[0]}년`, `${v.pay[1]}~`)}${big("연속 배당 인상", `${v.inc[0]}년`, `${v.inc[1]}~`)}${big("5년 평균 인상률", v.avg5 == null ? "-" : `${n(v.avg5, 1)}%`)}</div>
+    <div class="c" style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px">정기 배당률 <b>${n(v.yld, 2)}%</b> <span class="src">(1년 $${n(v.rate, 2)} ÷ $${n(v.price, 2)})</span>${v.yld_all ? ` · 특별 포함 <b class="irU">${n(v.yld_all, 1)}%</b>` : ""}</div>
+    ${pend.map((s) => `<div class="c">💰 특별배당 <b>$${n(s.amt, 2)}</b> 발표 ${esc(s.d.slice(5).replace("-", "/"))} · 지급 ${esc(String(s.pay).slice(5).replace("-", "/"))}${s.src ? ` <span class="src">${esc(s.src)}</span>` : ""}</div>`).join("")}</div></div>`;
+  const sp = Y.filter(([, , s]) => s > 0).map(([y, , s]) => `${yl(y)}년 $${n(s, 0)}`).join(" · ");
+  const a = keyChart({ t: "특별배당 포함 연간 배당", u: "달러", d: 1, q: Y.map(([y]) => yl(y)), col: ["var(--muted)", "#e03c31"],
+    bars: [{ n: "정기배당", v: Y.map(([, r]) => r) }, { n: "특별배당", v: Y.map(([, , s]) => s || null) }],
+    why: `야후 배당 내역 · 연도 = 배당락일 기준 (연말 특별배당은 지급 연도와 1년 다를 수 있어요)${pend.length ? " · 올해 특별배당은 발표 숫자 (야후에 들어오면 자동으로 바뀜)" : ""}`, note: sp && `특별배당: ${sp}` });
+  const Y10 = Y.slice(-10), G10 = v.growth.slice(-10);  // 숫자 두 자리라 10년만 (안 겹치게)
+  const b = keyChart({ t: "연간 정기배당 & 인상률", u: "달러", d: 2, q: Y10.map(([y]) => yl(y)), bars: [{ n: "연간 정기배당", v: Y10.map(([, r]) => r) }],
+    pct: { n: "정기배당 인상률", v: G10.map(([, g]) => g) }, why: "특별배당 뺀 정기배당만 · 올해는 한 해 몫을 다 준 뒤에 들어가요",
+    kid: `정기배당을 ${v.inc[0]}년 동안 해마다 올렸어요.${v.avg5 == null ? "" : ` 최근 5년은 해마다 평균 ${n(v.avg5, 0)}%씩 올렸어요.`}` });
+  const S = (v.spc || []).slice(-6);
+  const c = S.length ? keyChart({ t: "특별배당 때 배당률 (정기 + 특별)", u: "%", d: 1, tbl: true, q: S.map((s) => s.d.slice(0, 4)), col: ["var(--muted)", "#e03c31"],
+    bars: [{ n: "정기 배당률", v: S.map((s) => s.ry) }, { n: "특별 배당률", v: S.map((s) => s.sy) }],
+    why: `${S.some((s) => s.ann) ? "발표일 종가" : "배당락 전날 종가"} 기준 · 정기 = 그때 1년치 정기배당 ÷ 주가 · ${S.map((s) => `${s.d.slice(2).replace(/-/g, ".")} $${n(s.amt, 0)}`).join(" · ")}`,
+    kid: "평소 배당률은 1%도 안 되지만, 특별배당을 주는 해에는 몇 %가 더 붙어요." }) : "";
+  const t = v.ytd || {}, D = t.d || [], tk = (i) => (i && D[i].slice(0, 2) !== D[i - 1].slice(0, 2) && +D[i].slice(0, 2) % 2 ? `${+D[i].slice(0, 2)}월` : "");
+  const e = lineChart({ t: "올해 정기 배당률", labels: D, tick: tk, fl: (x) => `${n(x, 2)}%`, s: [{ n: "정기 배당률", v: t.y || [], col: "var(--ink)" }],
+    tag: v.yld_all ? ` <span class="src">특별 포함 <b class="irU">${n(v.yld_all, 1)}%</b></span>` : "", why: "그날까지 마지막 정기배당 × 한 해 횟수 ÷ 그날 종가 — 주가가 오르면 내려가요" });
+  const f = lineChart({ t: `올해 주가${v.ytd_pct == null ? "" : ` ${pct(v.ytd_pct, 1, true)}`}`, labels: D, tick: tk, fl: (x) => `$${n(x, 0)}`,
+    s: [{ n: "주가", v: t.p || [], col: "var(--muted)" }, { n: "올해 고점 대비 -10% 아래", v: t.dd || [], col: "#e03c31", nolab: true }, { n: "200일선", v: t.ma || [], col: "var(--s1)" }],
+    why: `야후 종가 (배당으로 깎지 않은 값) · ${v.date || ""}까지` });
+  return `<h3>💰 배당 추적 <span class="src">정기·특별 나눠서 · 야후 배당 내역 자동</span></h3><div class="card">${top}<div class="qgrid" style="margin-top:8px">${a}${b}${c}${e}${f}</div></div>`;
+}
 // 🔁 반복되는 패턴 메모 (kpi.yaml patterns): 예전 같은 일 → 그 뒤 숫자 흐름 → 이번 · 다음에 확인할 것 · 확인 결과
 function patternHTML(p) {
   const li = (x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`;
@@ -4587,7 +4617,7 @@ async function openStock(code) {
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const xp = EXP_CODE && ["ramen", "cosmetics"].includes(EXP_CODE[0]);  // 라면·화장품은 11/11 📦 수출입 탭으로 옮김
     const expLink = EXP_CODE ? `<div class="note"><a href="${xp ? "#exports" : "#industry"}" data-kc="${xp ? "xp" : "exp"}-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} ${xp ? "1~10일 잠정·월별 (1개월~전체) → 수출입 탭에서 보기" : "월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기"}</a></div>` : "";
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
