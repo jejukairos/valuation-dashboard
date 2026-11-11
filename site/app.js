@@ -1708,7 +1708,10 @@ function renderTop() {
   $("#estAlert").innerHTML = saAlertHTML() + estAlertHTML();
   $("#patAlert").innerHTML = patAlertHTML();
   const own = (DASH?.stocks || []).filter((c) => grp(c) === "보유" && (c.market === "US" ? "US" : "KR") === MKT);
-  $("#bigTech").innerHTML = bigTechHTML() + moneyHTML() + accelHTML(own) + dotMapHTML(own, "보유", MKT);
+  // 🇺🇸 보유 (사용자 11/11): 📍 지도·비교표·카드를 위로, 🚀 이익 증가율 · 빅테크 현금흐름·캐펙스는 카드 아래로
+  const acc = accelHTML(own), map = dotMapHTML(own, "보유", MKT), us = MKT === "US";
+  $("#bigTech").innerHTML = us ? map : acc + map;
+  $("#bigTechLow").innerHTML = us ? acc + bigTechHTML() + moneyHTML() : "";
   accSecFill();
 }
 // 📍 보유·관심 종목 지도 (사용자 전달 그림 '28년 Fwd EPS 증가율과 PER' 모양, 2026-11-01) — 카드의 fwd_mult 만으로 계산:
