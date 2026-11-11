@@ -58,6 +58,7 @@ def _by_period(inc, cf):
             "rnd": (inc, "Research And Development"), "sm": (inc, "Selling And Marketing Expense"),
             "ga": (inc, "General And Administrative Expense"), "sga": (inc, "Selling General And Administration"),
             "opex": (inc, "Operating Expense"), "op": (inc, "Operating Income"), "tax": (inc, "Tax Provision"), "ni": (inc, "Net Income"),
+            "intx": (inc, "Interest Expense"),  # 💸 영업이익 vs 이자비용 그림 (사용자 11/11 코어위브)
             "fcf": (cf, "Free Cash Flow"), "capex": (cf, "Capital Expenditure"),
             "ltdi": (cf, "Long Term Debt Issuance"),  # 🏦 회사채·장기 대출로 새로 빌린 돈
             "dil": (inc, "Diluted Average Shares")}  # 📉 희석 주식 수 (미국만 씀 — 한국은 우선주가 섞여 DART 주식 총수를 씀)

@@ -2244,7 +2244,7 @@ function callBriefHTML(code) {
     (e.vs || []).length || e.after ? vsHTML({ vs: e.vs, after: e.after }) : "", onceHTML(e.once)].join("");
   const s2 = keysHTML(e) + ((e.facts || []).length ? `<div class="card" style="margin-top:8px;background:var(--surface-2)"><b>🆕 뉴팩트</b> <span class="src">이번 발표에서 새로 나온 사실</span>${li(e.facts)}</div>` : "");
   const s3 = ((e.guide || []).length ? `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">항목</th><th style="text-align:left">회사 전망</th><th>시장 예상</th><th></th></tr></thead><tbody>${e.guide.map((x) => `<tr><td style="text-align:left"><b>${esc(x.k)}</b></td><td style="text-align:left;white-space:normal;min-width:10em">${esc(x.a ?? "-")}${typeof x.a === "number" && x.u ? esc(x.u) : ""}</td><td>${esc(x.e ?? "")}</td><td class="src" style="white-space:normal">${esc(x.b || "")}</td></tr>`).join("")}</tbody></table></div>` : "")
-    + ((e.guide_note || []).length ? `<div class="note">💬 <b>가이던스 읽는 법</b>${li(e.guide_note)}</div>` : "");
+    + ((e.guide_note || []).length ? `<div class="note">💬 <b>가이던스 읽는 법</b>${li([].concat(e.guide_note))}</div>` : "");  // 글 한 줄로 적은 종목도 (11/11 코어위브 상세가 안 열렸음)
   const s4 = callDiffHTML({ quarter: e.quarter, qa: e.qa, qa_u: e.qa_u });
   const s5 = callDiffHTML({ quarter: e.quarter, diff: e.diff, voice: e.voice }, prevQ);
   const s6 = ((e.check || []).length ? `<div class="card" style="margin-top:8px"><b>✅ 다음 발표 때 확인할 것</b>${li(e.check)}</div>` : "") + callDiffHTML({ miss: e.miss }) + previewHTML(e.next);
@@ -2639,7 +2639,7 @@ function vsHTML(e) {
   const up = /^\+/.test(e.after || "");
   return `<div class="card" style="margin-top:8px"><b>📋 실적 vs 예상</b>${e.after ? ` <span class="qtag ${up ? "" : "bad"}">발표 뒤 주가 ${esc(e.after)}</span>` : ""}
     ${tbl(e.vs, "실적")}${(e.guide || []).length ? `<div style="margin-top:6px"><b>🧭 가이던스</b> <span class="src">회사가 내놓은 앞으로 전망</span></div>${tbl(e.guide, "회사 전망")}` : ""}
-    ${(e.guide_note || []).length ? `<div class="note" style="margin-top:6px">💬 <b>가이던스 읽는 법</b><ul class="irl">${e.guide_note.map((t) => `<li${t.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(t)}</li>`).join("")}</ul></div>` : ""}</div>`;
+    ${(e.guide_note || []).length ? `<div class="note" style="margin-top:6px">💬 <b>가이던스 읽는 법</b><ul class="irl">${[].concat(e.guide_note).map((t) => `<li${t.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(t)}</li>`).join("")}</ul></div>` : ""}</div>`;
 }
 function preLoad(code) { try { return JSON.parse(localStorage.getItem("pre:" + code) || "{}"); } catch (_) { return {}; } }
 function preSave(code, v) { try { localStorage.setItem("pre:" + code, JSON.stringify(v)); } catch (_) {} }
@@ -3308,6 +3308,23 @@ function fcfBars(d, k) {
   return kqBars("💸 현금흐름 (FCF)", s.map((x) => ({ q: x.q, fcf: usd ? x.fcf : x.fcf / 1e8 })), "fcf", null, "var(--s1)", usd ? "USD" : "KRW",
     { tag: `<span class="qtag ${cls}">${t}</span>`, sub });
 }
+// 💸 영업이익 vs 이자비용 (야후 분기 재무제표 intx, 모든 종목 자동 — 사용자 11/11 코어위브 그림): 번 돈으로 이자를 몇 번 낼 수 있나
+function intHTML(d) {
+  const usd = d.currency === "USD", dv = usd ? 1e6 : 1e8, qs = Object.entries(d.qtrs || {}).filter(([, q]) => q.op != null && q.intx > 0 && !q.prelim).slice(-6);
+  if (qs.length < 2) return "";
+  const op = qs.map(([, q]) => q.op / dv), ix = qs.map(([, q]) => q.intx / dv), L = qs.map(([e]) => qLabel(e)), r = op.at(-1) / ix.at(-1), u = usd ? "백만$" : "억원";
+  const tag = op.at(-1) <= 0 ? "영업이익 적자" : `이자의 ${n(r, r >= 10 ? 0 : 1)}배`;
+  if (op.every((v, i) => v >= 20 * ix[i]))  // 이자가 영업이익의 5% 미만이면 막대가 안 보여서 한 줄로
+    return `<div class="qp"><div class="qt"><b>💸 영업이익 vs 이자비용 · ${tag}</b></div><div class="note">${L.map((q, i) => `${esc(q)} <b>${n(op[i] / ix[i], 0)}배</b>`).join(" · ")}<br><span class="src">이자가 영업이익의 5%도 안 돼요 — 이자 부담은 거의 없어요 (야후 분기 재무제표)</span></div></div>`;
+  const g = (a) => (a.length >= 5 && a.at(-5) > 0 && a.at(-1) > 0 ? (a.at(-1) / a.at(-5) - 1) * 100 : null), go = g(op), gi = g(ix);
+  const kid = op.at(-1) <= 0 ? "파란 막대(영업이익)가 0 아래예요. 본업에서 아직 돈을 못 벌어서 이자는 빌린 돈이나 가진 현금으로 내고 있어요."
+    : r < 1 ? `파란 막대(영업이익)가 주황 막대(이자)보다 작아요. 본업으로 번 돈이 이자의 ${n(r, 1)}배라 이자를 다 못 내요. 파란 막대가 주황을 따라잡는지가 핵심이에요.`
+    : r < 3 ? `본업으로 번 돈이 이자의 ${n(r, 1)}배예요. 이자는 낼 수 있지만 여유가 크지 않아요 — 이자가 이익보다 빨리 늘면 위험해요.`
+    : `본업으로 번 돈이 이자의 ${n(r, 1)}배라 이자 부담은 작은 편이에요.`;
+  return keyChart({ t: `💸 영업이익 vs 이자비용 · ${tag}`, u, d: Math.max(...op.map(Math.abs), ...ix) < 100 ? 1 : 0, side: true, tbl: true, q: L, col: ["#2f6db5", "#e8873a"],
+    bars: [{ n: "영업이익 (회계 기준)", v: op }, { n: "이자비용", v: ix }],
+    why: `야후 분기 재무제표 · 영업이익 ÷ 이자 = 이자보상배율 (1배 아래면 번 돈으로 이자를 다 못 냄)${go != null && gi != null ? ` · 1년 새 영업이익 ${pct(go, 0, true)}, 이자 ${pct(gi, 0, true)}` : ""} · 야후 반영 전 최신 분기는 빠져요`, kid });
+}
 // 🔁 반복되는 패턴 메모 (kpi.yaml patterns): 예전 같은 일 → 그 뒤 숫자 흐름 → 이번 · 다음에 확인할 것 · 확인 결과
 function patternHTML(p) {
   const li = (x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`;
@@ -3529,7 +3546,7 @@ async function kpiBlock(code, d) {
   const k = KPI[code] || KPI[KPI_ALIAS[code]] || { charts: [], auto: true };  // kpi.yaml 에 없는 종목도 자동 그림(손익·현금흐름·주식 수)은 보여 줌
   const ch = k.charts.filter((c) => !GROW_RE.test(c.t)).map(kpiChart);  // 매출·지역 성장률은 ⭐ 성장률 한눈에 로
   ch.unshift(comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률
-  ch.splice(2, 0, opYoyHTML(d, k), fcfBars(d, k), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 그다음 영업이익 성장률 · 현금흐름 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
+  ch.splice(2, 0, opYoyHTML(d, k), fcfBars(d, k), intHTML(d), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 그다음 영업이익 성장률 · 현금흐름 · 영업이익 vs 이자 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
   if (!ch.some(Boolean)) return "";
   return `<h3>🔑 핵심 지표 <span class="src">${k.auto ? "자동 계산 — 분기 실적·현금흐름·주식 수 (사업부별 숫자는 아직 안 넣음)" : `${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김`}</span></h3><div class="card kpi">
     ${k.key ? `<div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key)}</div>` : ""}
@@ -4570,6 +4587,7 @@ async function openStock(code) {
     drawTour();
     if (GOTO) { const g = GOTO; GOTO = null; setTimeout(() => document.getElementById(g)?.scrollIntoView({ block: "start" }), 300); }  // 위 그림이 다 그려진 뒤 바로 이동 (부드럽게 움직이면 중간에 멈춤)
   } catch (e) {
+    console.error("상세", code, e);
     $("#sheetBody").innerHTML = `<div class="empty">상세 데이터를 불러오지 못했어요.</div>`;
   }
 }
@@ -5611,9 +5629,10 @@ function keyChart(ch) {
   const all = [...(bars.length ? tot : []), ...lines.flatMap((s) => s.v)].filter((v) => v != null);
   if (N < 2 || !all.length) return "";
   const jo = ch.u === "억원" && Math.max(...all) >= 1e4, dv = jo ? 1e4 : 1, un = jo ? "조원" : ch.u || "", V = (v) => n(v / dv, jo ? 1 : ch.d || 0);  // d = 소수 자리 (DDR5 값 등)
-  const top = ch.pct ? 72 : 24, bot = 146, hi = Math.max(...all) * 1.08, Y = (v) => bot - (v / hi) * (bot - top);
+  const mn = side ? Math.min(0, ...bars.flatMap((s) => s.v).filter((v) => v != null)) : 0;  // 나란히 막대는 적자(0 아래)도 아래로
+  const top = ch.pct ? 72 : 24, bot = 146, hi = Math.max(...all) * 1.08, Y = (v) => bot - ((v - mn) / ((hi - mn) || 1)) * (bot - top);
   const BC = ch.col || ["var(--muted)", "var(--s1)", "var(--s3)", "var(--s4)"];
-  let g = `<line x1="${x0}" x2="${W - x0}" y1="${bot}" y2="${bot}" stroke="var(--axis)"/>`;
+  let g = `<line x1="${x0}" x2="${W - x0}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)"/>`;
   L.forEach((q, i) => {
     const isG = gq.has(q), fill = (c) => (isG ? `fill="${c}" fill-opacity=".22" stroke="${c}" stroke-dasharray="3 2"` : `fill="${c}" opacity=".8"`);
     g += `<text x="${X(i)}" y="${bot + 15}" text-anchor="middle" class="qx"${isG ? ' style="font-weight:700"' : ""}>${esc(ch.every ? ((N - 1 - i) % ch.every === 0 ? q : "") : N <= 8 || i === 0 || q.startsWith("1Q") ? q : q.slice(0, 2))}</text>`;  // every = 몇 칸마다 이름 (분기 39칸 수출 비중)
@@ -5623,8 +5642,8 @@ function keyChart(ch) {
       bars.forEach((s, si) => {
         const v = s.v[i], x = X(i) - bw * 0.38 + si * w, c = BC[si % BC.length];
         if (v == null) return;
-        g += `<rect x="${x}" y="${Y(v)}" width="${w - 1}" height="${Math.max(1, bot - Y(v))}" ${fill(c)}/>`;
-        if (i >= N - 2) g += `<text x="${x + w / 2}" y="${Y(v) - 3 - (si % 2) * 10}" text-anchor="${si % 2 ? "start" : "end"}" class="qv b" style="font-size:9px;fill:${c}">${V(v)}</text>`;  // 옆 막대 숫자와 안 겹치게 바깥쪽·위아래로
+        g += `<rect x="${x}" y="${Y(Math.max(v, 0))}" width="${w - 1}" height="${Math.max(1, Math.abs(Y(v) - Y(0)))}" ${fill(c)}/>`;
+        if (i >= N - 2) g += `<text x="${x + w / 2}" y="${v < 0 ? Y(0) - 3 : Y(v) - 3 - (si % 2) * 10}" text-anchor="${si % 2 ? "start" : "end"}" class="qv b" style="font-size:9px;fill:${c}">${V(v)}</text>`;  // 옆 막대 숫자와 안 겹치게 바깥쪽·위아래로
       });
       return;
     }
