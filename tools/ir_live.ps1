@@ -104,6 +104,35 @@ if (-not (Test-Path $cstamp)) {
     }
 }
 
+# 🇺🇸 미국 보유·관심 어닝콜 녹취록 (사용자 11/11 "내가 보내지 않아도 알아서 가져와서 번역·요약·Q&A"): 매시간 한 번
+#    tools/us_call.py 가 Motley Fool 공개 녹취록을 transcripts\us\ 에 저장 (이 컴퓨터에만 — 저장소가 공개라 사이트엔 원문 링크만)
+#    → claude 가 전체 한국어 번역(같은 폴더 .ko.md) + IR 요약·분석·질의응답(ir_brief qa) + earnings.yaml. 한 시간에 한 종목씩 (자막 받기를 오래 막지 않게)
+$ustamp = Join-Path $td ".uscall_$(Get-Date -Format yyyyMMddHH)"
+if (-not (Test-Path $ustamp)) {
+    New-Item $ustamp -ItemType File -Force | Out-Null
+    & $py -X utf8 tools\us_call.py todo 2>&1 | ForEach-Object { Log "미국 녹취록: $_" }
+    foreach ($f in @(Get-ChildItem (Join-Path $td "us") -Filter "*.txt" -ErrorAction SilentlyContinue)) {
+        if (Test-Path "$($f.FullName).done") { continue }
+        $tf = "$($f.FullName).tries"; $n = if (Test-Path $tf) { [int](Get-Content $tf) } else { 0 }
+        if ($n -ge 3) { continue }  # 3번 해도 안 되면 그만 — 로그에 남아 있음
+        Set-Content $tf ($n + 1)
+        $code, $date = $f.BaseName -split '_', 2
+        $url = (Get-Content $f.FullName -TotalCount 1 -Encoding UTF8).Trim()
+        $ko = "transcripts/us/$($f.BaseName).ko.md"
+        $prompt = "transcripts/us/$($f.Name) 는 $code 의 $date 실적발표 어닝콜 녹취록 원문(영어, 첫 줄 = Motley Fool 공개 녹취록 주소)이야. " +
+            "1) 전체를 빠짐없이 쉬운 한국어로 번역해서 $ko 에 써 (말한 사람 이름·직함 그대로, 줄이지 말 것, 숫자는 원문 그대로 · 길면 Write 로 앞부분을 쓰고 Edit 로 이어 붙이기 · 이 파일은 이 컴퓨터에만 둠). " +
+            "2) tools/earnings_task.md 3-0 형식으로 config/ir_brief.yaml 의 `"$code`" 이번 분기 IR 요약·IR 분석을 녹취록 기준으로 (있으면 보강, 없으면 맨 위에 추가) — t_u: $url 를 넣고, " +
+            "qa 에 질의응답을 빠짐없이 질문마다 {h: '증권사 — 질문 주제', l: ['Q. 질문 한 줄', 'A. 답 2~4줄 (숫자 포함)']} 로 (예시 = ir_brief.yaml CRWV 3Q26 qa). " +
+            "3) config/earnings.yaml 의 `"$code`" 이번 분기도 3번 형식대로 녹취록 기준으로 (있으면 보강, 없으면 맨 위에 추가, transcript: $url). " +
+            "원문 문장을 길게 옮기지 말고 우리 말로, 원문에 없는 숫자는 만들지 말고, 매수·매도 추천 금지. 파일 수정만 하고 git 은 하지 마."
+        & $claude -p $prompt --permission-mode acceptEdits --allowedTools "Read,Edit,Write" 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
+        & $py -X utf8 tools\us_call.py check $code $url
+        if ($LASTEXITCODE -eq 0 -and (Publish "$code 어닝콜 녹취록 요약·질의응답 (Motley Fool 공개 녹취록)")) { New-Item "$($f.FullName).done" -ItemType File -Force | Out-Null; Log "$code $date 녹취록 요약 올림" }
+        else { Log "$code $date 녹취록 요약 실패 ($($n + 1)/3) - 다음 시간에 다시" }
+        break
+    }
+}
+
 # 매일 아침: 다올 'Amazon K-Beauty 데일리' 그림 표 → Claude 가 옮김 → 합계 점검(tools/amazon_img.py) → 🏭 산업 탭 (하루 3번까지)
 $today = Get-Date -Format "yyyy-MM-dd"
 $astamp = Join-Path $td ".amazon_$(Get-Date -Format yyyyMMdd)"

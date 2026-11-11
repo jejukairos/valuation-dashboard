@@ -12,6 +12,8 @@
    - 미국: 회사 IR 사이트의 공식 'Earnings Call Transcript' PDF. Q4 Inc. IR 사이트는
      https://<IR 주소>/feed/FinancialReport.svc/GetFinancialReportList?LanguageId=1&reportTypes=First%20Quarter|Second%20Quarter|Third%20Quarter|Fourth%20Quarter&pageSize=2&pageNumber=0&includeTags=true&year=-1&excludeSelection=1
      에서 문서 목록을 준다 (예: investor.atmeta.com). 없으면 보도자료·주주서한(테슬라 등).
+     미국 보유·관심은 tools/ir_live.ps1 이 매시간 Motley Fool 공개 녹취록을 transcripts\us\{티커}_{발표일}.txt 로 받아 (tools/us_call.py, 발표 뒤 10일 동안)
+     번역(.ko.md)·IR 요약·질의응답까지 따로 하니, 그 파일이 있으면 그걸 쓰고 이미 .done 이면 건너뛴다.
    - 로그인·유료벽·로봇 확인(CAPTCHA)이 있으면 건너뛰고 보고만 한다. 받은 PDF 는 스크래치 폴더의 새 폴더에 두고 python -I 로 텍스트만 뽑는다.
 3-0. 📋 IR 요약 · IR 분석 먼저 (config/ir_brief.yaml — 화면: 🧾 실적 탭 카드·종목 상세 맨 위. 사용자 11/6: 텔레그램 t.me/maddingStock 의
    'IR 요약'·'IR 분석' 두 칸 형식을 그대로 따름 · 그 채널이 없어지거나 유료가 돼도 우리가 만들 수 있게. 예시 = ir_brief.yaml 덕산네오룩스 3Q26)
@@ -20,6 +22,8 @@
    - 자료 순서: 회사 IR 실적 자료(PDF — 회사 IR 페이지·KIND '기업설명회(IR)' 공시 첨부) > 잠정실적 공시 > 발표 자막·보도자료 > 다음 날 증권사 리뷰.
      실제로 쓴 자료를 src(이름)·u(주소)에. 원문 문장을 옮기지 말고 우리 말로 · 자료에 없는 숫자는 만들지 않는다 · 매수·매도 추천 금지.
    - 모양: "코드": [{quarter: 3Q26, period: "3분기 · 7~9월", date, src, u, sum: [칸…], ana: [칸…]}] · 칸 = {h: 제목, l: [줄 1~4개]} · 한 줄 60자 안팎
+     어닝콜 녹취록·자막이 있으면 (사용자 11/11): qa: [{h: '증권사 — 질문 주제', l: ['Q. 질문 한 줄', 'A. 답 2~4줄']}] 질문 전부 → 화면 '🎤 어닝콜 질의응답' 칸,
+     t_u: 녹취록 원문 주소 → '📄 어닝콜 원문(영어)' 링크 (원문·번역 글은 사이트에 옮기지 않음 — 저장소 공개). 예시 = CRWV 3Q26
      sum (IR 요약 = 회사가 말한 것만, "~라고 설명"처럼 누가 한 말인지):
        ① 회사 설명 — 회사가 든 실적 이유 2~4줄 (주력 제품·환율·일회성 등)
        ② "3분기 실적 · 7~9월 · 연결" — "매출액: 2,584억원 (1년 전보다 +34.8%)" 처럼 항목: 값. 매출·영업이익·영업이익률·순이익 + 자료에 있으면 매출총이익·판관비·세전이익·핵심 제품 매출
