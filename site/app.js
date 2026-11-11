@@ -5525,10 +5525,20 @@ function keyTrack(t) {
   const r = (v) => pct((v / t.p - 1) * 100, 1, true);
   return `<div class="note">📍 <b>${esc(c.name)} 주가</b>: ${esc(t.n)}(${esc(t.d.slice(5).replace("-", "/"))}) ${n(t.p, 0)}원 대비 지금 <b>${r(c.price)}</b>${after.length ? ` · 그 뒤 가장 낮은 종가 ${r(Math.min(...after))}` : ""}${t.then ? ` <span class="src">(예전 ${esc(t.then)})</span>` : ""}</div>`;
 }
+// ⏱ 분기 그림 기간 버튼 (사용자 11/11 코어위브 '매출·OPM·수주잔고'): tabs: true → 1년(4칸)·3년(12칸)·5년(20칸)·전체, 처음엔 전체
+const KC_TABS = [["1년", 4], ["3년", 12], ["5년", 20]];
+function kcTabs(ch) {
+  const N = (ch.q || []).length, cut = (k) => { const s = (o) => o && { ...o, v: o.v.slice(-k) };
+    return keyChart({ ...ch, q: ch.q.slice(-k), bars: (ch.bars || []).map(s), lines: (ch.lines || []).map(s), pct: s(ch.pct) }); };
+  const tabs = ch.tabs ? [...KC_TABS.filter(([, k]) => k < N), ["전체", N]] : [];
+  if (tabs.length < 2) return keyChart(ch);
+  return `<div style="grid-column:1/-1"><div class="seg" style="margin-bottom:4px">${tabs.map(([l], i) => `<button class="${i === tabs.length - 1 ? "on" : ""}" onclick="event.stopPropagation();const p=this.parentNode.parentNode;p.querySelectorAll(':scope>.seg>button').forEach((b,j)=>b.classList.toggle('on',j===${i}));p.querySelectorAll(':scope>.kct').forEach((d,j)=>d.style.display=j===${i}?'':'none')">${l}</button>`).join("")}</div>
+    ${tabs.map(([, k], i) => `<div class="kct qgrid"${i === tabs.length - 1 ? "" : ' style="display:none"'}>${cut(k)}</div>`).join("")}</div>`;  // hidden 대신 style — .qgrid display 와 옛 style.css 캐시에도 안 겹치게
+}
 function keyCard(c, open) {
   const li = (x) => `<li>${esc(x)}</li>`;
   return `<details class="card" style="margin-top:8px;background:var(--surface-2)"${c.id ? ` id="kc-${esc(c.id)}"` : ""}${open ? " open" : ""}><summary><b>📌 ${esc(c.t)}</b> <span class="src">${esc(c.d || "")}</span></summary>
-    <div class="qgrid" style="margin-top:6px">${(c.charts || []).map(keyChart).join("")}${(c.wf || []).map(keyWf).join("")}</div>
+    <div class="qgrid" style="margin-top:6px">${(c.charts || []).map((ch) => kcTabs(ch)).join("")}${(c.wf || []).map(keyWf).join("")}</div>
     ${(c.img || []).map((x) => `<figure style="margin:6px 0"><img src="${esc(x.src)}" alt="${esc(x.alt || c.t)}" loading="lazy" style="width:100%;height:auto;border-radius:8px;background:#fff"><figcaption class="src">${esc(x.cap || "")}</figcaption></figure>`).join("")}
     ${(c.lines || []).length ? `<ul class="irl">${c.lines.map(li).join("")}</ul>` : ""}${keyTrack(c.track)}
     ${c.go ? `<div class="note"><a href="#industry" data-kc="${esc(c.go)}">👉 자세한 내용: 산업 탭 '${esc(c.go_t || "전체 카드")}' 보기 →</a></div>` : ""}
