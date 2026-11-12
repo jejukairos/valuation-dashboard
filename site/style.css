@@ -267,6 +267,8 @@ table.cmp .dim { color: var(--muted); }
 .irc-2 > div + div { border-left: 1px solid var(--border); padding-left: 12px; }
 .irc-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center; margin: 6px 0; }
 .irc-3 b { display: block; font-size: 20px; margin-top: 2px; }
+table.peg4 { border-collapse: collapse; margin: 2px 0 0 auto; font-size: 13px; width: auto; }  /* 📐 카드 현재가 아래 PEG 4개 */
+.peg4 td { padding: 1px 12px 1px 0; text-align: left; white-space: nowrap; }
 .ixr { display: grid; grid-template-columns: 2.4em repeat(3, minmax(0, 1fr)); gap: 4px; align-items: baseline; padding-top: 6px; font-size: 13px; color: var(--muted); }  /* 📡 코스피·코스닥 카드 한 줄 (현재·선행) */.ixr b { font-size: 17px; color: var(--ink); }
 .irc .irU { color: var(--bad); } .irc .irD { color: var(--s1); }  /* .fvt .up(초록) 과 겹치지 않게 이름을 따로 */
 .irc-pill { font-size: 12px; font-weight: 700; color: #fff; background: var(--bad); border-radius: 999px; padding: 4px 10px; }
