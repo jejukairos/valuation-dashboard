@@ -102,6 +102,10 @@ MU:
   why: "메모리 값(HBM 포함) → 매출총이익률"
   region_src: "지역별 매출은 10-K 연간만 (분기 공개 안 함)"
   guide: {q: "26.4Q", rev: [60000, 63000], gm: [85.95, 85.95], date: "2026-09-30", src: "https://www.sec.gov/Archives/edgar/data/723125/000072312526000018/a2026q4ex991-pressrelease.htm", note: "회계 1분기(12월 초 끝) 매출 $61.5B±1.5B · 매출총이익률 회계 기준 85.95% (조정 86.25%) · 조정 EPS $38.15±1.00"}
+AMAT:
+  star: [rev, opm, "region:중국"]
+  why: "AI 메모리(D램) 장비 수요가 중국 비중 감소를 메우는지"
+  guide: {q: "26.4Q", rev: [10600, 11600], date: "2026-11-12", src: "https://www.sec.gov/Archives/edgar/data/6951/000162828026073360/exhibit991q42026earningsre.htm", note: "회계 1분기(11~1월, 14주) 매출 111억$±5억$ · 조정 EPS 4.35$±0.20$ — 13주로 바꾸면 약 103억$ (직접 계산)"}
 ORCL:
   star: [rev, "prod:클라우드", "region:미주"]
   why: "클라우드(OCI) 성장 속도와 수주잔고"
