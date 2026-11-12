@@ -5721,7 +5721,7 @@ function keyChart(ch) {
         const v = s.v[i], x = X(i) - bw * 0.38 + si * w, c = BC[si % BC.length];
         if (v == null) return;
         g += `<rect x="${x}" y="${Y(Math.max(v, 0))}" width="${w - 1}" height="${Math.max(1, Math.abs(Y(v) - Y(0)))}" ${fill(c)}/>`;
-        if (i >= N - 2) g += `<text x="${x + w / 2}" y="${v < 0 ? Y(0) - 3 : Y(v) - 3 - (si % 2) * 10}" text-anchor="${si % 2 ? "start" : "end"}" class="qv b" style="font-size:9px;fill:${c}">${V(v)}</text>`;  // 옆 막대 숫자와 안 겹치게 바깥쪽·위아래로
+        if (i >= N - (N > 8 ? 1 : 2)) g += `<text x="${x + w / 2}" y="${v < 0 ? Y(0) - 3 : Y(v) - 3 - (si % 2) * 10}" text-anchor="${si % 2 && i < N - 1 ? "start" : "end"}" class="qv b" style="font-size:9px;fill:${c}">${V(v)}</text>`;  // 옆 막대 숫자와 안 겹치게 바깥쪽·위아래로 (맨 끝 칸은 그림 밖으로 안 나가게 왼쪽으로)
       });
       return;
     }

@@ -42,6 +42,21 @@ def ccsi(ch):
         print(f"  ⚠ 소비자심리지수 ECOS: {type(e).__name__}: {str(e)[-80:]}")
 
 
+def qtr(ch, L):
+    """📊 kind: qtr — 종목 json longq {'26.3Q': {rev, op}} (한국 억원) 로 분기 그림을 채움 (사용자 11/12 삼양 '매출만 말고 영업이익·이익률·YoY 까지, 트래킹').
+    show: bars → 매출·영업이익 나란히 막대 + 영업이익률 pct (keyChart side) · show: yoy → 매출·영업이익 1년 전 대비 꺾은선 (kind line)."""
+    ks = sorted(q for q in L if q >= str(ch.get("from_q", "23.1Q")) and (L[q] or {}).get("rev"))
+    ago = lambda q: f"{int(q[:2]) - 1:02d}{q[2:]}"  # noqa: E731 — '26.3Q' → '25.3Q'
+    g = lambda q, f: round((L[q][f] / L[ago(q)][f] - 1) * 100, 1) if (L.get(ago(q)) or {}).get(f, 0) > 0 and L[q].get(f) is not None else None  # noqa: E731 — 1년 전 적자면 비움
+    if ch.get("show") == "yoy":
+        ch["kind"], ch["q"] = "line", ks
+        ch["lines"] = [{"n": "매출 YoY", "v": [g(q, "rev") for q in ks]}, {"n": "영업이익 YoY", "v": [g(q, "op") for q in ks]}]
+    else:
+        ch["side"], ch["q"] = True, [f"{q[3]}Q{q[:2]}" for q in ks]
+        ch["bars"] = [{"n": "매출액", "v": [round(L[q]["rev"]) for q in ks]}, {"n": "영업이익", "v": [round(L[q]["op"]) if L[q].get("op") is not None else None for q in ks]}]
+        ch["pct"] = {"n": "영업이익률", "v": [round(L[q]["op"] / L[q]["rev"] * 100, 1) if L[q].get("op") is not None else None for q in ks]}
+
+
 def fill(k):
     from kr_stock import naver_now, price_history
     for grp in [*(k.get("industry") or {}).values(), *(k.get("stock") or {}).values()]:
@@ -49,6 +64,11 @@ def fill(k):
             for ch in card.get("charts") or []:
                 if ch.get("kind") == "ccsi":
                     ccsi(ch)
+                if ch.get("kind") == "qtr":
+                    try:
+                        qtr(ch, json.loads((DATA / "stocks" / f"{ch['code']}.json").read_text(encoding="utf-8")).get("longq") or {})
+                    except Exception as e:  # noqa: BLE001
+                        print(f"  ⚠ 분기 그림 {ch.get('code')}: {type(e).__name__}: {e}")
                 if ch.get("kind") != "mcap":
                     continue
                 code = str(ch["code"])
@@ -71,4 +91,11 @@ if __name__ == "__main__":
     d, v = series(c * 1e4, {"2024-03-31": 10e6, "2024-09-30": 12e6}, None)
     assert v == [10000, 11000, 14400], v  # 1월은 가장 이른 분기 주식 수, 6월 = 3월 말, 12월 = 9월 말
     assert series(c * 1e4, None, 5e6)[1] == [5000, 5500, 6000]
+    L = {"24.3Q": {"rev": 100, "op": -5}, "25.3Q": {"rev": 150, "op": 30}, "26.3Q": {"rev": 180, "op": 45}}
+    b = {"from_q": "25.1Q"}
+    qtr(b, L)
+    assert b["q"] == ["3Q25", "3Q26"] and b["bars"][1]["v"] == [30, 45] and b["pct"]["v"] == [20.0, 25.0], b
+    y = {"from_q": "25.1Q", "show": "yoy"}
+    qtr(y, L)
+    assert y["lines"][0]["v"] == [50.0, 20.0] and y["lines"][1]["v"] == [None, 50.0], y  # 1년 전 적자 → 영업이익 YoY 비움
     print("ok")
