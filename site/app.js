@@ -1262,7 +1262,7 @@ function qSankey(q, usd, prev, segs) {
   const x = (sg ? [244, 374, 504] : [58, 178, 308]).concat(net4 ? [(sg ? 504 : 308) + 150] : []);
   const pct = (v) => `${n((v / rev) * 100, 1)}%`;
   const yo = (key, v) => (key && prev?.[key] > 0 && v != null ? (v / prev[key] - 1) * 100 : null);
-  const yoT = (g, tail = " YoY") => (g == null ? "" : `${g >= 0 ? "+" : ""}${n(g, 0)}%${tail}`);
+  const yoT = (g, tail = " YoY") => (g == null ? "" : g > 9900 ? "1년 전 거의 0" : `${g >= 0 ? "+" : ""}${n(g, 0)}%${tail}`);  // 100배 넘게 늘면 % 대신 (대덕전자 연구개발비 1년 전 47만 원 → +190,269% 로 보였음, 11/12)
   const pp = (key, v) => (key && prev?.[key] != null && prev.rev ? (v / rev - prev[key] / prev.rev) * 100 : null);
   const ppT = (d) => (d == null ? "" : `${d >= 0 ? "+" : ""}${n(d, 1)}%p`);
   const tone = (d) => (d == null ? "var(--muted)" : d >= 0 ? "var(--good-ink)" : "var(--bad-ink)");

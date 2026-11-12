@@ -470,7 +470,7 @@ def div_section(price, hist, band, kr3y):
 def judge(price, fair, band_pos):
     """적정가 괴리율과 밴드 위치를 조합한 판정 + 한 줄 근거."""
     score, why = [], []
-    gap = price / fair - 1 if fair else None
+    gap = price / fair - 1 if fair and fair > 0 else None  # 마이너스 적정가로 '싸다' 판정 안 함
     if gap is not None:
         g = "green" if gap <= SIG["cheap_gap"] else "red" if gap >= SIG["expensive_gap"] else "yellow"
         score.append(g)
@@ -542,6 +542,7 @@ if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% �
     # 기준 PER (11/6) = 성장률 · 업종 중앙값 · 업종 바닥 중 가장 낮은 값: NAVER 12.2% vs 중앙값 12.8 · 바닥 13 → 12.2 · 현대로템 11.4% vs 방산 바닥 11 → 11
     assert per_anchor(12.2, [(12.8, "업종 중앙값"), (13, "업종 바닥")]) == (12.2, "성장률")
     assert per_anchor(11.4, [(36, "업종 중앙값"), (11, "방산 업종 바닥"), (None, "x")]) == (11, "방산 업종 바닥")
+    assert judge(154.69, -182, None)[2] is None  # 적자 EPS 로 생긴 마이너스 적정가 → 괴리율 없음 (네비우스 11/12)
     # 적자였던 해가 있어 성장률이 없으면 업종 중앙값만으로 (파두 11/11): EPS -500 → 1000 · 업종 중앙값 11.3 → 11.3 · 14.1 · 17.0
     gn = growth_fair({y - 1: {"eps": -500}, y: {"eps": 1000, "estimate": 1}, y + 1: {"eps": 1000, "estimate": 1}}, cands=[(11.3, "업종 중앙값")])
     assert gn["g"] is None and gn["x"] == 11.3 and gn["cands"] == [["업종 중앙값", 11.3]], gn

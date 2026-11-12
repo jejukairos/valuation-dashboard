@@ -175,12 +175,12 @@ def stock_detail(h, rates_now, fx):
     if "PER" in methods and "PER" in bands:
         det["per"] = C.per_section(price, hist, bands["PER"])
         e = hist.get(yr, {}).get("eps")
-        if e and mult("PER") and "PER" in fm:
+        if e and e > 0 and mult("PER") and "PER" in fm:  # 적자 EPS × PER = 마이너스 적정가 (네비우스 -182$ 가 '초록' 으로 보였음, 11/12)
             fairs.append(("PER", e * mult("PER")))
     if "PBR" in methods and "PBR" in bands:
         det["pbr"] = C.pbr_section(price, hist, bands["PBR"], rate_kr3y, cyclical=fm == ["PBR"] or bool(h.get("cyclical")))
         b = hist.get(yr, {}).get("bps")
-        if b and mult("PBR") and "PBR" in fm:
+        if b and b > 0 and mult("PBR") and "PBR" in fm:
             fairs.append(("PBR", b * mult("PBR")))
     if "DIV" in methods and "DIV" in bands:
         det["div"] = C.div_section(price, hist, bands["DIV"], rate_kr3y)

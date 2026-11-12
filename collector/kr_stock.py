@@ -442,7 +442,10 @@ def dart_shares(stock_code, limit=8):
         elif j.get("status") == "013" and year < y - 1:  # 013 = 자료 없음. 오래된 보고서가 없으면 상장 전 → 0 으로 기억 (다시 안 받음)
             cache[f"{year}_{rc}"] = 0
     write_json(path, cache)
-    return {f"{k[:4]}-{QREP[k[5:]]}-{'31' if QREP[k[5:]] in ('03', '12') else '30'}": v for k, v in sorted(cache.items()) if v}
+    vs = sorted(v for v in cache.values() if v)
+    med = vs[len(vs) // 2] if vs else 0
+    # 회사가 보고서에 주식 수를 1,000배로 잘못 적은 칸은 뺌 (네오팜 25년 말 156억 주 → 주식 수 +99,900% 로 보였음, 11/12) — 중앙값의 1/50~50배 밖
+    return {f"{k[:4]}-{QREP[k[5:]]}-{'31' if QREP[k[5:]] in ('03', '12') else '30'}": v for k, v in sorted(cache.items()) if v and med / 50 < v < med * 50}
 
 
 def dart_dilution(stock_code, days=365):
