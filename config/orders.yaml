@@ -30,3 +30,20 @@ companies:
     code: "009150"
     since: "20240101"
     memo: "계약 상대는 모두 '글로벌 대형기업'(이름 비공개) · 26년 공시 8건 합계 5조 2,317억 — 실리콘 커패시터 1.6조(27~28년 2년치) + 27년 1년치 MLCC 6건·패키지기판 1건"
+
+  # 2026-11-12 사용자: "지엔씨에너지 수주잔고 트래킹하자" — 보고서에 표 없이 '…현재 수주잔고는 N억원' 문장만 있음 (별도 기준)
+  # 아래 9개 분기는 DART 정기보고서 문장에서 직접 확인 (사용자 그림 7개 분기와 같음) · 새 보고서는 backlog_text 로 자동
+  - name: 지엔씨에너지
+    code: "119850"
+    since: "20240101"
+    backlog_text: true
+    backlog:
+      - {as_of: 4Q24, total: 2591, source: "DART 사업보고서 (2024.12)"}
+      - {as_of: 1Q25, total: 2814, source: "DART 분기보고서 (2025.03)"}
+      - {as_of: 2Q25, total: 2904, source: "DART 반기보고서 (2025.06)"}
+      - {as_of: 3Q25, total: 3877, source: "DART 분기보고서 (2025.09)"}
+      - {as_of: 4Q25, total: 3996, source: "DART 사업보고서 (2025.12)"}
+      - {as_of: 1Q26, total: 3967, source: "DART 분기보고서 (2026.03)"}
+      - {as_of: 2Q26, total: 4147, source: "DART 반기보고서 (2026.06)", url: "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260813001483"}
+      - {as_of: 3Q26, total: 7264, source: "DART 분기보고서 (2026.09)", url: "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261112000485"}
+    memo: "AI 데이터센터 비상발전기 — 3Q26 수주잔고 7,264억: 지난 분기보다 +75%, 1년 전보다 +87% (직접 계산) · 잔고는 '앞으로 매출이 될 일감'이라 실제 매출·이익으로 바뀌는 속도를 같이 봐야 해요"

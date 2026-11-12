@@ -106,17 +106,39 @@ def _quarter(d):
         return ""
 
 
-def auto_backlog(code):
-    """최근 분기·반기·사업보고서의 '수주상황(요약)' 표에서 사업별 수주잔고(백만원)를 읽는다."""
-    cc = corp_code(code)
+def _last_periodic(code):
+    """최근 200일 안의 가장 새 분기·반기·사업보고서 (OpenDART 목록 한 줄)."""
     j = HTTP.get("https://opendart.fss.or.kr/api/list.json",
-                 params={"crtfc_key": dart_key(), "corp_code": cc, "pblntf_ty": "A",
+                 params={"crtfc_key": dart_key(), "corp_code": corp_code(code), "pblntf_ty": "A",
                          "bgn_de": (now_kst() - pd.Timedelta(days=200)).strftime("%Y%m%d"),
                          "end_de": now_kst().strftime("%Y%m%d"), "page_count": 20}).json()
     reps = [x for x in j.get("list", []) if re.search("분기보고서|반기보고서|사업보고서", x["report_nm"])]
     if not reps:
         raise RuntimeError("최근 정기보고서 없음")
-    rep = reps[0]
+    return reps[0]
+
+
+BL_TXT = re.compile(r"(\d{4})년\s*(\d{1,2})월\s*\d{1,2}일\s*(?:기준\s*)?현재\s*수주\s*잔고는\s*([\d,]+)\s*억\s*원")
+
+
+def text_backlog(code):
+    """표 없이 '2026년 9월 30일 현재 수주잔고는 7,264억원' 문장만 쓰는 회사 (지엔씨에너지).
+    새 정기보고서마다 한 분기씩 cache/orders/ 에 쌓고, 쌓인 분기를 모두 돌려준다."""
+    rep = _last_periodic(code)
+    path = ODIR / f"backlog_txt_{code}_{rep['rcept_no']}.json"
+    if not read_json(path):
+        m = BL_TXT.search(doc_text(rep["rcept_no"]))
+        if not m:
+            raise RuntimeError("보고서에 '현재 수주잔고는 …억원' 문장이 없음")
+        write_json(path, {"as_of": f"{(int(m.group(2)) - 1) // 3 + 1}Q{m.group(1)[2:]}", "total": _num(m.group(3)),
+                          "source": f"DART {rep['report_nm'].strip()} (자동)",
+                          "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={rep['rcept_no']}"})
+    return [read_json(p) for p in sorted(ODIR.glob(f"backlog_txt_{code}_*.json"))]
+
+
+def auto_backlog(code):
+    """최근 분기·반기·사업보고서의 '수주상황(요약)' 표에서 사업별 수주잔고(백만원)를 읽는다."""
+    rep = _last_periodic(code)
     path = ODIR / f"backlog_{rep['rcept_no']}.json"
     cached = read_json(path)
     if cached:
@@ -168,9 +190,17 @@ def backlog_view(cfg, code, by_year):
         view = {"as_of": a["as_of"], "segments": segs, "total": a["total"] / 100, "source": f"DART {a['report']}",
                 "url": a["url"]}
     else:
-        last = sorted(b, key=lambda x: (x["as_of"][-2:], x["as_of"][0]))[-1]
+        hist = list(b)
+        if cfg.get("backlog_text"):
+            try:
+                have = {x["as_of"] for x in hist}
+                hist += [x for x in text_backlog(code) if x["as_of"] not in have]
+            except Exception as e:  # noqa: BLE001 - 못 읽어도 직접 넣은 분기는 그대로 보여 줌
+                REPORT.fail(f"수주잔고 문장 {cfg['name']}", f"{type(e).__name__}: {e}")
+        hist.sort(key=lambda x: (x["as_of"][-2:], x["as_of"][0]))
+        last = hist[-1]
         view = {"as_of": last["as_of"], "segments": last.get("segments", {}), "total": last.get("total"),
-                "source": last.get("source", "직접 입력"), "history": b}
+                "source": last.get("source", "직접 입력"), "url": last.get("url"), "history": hist}
     w = wise_annual(code)
     y = now_kst().year
     s_last = (w.get(y - 1) or {}).get("sales")
@@ -269,3 +299,10 @@ def collect():
         except Exception as e:  # noqa: BLE001
             REPORT.fail(f"수주 {c['name']}", f"{type(e).__name__}: {e}")
     return out
+
+
+if __name__ == "__main__":  # 수주잔고 문장 읽기 확인 (지엔씨에너지 보고서 두 가지 말투)
+    for s, want in [("당사의 2026년 03월 31일 기준 현재 수주잔고는 3,967억원 입니다", ("2026", "03", "3,967")),
+                    ("2026년 9월 30일 현재 수주잔고는 7,264억원입니다", ("2026", "9", "7,264"))]:
+        assert BL_TXT.search(s).groups() == want, s
+    print("ok")

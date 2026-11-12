@@ -4386,7 +4386,12 @@ function backlogBlock(o) {
   const grade = (r) => r == null ? "" : r >= 5 ? "🟢 구조적 성장 국면 (5배 이상)" : r >= 3 ? "🟡 안정적 (3~4배)" : r > 2 ? "보통 (2~3배)" : "🔴 불안정·가시성 낮음 (2배 이하)";
   const segs = Object.entries(b.segments || {}).sort((a, c) => c[1] - a[1]);
   const max = segs.length ? segs[0][1] : 1;
-  return `<div class="chart-title">수주잔고 <span class="src">${esc(b.as_of)} 기준 · ${b.url ? `<a href="${esc(b.url)}" target="_blank" rel="noopener">${esc(b.source)}</a>` : esc(b.source)}</span></div>
+  // 분기별 잔고 막대 (사용자 11/12 지엔씨에너지) + 지난 분기·1년 전 대비
+  const h = (b.history || []).filter((x) => x.total != null), L = h.length - 1;
+  const pct = (a, c) => (a && c ? `${a >= c ? "+" : ""}${n((a / c - 1) * 100, 0)}%` : null);
+  const chg = L > 0 ? [pct(h[L].total, h[L - 1].total) && `지난 분기보다 ${pct(h[L].total, h[L - 1].total)}`, L >= 4 && `1년 전보다 ${pct(h[L].total, h[L - 4].total)}`].filter(Boolean).join(" · ") : "";
+  const hist = L > 0 ? `<div class="qgrid">${keyChart({ t: "분기 말 수주잔고", why: `${h[L].as_of} ${jo(h[L].total)} — ${chg}`, q: h.map((x) => x.as_of), bars: [{ n: "수주잔고", v: h.map((x) => x.total) }], u: "억원" })}</div>` : "";
+  return `${hist}<div class="chart-title">수주잔고 <span class="src">${esc(b.as_of)} 기준 · ${b.url ? `<a href="${esc(b.url)}" target="_blank" rel="noopener">${esc(b.source)}</a>` : esc(b.source)}</span></div>
     <div class="tiles">
       <div class="tile"><div class="tl">총 수주잔고</div><div class="tv">${jo(b.total)}</div><div class="src">${esc(b.as_of)}</div></div>
       <div class="tile"><div class="tl">잔고 ÷ ${b.sales_last_year} 매출</div><div class="tv">${n(b.backlog_to_sales_last, 2)}배</div><div class="src">${grade(b.backlog_to_sales_last)}</div></div>
@@ -4396,7 +4401,7 @@ function backlogBlock(o) {
     ${segs.map(([k, v]) => `<div class="note" style="margin:4px 0 0">${esc(k)} <b>${jo(v)}</b>
       <div style="height:8px;border-radius:4px;background:var(--surface-2);margin-top:2px"><div style="height:8px;border-radius:4px;background:var(--s1);width:${(v / max) * 100}%"></div></div></div>`).join("")}
     <div class="note src">판단 기준(내 시트): 잔고÷매출 2배 이하 불안정·가시성 낮음 / 3~4배 안정적 / 5배 이상 구조적 성장 · 신규수주÷매출 1 이상 성장, 1 미만 정체.
-    올해 신규수주는 공시(매출 대비 일정 규모 이상) 합계라서 실제 수주보다 작을 수 있어요.${o.backlog.history ? " 현대로템 잔고는 config/orders.yaml 에 분기마다 직접 입력해요." : ""}</div>`;
+    올해 신규수주는 공시(매출 대비 일정 규모 이상) 합계라서 실제 수주보다 작을 수 있어요.${o.backlog.history ? ` 분기별 잔고는 ${h.some((x) => /^DART/.test(x.source || "")) ? "DART 정기보고서 숫자예요 — 새 분기보고서가 나오면 자동으로 한 칸 붙어요" : "IR 자료 숫자를 분기마다 직접 넣어요"}.` : ""}</div>`;
 }
 
 function drawOrders(code) {
@@ -4598,7 +4603,9 @@ function drawPeers(code) {
   });
 }
 
+let OPEN_SEQ = 0;
 async function openStock(code) {
+  const seq = ++OPEN_SEQ;  // 불러오는 사이 다른 종목을 누르면 늦게 끝난 앞 종목이 화면을 덮어쓰지 않게 (사용자 11/12 코스맥스 화면에 실리콘투)
   const sheet = $("#sheet");
   sheet.classList.add("open");
   document.body.style.overflow = "hidden";
@@ -4627,6 +4634,7 @@ async function openStock(code) {
       ...Object.fromEntries(["005930", "005935", "000660", "009150"].map((c) => [c, ["tech", "💾 반도체·IT 수출 (메모리·HBM·MLCC 등)"]])) }[code];  // 📦 수출 데이터 → 산업 탭 그 칸
     const xp = EXP_CODE && ["ramen", "cosmetics"].includes(EXP_CODE[0]);  // 라면·화장품은 11/11 📦 수출입 탭으로 옮김
     const expLink = EXP_CODE ? `<div class="note"><a href="${xp ? "#exports" : "#industry"}" data-kc="${xp ? "xp" : "exp"}-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} ${xp ? "1~10일 잠정·월별 (1개월~전체) → 수출입 탭에서 보기" : "월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기"}</a></div>` : "";
+    if (seq !== OPEN_SEQ) return;
     $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     prefFill();
@@ -4641,6 +4649,7 @@ async function openStock(code) {
     if (GOTO) { const g = GOTO; GOTO = null; setTimeout(() => document.getElementById(g)?.scrollIntoView({ block: "start" }), 300); }  // 위 그림이 다 그려진 뒤 바로 이동 (부드럽게 움직이면 중간에 멈춤)
   } catch (e) {
     console.error("상세", code, e);
+    if (seq !== OPEN_SEQ) return;
     $("#sheetBody").innerHTML = `<div class="empty">상세 데이터를 불러오지 못했어요.</div>`;
   }
 }
