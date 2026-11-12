@@ -4957,6 +4957,15 @@ function idxCardHTML() {
   const body = card("코스피", kt, kf.value ? { per: kf.value * a, pbr: kf.fwd_pbr && kf.fwd_pbr * a } : null) + card("코스닥", kq, fq);
   return body ? `<div class="irc" style="margin-top:0">${body}<div class="note src">${esc(kt?.date || kq?.date || "")} 종가 · 현재 = KRX 지수 PER·PBR (지난 실적) · ROE = PBR ÷ PER · 선행 = 앞으로 12개월 (코스피는 시총 상위 150곳 컨센서스 합산) · 갱신 때마다 자동 · 자세한 표·밴드는 아래</div></div>` : "";
 }
+// 🎤 고점 신호 체크 (📡 공포·탐욕 아래, 사용자 11/12): 1등 기업 CEO 가 국민 예능·큰 광고에 나오면 경계 ← keychart.yaml peak {sub, lines, log [{d, who, where, note}]}
+function peakHTML(p) {
+  if (!p?.lines?.length) return "";
+  const log = [...(p.log || [])].sort((a, b) => String(b.d).localeCompare(String(a.d)));
+  return `<div class="card" style="margin-bottom:10px"><div class="chart-title" style="margin-top:0"><b>🎤 고점 신호 체크</b> <span class="src">${esc(p.sub || "")}</span></div>
+    <ul class="irl">${p.lines.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    ${log.length ? `<div class="note"><b>📝 기록</b></div><ul class="irl">${log.slice(0, 5).map((r) => `<li><b>${esc(r.d)}</b> ${esc(r.who || "")} · ${esc(r.where || "")}${r.note ? ` <span class="src">${esc(r.note)}</span>` : ""}</li>`).join("")}</ul>`
+      : `<div class="note src">📝 아직 기록 없음 — 이런 방송·광고를 보면 보내 주세요 (날짜·누가·어디·그때 주가를 적어 둬요)</div>`}</div>`;
+}
 const pctRank = (h, v, yrs = 10) => { const ds = h.map((x) => x[0]), a = h.slice(sliceYears(ds, yrs)).map((x) => x[1]).filter((x) => x > 0); return a.length ? { pos: (a.filter((x) => x < v).length / a.length) * 100, avg: a.reduce((s, x) => s + x, 0) / a.length, from: h[sliceYears(ds, yrs)]?.[0] } : null; };
 async function signalHTML() {
   const M = DASH.market || {}, kf = M.kospi_forward || {}, kt = M.kospi_trailing || {}, kq = M.kosdaq_trailing || {}, ws = M.woosan || {}, out = [];
@@ -4995,7 +5004,8 @@ async function signalHTML() {
   const row = (c) => `<details class="fvt bandall" data-code="${esc(c.code)}" style="margin-top:4px"><summary class="chart-title"><b>${c.market === "US" ? "🇺🇸" : "🇰🇷"} ${esc(c.name)}</b> <span class="src">${money(c.price, c.currency)}${c.band_pos != null ? ` · 10년 자리 ${n(c.band_pos, 0)}%` : ""}${c.scen?.base ? ` · 적정주가 대비 ${pct((c.price / c.scen.base - 1) * 100, 0, true)}` : ""}</span></summary><div class="bwb src">불러오는 중…</div></details>`;
   const bands = `<details class="card" style="margin-top:12px"><summary class="chart-title" style="margin-top:0"><b>📈 밴드 차트 — 보유 종목</b> <span class="src">눌러서 열기 · 종목을 누르면 12MF·PBR·PER 밴드 · 선행 PER·PBR 추이 + 적정주가 표 · 5년·10년·최대</span></summary>
     <div class="kidbox" style="margin-top:6px">🐣 밴드 선은 '그 배수를 받으면 주가가 얼마인지'예요. 오른쪽(앞으로)은 증권사 이익 추정치로 그린 선이라, 지금 주가가 어느 선 근처인지 볼 수 있어요. 그림을 누르면 그 날 숫자가 나와요.</div>${own.map(row).join("")}</details>`;
-  return `${idxCardHTML()}${fngHTML()}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
+  const pk = peakHTML((await keyLoad()).peak);
+  return `${idxCardHTML()}${fngHTML()}${pk}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
 }
 
 /* ---------- PBR 계산기 (📡 신호 탭 아래쪽) ---------- */

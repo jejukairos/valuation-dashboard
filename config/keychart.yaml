@@ -1927,6 +1927,13 @@ ipo:  # 🆕 상장 준비 중인 관심 회사 → ⭐🇺🇸 관심 탭 (사�
       - {t: "오픈AI 1.4조$ 에 300억$ 조달 추진 (TNW)", u: "https://thenextweb.com/news/openai-valuation-1-4tn-30bn-round-revenue-70bn"}
       - {t: "오픈AI 기업가치 1.25조$ 로 낮춤 (TNW 10/22)", u: "https://thenextweb.com/news/openai-funding-round-1-25tn-uae-coatue"}
       - {t: "오픈AI 9월 말 연환산 약 500억$ (FT 인용, 블룸버그 거버먼트)", u: "https://news.bgov.com/artificial-intelligence/openais-annualized-revenue-nears-50-billion-ft-says"}
+peak:  # 🎤 고점 신호 체크 (📡 신호 탭 😱 공포·탐욕 바로 아래, 사용자 11/12) — 매일 추적 아님, 보이면 log 에 한 줄 (최신이 위로 정렬됨)
+  sub: "사람들이 가장 많이 보는 곳에 나오면 경계 · 보이면 기록"
+  lines:
+    - "국민 예능(유 퀴즈 등)·큰 광고에 1등 기업 CEO 가 나오거나 한 업종 홍보가 쏟아지면 = 이미 모두가 아는 단계라 고점일 수 있어요"
+    - "예: 엔터가 한창 잘나갈 때 박진영 등 엔터 대표들이 인기 예능에 나왔던 때 (사용자 기억)"
+    - "보이면: 그 종목·업종이 PER 밴드 위쪽인지, 200일선보다 얼마나 높은지 같이 보기 — 추천 아님, 경계용"
+  log: []  # {d: "2026-11-12", who: "누가 (회사·종목)", where: "프로그램·광고", note: "그때 주가·밴드 자리"}
 policy:  # 🏛 정책 탭 (사용자 11/5: "맨 끝에 정책 탭 — 이런 걸 메모해 나가기") — notes 는 최신이 위 (카드 모양 + top 맨 위 핵심 줄), ev = 정책 일정표
   notes:
     - t: "💵 MAG7 정당 후원금 — 몰아준 정당이 지면 단기 주가가 약할 수 있다 (26년 중간선거 기록)"
