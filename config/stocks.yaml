@@ -226,6 +226,9 @@ watchlist:
   - {name: 지엔씨에너지, market: KR, code: "119850", industry: AIDC, methods: [PER]}
   # 💄 화장품 ODM — 2026-11-07 사용자: "관심종목에 코스메카코리아 추가, 실적발표 보여줘" (중소 K-인디 브랜드 고객 · 미국 잉글우드랩)
   - {name: 코스메카코리아, market: KR, code: "241710", industry: 화장품 ODM, methods: [PER], sector: 화장품 ODM}
+  # 💄 화장품 ODM 1위·K-뷰티 수출 유통 — 2026-11-12 사용자: "관심 종목 실리콘투·코스맥스 실적발표, 교보 정리 참고해 IR 칸" (그전엔 비교표 peers 에만 있었음)
+  - {name: 코스맥스, market: KR, code: "192820", industry: 화장품 ODM, methods: [PER], sector: 화장품 ODM}
+  - {name: 실리콘투, market: KR, code: "257720", industry: 화장품 유통, methods: [PER], sector: 화장품 브랜드, note: "K-뷰티 브랜드를 해외 소매점에 파는 수출 유통 회사 — 적정가는 화장품 배수(10·15·20배)를 그대로 써요."}
   # 🧴 화장품 용기(펌프·튜브) — 2026-11-10 사용자: "펌텍코리아 관심 종목, 실적발표 커버" (3Q26 영업이익률 20% 돌파, 전달 글: 용기 해자)
   - {name: 펌텍코리아, market: KR, code: "251970", industry: 화장품 용기, methods: [PER], sector: 화장품 ODM}
   # 🧴 더마 화장품 브랜드(제로이드·아토팜·리얼베리어·더마비) — 2026-11-10 사용자: "네오팜 관심종목 추가, 실적발표 참고" (3Q26 영업이익 +48%, 이익률 25.5%)
