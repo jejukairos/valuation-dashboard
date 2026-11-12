@@ -2123,7 +2123,7 @@ ipo:  # 🆕 상장 준비 중인 관심 회사 → ⭐🇺🇸 관심 탭 (사�
       - {t: "오픈AI 1.4조$ 에 300억$ 조달 추진 (TNW)", u: "https://thenextweb.com/news/openai-valuation-1-4tn-30bn-round-revenue-70bn"}
       - {t: "오픈AI 기업가치 1.25조$ 로 낮춤 (TNW 10/22)", u: "https://thenextweb.com/news/openai-funding-round-1-25tn-uae-coatue"}
       - {t: "오픈AI 9월 말 연환산 약 500억$ (FT 인용, 블룸버그 거버먼트)", u: "https://news.bgov.com/artificial-intelligence/openais-annualized-revenue-nears-50-billion-ft-says"}
-peak:  # 🎤 고점 신호 체크 (📡 신호 탭 😱 공포·탐욕 바로 아래, 사용자 11/12) — 매일 추적 아님, 보이면 log 에 한 줄 (최신이 위로 정렬됨)
+peak:  # 🎤 고점 신호 체크 (📡 신호 탭 코스피·코스닥 카드 바로 아래, 사용자 11/12) — 매일 추적 아님, 보이면 log 에 한 줄 (최신이 위로 정렬됨)
   sub: "사람들이 가장 많이 보는 곳에 나오면 경계 · 보이면 기록"
   lines:
     - "국민 예능(유 퀴즈 등)·큰 광고에 1등 기업 CEO 가 나오거나 한 업종 홍보가 쏟아지면 = 이미 모두가 아는 단계라 고점일 수 있어요"

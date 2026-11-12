@@ -4922,45 +4922,6 @@ document.addEventListener("toggle", (e) => {
     if (kq.pbr_hist?.length > 20) wireHBand("sg-qpbr", kq.pbr_hist, "코스닥 PBR", "배", 2, 10);
   }
 }, true);
-/* ---------- 😱 CNN 공포·탐욕 지수 (📡 신호 탭 맨 위, 사용자 11/9: '숫자 바로 아래 선, 기간 탭에 따라 바뀌게') ← data/fng.json ---------- */
-let FNG = null;
-const FNG_TF = [["1m", "1개월", 1], ["3m", "3개월", 3], ["6m", "6개월", 6], ["1y", "1년", 12], ["all", "전체", 0]];
-const fngRate = (v) => (v < 25 ? "극단적 공포" : v < 45 ? "공포" : v <= 55 ? "중립" : v <= 75 ? "탐욕" : "극단적 탐욕");
-const fngCol = (v) => (v < 45 ? "var(--bad-ink)" : v <= 55 ? "var(--ink-2)" : "var(--s3)");
-function fngChart(tf) {
-  const H0 = FNG.hist, mo = FNG_TF.find((x) => x[0] === tf)?.[2], ex = new Set(FNG.exact || []);
-  let from = "";
-  if (mo) { const t = new Date(H0.at(-1)[0] + "T00:00:00Z"); t.setUTCMonth(t.getUTCMonth() - mo); from = t.toISOString().slice(0, 10); }
-  const h = H0.filter((r) => r[0] > from), N = h.length, W = 380, H = 200, x0 = 26, x1 = W - 10, top = 8, bot = H - 20;
-  const X = (i) => x0 + ((x1 - x0) * i) / Math.max(1, N - 1), Y = (v) => bot - (v / 100) * (bot - top);
-  let g = `<rect x="${x0}" y="${Y(25)}" width="${x1 - x0}" height="${Y(0) - Y(25)}" fill="var(--bad)" fill-opacity=".08"/><rect x="${x0}" y="${Y(100)}" width="${x1 - x0}" height="${Y(75) - Y(100)}" fill="var(--s3)" fill-opacity=".08"/>`;
-  g += [0, 25, 50, 75, 100].map((v) => `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"${v % 50 ? ' stroke-dasharray="3 3"' : ""}/><text x="${x0 - 3}" y="${Y(v) + 3}" text-anchor="end" class="qx">${v}</text>`).join("");
-  g += `<text x="${x0 + 3}" y="${Y(25) + 10}" class="qx" style="fill:var(--bad-ink)">극단적 공포</text><text x="${x0 + 3}" y="${Y(100) + 10}" class="qx" style="fill:var(--s3)">극단적 탐욕</text>`;
-  const step = Math.max(1, Math.ceil(N / 6));  // 아래 날짜: 1개월은 며칠마다, 길면 달이 바뀔 때
-  h.forEach(([d], i) => {
-    const lab = mo === 1 ? (i % step === 0 ? `${+d.slice(5, 7)}/${+d.slice(8)}` : "") : i && d.slice(5, 7) !== h[i - 1][0].slice(5, 7) && (mo !== 0 || ["01", "07"].includes(d.slice(5, 7))) && (mo <= 6 || +d.slice(5, 7) % 3 === 1) ? ym(d) : "";
-    if (lab) g += `<line x1="${X(i)}" x2="${X(i)}" y1="${top}" y2="${bot}" stroke="var(--grid)"/><text x="${X(i)}" y="${bot + 13}" text-anchor="middle" class="qx">${lab}</text>`;
-  });
-  g += `<path d="${h.map((r, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(r[1]).toFixed(1)}`).join("")}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>`;
-  g += `<circle cx="${X(N - 1)}" cy="${Y(h[N - 1][1])}" r="4" fill="var(--s1)"/>`;
-  g += tipCols(X, (x1 - x0) / Math.max(1, N - 1), top, bot, h.map(([d, v]) => `${d}\n${v} · ${fngRate(v)}${ex.has(d) ? "" : "\n(그림에서 읽은 값 ±3)"}`));
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="CNN 공포·탐욕 지수 추이">${g}</svg>`;
-}
-function fngTab(b) {
-  const box = b.closest(".fngbox"); box.querySelectorAll(".fngseg [data-tf]").forEach((x) => x.classList.toggle("on", x === b));
-  box.querySelector(".fngin").innerHTML = fngChart(b.dataset.tf);
-}
-function fngHTML() {
-  if (!FNG?.hist?.length) return "";
-  const [d, v] = FNG.hist.at(-1);
-  const span = (new Date(d) - new Date(FNG.hist[0][0])) / 864e5 > 400;
-  return `<h3 style="margin-top:0">😱 CNN 공포·탐욕 지수 <span class="src">미국 주식시장 분위기 · 0~100 · ${esc(FNG.updated || d)}</span></h3><div class="card fngbox" style="margin-bottom:10px">
-    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="font-size:40px;line-height:1;color:${fngCol(v)}">${v}</b><b style="font-size:17px;color:${fngCol(v)}">${fngRate(v)}</b><span class="src">${esc(d)} 기준</span></div>
-    <div class="seg fngseg" style="margin-top:8px">${FNG_TF.filter((x) => x[0] !== "all" || span).map(([k, l]) => `<button data-tf="${k}" class="${k === "1y" ? "on" : ""}" onclick="fngTab(this)">${l}</button>`).join("")}</div>
-    <div class="fngin">${fngChart("1y")}</div>
-    <div class="kidbox" style="margin-top:6px">🐣 미국 투자자들이 지금 얼마나 겁먹었는지(0쪽)·들떴는지(100쪽)를 CNN 이 7가지 시장 숫자(주가 흐름·변동성·옵션·안전자산 등)로 매긴 점수예요. 25 아래(빨간 띠) = 겁이 아주 큰 때, 75 위(초록 띠) = 아주 들뜬 때. 선을 누르면 그날 숫자가 나와요.</div>
-    <div class="note src">출처 CNN Fear &amp; Greed Index · ${esc(FNG.how || "")} · ⚠ CNN 이 프로그램 접속을 막아 두어 자동 갱신은 안 돼요 — 새 숫자를 보내 주시면 이어 붙여요</div></div>`;
-}
 // 🇰🇷 코스피·코스닥 한눈에 (📡 맨 위, 사용자 11/12 그림 모양): 지수·하루 변화 + 현재(KRX)·선행(12MF) PER·PBR·ROE — 아래 표와 같은 자료, KRX 종가 하루로 맞춤
 function idxCardHTML() {
   const M = DASH.market || {}, kf = M.kospi_forward || {}, ws = M.woosan || {}, kt = M.kospi_trailing, kq = M.kosdaq_trailing;
@@ -4976,7 +4937,7 @@ function idxCardHTML() {
   const body = card("코스피", kt, kf.value ? { per: kf.value * a, pbr: kf.fwd_pbr && kf.fwd_pbr * a } : null) + card("코스닥", kq, fq);
   return body ? `<div class="irc" style="margin-top:0">${body}<div class="note src">${esc(kt?.date || kq?.date || "")} 종가 · 현재 = KRX 지수 PER·PBR (지난 실적) · ROE = PBR ÷ PER · 선행 = 앞으로 12개월 (코스피는 시총 상위 150곳 컨센서스 합산) · 갱신 때마다 자동 · 자세한 표·밴드는 아래</div></div>` : "";
 }
-// 🎤 고점 신호 체크 (📡 공포·탐욕 아래, 사용자 11/12): 1등 기업 CEO 가 국민 예능·큰 광고에 나오면 경계 ← keychart.yaml peak {sub, lines, log [{d, who, where, note}]}
+// 🎤 고점 신호 체크 (📡 코스피·코스닥 카드 아래, 사용자 11/12 · 공포·탐욕 칸은 11/13 사용자 요청으로 지움): 1등 기업 CEO 가 국민 예능·큰 광고에 나오면 경계 ← keychart.yaml peak {sub, lines, log [{d, who, where, note}]}
 function peakHTML(p) {
   if (!p?.lines?.length) return "";
   const log = [...(p.log || [])].sort((a, b) => String(b.d).localeCompare(String(a.d)));
@@ -4988,7 +4949,6 @@ function peakHTML(p) {
 const pctRank = (h, v, yrs = 10) => { const ds = h.map((x) => x[0]), a = h.slice(sliceYears(ds, yrs)).map((x) => x[1]).filter((x) => x > 0); return a.length ? { pos: (a.filter((x) => x < v).length / a.length) * 100, avg: a.reduce((s, x) => s + x, 0) / a.length, from: h[sliceYears(ds, yrs)]?.[0] } : null; };
 async function signalHTML() {
   const M = DASH.market || {}, kf = M.kospi_forward || {}, kt = M.kospi_trailing || {}, kq = M.kosdaq_trailing || {}, ws = M.woosan || {}, out = [];
-  try { FNG = FNG || await (await fetch("data/fng.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { /* 😱 공포·탐욕 칸만 빠짐 */ }
   if (kf.level && kf.value) {  // 코스피: 12MF = 시총 상위 150 컨센서스 합산(직접 계산) · TTM = KRX (같은 날 종가로 맞춤)
     const L = kf.level, adj = kt.level ? L / kt.level : 1, r = kt.pbr_hist ? pctRank(kt.pbr_hist, kt.pbr) : null;
     out.push(sigTable({ name: "코스피", unit: "지수", L, dec: 1, date: `${kt.date || kf.date} 종가 기준`,
@@ -5024,7 +4984,7 @@ async function signalHTML() {
   const bands = `<details class="card" style="margin-top:12px"><summary class="chart-title" style="margin-top:0"><b>📈 밴드 차트 — 보유 종목</b> <span class="src">눌러서 열기 · 종목을 누르면 12MF·PBR·PER 밴드 · 선행 PER·PBR 추이 + 적정주가 표 · 5년·10년·최대</span></summary>
     <div class="kidbox" style="margin-top:6px">🐣 밴드 선은 '그 배수를 받으면 주가가 얼마인지'예요. 오른쪽(앞으로)은 증권사 이익 추정치로 그린 선이라, 지금 주가가 어느 선 근처인지 볼 수 있어요. 그림을 누르면 그 날 숫자가 나와요.</div>${own.map(row).join("")}</details>`;
   const pk = peakHTML((await keyLoad()).peak);
-  return `${idxCardHTML()}${fngHTML()}${pk}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
+  return `${idxCardHTML()}${pk}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
 }
 
 /* ---------- PBR 계산기 (📡 신호 탭 아래쪽) ---------- */
