@@ -229,6 +229,7 @@ def kospi_trailing(code="1001"):
     # level = 그날 지수 종가 · fwd_per = KRX 선행 PER (없으면 0 → None) — 📡 신호 탭 표 (사용자 11/6)
     return {"per": float(last["PER"]), "pbr": float(last["PBR"]), "div": float(last.get("배당수익률", 0) or 0),
             "level": float(last.get("종가", 0) or 0) or None, "fwd_per": float(last.get("선행PER", 0) or 0) or None,
+            "prev": float(df.iloc[-2].get("종가", 0) or 0) or None if len(df) > 1 else None,  # 전날 종가 → 📡 맨 위 카드 하루 변화 (사용자 11/12)
             "date": df.index[-1].strftime("%Y-%m-%d"), "source": "KRX (pykrx)",
             "hist": [[d.strftime("%Y-%m-%d"), round(float(v), 2)] for d, v in w["PER"].items()],
             "pbr_hist": [[d.strftime("%Y-%m-%d"), round(float(v), 3)] for d, v in w["PBR"].items() if v > 0]}

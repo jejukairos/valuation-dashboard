@@ -4942,6 +4942,21 @@ function fngHTML() {
     <div class="kidbox" style="margin-top:6px">🐣 미국 투자자들이 지금 얼마나 겁먹었는지(0쪽)·들떴는지(100쪽)를 CNN 이 7가지 시장 숫자(주가 흐름·변동성·옵션·안전자산 등)로 매긴 점수예요. 25 아래(빨간 띠) = 겁이 아주 큰 때, 75 위(초록 띠) = 아주 들뜬 때. 선을 누르면 그날 숫자가 나와요.</div>
     <div class="note src">출처 CNN Fear &amp; Greed Index · ${esc(FNG.how || "")} · ⚠ CNN 이 프로그램 접속을 막아 두어 자동 갱신은 안 돼요 — 새 숫자를 보내 주시면 이어 붙여요</div></div>`;
 }
+// 🇰🇷 코스피·코스닥 한눈에 (📡 맨 위, 사용자 11/12 그림 모양): 지수·하루 변화 + 현재(KRX)·선행(12MF) PER·PBR·ROE — 아래 표와 같은 자료, KRX 종가 하루로 맞춤
+function idxCardHTML() {
+  const M = DASH.market || {}, kf = M.kospi_forward || {}, ws = M.woosan || {}, kt = M.kospi_trailing, kq = M.kosdaq_trailing;
+  const row = (lb, per, pbr, note) => `<div class="ixr"><span class="src">${lb}</span><span>PER <b>${per ? n(per, 2) : "-"}</b></span><span>PBR <b>${pbr ? n(pbr, 2) : "-"}</b></span><span>ROE <b>${per && pbr ? `${n((pbr / per) * 100, 1)}%` : "-"}</b></span></div>${note ? `<div class="src" style="text-align:right">${note}</div>` : ""}`;
+  const card = (nm, t, f) => {
+    if (!t?.level || !t.per) return "";
+    const ch = t.prev ? t.level - t.prev : null;
+    return `<div class="irc-box"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid var(--border)"><b style="font-size:16px">${nm}</b><b style="font-size:24px">${n(t.level, 2)}</b>${ch == null ? "" : `<span class="${ch >= 0 ? "irU" : "irD"}">${ch >= 0 ? "▲" : "▼"} ${n(Math.abs(ch), 2)} (${pct((ch / t.prev) * 100, 2, true)})</span>`}</div>
+      ${row("현재", t.per, t.pbr)}${f ? row("선행", f.per, f.pbr, f.note) : ""}</div>`;
+  };
+  const a = kt?.level && kf.level ? kt.level / kf.level : 1;  // 12MF 는 다른 시각 지수로 계산돼서 KRX 종가로 맞춤 (아래 표는 지금 지수 기준)
+  const fq = kq?.fwd_per ? { per: kq.fwd_per } : ws.kosdaq_pe ? { per: ws.kosdaq_pe, note: `선행 PER = 우산 텔레그램 주간 (${esc(ws.date || "")}) · PBR·ROE 는 무료 자료가 없어요` } : null;
+  const body = card("코스피", kt, kf.value ? { per: kf.value * a, pbr: kf.fwd_pbr && kf.fwd_pbr * a } : null) + card("코스닥", kq, fq);
+  return body ? `<div class="irc" style="margin-top:0">${body}<div class="note src">${esc(kt?.date || kq?.date || "")} 종가 · 현재 = KRX 지수 PER·PBR (지난 실적) · ROE = PBR ÷ PER · 선행 = 앞으로 12개월 (코스피는 시총 상위 150곳 컨센서스 합산) · 갱신 때마다 자동 · 자세한 표·밴드는 아래</div></div>` : "";
+}
 const pctRank = (h, v, yrs = 10) => { const ds = h.map((x) => x[0]), a = h.slice(sliceYears(ds, yrs)).map((x) => x[1]).filter((x) => x > 0); return a.length ? { pos: (a.filter((x) => x < v).length / a.length) * 100, avg: a.reduce((s, x) => s + x, 0) / a.length, from: h[sliceYears(ds, yrs)]?.[0] } : null; };
 async function signalHTML() {
   const M = DASH.market || {}, kf = M.kospi_forward || {}, kt = M.kospi_trailing || {}, kq = M.kosdaq_trailing || {}, ws = M.woosan || {}, out = [];
@@ -4980,7 +4995,7 @@ async function signalHTML() {
   const row = (c) => `<details class="fvt bandall" data-code="${esc(c.code)}" style="margin-top:4px"><summary class="chart-title"><b>${c.market === "US" ? "🇺🇸" : "🇰🇷"} ${esc(c.name)}</b> <span class="src">${money(c.price, c.currency)}${c.band_pos != null ? ` · 10년 자리 ${n(c.band_pos, 0)}%` : ""}${c.scen?.base ? ` · 적정주가 대비 ${pct((c.price / c.scen.base - 1) * 100, 0, true)}` : ""}</span></summary><div class="bwb src">불러오는 중…</div></details>`;
   const bands = `<details class="card" style="margin-top:12px"><summary class="chart-title" style="margin-top:0"><b>📈 밴드 차트 — 보유 종목</b> <span class="src">눌러서 열기 · 종목을 누르면 12MF·PBR·PER 밴드 · 선행 PER·PBR 추이 + 적정주가 표 · 5년·10년·최대</span></summary>
     <div class="kidbox" style="margin-top:6px">🐣 밴드 선은 '그 배수를 받으면 주가가 얼마인지'예요. 오른쪽(앞으로)은 증권사 이익 추정치로 그린 선이라, 지금 주가가 어느 선 근처인지 볼 수 있어요. 그림을 누르면 그 날 숫자가 나와요.</div>${own.map(row).join("")}</details>`;
-  return `${fngHTML()}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
+  return `${idxCardHTML()}${fngHTML()}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
 }
 
 /* ---------- PBR 계산기 (📡 신호 탭 아래쪽) ---------- */
