@@ -1887,31 +1887,34 @@ function expBanner() {
   return ks.length ? `<div class="warnbox" style="margin-bottom:8px;border-color:var(--bad);font-weight:600">‼️ 📦 새 숫자 나옴 — ${ks.map((k) => `${EXPW_K[k].t} ${by[k].r.p || `${+by[k].r.ym.slice(5)}월`} (${by[k].s.map((s) => `<a href="#stock/${esc(s.code)}" onclick="GOTO='expw'">${esc(s.name)}</a>`).join("·")})`).join(" · ")} <span class="src" style="font-weight:400">누르면 그래프 · 7일 동안 보여요 · 기간별은 <a href="#exports">📦 수출입 탭</a></span></div>` : "";
 }
 document.addEventListener("click", (e) => { const b = e.target.closest(".earnmk button"); if (b) { EARN_MKT = b.dataset.mk; renderEarn(); } });
+const earnKid = (e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(DASH.stocks.find((s) => s.code === e.code)?.name || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">🐣 쉬운 요약 · ${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
+    <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`;
+// 실적 카드 한 장 (🧾 실적 탭 · 🔔 새 소식 탭이 같이 씀) — ez = 같은 분기 🐣 쉬운 요약 (EARNINGS) · feed = 새 소식 탭: 주가 그림(📐 캔들 포함, 카드당 약 19만 자)은 빼고 실적 내용만
+function earnCardHTML(c, ez, feed = false) {
+  const k = c.kq_brief;
+  const head = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:18px;color:var(--s1)">${esc(c.name)} (${esc(c.code)})</b>
+    <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${capTxt(c)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
+  return `<div class="card" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">${head}
+    <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${k.cur === "USD" ? "발표" : "공시"}</a>` : ""}</div>
+    ${ez ? earnKid({ date: ez.date, title: `${ez.quarter} 실적발표`, easy: ez.easy, sum: !feed }) : ""}
+    ${feed ? "" : priceBox(c)}
+    ${kqTable(k)}
+    ${kqPtHTML(k)}
+    ${irBriefHTML(c.code, c.name, k)}
+    ${moodHTML(c)}
+    ${kqBox(k, c.code)}
+  </div>`;
+}
 function kqNewsHTML() {
   // 최신 날짜 먼저 (사용자 11/5) — 실적 카드 · 쉬운 요약만 있는 회사 · 공시·전망 변화(events.yaml)를 한 목록에서 (같은 날이면 실적 카드 → 보유 → 관심 순서 그대로)
   const t0 = new Date(), q0 = `${t0.getFullYear()}-${String(Math.floor(t0.getMonth() / 3) * 3 + 1).padStart(2, "0")}-01`, d3 = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10);
   // 사용자 11/10: 이번 분기(달력 분기 시작 뒤) 발표·요약·공시 다 보이게 (분기 첫 3일은 지난 3일도)
   const cut = d3 < q0 ? d3 : q0, nm = (c) => DASH.stocks.find((s) => s.code === c)?.name;
   const easyOf = (code) => { const l = EARNINGS[code]?.[0]; return l?.easy?.length && l.date >= cut ? l : null; };
-  const kid = (e) => `<div class="kidbox"><b>${e.code ? `<a href="#stock/${esc(e.code)}">${esc(nm(e.code) || e.code)}</a> · ` : ""}${esc(e.title)}</b> <span class="src">🐣 쉬운 요약 · ${esc(e.date.slice(5).replace("-", "/"))}${e.sum ? " · 누르면 상세 요약" : ""}</span>
-      <ul class="irl">${e.easy.map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></div>`;
+  const kid = earnKid;
   const list = DASH.stocks.filter((c) => c.kq_brief && earnOk(c.code));
   const wait = DASH.stocks.filter((c) => !c.kq_brief && c.kq_wait && earnOk(c.code));
-  const rows = list.map((c) => {
-    const k = c.kq_brief, ez = easyOf(c.code);
-    const head = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:18px;color:var(--s1)">${esc(c.name)} (${esc(c.code)})</b>
-      <span class="src">${esc(c.industry || "")}${c.market_cap ? ` · 시총 ${capTxt(c)}` : ""} · ${esc(c.group || "")} · <a href="#stock/${esc(c.code)}">상세 화면</a></span></div>`;
-    return { date: k.date || "", html: `<div class="card" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">${head}
-      <div class="sub">${esc(k.latest)}${k.prelim ? " 잠정실적" : " 실적"}${k.filing ? ` · <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${k.cur === "USD" ? "발표" : "공시"}</a>` : ""}</div>
-      ${ez ? kid({ date: ez.date, title: `${ez.quarter} 실적발표`, easy: ez.easy, sum: true }) : ""}
-      ${priceBox(c)}
-      ${kqTable(k)}
-      ${kqPtHTML(k)}
-      ${irBriefHTML(c.code, c.name, k)}
-      ${moodHTML(c)}
-      ${kqBox(k, c.code)}
-    </div>` };
-  });
+  const rows = list.map((c) => ({ date: c.kq_brief.date || "", html: earnCardHTML(c, easyOf(c.code)) }));
   const shown = new Set(list.map((c) => c.code));
   Object.entries(EARNINGS).forEach(([code, l]) => {  // 실적 카드는 없는데 쉬운 요약은 있는 회사
     const ez = easyOf(code);
@@ -4180,24 +4183,35 @@ function feedBadge() {  // 탭 이름 옆 = 오늘 새 소식 수 (사이트 반
   const n = (FEED?.items || []).filter((x) => x.d === kstToday() && x.k !== SITE_K).length, a = document.querySelector('#tabbar a[data-view="feed"]');
   if (a) a.innerHTML = `🔔 새 소식${n ? ` <b style="color:var(--bad-ink)">${n}</b>` : ""}`;
 }
-const feedRow = (x) => `<div class="note" style="margin:6px 0;line-height:1.55${x.bad ? ";color:var(--bad-ink)" : ""}"><span class="pill">${esc(x.k)}</span> ${x.name ? `<a href="${esc(x.go || "#")}"><b>${esc(x.name)}</b></a> ` : ""}${esc(x.t)}${!x.name && x.go ? ` <a href="${esc(x.go)}">보기</a>` : ""}${x.u ? ` <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a>` : ""}${x.hm ? ` <span class="src">${esc(x.hm)}</span>` : ""}</div>`;
+const feedRow = (x) => `<div class="note" style="margin:6px 0;line-height:1.55${x.bad ? ";color:var(--bad-ink)" : ""}"><span class="pill">${esc(x.k)}</span> ${x.name ? `<a href="${esc(x.go || "#")}"><b>${esc(x.name)}</b></a> ` : ""}${esc(x.t)}${!x.name && x.go ? ` <a href="${esc(x.go)}">보기</a>` : ""}${x.u ? ` <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a>` : ""}${x.hm ? ` <span class="src">${esc(x.hm)}</span>` : ""}</div>`
+  + ((x.x || []).length ? `<ul class="irl" style="margin:-2px 0 8px">${x.x.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "");
+// 사용자 11/13 "상세 화면이 아니라 오늘 있었던 일 그대로 · 실적발표면 내용 모두" → 실적은 🧾 실적 탭 카드 그대로, 리포트는 리포트 탭 줄 그대로 펼쳐서
+const feedOpen = (h) => h.replace(/<details class="(fvt|rpd)"/g, '<details open class="$1"');
+function feedMore(x, seen) {
+  if (x.k === "🧾 실적" && x.code) {
+    const c = DASH.stocks.find((s) => s.code === x.code), l = EARNINGS[x.code]?.[0], ez = l?.easy?.length && l.date >= kstDay(6) ? l : null;
+    return feedOpen(c?.kq_brief ? earnCardHTML(c, ez, true) : (ez ? earnKid({ date: ez.date, title: `${ez.quarter} 실적발표`, easy: ez.easy }) : "") + irBriefHTML(x.code, x.name, null));
+  }
+  if (!["📑 리포트", "🌏 증권사 요약"].includes(x.k) || !x.code || seen.has(`${x.code}|${x.d}`)) return "";
+  seen.add(`${x.code}|${x.d}`);  // 한경 목록·한 장 요약·텔레그램 리포트는 repMerge 가 한 줄로 합쳐서 그 날 한 번만
+  const r = REPS?.stocks?.find((s) => s.code === x.code), L = repMerge(x.code, r).filter((y) => y.d === x.d);
+  return L.length ? feedOpen(`<div style="margin:0 0 10px">${L.map((y) => repRow(y, r?.market || mktOf(x.code))).join("")}</div>`) : "";
+}
 async function renderFeed() {
-  const F = await feedGet(), it = F.items || [], today = kstToday();
+  const [F] = await Promise.all([feedGet(), tgGet().catch(() => null), repGet().catch(() => null), dgGet()]), it = F.items || [], today = kstToday();
   feedBadge();
   if (!it.length) { $("#feedBody").innerHTML = `<div class="empty">최근 7일 새 소식이 없어요.</div>`; return; }
   const dl = (d) => { const df = Math.round((Date.parse(today) - Date.parse(d)) / 864e5), w = "일월화수목금토"[new Date(`${d}T12:00:00Z`).getUTCDay()];
     return `${df === 0 ? "오늘" : df === 1 ? "어제" : `${df}일 전`} (${+d.slice(5, 7)}/${+d.slice(8)} ${w})`; };
-  const isData = (x) => x.k !== SITE_K;
-  // 맨 위: 💼 보유 종목 최근 2일 (가장 먼저 봐야 할 것)
-  const d2 = [...new Set(it.map((x) => x.d))].slice(0, 2), top = it.filter((x) => d2.includes(x.d) && x.g === "보유" && isData(x));
+  const isData = (x) => x.k !== SITE_K, seen = new Set(), row = (x) => feedRow(x) + feedMore(x, seen);
   const cnt = (xs) => Object.keys(FG).map((g) => [g, xs.filter((x) => x.g === g).length]).filter(([, c]) => c).map(([g, c]) => `${FG[g]} ${c}`).join(" · ");
-  const head = `<div class="kidbox" style="margin-bottom:10px">🐣 최근 7일 바뀐 것 ${it.filter(isData).length}개 (${cnt(it.filter(isData))}) · 같은 날 안에서는 보유 → 관심 → 공동 → 공통 순서
-    ${top.length ? `<div style="margin-top:6px"><b>💼 보유 종목 — ${esc(d2.map(dl).join(" · "))}</b>${top.map(feedRow).join("")}</div>` : `<div class="note">💼 보유 종목은 최근 이틀 새 소식이 없어요.</div>`}</div>`;
+  // 맨 위 = 오늘 (사용자 11/13 "당일 올라온 게 제일 위") — 예전 '💼 보유 최근 2일' 칸은 어제 것이 오늘보다 위에 와서 지움
+  const head = `<div class="kidbox" style="margin-bottom:10px">🐣 최근 7일 바뀐 것 ${it.filter(isData).length}개 (${cnt(it.filter(isData))}) · 오늘 것이 맨 위 · 같은 날 안에서는 보유 → 관심 → 공동 → 공통 · 실적·리포트는 내용까지 펼쳐 둠</div>`;
   const day = (d, i) => {
     const xs = it.filter((x) => x.d === d), data = xs.filter(isData), site = xs.filter((x) => !isData(x));
-    const grp = Object.keys(FG).map((g) => { const ys = data.filter((x) => x.g === g); return ys.length ? `<div style="margin-top:8px"><b>${FG[g]}</b> <span class="src">${ys.length}개</span>${ys.map(feedRow).join("")}</div>` : ""; }).join("");
+    const grp = Object.keys(FG).map((g) => { const ys = data.filter((x) => x.g === g); return ys.length ? `<div style="margin-top:8px"><b>${FG[g]}</b> <span class="src">${ys.length}개</span>${ys.map(row).join("")}</div>` : ""; }).join("");
     return `<details class="fvt"${i < 2 ? " open" : ""}><summary class="chart-title" style="margin-top:12px"><b>${dl(d)}</b> <span class="src">${data.length}개${data.length ? ` (${cnt(data)})` : ""}${site.length ? ` · 🛠 반영 ${site.length}` : ""}</span></summary>
-      <div class="card">${grp || '<div class="note">데이터 변화 없음</div>'}${site.length ? `<details class="fvt"><summary class="chart-title">🛠 사이트에 반영한 것 ${site.length}개 <span class="src">전달받은 글 반영 · 화면·계산 고침 (Claude)</span></summary>${site.map(feedRow).join("")}</details>` : ""}</div></details>`;
+      <div class="card">${grp || '<div class="note">데이터 변화 없음</div>'}${site.length ? `<details class="fvt"><summary class="chart-title">🛠 사이트에 반영한 것 ${site.length}개 <span class="src">전달받은 글 반영 · 화면·계산 고침 (Claude)</span></summary>${site.map(row).join("")}</details>` : ""}</div></details>`;
   };
   $("#feedBody").innerHTML = head + [...new Set(it.map((x) => x.d))].map(day).join("")
     + `<div class="note src" style="margin-top:10px">자동 갱신 ${esc(F.updated_at || "")} (하루 여러 번) · 🧾 실적 = 잠정실적 숫자·IR 요약·컨콜 정리 · 📑 리포트 = 한경 목표가 · 🌏 증권사 요약 = 리포트 탭 한 장 요약 · 📢 공시 = 중요 공시 · 📦 수출 = 채널 1~10일 잠정·관세청 확정 · 📈 추정치 = 1주 3% 넘게 바뀐 이익 추정 · 🤖 자동 정리 = PC 예약 작업이 스스로 정리 · 매수·매도 추천 아님</div>`;

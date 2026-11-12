@@ -49,9 +49,9 @@ def build(today=None):
     today = today or now_kst().date()
     cut = (today - timedelta(days=DAYS - 1)).isoformat()
     S, items = stocks(), []
-    add = lambda d, code, k, t, u="", go="", g=None, hm="": items.append({  # noqa: E731
+    add = lambda d, code, k, t, u="", go="", g=None, hm="", x=None: items.append({  # noqa: E731  x = 그 일의 내용 줄 (화면에 펼쳐 보임, 사용자 11/13)
         "d": d, "hm": hm, "code": code, "name": S.get(code, ("", ""))[0], "g": g or S.get(code, ("", "공통"))[1], "k": k, "t": t,
-        **({"u": u} if u else {}), "go": go or (f"#stock/{code}" if code in S else "")})
+        **({"u": u} if u else {}), **({"x": x} if x else {}), "go": go or (f"#stock/{code}" if code in S else "")})
 
     # 🧾 실적: 잠정실적 숫자(kq) + IR 요약 + 컨콜 깊이 정리를 종목·분기 한 줄로
     D, IRB, ER = _j("dashboard"), _j("ir_brief"), _j("earnings")
@@ -123,36 +123,44 @@ def build(today=None):
     # 📌 큰 사건 (events.json) · 📈 이익 추정치 1주 변화 (3% 넘게)
     for ev in _j("events") if isinstance(_j("events"), list) else []:
         if (ev.get("date") or "") >= cut and str(ev.get("code")) in S:
-            add(ev["date"], str(ev["code"]), "📌 사건", ev.get("title", ""))
+            add(ev["date"], str(ev["code"]), "📌 사건", ev.get("title", ""), x=ev.get("easy"))
     dd = (D.get("updated_at") or "")[:10]
     for s in D.get("stocks") or []:
         e, code = s.get("est") or {}, str(s.get("code"))
         if dd >= cut and code in S and isinstance(e.get("1주"), (int, float)) and abs(e["1주"]) >= 3:
             add(dd, code, "📈 추정치", f"{e.get('y', '')}년 {e.get('what', '이익')} 추정치 1주 {e['1주']:+.1f}%" + (f" · 1개월 {e['1개월']:+.1f}%" if isinstance(e.get("1개월"), (int, float)) else ""))
     # 🛠 사이트에 반영 · 🤖 자동 정리 (커밋 제목, 봇 정기 갱신은 뺌) — 제목에 종목 이름이 있으면 그 종목 묶음
-    for d, hm, an, subj in commits(cut):
+    for d, hm, an, subj, body in commits(cut):
         if BOT.match(subj) or an in ("valuation-bot", "github-actions[bot]"):
             continue
         code = next((c for c, (nm, *_) in S.items() if nm in subj or (re.fullmatch(r"[A-Z]{2,5}", c) and re.search(rf"\b{c}\b", subj))), "")
-        add(d, code, "🤖 자동 정리" if AUTO.search(subj) else "🛠 사이트 반영", subj.lstrip("﻿")[:150], hm=hm, g=None if code else "공통")
+        add(d, code, "🤖 자동 정리" if AUTO.search(subj) else "🛠 사이트 반영", subj.lstrip("﻿")[:150], hm=hm, g=None if code else "공통", x=body)
     items.sort(key=lambda x: (x["d"], -PRI.get(x["g"], 3), x["hm"]), reverse=True)
     return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "days": DAYS, "items": items}
 
 
+TRAILER = re.compile(r"^(Co-Authored-By|Claude-Session|Signed-off-by):", re.I)
+
+
+def body_lines(b):
+    """커밋 본문 → 내용 줄 (앞 '- ' 와 서명 줄은 뺌, 최대 15줄)."""
+    return [ln.strip().lstrip("-•· ").strip() for ln in (b or "").splitlines() if ln.strip() and not TRAILER.match(ln.strip())][:15]
+
+
 def commits(cut):
-    """(날짜, 시:분, 작성자, 제목) — 한국 시간."""
-    try:  # %cI = 커밋한 곳의 시간대가 붙은 시각 → 한국 시간으로 (윈도·리눅스 TZ 설정과 상관없이)
-        out = subprocess.run(["git", "log", f"--since={cut}T00:00:00+09:00", "--format=%cI%x09%an%x09%s"],
+    """(날짜, 시:분, 작성자, 제목, 본문 줄) — 한국 시간."""
+    try:  # %cI = 커밋한 곳의 시간대가 붙은 시각 → 한국 시간으로 (윈도·리눅스 TZ 설정과 상관없이) · %x1e = 커밋 사이 구분 (본문에 줄바꿈이 있어서)
+        out = subprocess.run(["git", "log", f"--since={cut}T00:00:00+09:00", "--format=%cI%x09%an%x09%s%x09%b%x1e"],
                              cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=30).stdout
     except (OSError, subprocess.SubprocessError):
         return []
     rows, kst = [], timezone(timedelta(hours=9))
-    for ln in out.splitlines():
-        p = ln.split("\t", 2)
-        if len(p) == 3:
+    for rec in out.split("\x1e"):
+        p = rec.strip("\n").split("\t", 3)
+        if len(p) == 4:
             t = datetime.fromisoformat(p[0]).astimezone(kst)
             if t.date().isoformat() >= cut:
-                rows.append((t.strftime("%Y-%m-%d"), t.strftime("%H:%M"), p[1], p[2]))
+                rows.append((t.strftime("%Y-%m-%d"), t.strftime("%H:%M"), p[1], p[2], body_lines(p[3])))
     return rows
 
 
@@ -160,6 +168,7 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--test"]:
         assert _eok(1962) == "1,962억" and _eok(12345) == "1.2조" and _won(1800000) == "180만원" and _won(52000) == "52,000원"
         assert BOT.match("데이터 갱신 2026-11-11 13:29") and not BOT.match("📦 수출입 탭: …") and AUTO.search("삼성전기 3Q26 실적발표 요약 (발표 자막)")
+        assert body_lines("- 가 줄\n\n- 나 줄\nCo-Authored-By: x\nClaude-Session: y") == ["가 줄", "나 줄"]
         f = build()
         assert all(x["d"] >= f["items"][-1]["d"] for x in f["items"]) and all(x["g"] in PRI for x in f["items"]), "정렬·묶음"
         print("ok", len(f["items"]))
