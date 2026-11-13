@@ -4645,6 +4645,7 @@ async function openStock(code) {
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
     const growHtml = await growthBlock(code, d);
+    const topHtml = ((await keyLoad()).stock?.[code]?.cards || []).filter((x) => x.top).map((x) => keyCard(x, true)).join("");  // keychart.yaml top: true = 상세 맨 위 (사용자 11/13 테슬라 FSD 유럽 승인)
     try { OHLC[code] = OHLC[code] || await (await fetch(`data/ohlc/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { OHLC[code] = null; }  // 📉 5년 하락률 그림 (📐 선 읽기와 같은 파일)
     const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + ddHTML(code) + cycHTML(code) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
@@ -4658,7 +4659,7 @@ async function openStock(code) {
     const xp = EXP_CODE && ["ramen", "cosmetics"].includes(EXP_CODE[0]);  // 라면·화장품은 11/11 📦 수출입 탭으로 옮김
     const expLink = EXP_CODE ? `<div class="note"><a href="${xp ? "#exports" : "#industry"}" data-kc="${xp ? "xp" : "exp"}-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} ${xp ? "1~10일 잠정·월별 (1개월~전체) → 수출입 탭에서 보기" : "월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기"}</a></div>` : "";
     if (seq !== OPEN_SEQ) return;
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => topHtml + liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
@@ -5849,7 +5850,7 @@ function keyCard(c, open) {
 function keyGroup(name, g, code) {
   return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}
     ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${evHTML(g.ev)}${vcHTML(g.vc)}
-    ${(g.cards || []).filter((c) => code || !c.stock_only).map((c) => keyCard(c, !code || [].concat(c.code).includes(code))).join("")}</div>`;
+    ${(g.cards || []).filter((c) => (code || !c.stock_only) && !(code && c.top)).map((c) => keyCard(c, !code || [].concat(c.code).includes(code))).join("")}</div>`;
 }
 // 📅 업종 이벤트 일정표 (keychart.yaml 묶음의 ev: {t 제목, src, note, rows [{d 정렬 날짜, w 보이는 날짜, e 이벤트, p 확인 포인트, k 1 = 특히 중요}]}) — 사용자 11/5 2차전지 일정
 function evHTML(ev) {
