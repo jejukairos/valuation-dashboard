@@ -5001,6 +5001,30 @@ async function signalHTML() {
   return `${idxCardHTML()}${pk}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
 }
 
+/* ---------- 📊 섹터별 대표 ETF (📡 신호 탭 🇰🇷 맨 위, 사용자 11/13 블로그 MTS 표 그대로: 현재가 · 등락률 · L일봉H · 시가총액) ← data/sector_etf.json (collector/sector_etf.py) ---------- */
+async function etfHTML() {
+  let E;
+  try { E = await (await fetch("data/sector_etf.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { return ""; }
+  const R = E.rows || [];
+  if (!R.length) return "";
+  const pc = (r, v) => (v / r.pc - 1) * 100, S = Math.max(3, ...R.flatMap((r) => [Math.abs(pc(r, r.h)), Math.abs(pc(r, r.l))]));  // 모든 줄 같은 눈금 (전일 종가 ±S%)
+  const W = 72, X = (v) => W / 2 + (v / S) * (W / 2 - 3);  // 휴대폰 폭에 시가총액 칸까지 들어가게
+  const cnd = (r) => { const up = r.p >= r.o, col = up ? "var(--bad)" : "var(--s1)", a = X(pc(r, Math.min(r.o, r.p))), b = X(pc(r, Math.max(r.o, r.p)));
+    return `<svg viewBox="0 0 ${W} 16" width="${W}" height="16" style="vertical-align:middle" aria-label="일봉"><line x1="${W / 2}" x2="${W / 2}" y1="1" y2="15" stroke="var(--grid)"/>`
+      + `<line x1="${X(pc(r, r.l))}" x2="${X(pc(r, r.h))}" y1="8" y2="8" stroke="${col}" stroke-width="1.5"/><rect x="${a}" y="3" width="${Math.max(1.5, b - a)}" height="10" fill="${col}"/></svg>`; };
+  const cl = (v) => (v > 0 ? "var(--bad)" : v < 0 ? "var(--s1)" : "var(--ink)");
+  const by = [...R].sort((a, b) => b.r - a.r), top = by.slice(0, 3).filter((r) => r.r > 0), bot = by.slice(-3).reverse().filter((r) => r.r < 0);
+  const nm = (r) => `${esc(r.n.replace(/^(KODEX|TIGER|SOL|KoAct|PLUS|ACE) /, ""))} ${r.r > 0 ? "+" : ""}${n(r.r, 2)}%`;
+  const u = E.updated_at || "", live = u.slice(0, 10) === R[0].d && u.slice(11) < "15:40";  // 장중에 갱신된 값이면 종가가 아님
+  return `<div class="card" style="margin-bottom:12px"><div class="chart-title" style="margin-top:0"><b>📊 섹터별 대표 ETF — 오늘 돈 흐름</b> <span class="src">${esc(R[0].d)} ${live ? `<b style="color:var(--warn-ink)">장중 ${esc(u.slice(11))} 값</b>` : "종가"} · ${R.length}개</span></div>
+    ${top.length || bot.length ? `<div class="note">🔺 많이 오름: ${top.map(nm).join(" · ") || "없음"}<br>🔻 많이 내림: ${bot.map(nm).join(" · ") || "없음"}</div>` : ""}
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th style="text-align:center">L 일봉 H</th><th>시가총액</th></tr></thead><tbody>
+      ${R.map((r) => `<tr><td style="text-align:left;white-space:normal;min-width:7em;line-height:1.3">${esc(r.n)}</td><td style="color:${cl(r.r)}">${n(r.p, 0)}</td><td style="color:${cl(r.r)}">${r.r > 0 ? "+" : ""}${n(r.r, 2)}%</td><td style="text-align:center">${cnd(r)}</td><td>${r.cap != null ? n(r.cap, 0) : "-"}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="kidbox" style="margin-top:6px">🐣 업종마다 대표 ETF 하나씩이라, 오늘 돈이 어느 업종으로 갔는지 한눈에 보여요. <b>일봉</b>: 가운데 회색 세로선 = 어제 종가, 가로선 = 오늘 최저가 ~ 최고가, 네모 = 시가 → 종가 (빨강 = 시가보다 올라서 끝남, 파랑 = 내려서 끝남). 모든 줄이 같은 눈금 (어제 종가 ±${n(S, 1)}%).</div>
+    <div class="note src">목록 = 블로그 '요약하는 고잉' 섹터별 대표 ETF 23개 (사용자 11/13 전달) · 가격 = 네이버 · 시가총액 = 억원 · 데이터 갱신 때마다 (장 마감 뒤 18:30 무렵 = 그날 종가) · ${esc(E.updated_at || "")} · 매수·매도 추천 아님</div></div>`;
+}
+
 /* ---------- 📡 신호 탭 🇰🇷 한국 / 🇺🇸 미국 (사용자 11/13) — 미국 = 빅테크 8곳 고점 대비 하락률 · 올해 수익률 (전달 그림 2장 본뜸, 매일) ← data/bigtech.json (collector/bigtech.py) ---------- */
 let BIGT = null;
 const BT_HL = "NVDA";  // 그림처럼 엔비디아만 파랑
@@ -5047,6 +5071,7 @@ async function loadPBR() {
     catch (e) { $("#pbrCards").innerHTML = `<div class="empty">PBR 계산기 데이터를 불러오지 못했어요.</div>`; return; }
   }
   signalHTML().then((h) => { $("#signalBody").innerHTML = h; }).catch(() => { $("#signalBody").innerHTML = `<div class="empty">신호 표를 못 그렸어요.</div>`; });
+  etfHTML().then((h) => { $("#sigEtf").innerHTML = h; });
   const base = PBR.base_year;
   $("#pbrIntro").innerHTML = `연도별 추정 BPS(주당순자산) × PBR 배수로 가격을 계산해요. <b>${esc(base)}</b> 열이 기준 연도예요. 갱신 ${esc(PBR.updated_at)}`;
   $("#pbrCards").innerHTML = PBR.items.map((it, i) => pbrCard(it, base, i)).join("") || `<div class="empty">config/pbr_watch.yaml 에 종목을 넣어 주세요.</div>`;

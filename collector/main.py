@@ -1153,6 +1153,13 @@ def main():
     except Exception as e:  # noqa: BLE001
         REPORT.block("📉 고점 대비 낙폭 사이클", str(e)[:80])
 
+    print("■ 📊 섹터별 대표 ETF (📡 신호 탭 한국 맨 위)")
+    try:
+        import sector_etf
+        sector_etf.collect()
+    except Exception as e:  # noqa: BLE001 - 못 받으면 화면은 직전 값 그대로
+        REPORT.block("📊 섹터별 대표 ETF", str(e)[:80])
+
     print("■ 🇺🇸 빅테크 8곳 고점 대비·올해 수익률 (📡 신호 탭 미국)")
     try:
         import bigtech
