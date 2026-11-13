@@ -235,6 +235,8 @@ watchlist:
   - {name: 네오팜, market: KR, code: "092730", industry: 화장품, methods: [PER], sector: 화장품 브랜드}
   # 💾 데이터센터 SSD 컨트롤러 팹리스 — 2026-11-11 사용자: "파두도 관심종목 넣어줘" (3Q26 매출 1,436억 · 영업이익 361억 흑자전환, 2023년 상장)
   - {name: 파두, market: KR, code: "440110", industry: 반도체, methods: [PER], note: "2023년 상장 · 25년까지 적자라 밴드는 가능한 기간만으로 계산해요."}
+  # 🍪 과자 (한국·중국·베트남·러시아 법인, 매달 DART 에 나라별 매출·영업이익 공시) — 2026-11-13 사용자: "오리온 관심 종목 있을 텐데 관련 내용 참고" (그전엔 삼양식품 비교표 peers 에만 있었음)
+  - {name: 오리온, market: KR, code: "271560", industry: 음식료, methods: [PER], sector: 음식료}
   # M7 빅테크 — 보유·공동자산에 있는 종목은 한 번만 계산하고 ⭐ 관심 탭에도 같이 보여요
   - {name: 애플, market: US, code: AAPL, industry: 하드웨어, methods: [PER]}
   - {name: 마이크로소프트, market: US, code: MSFT, industry: 소프트웨어, methods: [PER]}
