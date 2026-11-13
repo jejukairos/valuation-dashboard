@@ -1153,6 +1153,13 @@ def main():
     except Exception as e:  # noqa: BLE001
         REPORT.block("📉 고점 대비 낙폭 사이클", str(e)[:80])
 
+    print("■ 🇺🇸 빅테크 8곳 고점 대비·올해 수익률 (📡 신호 탭 미국)")
+    try:
+        import bigtech
+        bigtech.collect()
+    except Exception as e:  # noqa: BLE001 - 못 받으면 화면은 직전 값 그대로
+        REPORT.block("🇺🇸 빅테크 고점 대비·올해 수익률", str(e)[:80])
+
     out = {
         "updated_at": t0.strftime("%Y-%m-%d %H:%M"),
         "rates": r, "market": m, "signals": {"us": us_sig, "kr": kr_sig},

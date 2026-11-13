@@ -5001,6 +5001,44 @@ async function signalHTML() {
   return `${idxCardHTML()}${pk}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
 }
 
+/* ---------- 📡 신호 탭 🇰🇷 한국 / 🇺🇸 미국 (사용자 11/13) — 미국 = 빅테크 8곳 고점 대비 하락률 · 올해 수익률 (전달 그림 2장 본뜸, 매일) ← data/bigtech.json (collector/bigtech.py) ---------- */
+let BIGT = null;
+const BT_HL = "NVDA";  // 그림처럼 엔비디아만 파랑
+function btBars(rows, key) {
+  const W = 380, H = 230, N = rows.length, x0 = 4, bw = (W - 8) / N, vs = rows.map((r) => r[key]), mx = Math.max(0, ...vs), mn = Math.min(0, ...vs);
+  const down = mx === 0, top = down ? 30 : 20, bot = H - (down ? 22 : 42), Y = (v) => top + ((mx - v) / (mx - mn || 1)) * (bot - top);
+  let g = "";
+  rows.forEach((r, i) => {
+    const v = r[key], cx = x0 + bw * (i + 0.5), y = Y(v), hl = r.t === BT_HL;
+    g += `<rect x="${cx - bw * 0.3}" y="${Math.min(y, Y(0))}" width="${bw * 0.6}" height="${Math.max(1.5, Math.abs(y - Y(0)))}" fill="${hl ? "var(--s1)" : "var(--ink-2)"}" fill-opacity="${hl ? 1 : 0.5}"><title>${esc(r.n)} ${v > 0 ? "+" : ""}${n(v, 1)}%</title></rect>`;
+    g += `<text x="${cx}" y="${v >= 0 && !down ? y - 5 : y + 13}" text-anchor="middle" style="font-size:11px;font-weight:700;fill:${hl ? "var(--s1)" : "var(--ink)"}">${v > 0 ? "+" : ""}${n(v, 1)}%</text>`;
+    g += `<text x="${cx}" y="${down ? 14 : H - 10}" text-anchor="middle" class="qx"${hl ? ' style="font-weight:700;fill:var(--s1)"' : ""}>${esc(r.n)}</text>`;
+  });
+  g += `<line x1="${x0}" x2="${W - 4}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--ink)" stroke-width="2"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="빅테크 ${key === "dd" ? "고점 대비 하락률" : "올해 수익률"}">${g}</svg>`;
+}
+async function renderBigTech() {
+  const el = $("#sigUS");
+  try { BIGT = BIGT || await (await fetch("data/bigtech.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { el.innerHTML = `<div class="empty">빅테크 자료는 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
+  const R = BIGT.rows || [], dd = [...R].sort((a, b) => b.dd - a.dd), yt = [...R].sort((a, b) => b.ytd - a.ytd), hl = R.find((r) => r.t === BT_HL), d = R[0]?.date || "";
+  const pp = (a, b) => (a == null || b == null ? "" : `<span class="src">${a - b >= 0 ? "▲" : "▼"}${n(Math.abs(a - b), 1)}</span>`), sg = (v) => `${v > 0 ? "+" : ""}${n(v, 1)}%`;
+  const rk = (L) => L.findIndex((r) => r.t === BT_HL) + 1;
+  const card = (t, key, L, cap) => `<div class="card" style="margin-bottom:10px"><div class="chart-title" style="margin-top:0"><b>${t}</b> <span class="src">${esc(d)} 종가</span></div>${btBars(L, key)}<div class="src">${cap}</div></div>`;
+  el.innerHTML = `${hl ? `<div class="kidbox" style="margin-bottom:10px">🐣 <b>엔비디아 고점 대비 ${sg(hl.dd)}</b> (${R.length}곳 중 ${R.length - rk(dd) + 1}번째로 많이 빠짐) · <b>올해 ${sg(hl.ytd)}</b> (${R.length}곳 중 ${rk(yt)}등). 막대가 아래로 길수록 많이 빠진 거예요. 미국장이 끝난 뒤 아침 갱신 때 매일 새로 계산해요.</div>` : ""}
+    ${card("📉 주요 빅테크 고점 대비 하락률", "dd", dd, "고점 = 상장 뒤 장중 최고가 (분할 반영)")}
+    ${card("📈 주요 빅테크 올해 수익률", "ytd", yt, `작년 마지막 거래일 종가 대비${R.some((r) => r.base_n !== "작년 말 종가") ? ` · ${R.filter((r) => r.base_n !== "작년 말 종가").map((r) => `${esc(r.n)} = ${esc(r.base_n)} 대비`).join(" · ")}` : ""}`)}
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>종가</th><th>고점 (날짜)</th><th>고점 대비</th><th>올해</th></tr></thead><tbody>
+      ${dd.map((r) => `<tr${r.t === BT_HL ? ' style="font-weight:700"' : ""}><td style="text-align:left">${esc(r.n)} <span class="src">${esc(r.t)}</span></td><td>$${n(r.close, 2)}</td><td>$${n(r.hi, 2)} <span class="src">${esc(r.hi_d.slice(2).replace(/-/g, "/"))}</span></td><td>${sg(r.dd)} ${pp(r.dd, r.dd_prev)}</td><td>${sg(r.ytd)} ${pp(r.ytd, r.ytd_prev)}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="note src">▲▼ = 전 거래일보다 몇 %p · 야후 일봉 · 매일 07:30 무렵 갱신 (${esc(BIGT.updated_at || "")}) · 11/12 종가로 전달받은 그림 숫자 16개가 모두 같았어요 · 매수·매도 추천 아님</div>`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".sigmk button"); if (!b) return;
+  document.querySelectorAll(".sigmk button").forEach((x) => x.classList.toggle("on", x === b));
+  const us = b.dataset.mk === "US"; $("#sigKR").hidden = us; $("#sigUS").hidden = !us;
+  if (us) renderBigTech();
+});
+
 /* ---------- PBR 계산기 (📡 신호 탭 아래쪽) ---------- */
 let PBR = null;
 async function loadPBR() {
