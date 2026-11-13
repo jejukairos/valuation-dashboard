@@ -1627,6 +1627,14 @@ function taAnalyze(full, kind, c) {
     [0.382, 0.5, 0.618].forEach((r) => g.push(`<hr data-v="${H - (H - L) * r}" data-t="피보 눌림 ${n(r * 100, 1)}%${r === 0.5 ? " · " + fmt(H - (H - L) * r) : ""}" data-c="${r === 0.5 ? "f" : "f2"}"/>`));
     leg.push([SW(COL.f, 1), `피보나치 (상승 뒤 눌림): 저점 ${fmt(L)} → 고점 ${fmt(H)} · <b>50% 눌림 = ${fmt(H - (H - L) / 2)}</b> (${pp(H - (H - L) / 2)}) · 38.2% ${fmt(H - (H - L) * 0.382)} · 61.8% ${fmt(H - (H - L) * 0.618)}`]); }
   const run = ch.h[iA] / Math.min(...ch.l.slice(0, iA + 1));
+  // 📝 11/13 메모 (전달받은 엔비디아 글): 내리면서 거래량이 터지면 손바뀜 · 그 자리가 전고점이면 받쳐 주는지 보는 자리 — 최근 3봉 중 내린 봉 거래량 ≥ 앞 20봉 평균 2배
+  if (kind !== "m") for (let k = N - 1; k >= Math.max(21, N - 3); k--) {
+    const vx = ch.v[k] / (ch.v.slice(k - 20, k).reduce((a, b) => a + b, 0) / 20 || 1);
+    if (vx < 2 || ch.c[k] >= ch.c[k - 1]) continue;
+    const ph = PH.filter((i) => i < k - 13 && Math.abs(ch.l[k] / ch.h[i] - 1) < tol).sort((a, b) => Math.abs(ch.l[k] / ch.h[a] - 1) - Math.abs(ch.l[k] / ch.h[b] - 1))[0];  // 저가에 가장 가까운 전고점
+    lines.push(`📝 <b>내리면서 거래량 터짐</b> (${ch.t[k]}, 앞 20봉 평균의 ${n(vx, 1)}배) — 11/13 메모: 하락 중 거래량 폭발 = 손바뀜일 수 있음${ph != null ? ` · 저가 ${fmt(ch.l[k])} 가 <b>${ch.t[ph]} 전고점 ${fmt(ch.h[ph])}</b> 근처 (예전 저항이 받쳐 주는지 보는 자리)` : ""}`);
+    break;
+  }
   if (run >= 5) lines.push(`🚫 이 기간 저점에서 고점까지 약 <b>${n(run, 1)}배</b> — 형님 원칙: 짧게 5~10배 오른 종목은 1~2년 쉴 수 있어 쳐다보지 않음${["012450", "003230"].includes(c.code) ? " (단 한화에어로스페이스·삼양식품은 이 원칙에서 빼서 말씀하셨어요)" : ""}`);
   if (c.market !== "US" && c.market_cap && c.market_cap < 1e12) lines.push(`🚫 시가총액 약 ${n(c.market_cap / 1e8, 0)}억 — 형님 원칙: 1조 미만은 손대지 않음`);
   // over: 위 표식 → SVG (회색 채널 · 저항 빨강 점선 · 지지 파랑 점선 · 피보 보라 · 박스 연한 칸)
@@ -4637,7 +4645,8 @@ async function openStock(code) {
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
     const growHtml = await growthBlock(code, d);
-    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + cycHTML(code) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
+    try { OHLC[code] = OHLC[code] || await (await fetch(`data/ohlc/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { OHLC[code] = null; }  // 📉 5년 하락률 그림 (📐 선 읽기와 같은 파일)
+    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + ddHTML(code) + cycHTML(code) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : DR_CODES.includes(code) ? (await drGet(), drHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬 · 💾 메모리 회사는 D램 값
     await consGet();
@@ -5537,9 +5546,10 @@ const CHART_RULES = [
   ["🧱 지지·저항", ["얼마나 오래 옆으로 기었나 vs 빠르게 급락했나가 중요 — 빠른 급락 뒤엔 반등이 나올 수 있음", "지지를 깨고 내려가면 그 지지가 저항이 됨 → 실패한 매매라도 그 근처까지는 반등해 손실을 메울 수 있음", "지지부진하게 옆으로 기면 사고파는 사람이 많다는 뜻 — 위 저항을 3번 부딪히면(쌍봉·삼봉) 뚫을 확률이 높다고 볼 수 있음", "10만 → 20만원 오를 때 15만원에서 판 사람은 15만원 아래에서 다시 삼 → 거래가 쌓이며 횡보 → 횡보가 길어질수록 아래로 깰 때 더 크게 빠질 수 있음"]],
   ["📈 장마다 다른 매매", ["상승장: 옆으로 기다 거래량 터지며 뚫고, 그 저항이 지지로 바뀌어 살짝 받쳐 줄 때가 기회 — 가장 쉬운 매매", "횡보장: 멀리서 보면 박스가 보임 → 박스 아래에서 사고 위에서 판다. 아래에서 장대 음봉이 나와도 사는 자리, 위에서 거래량 터진 장대 양봉이어도 파는 자리 (아래에서 산 건 실패해도 반등이 있어 실패라고 보기 어려움)", "하락장: 피보나치 — 최고점에서 내린 폭의 1/2(50%)은 되돌린다. 살 때 늘 이 자리를 신경 씀"]],
   ["🚫 국장에서 하지 말 것", ["짧은 기간 6·7·8배·10배 오른 종목(현대로템·단기 급등한 SK하이닉스·삼성전자 등)은 최소 1~2년 쉰다고 보고 쳐다보지 않음 (한화에어로스페이스·삼양식품은 예외로 봄)", "시가총액 1조 미만은 손대지 않음 (여의도 생태계 — 수급·거래대금)", "1조 이상이라도 그 섹터 대장(1등주)에서 잘 먹힘 — 거래대금이 많아서"]],
+  ["📝 11/13 메모 (전달받은 엔비디아 주봉 글 · 형님 원칙 아님)", ["내려오면서 거래량이 크게 터지면 '손바뀜' — 던지는 물량을 새로 받아 가는 사람이 있다는 뜻으로 보는 시각", "그 자리가 전고점(예전에 위에서 막혔던 가격)이면, 예전 저항이 이번엔 받쳐 주는지(지지) 보는 자리 — 엔비디아 26년 11월 둘째 주: 24~25년 전고점 약 150달러(약 20만 원) 근처까지 내려오며 주간 거래량이 20주 평균의 약 3배", "많이 빠졌다 = 반드시 오른다는 아님 (글쓴이도 강조) · '📐 선 읽기' 일봉·주봉에 📝 줄로 자동 표시"]],
 ];
 function chartRulesHTML() {
-  return `<details class="card" style="margin-bottom:12px"><summary class="chart-title" style="margin-top:0"><b>📚 차트 원칙</b> <span class="src">차트 10년 넘게 본 형님에게 배운 것 (11/7) · 주가 그림의 연한 회색 선·'📐 선 읽기'가 이 원칙으로 계산 · 눌러서 열기 · 추천 아님</span></summary>
+  return `<details class="card" style="margin-bottom:12px"><summary class="chart-title" style="margin-top:0"><b>📚 차트 원칙</b> <span class="src">차트 10년 넘게 본 형님에게 배운 것 (11/7) + 📝 11/13 손바뀜 메모 ·주가 그림의 연한 회색 선·'📐 선 읽기'가 이 원칙으로 계산 · 눌러서 열기 · 추천 아님</span></summary>
     ${CHART_RULES.map(([h, l]) => `<div style="margin-top:8px"><b>${h}</b><ul class="irl">${l.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")}
     <div class="note src">회색 선은 종가 꼭짓점으로 자동 계산: 고점선 = 최근 고점 2개를 이은 선 · 저점선 = 최근 저점 2개 · 지지·저항 = 꼭짓점이 3% 안에서 2번 넘게 모인 가격 · 50% = 보이는 기간 최고점 → 그 뒤 최저점 폭의 절반</div></details>`;
 }
@@ -6249,6 +6259,54 @@ function cycHTML(code, open = false) {
     <div class="kidbox" style="margin-top:6px">🐣 고점을 0%로 놓고, 고점 뒤 몇 달 동안 얼마나 빠졌는지를 사이클마다 겹쳐 그린 거예요. 빨간 굵은 선(지금)이 과거 선들 중 어디쯤 있는지 보면 '이번 하락이 얼마나 깊고 빠른지'를 비교할 수 있어요. 과거에 여기서 멈췄다고 이번에도 멈춘다는 뜻은 아니에요.</div>
     ${note ? `<details class="fvt"><summary class="chart-title">📌 전달받은 시각 (11/7) <span class="src">그 글의 생각 · 추천 아님 · 눌러서 보기</span></summary><ul class="irl">${note.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}
     <div class="note src">고점 = 앞 1년 중 가장 높은 종가이면서 그 뒤 30개월 안에 33% 넘게 빠진 자리 · 바닥 = 고점 뒤 30개월 안 가장 낮은 종가 · 일봉 종가(장중 저가 아님) · ${esc(CYC.src || "")} · ${esc(CYC.updated_at || "")}</div></details>`;
+}
+// 📉 5년 주가 & 고점 대비 하락률 (사용자 11/13 '엔비디아, 고점 대비 -30% 하락' 그림처럼 전 종목 상세 · 매일 자동) — data/ohlc/{코드}.json dd ← collector/ohlc.py dd5
+// 위 = 일봉 종가 (고점보다 20% 넘게 빠진 날은 빨강) · 아래 = 고점 대비 % (분홍) · 빨간 점선 = 지금 수준 · 고점 = 그날까지 가장 높은 종가 (5년 전 고점 pk0 포함)
+function ddHTML(code) {
+  const D = OHLC[code]?.dd, cur = (DASH.stocks.find((x) => x.code === code) || {}).currency;
+  if (!D?.c?.length || D.c.length < 120) return "";
+  const N = D.c.length, P = [];
+  let mx = D.pk0 || 0, mt = D.pk0 ? "5년 전" : D.t[0];
+  D.c.forEach((v, i) => { if (v >= mx) { mx = v; mt = D.t[i]; } P.push({ t: D.t[i], v, mx, mt, dd: (v / mx - 1) * 100 }); });
+  // 하락 구간 = 고점에서 내려와 새 고점을 찍을 때까지 · 그중 바닥이 -20% 넘게 빠진 것만
+  const ep = [];
+  let e = null;
+  P.forEach((p, i) => { if (p.dd < 0) { if (!e) e = { lo: i }; if (p.dd < P[e.lo].dd) e.lo = i; } else if (e) { e.back = i; ep.push(e); e = null; } });
+  if (e) ep.push(e);
+  const big = ep.filter((x) => P[x.lo].dd <= -20), L = P[N - 1], live = e && e === big.at(-1) ? e : null;
+  const mon = (a, b) => { const f = (s) => new Date(`20${s}T00:00:00`); return Math.round((f(b) - f(a)) / (30.44 * 864e5)); };
+  const ym = (t) => `${t.slice(0, 2)}.${+t.slice(3, 5)}`, F = (v) => money(v, cur);
+  const W = 640, x0 = 44, x1 = 584, pt = 12, pb = 158, dt = 176, db = 286, X = (i) => x0 + ((x1 - x0) * i) / (N - 1);
+  const vmin = Math.min(...D.c), vmax = Math.max(...D.c), Yp = (v) => pb - ((v - vmin) / (vmax - vmin || 1)) * (pb - pt);
+  const lo = Math.min(-20, Math.floor(Math.min(...P.map((p) => p.dd)) / 20) * 20), Yd = (v) => dt + (v / lo) * (db - dt);
+  let g = "";
+  const step = [1, 2, 5].map((k) => k * 10 ** Math.floor(Math.log10((vmax - vmin) / 4 || 1))).find((s) => (vmax - vmin) / s <= 5) || 10 ** Math.ceil(Math.log10((vmax - vmin) / 4 || 1));
+  for (let v = Math.ceil(vmin / step) * step; v <= vmax; v += step) g += `<line x1="${x0}" x2="${x1}" y1="${Yp(v)}" y2="${Yp(v)}" stroke="var(--grid)"/><text x="${x1 + 4}" y="${Yp(v) + 4}" class="qx">${n(v, cur === "USD" && step < 1 ? 1 : 0)}</text>`;
+  for (let v = 0; v >= lo; v -= 20) g += `<line x1="${x0}" x2="${x1}" y1="${Yd(v)}" y2="${Yd(v)}" stroke="${v ? "var(--grid)" : "var(--ink-2)"}"/><text x="${x0 - 4}" y="${Yd(v) + 4}" text-anchor="end" class="qx">${v}%</text>`;
+  P.forEach((p, i) => { if (i && p.t.slice(0, 2) !== P[i - 1].t.slice(0, 2)) g += `<line x1="${X(i)}" x2="${X(i)}" y1="${pt}" y2="${db}" stroke="var(--grid)" stroke-dasharray="3 4"/><text x="${X(i)}" y="${db + 15}" text-anchor="middle" class="qx">${p.t.slice(0, 2)}.1</text>`; });
+  // 주가 선: 빨강(-20% 넘게 빠진 날)·검정 구간을 따로 이어 그림
+  let run = [], red = P[0].dd <= -20;
+  const flush = () => { if (run.length > 1) g += `<path d="${run.map(([x, y], j) => `${j ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join("")}" fill="none" stroke="${red ? "var(--bad)" : "var(--ink)"}" stroke-width="${red ? 3 : 1.6}" stroke-linejoin="round"/>`; };
+  P.forEach((p, i) => { const r = p.dd <= -20, pt2 = [X(i), Yp(p.v)]; if (r !== red) { run.push(pt2); flush(); run = [run.at(-1)]; red = r; } else run.push(pt2); });
+  flush();
+  const ddPath = P.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Yd(p.dd).toFixed(1)}`).join("");
+  g += `<path d="${ddPath}L${X(N - 1)},${Yd(0)}L${X(0)},${Yd(0)}Z" fill="var(--bad)" fill-opacity=".22"/><path d="${ddPath}" fill="none" stroke="var(--ink)" stroke-width="1.2"/>`;
+  if (L.dd <= -5) g += `<line x1="${x0}" x2="${x1}" y1="${Yd(L.dd)}" y2="${Yd(L.dd)}" stroke="var(--bad)" stroke-width="1.5" stroke-dasharray="7 4"/>`;
+  // 바닥 숫자: 지금 먼저, 그다음 깊은 순 · 옆 글자와 46px 안이면 뺌
+  const lab = [], put = (i, t) => { if (lab.some((x) => Math.abs(x - X(i)) < 46)) return; lab.push(X(i)); g += `<text x="${Math.min(x1 - 4, Math.max(x0 + 18, X(i)))}" y="${Math.min(db + 2, Yd(P[i].dd) + 14)}" text-anchor="middle" class="qv b" style="fill:var(--bad);font-size:12px">${t}</text>`; };
+  if (L.dd <= -5) put(N - 1, `${n(L.dd, 0)}%`);
+  [...big].filter((x) => x !== live).sort((a, b) => P[a.lo].dd - P[b.lo].dd).forEach((x) => put(x.lo, `${n(P[x.lo].dd, 0)}%`));
+  g += `<circle cx="${X(N - 1)}" cy="${Yp(L.v)}" r="3.5" fill="${L.dd <= -20 ? "var(--bad)" : "var(--ink)"}"/>`;
+  const past = big.filter((x) => x !== live), deeper = past.filter((x) => P[x.lo].dd < L.dd);
+  const li = [`지금 <b style="color:var(--bad-ink)">고점 대비 ${pct(L.dd, 1)}</b> · 고점 ${F(L.mx)} (${esc(L.mt)} 종가) → ${F(L.v)} (${esc(L.t)})${L.dd > -1 ? " — 거의 고점" : ""}`,
+    past.length ? `지난 5년 20% 넘게 빠진 적 <b>${past.length}번</b>: ${past.map((x) => `${ym(P[x.lo].t)} <b>${n(P[x.lo].dd, 0)}%</b> (${x.back != null ? `바닥에서 고점 되찾는 데 ${mon(P[x.lo].t, P[x.back].t)}개월` : "아직 못 되찾음"})`).join(" · ")}` : "지난 5년 20% 넘게 빠진 적 없음",
+    live ? `이번 하락: ${P[live.lo].mt === "5년 전" ? "5년보다 전 고점부터" : `${esc(P[live.lo].mt)} 고점 뒤 ${mon(P[live.lo].mt, L.t)}개월`} · 바닥 ${n(P[live.lo].dd, 1)}% (${esc(P[live.lo].t)})${past.length ? ` · 지금보다 깊었던 적 ${deeper.length ? deeper.map((x) => `${ym(P[x.lo].t)} ${n(P[x.lo].dd, 0)}%`).join(" · ") : "없음 (5년 중 가장 깊음)"}` : ""}` : ""].filter(Boolean);
+  return `<details class="fvt" open><summary class="chart-title"><b>📉 5년 주가 & 고점 대비 하락률</b> <span class="src">지금 ${pct(L.dd, 1)} · 매일 자동 · 눌러서 접기</span></summary>
+    <svg viewBox="0 0 ${W} ${db + 22}" role="img" aria-label="5년 주가와 고점 대비 하락률">${g}</svg>
+    <div class="src"><span style="color:var(--ink)">━</span> 일봉 종가 · <span style="color:var(--bad)">━</span> 고점보다 20% 넘게 빠져 있던 날 · 아래 분홍 = 고점 대비 % · <span style="color:var(--bad)">┅</span> 지금 수준 · 빨간 숫자 = 하락 구간 바닥</div>
+    <ul class="irl" style="margin-top:6px">${li.map((x) => `<li>${x}</li>`).join("")}</ul>
+    <div class="kidbox" style="margin-top:6px">🐣 그날까지 가장 비쌌던 값(고점)에서 얼마나 내려와 있는지예요. 아래 분홍이 깊을수록 많이 빠진 거예요. 많이 빠졌다고 반드시 오르는 건 아니고, 더 빠질 수도 있어요.</div>
+    <div class="note src">고점 = 그날까지 가장 높은 종가 (5년보다 전 고점 ${D.pk0 ? F(D.pk0) : "없음"} 포함, 장중 고가 아님) · ${cur === "USD" ? "야후 (분할만 반영)" : "네이버 수정주가"} · ${esc(OHLC[code].at || "")}</div></details>`;
 }
 function patHTML(d) {  // 종목 상세: 차트 + 조건 설명
   const p = d.pattern;
