@@ -86,7 +86,19 @@ def quarters(tkr, saved=None):
     out = dict(saved or {})
     for e, d in _by_period(tk.quarterly_income_stmt, tk.quarterly_cashflow).items():
         out[e] = {**(out.get(e) or {}), **d}
+    try:  # 📊 상세 맨 위 '재무상태' 칸 (사용자 11/14 이오테크닉스 그림): 손익이 있는 분기에만 붙임 (분기 목록 = 손익 기준 그대로)
+        bs = tk.quarterly_balance_sheet
+        for col in bs.columns:
+            e = str(col.date())
+            if e in out:
+                out[e].update({k: float(v) for k, row in BSQ.items() if row in bs.index and (v := bs.loc[row].get(col)) is not None and v == v})
+    except Exception:  # noqa: BLE001 - 재무상태가 없어도 손익은 그대로
+        pass
     return dict(sorted(out.items())[-12:])
+
+
+BSQ = {"cash": "Cash Cash Equivalents And Short Term Investments", "inv": "Inventory", "ar": "Accounts Receivable",
+       "ap": "Accounts Payable", "debt": "Total Debt", "lease": "Capital Lease Obligations"}
 
 
 def _at(f, k, i=0):
