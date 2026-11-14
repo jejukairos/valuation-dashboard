@@ -736,6 +736,31 @@ function wireNvOne(d, px, which) {
 // 📌 pbr_watch.yaml chart_note — 신호 탭 표와 종목 상세 밴드 차트 위에 같은 코멘트 (사용자 11/7 삼성전자)
 const pbrNoteHTML = (code) => { const L = (PBR?.items || []).find((x) => x.code === code)?.chart_note || [];
   return L.length ? `<details class="fvt" style="margin:6px 0"><summary class="chart-title">${esc(L[0])}</summary><ul class="irl">${L.slice(1).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></details>` : ""; };  // 닫힘 (사용자 11/7)
+// 📊 증권사 시나리오별 밸류에이션 (사용자 11/14 유진 Base·Bear 표 → 📡 신호 탭 + 종목 상세 맨 위) ← pbr_watch.yaml scen · '지금 주가' 줄과 컨센서스 줄은 화면이 매일 다시 계산
+function scenHTML(code, price, hist) {
+  const S = (PBR?.items || []).find((x) => x.code === code)?.scen;
+  if (!S?.base || !price) return "";
+  const Y = S.years, H = Object.fromEntries((hist || []).map((r) => [String(r.year), r])), yr = (y) => (/^\d{2}E$/.test(y) ? `20${y.slice(0, 2)}` : String(y));
+  const con = { eps: Y.map((y) => H[yr(y)]?.eps ?? null), bps: Y.map((y) => H[yr(y)]?.bps ?? null) }, C = { base: S.base, bear: S.bear, con };
+  const NM = { base: "Base", bear: "Bear", con: "컨센서스" }, COL = { base: "#2f5bea", bear: "#e8692f", con: "#8c8c8c" }, ks = ["base", "bear", "con"];
+  const mul = (k, f) => (C[k]?.[f] || []).map((v) => (v > 0 ? price / v : null));
+  const tr = (lab, k, vals, d) => `<tr><td style="text-align:left;white-space:nowrap"><span style="color:${COL[k]}">●</span> ${lab} ${NM[k]}</td>${vals.map((v, i) => `<td>${v == null ? "-" : i === vals.length - 1 ? `<b>${n(v, d)}</b>` : n(v, d)}</td>`).join("")}</tr>`;
+  const grp = (lab, f, d, fn) => ks.filter((k) => C[k]?.[f] || fn).map((k) => tr(lab, k, fn ? fn(k) : C[k][f], d)).join("");
+  const sep = `<tr><td colspan="${Y.length + 1}" style="padding:0;border-top:2px solid var(--border)"></td></tr>`;
+  const tbl = `<div class="tbl-wrap"><table class="compact" style="width:100%;text-align:right"><thead><tr><th style="text-align:left">원 · 배</th>${Y.map((y) => `<th>${esc(y)}</th>`).join("")}</tr></thead><tbody>
+    ${grp("EPS", "eps", 0)}${sep}${grp("BPS", "bps", 0)}${sep}${grp("지금 PER", "eps", 2, (k) => mul(k, "eps"))}${sep}${grp("지금 PBR", "bps", 2, (k) => mul(k, "bps"))}</tbody></table></div>`;
+  const px0 = S.base.pbr?.[1] * S.base.bps?.[1], L = Y.length - 1, pb = (k) => mul(k, "bps")[L], dE = (S.bear.eps[L] / S.bear.eps[L - 1] - 1) * 100;
+  const c1 = keyChart({ t: "EPS — Base · Bear · 컨센서스", u: "원", side: true, q: Y, col: ks.map((k) => COL[k]), bars: ks.map((k) => ({ n: NM[k], v: C[k].eps })) });
+  const c2 = keyChart({ kind: "line", t: `지금 주가로 본 PBR (${n(price, 0)}원)`, u: "배", d: 2, q: Y, lines: ks.map((k) => ({ n: NM[k], v: mul(k, "bps") })) });
+  const kid = [`지금 ${n(price, 0)}원이면 ${Y[L]} PBR: Base ${n(pb("base"), 2)}배 · Bear ${n(pb("bear"), 2)}배${pb("con") ? ` (컨센서스 ${n(pb("con"), 2)}배)` : ""}`,
+    `Bear = ${Y[L]} EPS 가 ${Y[L - 1]}보다 ${pct(dE, 0, true)} — 이익이 꺾이는 경우예요. 그래서 Bear 는 ${Y[L]} PER 이 다시 올라가요 (${n(mul("bear", "eps")[L], 1)}배)`,
+    con.eps[L - 1] ? `${Y[L - 1]} EPS: Base 가 컨센서스보다 ${pct((S.base.eps[L - 1] / con.eps[L - 1] - 1) * 100, 0, true)} — 이 증권사가 시장 평균보다 ${S.base.eps[L - 1] > con.eps[L - 1] ? "높게" : "낮게"} 봐요` : ""].filter(Boolean);
+  return `<details class="card" open style="margin:8px 0"><summary class="chart-title" style="margin-top:0"><b>📊 시나리오별 밸류에이션 — Base vs Bear</b> <span class="src">${esc(S.src || "")}</span></summary>
+    <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div>${tbl}<div class="qgrid">${c1}${c2}</div>
+    <details class="fvt"><summary class="src">증권사 표의 PBR·PER 원본 (표를 만든 날 주가 약 ${n(px0, 0)}원 = 26E PBR × BPS 로 거꾸로 계산 · 2025 = 25년 말 주가)</summary><div class="tbl-wrap"><table class="compact" style="width:100%;text-align:right"><tbody>
+      ${["base", "bear"].map((k) => `<tr><td style="text-align:left"><span style="color:${COL[k]}">●</span> PBR ${NM[k]}</td>${S[k].pbr.map((v) => `<td>${n(v, 2)}</td>`).join("")}</tr><tr><td style="text-align:left"><span style="color:${COL[k]}">●</span> PER ${NM[k]}</td>${S[k].per.map((v) => `<td>${n(v, 2)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>
+    <div class="note src">'지금 PER·PBR' = 오늘 주가 ÷ 표의 EPS·BPS (매일 자동) · 컨센서스 = 이 사이트 연도별 추정치 (와이즈리포트, 매일 자동) · Base·Bear 숫자는 새 표를 받으면 바꿔요 · 참고용 (매수·매도 추천 아님)</div></details>`;
+}
 function bandChartsHTML(d, px, tag, pbrFirst) {
   return pbrNoteHTML(d.code || d.card?.code) + bandChartsBody(d, px, tag, pbrFirst);
 }
@@ -4154,6 +4179,65 @@ function xpMonths(k, km, lbl) {  // 월별 (관세청 확정) — 막대 = 금�
     cagr != null ? `연평균 ${sg(cagr, 1)} 성장 (처음 12개월 합 → 최근 12개월 합)` : "", hi ? `이 기간 가장 많이 판 달: ${hi.slice(2, 4)}년 ${+hi.slice(5)}월 ${n(V(M, hi), K.dg)}${K.u}` : ""].filter(Boolean);
   return `${kid.length ? `<div class="kidbox" style="grid-column:1/-1;margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div>` : ""}${c1}${c2}${up}`;
 }
+// 100% 쌓은 막대 + 칸 안 숫자 (현대차 '한국 화장품 수출액 국가별 비중' 모양) · o = {t, why, q, cols, rows, col, light(밝은 칸 번호 → 글자 어둡게), kid}
+function shareBars(o) {
+  const W = 320, top = 6, bot = 158, x0 = 6, N = o.q.length, bw = (W - 2 * x0) / N;
+  let g = "";
+  o.q.forEach((q, i) => {
+    const r = o.rows[i], tot = r.reduce((a, v) => a + (v || 0), 0) || 1, x = x0 + bw * i + bw * 0.16;
+    let acc = 0;
+    r.forEach((v, j) => {
+      if (!v) return;
+      const h = (v / tot) * (bot - top), y = bot - (acc / tot) * (bot - top) - h;
+      g += `<rect x="${x}" y="${y}" width="${bw * 0.68}" height="${h}" fill="${o.col[j]}" stroke="var(--surface)" stroke-width=".6"><title>${esc(`${q} ${o.cols[j]} ${v}%`)}</title></rect>`;
+      if (v >= 3) g += `<text x="${x + bw * 0.34}" y="${y + h / 2 + 3.5}" text-anchor="middle" style="font-size:10px;fill:${o.light.includes(j) ? "#1b2a4a" : "#fff"}">${v}</text>`;
+      acc += v;
+    });
+    g += `<text x="${x0 + bw * i + bw / 2}" y="${bot + 14}" text-anchor="middle" class="qx">${esc(q)}</text>`;
+  });
+  return `<div class="qp"><div class="qt"><b>${esc(o.t)} <span class="src">%</span></b></div>${o.why ? `<div class="src">${esc(o.why)}</div>` : ""}
+    <svg viewBox="0 0 ${W} 178" role="img" aria-label="${esc(o.t)}">${g}</svg><div class="src" style="padding:0 4px 4px">${o.cols.map((c, j) => `<span style="color:${o.col[j]}">■</span> ${esc(c)}`).join(" · ")}</div>
+    ${o.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(o.kid)}</div>` : ""}</div>`;
+}
+// 💄 화장품 수출 한눈에 (사용자 11/14 현대차증권 그림 3장 "수출입 탭 화장품에 넣고 트래킹") — 자동 = 관세청 월별 · 손 = exports.yaml cos_hd_latest
+function cosHeroHTML() {
+  const C = EXP?.cosmetics, H = EXP?.cos_hd_latest, M = C?.["전체"];
+  if (!M) return "";
+  const ms = Object.keys(M).sort(), last = ms.at(-1), yy = +last.slice(0, 4), mm = +last.slice(5), ago = (x) => ymAdd(x, -12);
+  const yo = (s, x) => (s?.[x] != null && s?.[ago(x)] ? (s[x] / s[ago(x)] - 1) * 100 : null);
+  const ytdM = Array.from({ length: mm }, (_, i) => `${yy}-${String(i + 1).padStart(2, "0")}`);
+  const ytd = (s) => (ytdM.every((x) => s?.[x] != null && s?.[ago(x)] != null) ? (ytdM.reduce((a, x) => a + s[x], 0) / ytdM.reduce((a, x) => a + s[ago(x)], 0) - 1) * 100 : null);
+  const hY = H?.ytd?.ym === last ? H.ytd : null, all = ytd(M);
+  const barYoy = (s, nm, t) => { const lab = ms.filter((x) => x >= "2020-01"), lx = Object.keys(s).filter((x) => s[x] != null).sort().at(-1);  // 예시 = 그 줄에 값이 있는 마지막 달
+    return lineChart({ t, why: `막대 = 억$ · 예) ${n(s[lx] / 100, 2)}억$ = ${lx.slice(2, 4)}년 ${+lx.slice(5)}월`, labels: lab, zero: true, tick: (i) => (lab[i].endsWith("-01") ? `${lab[i].slice(2, 4)}.01` : ""),
+      fl: (v) => n(v, 2), fr: (v) => `${n(v, 0)}%`, s: [{ n: `${nm} (억$)`, v: lab.map((x) => (s[x] == null ? null : s[x] / 100)), bar: true, col: "#8c8c8c" }, { n: "1년 전보다 %", v: lab.map((x) => yo(s, x)), right: true, col: "#2f5bea" }] }); };
+  const c1 = barYoy(M, "전세계", `화장품 총 수출액 및 성장률 추이 (${mm}월 누적 ${sg(all)} yoy)`);
+  // 나라 비중: 그림 숫자 + 관세청·유엔 숫자로 중국·미국·일본 다시 계산 (12달 다 있는 해만)
+  const S = H?.share, SC = ["#2f5bea", "#8c8c8c", "#9cc3f0", "#c9f3f5", "#555", "#dfe3ef", "#c7d0f0", "#1f3f8f"];
+  const chk = S ? Object.keys(S.rows).filter((y) => /^\d{4}$/.test(y)).map((y) => { const xs = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, "0")}`);
+    if (!xs.every((x) => M[x] != null)) return null; const tot = xs.reduce((a, x) => a + M[x], 0);
+    const our = ["중국", "미국", "일본"].map((c) => (xs.every((x) => C[c]?.[x] != null) ? (xs.reduce((a, x) => a + C[c][x], 0) / tot) * 100 : null));
+    return our.includes(null) ? null : { y, our, ok: our.every((v, i) => Math.abs(v - S.rows[y][S.cols.indexOf(["중국", "미국", "일본"][i])]) <= 1) }; }).filter(Boolean) : [];
+  const c2 = S ? shareBars({ t: `한국 화장품 수출액 국가별 비중`, why: "현대차증권 그림 숫자 (TRASS) · 숫자 없는 작은 칸은 비움", q: Object.keys(S.rows), cols: S.cols, rows: Object.values(S.rows), col: SC, light: [2, 3, 5, 6],
+    kid: (() => { const r = Object.values(S.rows), q = Object.keys(S.rows), f = r[0], l = r.at(-1), i = (c) => S.cols.indexOf(c);
+      return `${q[0]}년엔 수출의 절반(${f[i("중국")]}%)이 중국이었는데, ${q.at(-1)}엔 중국 ${l[i("중국")]}% · 미국 ${l[i("미국")]}% · 유럽 ${l[i("유럽")]}% — 유럽이 ${f[i("유럽")]}% → ${l[i("유럽")]}%로 가장 많이 커졌어요.`; })() }) : "";
+  const R = hY?.rows, c3 = R ? keyChart({ t: `나라별 화장품 ${yy}년 ${mm}월 누적 수출 증가율`, u: "%", q: Object.keys(R), every: 1, col: ["#2f5bea"], bars: [{ n: "1년 전보다 %", v: Object.values(R) }],
+    why: `현대차증권 그림 (TRASS) · 지역 묶음은 현대차 정의${all != null ? ` · 🔎 전세계는 우리 관세청 숫자(HS 3304)로 ${sg(all)} — 그림 ${sg(R["전세계"])}` : ""}` }) : "";
+  const U = H?.us_kr, c4 = U ? keyChart({ kind: "line", t: "미국 화장품 수입국 가운데 한국 비중", u: "%", q: U.q, lines: [{ n: "한국", v: U.v }], why: "ITC·현대차증권 · 25년 1위 (2위권 프랑스·캐나다는 그림에 숫자 표시 없음)" }) : "";
+  const D = H?.dtc, c5 = D ? keyChart({ t: "K-뷰티 역직구 (해외 직접 판매) 화장품", u: "십억원", q: D.q, col: ["#2f5bea"], bars: [{ n: "역직구", v: D.v }],
+    why: "통계청 온라인쇼핑동향·현대차증권", kid: `26년 3분기까지 ${n(D.v.at(-1) / 1000, 2)}조 원 — 벌써 25년 한 해(${n(D.v.at(-2) / 1000, 2)}조 원)보다 많아요.` }) : "";
+  const eu = ["영국", "네덜란드", "폴란드"].filter((c) => C[c]).map((c) => { const v = ytd(C[c]), h = hY?.more?.[c];
+    return barYoy(C[c], c, `${c}향 화장품 수출액 추이 (${mm}월 누적 ${v != null ? `${sg(v)} yoy` : h != null ? `${sg(h)} yoy · 현대차` : "-"})`); });
+  const best = R ? Object.entries(R).filter(([k]) => k !== "전세계").sort((a, b) => b[1] - a[1]) : [];
+  const kid = [`${yy}년 1~${mm}월 화장품 수출 ${n(ytdM.reduce((a, x) => a + M[x], 0) / 100, 1)}억$ — 1년 전보다 ${sg(all)} (관세청 HS 3304, 매일 자동)${R ? ` · 현대차 그림 ${sg(R["전세계"])}` : ""}`,
+    best.length ? `가장 빨리 느는 곳: ${best.slice(0, 3).map(([k, v]) => `${k} ${sg(v)}`).join(" · ")} / 가장 느린 곳: ${best.at(-1)[0]} ${sg(best.at(-1)[1])}` : "",
+    hY?.more ? `유럽 안에서도: ${Object.entries(hY.more).map(([k, v]) => `${k} ${sg(v)}`).join(" · ")} (현대차)` : "", ...(H?.notes || [])].filter(Boolean);
+  const ck = chk.length ? `🔎 관세청·유엔 숫자로 중국·미국·일본 비중을 다시 계산: ${chk.map((c) => `${c.y.slice(2)}년 ${c.our.map((v) => n(v, 0)).join("·")}`).join(" / ")} → ${chk.every((c) => c.ok) ? "그림과 1%p 안 ✅" : "⚠ 1%p 넘게 다른 해가 있어요"}` : "";
+  return `<div class="card" style="margin-bottom:8px"><div class="chart-title"><b>💄 화장품 수출 한눈에</b> <span class="src">현대차증권 그림 모양 · ${last}까지</span></div>
+    <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div>
+    <div class="qgrid">${c1}${c2}${c3}${c4}${c5}${eu.join("")}</div>
+    <div class="note src">${ck ? `${esc(ck)}<br>` : ""}🔁 자동: 총 수출액·증가율 (관세청, 매일) · 영국·폴란드·네덜란드 월별 (관세청 나라별 API 승인 전이라 26년 1~8월은 빈칸 — 승인되면 저절로 채워짐) · ✋ 손으로: 나라 비중·지역별 누적 증가율·미국 수입 비중·역직구·세계 점유율 (${esc(H?.src || "")}) — 새 그림을 받으면 바꿔요</div></div>`;
+}
 function xpItem(k) {
   const K = EXPW_K[k];
   if (!K.s()?.[K.m] && !xTen().some((t) => t[k])) return "";
@@ -4166,7 +4250,7 @@ function xpItem(k) {
     : k === "power" ? `<div class="note"><a href="#industry" data-kc="exp-power">⚡ 전력기기 품목 전체 월별 그림 → 산업 탭</a></div>` : "";
   const nw = expRel(k), isNew = nw && kDays(nw.d) >= -1 && kDays(nw.d) <= 7;
   return `<section data-jump="${esc(K.t)}" data-jname="${esc(K.t)}" id="kc-xp-${k}" style="margin-top:18px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">${K.t} ${isNew ? `<span class="pill red">‼️ ${esc(nw.p || `${+nw.ym.slice(5)}월`)} 새로 나옴</span>` : ""}</h2>
-    <div class="card">${body}<div class="note src">${esc(K.hs)} · 1개월 = 채널 글 자동 (교보 음식료·화장품 · 다올 의료기기·화장품 · TRASS-BF) · 3개월~전체 = 관세청 월별 확정치 (다음 달 중순)</div></div>${extra}</section>`;
+    ${k === "cosmetics" ? cosHeroHTML() : ""}<div class="card">${body}<div class="note src">${esc(K.hs)} · 1개월 = 채널 글 자동 (교보 음식료·화장품 · 다올 의료기기·화장품 · TRASS-BF) · 3개월~전체 = 관세청 월별 확정치 (다음 달 중순)</div></div>${extra}</section>`;
 }
 async function renderExports() {
   const get = (f) => fetch(`data/${f}.json?t=` + Date.now(), { cache: "no-store" }).then((r) => r.json()).catch(() => ({}));
@@ -4645,7 +4729,8 @@ async function openStock(code) {
     const tourHtml = await tourBlock(code);
     const kpiHtml = await kpiBlock(code, d);
     const growHtml = await growthBlock(code, d);
-    const topHtml = ((await keyLoad()).stock?.[code]?.cards || []).filter((x) => x.top).map((x) => keyCard(x, true)).join("");  // keychart.yaml top: true = 상세 맨 위 (사용자 11/13 테슬라 FSD 유럽 승인)
+    if (!PBR) { try { PBR = await (await fetch(`data/pbr_watch.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { /* 📊 시나리오 칸만 빠짐 */ } }
+    const topHtml = scenHTML(code, c?.price || d.price, d.history) + ((await keyLoad()).stock?.[code]?.cards || []).filter((x) => x.top).map((x) => keyCard(x, true)).join("");  // keychart.yaml top: true = 상세 맨 위 (사용자 11/13 테슬라 FSD 유럽 승인) · 📊 시나리오 = pbr_watch.yaml scen (11/14)
     try { OHLC[code] = OHLC[code] || await (await fetch(`data/ohlc/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { OHLC[code] = null; }  // 📉 5년 하락률 그림 (📐 선 읽기와 같은 파일)
     const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + ddHTML(code) + cycHTML(code) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
@@ -5000,7 +5085,7 @@ async function signalHTML() {
     out.push(sigTable({ name: c.name, unit: "주가 (원)", L, date: `${d.price_date || ""} 종가 기준`.trim(),
       m: { pbf: fm.PBR?.["12MF"], pbt: now.pbr && now.pbr * adj, pef: fm.PER?.["12MF"], pet: now.per && now.per * adj }, marks: mk,
       pos: b ? `PBR (1년 뒤 BPS 기준) 10년 중 아래에서 <b>${n(b.pos, 0)}%</b> 자리 (하단 ${n(b.low, 2)} · 평균 ${n(b.avg, 2)} · 상단 ${n(b.high, 2)}배)` : "",
-      src: `12MF = 증권사 컨센서스 앞으로 12개월 EPS·BPS (카드 위 숫자와 같음) · TTM = 네이버 지난 실적 PER·PBR${mk.length ? " · 📏 = 🧮 PBR 기준선 (아래 계산기와 같음)" : ""}`, extra: pbrNoteHTML(code) + stockBandBox(code) }));
+      src: `12MF = 증권사 컨센서스 앞으로 12개월 EPS·BPS (카드 위 숫자와 같음) · TTM = 네이버 지난 실적 PER·PBR${mk.length ? " · 📏 = 🧮 PBR 기준선 (아래 계산기와 같음)" : ""}`, extra: scenHTML(code, L, d.history) + pbrNoteHTML(code) + stockBandBox(code) }));
   }
   // 📈 밴드 차트 (사용자 11/6): 보유 종목마다 눌러서 — bandAllRender (그림 먼저, 그다음 카드와 같은 적정주가 표)
   const own = DASH.stocks.filter((c) => grp(c) === "보유" && !/우$/.test(c.name)).sort((a, b) => (a.market === "US") - (b.market === "US"));
@@ -6142,7 +6227,8 @@ function amzCross(day, cur) {
   const rk = ours.map((b) => `<details style="margin-top:6px"><summary><b>${esc(b)}</b> 제품별 순위 <span class="src">${esc(AMZ.brands[b].company)} · 숫자 = 그 나라 Top100 순위 · 눌러서 보기</span></summary>
     <div class="tbl-wrap"><table class="compact" style="width:100%;text-align:center"><thead><tr><th style="text-align:left">제품</th>${ci.slice(0, IT).map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
     <tbody>${Object.entries(R[b]).map(([p, r]) => `<tr><td style="text-align:left">${esc(p)}</td>${ci.slice(0, IT).map((c) => `<td>${r[c] ? (r[c] <= 10 ? `<b>${r[c]}</b>` : r[c]) : '<span class="src">–</span>'}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>`).join("");
-  return `<div class="note src" style="margin-top:10px">🔍 같은 날 ${[K && "교보", M && "한투"].filter(Boolean).join("·")} 숫자와 비교: ${bad ? `${cmp}칸 중 ${bad}칸이 조금 달라요 (채널마다 순위를 잰 시각이 달라서)` : `${cmp}칸 모두 같아요`}</div>${rk}`;
+  const fx = (day.fix || []).length ? `<br>✏️ 다올 표와 다르고 교보·한투 둘이 같은 숫자라서 둘을 따랐어요: ${day.fix.map(esc).join(" · ")} (이탈리아 칸은 한투에 없어 다올 그대로)` : "";
+  return `<div class="note src" style="margin-top:10px">🔍 같은 날 ${[K && "교보", M && "한투"].filter(Boolean).join("·")} 숫자와 비교: ${bad ? `${cmp}칸 중 ${bad}칸이 조금 달라요 (채널마다 순위를 잰 시각이 달라서)` : `${cmp}칸 모두 같아요`}${fx}</div>${rk}`;
 }
 function drawAmz() {
   const C = themeColors(), A = AMZ, ds = Object.keys(A.days).sort(), last = A.days[ds[ds.length - 1]].counts;
