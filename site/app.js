@@ -5953,7 +5953,7 @@ function keyChart(ch) {
 function keyWf(w) {
   const mx = Math.max(w.from[1], w.to[1], ...w.steps.map((s) => Math.abs(s[1]))) || 1;
   const row = (name, v, col, sign) => `<tr><td style="text-align:left">${esc(name)}</td><td style="text-align:left"><span class="cbar"><i style="width:${Math.max(2, (Math.abs(v) / mx) * 120)}px;background:${col}"></i>${sign && v > 0 ? "+" : ""}${n(v, 0)}</span></td></tr>`;
-  return `<div class="qp"><div class="qt"><b>${esc(w.t)} <span class="src">억원 · 대략</span></b></div><table class="compact" style="width:100%">
+  return `<div class="qp"><div class="qt"><b>${esc(w.t)} <span class="src">${esc(w.u || "억원")} · 대략</span></b></div><table class="compact" style="width:100%">
     ${row(w.from[0], w.from[1], "var(--muted)")}${w.steps.map(([k, v]) => row(k, v, v < 0 ? "var(--bad)" : "var(--good)", true)).join("")}${row(w.to[0], w.to[1], "var(--s1)")}</table></div>`;
 }
 // 📍 기준일(발표 전일 등) 대비 지금 주가와 그 뒤 가장 낮았던 종가 — 예전 같은 일(then)과 나란히
