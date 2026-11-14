@@ -119,10 +119,18 @@ def build(cache, cfg):
                         row[i] = max(0, row[i] + (1 if mv.get("new") else -1))
         else:
             continue
+        ky, km, fix = cache["kyobo"].get(d), cache["kmj"].get(d), []
+        if d not in manual and ky and km:  # 다올 표가 교보·한투 둘과 다르고 교보·한투끼리 같으면 둘을 따름 (11/13 달바 다올 7 vs 교보·한투 9) · 한투엔 이탈리아 칸이 없어 그 칸은 그대로
+            kb = {nm(b): n for b, n in ky["brands"].items()}
+            for b, m in km["brands"].items():
+                row = counts.get(nm(b), [0] * 6)
+                new = [row[i] if c == "이탈리아" else m.get(c, 0) for i, c in enumerate(C6)]
+                if kb.get(nm(b)) == sum(new) != sum(row):
+                    fix.append(f"{nm(b)} {sum(row)}→{sum(new)}")
+                    counts[nm(b)] = new
         counts = {b: v for b, v in counts.items() if any(v)}
         moves = man.get("moves") or [{**m, "b": nm(m["b"])} for m in dl.get("moves") or []]
-        ky, km = cache["kyobo"].get(d), cache["kmj"].get(d)
-        days[d] = {"counts": counts, "how": how, "moves": moves, "derived": man.get("derived"),
+        days[d] = {"counts": counts, "how": how, "moves": moves, "derived": man.get("derived"), **({"fix": fix} if fix else {}),
                    "kyobo": ky and {**ky, "brands": {nm(b): n for b, n in ky["brands"].items()}},
                    "kmj": km and {**km, "brands": {nm(b): v for b, v in km["brands"].items()},
                                   "ranks": {nm(b): v for b, v in km["ranks"].items()}}}
