@@ -63,7 +63,7 @@ def item(cfg, base):
         "bps_last": {"year": last_y, "bps": w[last_y]["bps"] if last_y else None,
                      "pbr": rnd(price / w[last_y]["bps"], 2) if last_y else None},
         "rows": rows, "auto_multiples": auto, "memo": cfg.get("memo") or "", "alert": _alert(cfg, bps, price),
-        "marks": cfg.get("marks") or [], "chart_note": cfg.get("chart_note") or [],  # 📌 신호 탭 표·밴드 차트 위 코멘트  # 내 기준선 [[배수, 이름]] 예: [[0.7, 저평가], [1.0, 매력적]]
+        "marks": cfg.get("marks") or [], "chart_note": cfg.get("chart_note") or [], "scen": cfg.get("scen"),  # 📊 증권사 Base·Bear 시나리오 표  # 📌 신호 탭 표·밴드 차트 위 코멘트  # 내 기준선 [[배수, 이름]] 예: [[0.7, 저평가], [1.0, 매력적]]
         "band10": {k: band.get(k) for k in ("low", "avg", "high", "min", "max", "pos", "from")} if band else None,
         "source": "BPS: 와이즈리포트 컨센서스(네이버 종목분석) · 가격: 네이버 증권",
     }
