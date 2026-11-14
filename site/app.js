@@ -4783,7 +4783,8 @@ async function openStock(code) {
     if (!PBR) { try { PBR = await (await fetch(`data/pbr_watch.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { /* 📊 시나리오 칸만 빠짐 */ } }
     const topHtml = scenHTML(code, c?.price || d.price, d.history) + hxCycleHTML(code, d, c?.price || d.price) + ((await keyLoad()).stock?.[code]?.cards || []).filter((x) => x.top).map((x) => keyCard(x, true)).join("");  // keychart.yaml top: true = 상세 맨 위 (사용자 11/13 테슬라 FSD 유럽 승인) · 📊 시나리오 = pbr_watch.yaml scen (11/14)
     try { OHLC[code] = OHLC[code] || await (await fetch(`data/ohlc/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { OHLC[code] = null; }  // 📉 5년 하락률 그림 (📐 선 읽기와 같은 파일)
-    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + ddHTML(code) + cycHTML(code) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
+    if (!TL) { try { TL = await (await fetch(`data/timeline.json?t=${Date.now()}`, { cache: "no-store" })).json(); } catch (_) { TL = {}; } }  // 🗓 주요 타임라인
+    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + cycHTML(code) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : DR_CODES.includes(code) ? (await drGet(), drHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬 · 💾 메모리 회사는 D램 값
     await consGet();
@@ -4795,7 +4796,7 @@ async function openStock(code) {
     const xp = EXP_CODE && ["ramen", "cosmetics"].includes(EXP_CODE[0]);  // 라면·화장품은 11/11 📦 수출입 탭으로 옮김
     const expLink = EXP_CODE ? `<div class="note"><a href="${xp ? "#exports" : "#industry"}" data-kc="${xp ? "xp" : "exp"}-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} ${xp ? "1~10일 잠정·월별 (1개월~전체) → 수출입 탭에서 보기" : "월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기"}</a></div>` : "";
     if (seq !== OPEN_SEQ) return;
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => fin4HTML(d) + topHtml + liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => fin4HTML(d) + topHtml + liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + ddHTML(code) + tlHTML(code) + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
@@ -6582,6 +6583,27 @@ function ddHTML(code) {
     <ul class="irl" style="margin-top:6px">${li.map((x) => `<li>${x}</li>`).join("")}</ul>
     <div class="kidbox" style="margin-top:6px">🐣 그날까지 가장 비쌌던 값(고점)에서 얼마나 내려와 있는지예요. 아래 분홍이 깊을수록 많이 빠진 거예요. 많이 빠졌다고 반드시 오르는 건 아니고, 더 빠질 수도 있어요.</div>
     <div class="note src">고점 = 그날까지 가장 높은 종가 (5년보다 전 고점 ${D.pk0 ? F(D.pk0) : "없음"} 포함, 장중 고가 아님) · ${cur === "USD" ? "야후 (분할만 반영)" : "네이버 수정주가"} · ${esc(OHLC[code].at || "")}</div></details>`;
+}
+// 🗓 주요 타임라인 (사용자 11/15 엔비디아 그림 오른쪽처럼 전 종목) — data/timeline.json ← collector/feed.py timeline() · 손으로 넣는 줄 = config/timeline.yaml
+let TL = null;
+function tlHTML(code) {
+  const R = TL?.stocks?.[code] || [];
+  if (!R.length) return "";
+  const md = (d) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`, wd = (d) => "일월화수목금토"[new Date(`${d}T12:00:00Z`).getUTCDay()];
+  const tone = (r) => r.up || r.good ? "good" : r.bad ? "bad" : "";
+  const row = (r) => {
+    const tn = tone(r), hl = tn ? ` style="background:color-mix(in srgb, var(--${tn}) 13%, transparent);color:var(--${tn}-ink);border-radius:4px;padding:0 3px"` : "";
+    const sub = [...(r.h ? [`그날 기사: ${r.h}`] : []), ...(r.x || [])], link = r.u ? ` <a href="${esc(r.u)}" target="_blank" rel="noopener">↗</a>` : "";
+    const line = `<span style="display:inline-block;min-width:${r.up ? 64 : 40}px;color:var(--ink-2)">${r.dl ? esc(r.dl) : md(r.d) + (r.up ? `(${wd(r.d)})` : "")}</span> <span class="src">${esc(r.k.replace(/^📢 /, ""))}</span> <span${hl}>${esc(r.t)}</span>${link}${r.src ? ` <span class="src">(${esc(r.src)})</span>` : ""}`;
+    return `<li>${sub.length ? `<details><summary>${line}</summary><div class="src" style="margin-left:44px">${sub.map(esc).join("<br>")}</div></details>` : line}</li>`;
+  };
+  const past = R.filter((r) => !r.up), up = R.filter((r) => r.up), old = past.slice(0, -15), rec = past.slice(-15);
+  return `<details class="fvt" open><summary class="chart-title"><b>🗓 주요 타임라인</b> <span class="src">지난 ${TL.days || 90}일 ${past.length}개${up.length ? ` · 앞으로 ${up.length}개` : ""} · 매일 자동</span></summary>
+    ${old.length ? `<details><summary class="src">그 전 ${old.length}개 더 보기</summary><ul class="irl">${old.map(row).join("")}</ul></details>` : ""}
+    <ul class="irl">${rec.map(row).join("")}</ul>
+    ${up.length ? `<div class="src" style="border-top:1px dashed var(--ink-2);margin:6px 0 2px;padding-top:4px">앞으로</div><ul class="irl">${up.map(row).join("")}</ul>` : ""}
+    <div class="kidbox" style="margin-top:6px">🐣 이 회사에 최근 무슨 일이 있었는지 날짜 순서예요. <b style="color:var(--bad-ink)">빨강</b> = 안 좋은 쪽 (임원 매도·목표가 하향·하루 큰 하락), <b style="color:var(--good-ink)">초록</b> = 좋은 쪽이거나 다가올 일정. 줄을 누르면 자세한 내용이 나와요.</div>
+    <div class="note src">공시 = DART (국민연금 같은 기관의 매일 매매는 뺌) · 목표가 = 한경 리포트 (그대로인 날은 뺌) · 수출 = 증권사 텔레그램 · 하루 큰 주가 변동 = 지난 1년 하루 변동폭의 2.5배 넘고 4% 넘게 움직인 날 · 그날 기사 = 그날 가장 많이 쓰인 기사 제목 (주가가 움직인 원인이라고 확정한 건 아님) · 출처가 붙은 줄 = 손으로 넣은 줄 · ${esc(TL.updated_at || "")}</div></details>`;
 }
 function patHTML(d) {  // 종목 상세: 차트 + 조건 설명
   const p = d.pattern;
