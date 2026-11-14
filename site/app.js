@@ -737,7 +737,7 @@ function wireNvOne(d, px, which) {
 const pbrNoteHTML = (code) => { const L = (PBR?.items || []).find((x) => x.code === code)?.chart_note || [];
   return L.length ? `<details class="fvt" style="margin:6px 0"><summary class="chart-title">${esc(L[0])}</summary><ul class="irl">${L.slice(1).map((x) => `<li${x.startsWith("⚠") ? ' class="kid-warn"' : ""}>${esc(x)}</li>`).join("")}</ul></details>` : ""; };  // 닫힘 (사용자 11/7)
 // 📊 증권사 시나리오별 밸류에이션 (사용자 11/14 유진 Base·Bear 표 → 📡 신호 탭 + 종목 상세 맨 위) ← pbr_watch.yaml scen · '지금 주가' 줄과 컨센서스 줄은 화면이 매일 다시 계산
-function scenHTML(code, price, hist) {
+function scenTblHTML(code, price, hist) {
   const S = (PBR?.items || []).find((x) => x.code === code)?.scen;
   if (!S?.base || !price) return "";
   const Y = S.years, H = Object.fromEntries((hist || []).map((r) => [String(r.year), r])), yr = (y) => (/^\d{2}E$/.test(y) ? `20${y.slice(0, 2)}` : String(y));
@@ -2038,8 +2038,9 @@ function kqHTML(d) {
     ${k.filing ? `<div class="note src">${k.cur === "USD" ? "발표" : "공시"}: <a href="${esc(k.filing.url)}" target="_blank" rel="noopener">${esc(k.filing.date)} ${esc(k.filing.name)}</a></div>` : ""}
     ${(EARNINGS[d.card?.code] || []).length ? "" : earningsHTML(d.card?.code, true)}
     ${irBriefHTML(d.card?.code, d.card?.name, k)}
+    <details class="fvt"><summary class="chart-title" style="margin-top:12px"><b>📊 10년 흐름 · 손익 구조 · 돈의 흐름</b> <span class="src">맨 위 📊 실적 그림의 긴 기간판 · 눌러서 보기</span></summary>
     ${longHTML(d)}
-    ${qtrHTML(d, "q", true)}
+    ${qtrHTML(d, "q", true)}</details>
   </div>`;
 }
 const QTR_MAP = {};
@@ -3530,14 +3531,14 @@ function guideOf(G, d, key, si = 0) {  // growth.yaml guide → 그래프 끝 �
 //   비율 = 10년 분기 실적(longq) · 쪼개기: 한국 = 전자공시 연결 주석 '판매비와관리비' 표 (tools/dart_sga.py, 억원), 미국 = 야후 분기 연구개발·판매마케팅·일반관리
 const SGA_CAT = [["인건비", /급여|상여|퇴직|복리후생|주식보상|종업원|인건비/], ["광고·판촉비", /광고|판매촉진|판촉|마케팅|홍보|견본/],
   ["운반·물류비", /운반|운송|물류|수출제비|보관|배송/], ["연구개발비", /연구|개발비/], ["감가상각비", /^(?!.*대손).*상각/], ["수수료·용역비", /수수료|용역|위탁|외주/]];
-function costCards(d, pts) {
+function costCards(d, pts, dup) {  // dup = 맨 위 💸 비용 구조에 같은 원가율·판관비율 그림이 있음 → 쪼개 보기만
   const L = d.longq || {}, usd = d.currency === "USD", out = [];
   const lq = Object.keys(L).sort().filter((q) => L[q].rev > 0 && L[q].gp != null && L[q].op != null).slice(-6);  // 매출총이익이 아직 없는 잠정 실적 분기는 빼고
   const cg = Object.fromEntries(lq.map((q) => [q, rnd1(100 - (L[q].gp / L[q].rev) * 100)]));
   const sg = Object.fromEntries(lq.map((q) => [q, rnd1(((L[q].gp - L[q].op) / L[q].rev) * 100)]));
   const sn = usd ? "판관비율 (연구개발 포함)" : "판관비율", tt = turnOf(sg, 0.8, ["상승", "하락"]);
   if (tt?.pt) pts.push(`${sn} <b>${esc(tt.t)}</b> (${n(tt.f, 1)}% → ${n(tt.a, 1)}%)`);
-  if (Object.keys(cg).length >= 2) out.push(kpiChart({ t: "매출원가율 · 판관비율", u: "%", s: [{ n: "매출원가율", v: cg }, { n: sn, v: sg }], col: ["var(--s3)", "var(--s4)"],
+  if (Object.keys(cg).length >= 2 && !(dup && lq.length >= 4)) out.push(kpiChart({ t: "매출원가율 · 판관비율", u: "%", s: [{ n: "매출원가율", v: cg }, { n: sn, v: sg }], col: ["var(--s3)", "var(--s4)"],
     tag: tt ? growTag(`판관비율 ${tt.t}`, /상승|반등/.test(tt.t)) : "", why: "100원어치 팔 때 재료·생산비(원가)와 인건비·광고·운반비(판관비)로 몇 원 나가나 · 100 − 둘 = 영업이익률" }));
   // 쪼개기 {분기: {묶음: 금액}} — 한국 억원(DART), 미국 달러(야후 qtrs, 분기 끝 날짜 → '26.3Q')
   const parts = {}, names = {};
@@ -3567,6 +3568,8 @@ function growAllHTML(code, d, k) {
   const G = GROWTH?.[code] || GROWTH?.[KPI_ALIAS[code]] || {}, st = new Set((G.star || []).map((s) => s.split(":")[0]));
   const starLine = (kind) => (G.star || []).filter((s) => s.startsWith(kind + ":")).map((s) => s.slice(kind.length + 1));
   const pts = [], cards = [];  // pts = 📍 변곡점 한 줄씩
+  // 사용자 11/15 "매출총이익률 그림이 겹침": 맨 위 📊 실적 4칸·💸 비용 구조(fin4HTML)에 이미 있는 이익률·원가율 그림은 여기서 빼기 — 가이던스 점선·회사 조정·⭐ 가 붙은 칸만 남김 (📍 변곡점 줄은 그대로 계산)
+  const F4 = Object.values(d.longq || {}).filter((q) => q.rev != null && q.op != null).length >= 4;
   const pp = (a, b) => `${n(b, 1)}% → ${n(a, 1)}%`;
   // ① 매출 성장률 — kpi.yaml 에 직접 적은 그래프가 있으면 그것
   const kRev = k.charts.find((c) => /^매출 성장률/.test(c.t)), rv = kRev ? kRev.s[0]?.v || {} : revYoy(d), rg = guideOf(G, d, "rev_yoy");
@@ -3583,13 +3586,13 @@ function growAllHTML(code, d, k) {
     const main = extra ? s[1].v : v, tt = turnOf(main, 0.8, ["상승", "하락"]), gd = guideOf(G, d, extra ? "adj_opm" : gk, extra ? 1 : 0);
     if (tt?.pt) pts.push(`${extra ? "조정 " : ""}${t} <b>${esc(tt.t)}</b> (${pp(tt.a, tt.f)})`);
     const gT = gd && tt ? ((gd.lo + gd.hi) / 2 < tt.a - 0.8 ? "마진 하락 전망" : (gd.lo + gd.hi) / 2 > tt.a + 0.8 ? "마진 상승 전망" : "마진 유지 전망") : null;
-    cards.push(kpiChart({ t, u: "%", s, g: gd, star: st.has(gk), col: extra ? [col, "var(--s3)"] : [col],
+    if (!F4 || gd || extra || st.has(gk)) cards.push(kpiChart({ t, u: "%", s, g: gd, star: st.has(gk), col: extra ? [col, "var(--s3)"] : [col],
       tag: growTag(gT || (tt && `마진 ${tt.t}`), /하락/.test(gT || tt?.t || "")),
       why: key === "gp" ? "100원어치 팔아 재료·생산비를 빼고 남는 돈" : `인건비·광고·연구비까지 빼고 남는 돈${extra ? " · 회사 조정 = 주식 보상 비용 등을 뺀 숫자 (회사가 이걸로 말함)" : ""}` }));
   };
   mg("gp", "매출총이익률", "var(--s2)", "gm");
   mg("op", "영업이익률", "var(--s4)", "opm", G.adj_opm);
-  cards.push(...costCards(d, pts));
+  cards.push(...costCards(d, pts, F4));
   // ④ 제품·부문별 성장률 (segments.yaml 금액, 비중 3% 넘는 큰 제품 5개까지)
   const ps = segPeriods(d.seg);
   if (ps.length) {
@@ -4594,7 +4597,7 @@ async function holdersBlock(code) {
     </tbody></table></div>
     <div class="note src">${esc(HOLDERS.source)} · ${esc(HOLDERS.updated_at)} · 국민연금 같은 기관의 5% 지분 변동은 아래 '내부자 거래'(대주주·임원 본인 돈) 통계와는 다른 성격이에요.</div></div>`;
 }
-function eok(v) { return !v ? "0" : v >= 1e8 ? `${n(v / 1e8, 1)}억` : `${n(v / 1e4, 0)}만`; }
+function eokS(v) { return !v ? "0" : v >= 1e8 ? `${n(v / 1e8, 1)}억` : `${n(v / 1e4, 0)}만`; }
 // 깡토 백테스트 (2016~2026.10, 임원·주요주주 소유보고 약 14만 건 중 장내매수·장내매도만, 거래대금 10억↑, 같은 날 거래대금 비슷한 종목 대비 초과수익)
 const KKANGTO = {
   major_sell: "대주주 장내매도 496건: 시장 대비 1개월 −2.7% · 5개월 −11.5% · 1년 −19.7%, 이긴 비율 34% → 28% → 20%. 5개월 뒤 시장보다 나았던 해가 11년 중 0번 → '꽤 무거운 경고'",
@@ -4604,22 +4607,22 @@ const KKANGTO = {
 function insiderHTML(x) {
   if (!x || !(x.rows || []).length) return "";
   const big = [];
-  if (x.major_sell) big.push(`<div class="warnbox" style="margin-top:6px;background:var(--bad-bg);color:var(--bad-ink)">⚠ <b>대주주 장내매도 ${eok(x.major_sell)}</b><div class="note src">${KKANGTO.major_sell}</div></div>`);
+  if (x.major_sell) big.push(`<div class="warnbox" style="margin-top:6px;background:var(--bad-bg);color:var(--bad-ink)">⚠ <b>대주주 장내매도 ${eokS(x.major_sell)}</b><div class="note src">${KKANGTO.major_sell}</div></div>`);
   // 국내는 임원·대표가 팔 때가 뒤 주가에 더 잘 맞음 (사용자 원칙 · 미국은 CEO·임원 매수가 더 의미) — 행이 아직 없는 옛 데이터는 표에서 직접 셈
   const es = (x.rows || []).filter((r) => r.kind === "매도" && r.role !== "대주주"), esN = x.exec_sellers ?? new Set(es.map((r) => r.name)).size;
   const ceoS = x.ceo_sell ?? new Set(es.filter((r) => r.role === "대표이사").map((r) => r.name)).size;
-  if (esN) big.unshift(`<div class="warnbox" style="margin-top:6px;background:var(--bad-bg);color:var(--bad-ink);border-color:var(--bad)">🚨 <b>${ceoS ? `대표이사 ${ceoS}명 포함 ` : ""}임원 ${esN}명 장내매도 ${eok(x.exec_sell ?? es.reduce((a, r) => a + r.amt, 0))}</b> (최근 3개월)
+  if (esN) big.unshift(`<div class="warnbox" style="margin-top:6px;background:var(--bad-bg);color:var(--bad-ink);border-color:var(--bad)">🚨 <b>${ceoS ? `대표이사 ${ceoS}명 포함 ` : ""}임원 ${esN}명 장내매도 ${eokS(x.exec_sell ?? es.reduce((a, r) => a + r.amt, 0))}</b> (최근 3개월)
     <div class="note" style="color:var(--bad-ink)">국내 주식은 주요 임원·대표가 팔면 뒤 주가가 안 좋은 경우가 많아요 — 꼭 확인 (미국은 CEO·임원 매수가 더 의미 있는 신호). 아래 빨간 줄이 매도 거래예요.</div></div>`);
   if (x.exec_buyers) big.push(`<div class="warnbox" style="margin-top:6px;background:var(--good-bg);color:var(--good-ink)">👀 <b>임원 ${x.exec_buyers}명 장내매수${x.ceo_buy ? ` (대표이사 ${x.ceo_buy}명 포함)` : ""}</b><div class="note src">${KKANGTO.exec_buy}</div></div>`);
-  if (x.major_buy) big.push(`<div class="note">ℹ 대주주 장내매수 ${eok(x.major_buy)} <span class="src">${KKANGTO.major_buy}</span></div>`);
+  if (x.major_buy) big.push(`<div class="note">ℹ 대주주 장내매수 ${eokS(x.major_buy)} <span class="src">${KKANGTO.major_buy}</span></div>`);
   const tag = (r) => `<span class="pill ${r.kind === "매도" ? "red" : r.role === "대주주" ? "" : "green"}">${esc(r.role)}</span>`;  // 매도 = 빨강 (누가 팔든)
   return `<h3>👥 내부자 거래 <span class="src">최근 3개월 장내매수·매도 · 임원·주요주주 소유보고 (스톡옵션·상여 제외)</span></h3><div class="card">
-    <div class="mini"><div>매수<b class="cheap">${eok(x.buy)}</b><span class="src">${x.buyers}명</span></div><div>매도<b class="dear">${eok(x.sell)}</b><span class="src">${x.sellers}명</span></div>
-      <div>순매수<b class="${x.buy - x.sell < 0 ? "dear" : "cheap"}">${x.buy - x.sell < 0 ? "−" : ""}${eok(Math.abs(x.buy - x.sell))}</b></div></div>
+    <div class="mini"><div>매수<b class="cheap">${eokS(x.buy)}</b><span class="src">${x.buyers}명</span></div><div>매도<b class="dear">${eokS(x.sell)}</b><span class="src">${x.sellers}명</span></div>
+      <div>순매수<b class="${x.buy - x.sell < 0 ? "dear" : "cheap"}">${x.buy - x.sell < 0 ? "−" : ""}${eokS(Math.abs(x.buy - x.sell))}</b></div></div>
     ${big.join("")}
     <div class="tbl-wrap" style="margin-top:8px"><table class="compact orders"><thead><tr><th>변동일</th><th>보고자</th><th>사유</th><th>증감(주)</th><th>단가</th><th>금액</th></tr></thead><tbody>
       ${x.rows.slice(0, 15).map((r) => `<tr${r.kind === "매도" ? ' style="background:var(--bad-bg);font-weight:700"' : ""}><td>${esc((r.date || "").slice(2))}</td><td style="white-space:normal"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a> ${tag(r)}<br><span class="src">${esc(r.pos || "")}</span></td>
-        <td>장내${esc(r.kind)}</td><td class="${r.chg < 0 ? "dear" : "cheap"}">${r.chg > 0 ? "+" : ""}${n(r.chg, 0)}</td><td>${n(r.price, 0)}</td><td>${eok(r.amt)}</td></tr>`).join("")}
+        <td>장내${esc(r.kind)}</td><td class="${r.chg < 0 ? "dear" : "cheap"}">${r.chg > 0 ? "+" : ""}${n(r.chg, 0)}</td><td>${n(r.price, 0)}</td><td>${eokS(r.amt)}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="note src">참고(깡토 블로그 백테스트, 한 사람의 통계): 대주주가 산다는 건 매수 이유가 못 되고, 대주주가 판다는 건 꽤 무거운 경고. 임원이 여러 명 사면 관심종목에 올릴 만함. 그래도 추세(신고가·상대강도)를 먼저 보고, 시장이 나쁘면 비중은 작게. 통계는 과거 결과일 뿐 앞으로를 보장하지 않아요.</div>
   </div>`;
@@ -4781,10 +4784,10 @@ async function openStock(code) {
     const kpiHtml = await kpiBlock(code, d);
     const growHtml = await growthBlock(code, d);
     if (!PBR) { try { PBR = await (await fetch(`data/pbr_watch.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { /* 📊 시나리오 칸만 빠짐 */ } }
-    const topHtml = scenHTML(code, c?.price || d.price, d.history) + hxCycleHTML(code, d, c?.price || d.price) + ((await keyLoad()).stock?.[code]?.cards || []).filter((x) => x.top).map((x) => keyCard(x, true)).join("");  // keychart.yaml top: true = 상세 맨 위 (사용자 11/13 테슬라 FSD 유럽 승인) · 📊 시나리오 = pbr_watch.yaml scen (11/14)
+    const topHtml = scenTblHTML(code, c?.price || d.price, d.history) + hxCycleHTML(code, d, c?.price || d.price) + ((await keyLoad()).stock?.[code]?.cards || []).filter((x) => x.top).map((x) => keyCard(x, true)).join("");  // keychart.yaml top: true = 상세 맨 위 (사용자 11/13 테슬라 FSD 유럽 승인) · 📊 시나리오 = pbr_watch.yaml scen (11/14)
     try { OHLC[code] = OHLC[code] || await (await fetch(`data/ohlc/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { OHLC[code] = null; }  // 📉 5년 하락률 그림 (📐 선 읽기와 같은 파일)
     if (!TL) { try { TL = await (await fetch(`data/timeline.json?t=${Date.now()}`, { cache: "no-store" })).json(); } catch (_) { TL = {}; } }  // 🗓 주요 타임라인
-    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + cycHTML(code) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
+    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + cycHTML(code) + patHTML(d), keyHtml = await keyBlock(code);  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : DR_CODES.includes(code) ? (await drGet(), drHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬 · 💾 메모리 회사는 D램 값
     await consGet();
@@ -4796,7 +4799,19 @@ async function openStock(code) {
     const xp = EXP_CODE && ["ramen", "cosmetics"].includes(EXP_CODE[0]);  // 라면·화장품은 11/11 📦 수출입 탭으로 옮김
     const expLink = EXP_CODE ? `<div class="note"><a href="${xp ? "#exports" : "#industry"}" data-kc="${xp ? "xp" : "exp"}-${EXP_CODE[0]}">📦 ${EXP_CODE[1]} ${xp ? "1~10일 잠정·월별 (1개월~전체) → 수출입 탭에서 보기" : "월별 데이터 (관세청·2020년부터) → 산업 탭에서 보기"}</a></div>` : "";
     if (seq !== OPEN_SEQ) return;
-    $("#sheetBody").innerHTML = detailHTML(d).replace("<!--profile-->", () => fin4HTML(d) + topHtml + liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + ddHTML(code) + tlHTML(code) + growHtml + consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code)) + issueHtml + segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml + globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + peerHtml + tourHtml;
+    // 사용자 11/15 "그림 먼저 · 긴 글 줄이기 · 중복 정리": 위 = 신호등·적정주가 → 실적 그림 → 최신 실적 → 하락률·타임라인 → 성장률, 그 아래는 묶음 8개로 접어 두고 눌러서 보기 (맨 위 바로가기 칩)
+    const [headHtml, tailHtml = ""] = detailHTML(d).split("<!--profile-->");
+    const G = [["earn", "📞 실적발표 · 컨콜 · 업종 컨센서스", consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code))],
+      ["news", "📢 공시 · 🎯 리포트 · 📈 추정치", issueHtml],
+      ["key", "🔑 키팩터 · 키차트", keyHtml],
+      ["biz", "🧩 사업부문 · 수출 · 핵심 지표", segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml],
+      ["val", "💰 밸류에이션 (밴드 · 적정주가 표)", globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + tailHtml],
+      ["past", "📚 과거 실적 · IR 자료 · 점검표", (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)],
+      ["flow", "👥 수급 · 내부자 · 수주", brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + tourHtml],
+      ["peer", "🏁 동종업계 · 경쟁사 컨콜", peerHtml]].filter(([, , h]) => h && h.trim());
+    const chips = `<div class="seg" style="display:flex;flex-wrap:wrap;margin-top:10px">${G.map(([id, t]) => `<a class="segl" href="#" data-jg="g-${id}" style="font-size:12px;padding:5px 9px;min-height:30px">${esc(t.split(" · ")[0].replace(/ \(.*/, ""))}</a>`).join("")}</div>`;
+    const grp = ([id, t, h]) => `<details class="grp" id="g-${id}" style="margin-top:10px"><summary style="cursor:pointer;padding:12px 14px;border-radius:12px;background:var(--surface-2);font-weight:700;font-size:15px">${esc(t)} <span class="src">눌러서 보기</span></summary>${h}</details>`;
+    $("#sheetBody").innerHTML = headHtml + chips + fin4HTML(d) + topHtml + liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + ddHTML(code) + tlHTML(code) + growHtml + G.map(grp).join("");
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
@@ -4807,13 +4822,20 @@ async function openStock(code) {
     drawHolders(code);
     drawPeers(code);
     drawTour();
-    if (GOTO) { const g = GOTO; GOTO = null; setTimeout(() => document.getElementById(g)?.scrollIntoView({ block: "start" }), 300); }  // 위 그림이 다 그려진 뒤 바로 이동 (부드럽게 움직이면 중간에 멈춤)
+    if (GOTO) { const g = GOTO; GOTO = null; setTimeout(() => grpJump(g), 300); }  // 위 그림이 다 그려진 뒤 바로 이동 (부드럽게 움직이면 중간에 멈춤)
   } catch (e) {
     console.error("상세", code, e);
     if (seq !== OPEN_SEQ) return;
     $("#sheetBody").innerHTML = `<div class="empty">상세 데이터를 불러오지 못했어요.</div>`;
   }
 }
+// 접힌 묶음 안 칸으로 갈 때: 감싼 묶음을 먼저 펼치고 이동 (‼️ 수출 꼬리표 · 맨 위 바로가기 칩)
+function grpJump(id) {
+  const el = document.getElementById(id); if (!el) return;
+  for (let p = el; p; p = p.parentElement) if (p.tagName === "DETAILS") p.open = true;
+  el.scrollIntoView({ block: "start" });
+}
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-jg]"); if (a) { e.preventDefault(); grpJump(a.dataset.jg); } });
 function closeSheet() {
   $("#sheet").classList.remove("open");
   document.body.style.overflow = "";
@@ -5099,7 +5121,7 @@ function idxCardHTML() {
   return body ? `<div class="irc" style="margin-top:0">${body}<div class="note src">${esc(kt?.date || kq?.date || "")} 종가 · 현재 = KRX 지수 PER·PBR (지난 실적) · ROE = PBR ÷ PER · 선행 = 앞으로 12개월 (코스피는 시총 상위 150곳 컨센서스 합산) · 갱신 때마다 자동 · 자세한 표·밴드는 아래</div></div>` : "";
 }
 // 🎤 고점 신호 체크 (📡 코스피·코스닥 카드 아래, 사용자 11/12 · 공포·탐욕 칸은 11/13 사용자 요청으로 지움): 1등 기업 CEO 가 국민 예능·큰 광고에 나오면 경계 ← keychart.yaml peak {sub, lines, log [{d, who, where, note}]}
-function peakHTML(p) {
+function peakSigHTML(p) {
   if (!p?.lines?.length) return "";
   const log = [...(p.log || [])].sort((a, b) => String(b.d).localeCompare(String(a.d)));
   return `<div class="card" style="margin-bottom:10px"><div class="chart-title" style="margin-top:0"><b>🎤 고점 신호 체크</b> <span class="src">${esc(p.sub || "")}</span></div>
@@ -5137,14 +5159,14 @@ async function signalHTML() {
     out.push(sigTable({ name: c.name, unit: "주가 (원)", L, date: `${d.price_date || ""} 종가 기준`.trim(),
       m: { pbf: fm.PBR?.["12MF"], pbt: now.pbr && now.pbr * adj, pef: fm.PER?.["12MF"], pet: now.per && now.per * adj }, marks: mk,
       pos: b ? `PBR (1년 뒤 BPS 기준) 10년 중 아래에서 <b>${n(b.pos, 0)}%</b> 자리 (하단 ${n(b.low, 2)} · 평균 ${n(b.avg, 2)} · 상단 ${n(b.high, 2)}배)` : "",
-      src: `12MF = 증권사 컨센서스 앞으로 12개월 EPS·BPS (카드 위 숫자와 같음) · TTM = 네이버 지난 실적 PER·PBR${mk.length ? " · 📏 = 🧮 PBR 기준선 (아래 계산기와 같음)" : ""}`, extra: scenHTML(code, L, d.history) + hxCycleHTML(code, d, L) + pbrNoteHTML(code) + stockBandBox(code) }));
+      src: `12MF = 증권사 컨센서스 앞으로 12개월 EPS·BPS (카드 위 숫자와 같음) · TTM = 네이버 지난 실적 PER·PBR${mk.length ? " · 📏 = 🧮 PBR 기준선 (아래 계산기와 같음)" : ""}`, extra: scenTblHTML(code, L, d.history) + hxCycleHTML(code, d, L) + pbrNoteHTML(code) + stockBandBox(code) }));
   }
   // 📈 밴드 차트 (사용자 11/6): 보유 종목마다 눌러서 — bandAllRender (그림 먼저, 그다음 카드와 같은 적정주가 표)
   const own = DASH.stocks.filter((c) => grp(c) === "보유" && !/우$/.test(c.name)).sort((a, b) => (a.market === "US") - (b.market === "US"));
   const row = (c) => `<details class="fvt bandall" data-code="${esc(c.code)}" style="margin-top:4px"><summary class="chart-title"><b>${c.market === "US" ? "🇺🇸" : "🇰🇷"} ${esc(c.name)}</b> <span class="src">${money(c.price, c.currency)}${c.band_pos != null ? ` · 10년 자리 ${n(c.band_pos, 0)}%` : ""}${c.scen?.base ? ` · 적정주가 대비 ${pct((c.price / c.scen.base - 1) * 100, 0, true)}` : ""}</span></summary><div class="bwb src">불러오는 중…</div></details>`;
   const bands = `<details class="card" style="margin-top:12px"><summary class="chart-title" style="margin-top:0"><b>📈 밴드 차트 — 보유 종목</b> <span class="src">눌러서 열기 · 종목을 누르면 12MF·PBR·PER 밴드 · 선행 PER·PBR 추이 + 적정주가 표 · 5년·10년·최대</span></summary>
     <div class="kidbox" style="margin-top:6px">🐣 밴드 선은 '그 배수를 받으면 주가가 얼마인지'예요. 오른쪽(앞으로)은 증권사 이익 추정치로 그린 선이라, 지금 주가가 어느 선 근처인지 볼 수 있어요. 그림을 누르면 그 날 숫자가 나와요.</div>${own.map(row).join("")}</details>`;
-  const pk = peakHTML((await keyLoad()).peak);
+  const pk = peakSigHTML((await keyLoad()).peak);
   return `${idxCardHTML()}${pk}<div class="kidbox" style="margin-bottom:10px">🐣 위에서 아래로 갈수록 '지수(주가)가 이만큼 빠지면 PBR·PER 이 몇 배가 되나'예요. 노란 줄이 지금이에요. <b>12MF</b> = 앞으로 12개월 예상 실적 기준, <b>TTM</b> = 지난 12개월(지난 결산) 실제 실적 기준이에요. 이익이 크게 늘 때는 12MF 숫자가 TTM 보다 훨씬 낮게 나와요.</div>${out.join("")}${bands}`;
 }
 
@@ -5984,10 +6006,10 @@ function keyCard(c, open) {
     <div class="note src">출처: ${esc(c.src || "")}${(c.u || []).map((x) => ` · <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>`).join("")}</div></details>`;
 }
 // 묶음 하나: 키팩터 한 줄 + 변곡점 체크 + 카드들 (code = 지금 보는 종목 → 그 종목이 주인공인 카드만 펼침, 산업 탭은 모두 펼침)
-function keyGroup(name, g, code) {
+function keyGroup(name, g, code, st = { n: 0 }) {  // st = 상세에서 이미 펼친 카드 수 — 맨 위 하나만 펼침 (사용자 11/15 긴 글 줄이기, 나머지는 제목 줄만)
   return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}
     ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${evHTML(g.ev)}${vcHTML(g.vc)}
-    ${(g.cards || []).filter((c) => (code || !c.stock_only) && !(code && c.top)).map((c) => keyCard(c, !code || [].concat(c.code).includes(code))).join("")}</div>`;
+    ${(g.cards || []).filter((c) => (code || !c.stock_only) && !(code && c.top)).map((c) => keyCard(c, !code || ([].concat(c.code).includes(code) && !st.n++))).join("")}</div>`;
 }
 // 📅 업종 이벤트 일정표 (keychart.yaml 묶음의 ev: {t 제목, src, note, rows [{d 정렬 날짜, w 보이는 날짜, e 이벤트, p 확인 포인트, k 1 = 특히 중요}]}) — 사용자 11/5 2차전지 일정
 function evHTML(ev) {
@@ -6194,7 +6216,7 @@ function costHTML(c, d) {
 async function keyBlock(code) {
   const K = await keyLoad(), c = DASH.stocks.find((x) => x.code === code), ind = c?.industry || "";
   const gs = [...Object.entries(K.industry || {}).filter(([k, g]) => ind.includes(k) || (g.codes || []).includes(code)), ...(K.stock?.[code] ? [[c?.name || code, K.stock[code]]] : [])];
-  return gs.length ? `<h3>🔑 키팩터 · 키차트 <span class="src">주가를 움직이는 숫자 · 변곡점 체크 (산업 탭에도 있어요)</span></h3>${gs.map(([k, g]) => keyGroup(k, g, code)).join("")}` : "";
+  return gs.length ? `<h3>🔑 키팩터 · 키차트 <span class="src">주가를 움직이는 숫자 · 변곡점 체크 (산업 탭에도 있어요)</span></h3>${((st) => gs.map(([k, g]) => keyGroup(k, g, code, st)).join(""))({ n: 0 })}` : "";
 }
 // 🛡 방산 (config/defense.yaml): 지정학 연표(사실) + 글쓴이 가설 + 우리 방산 종목 숫자 (stocks.yaml industry 에 '방산')
 let DEF = null;
@@ -6531,7 +6553,7 @@ function fin4HTML(d) {
         f4Fall([[["작년 누적", "영업이익"], O0, true], [["매출 증가", "(작년 GPM)"], eR], [["GPM 변화"], eG], [["판관비"], eS], [["올해 누적", "영업이익"], O1, true]], bf),
         `<span class="src">매출 증가 효과 = 매출 증감 × 작년 GPM · GPM 변화 효과 = 올해 매출 × (올해 GPM − 작년 GPM) · 판관비 효과 = −(판관비 증감) · 넷을 더하면 영업이익 증감과 같음</span>`);
     }
-    h += `<details class="card" open style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>💸 ${esc(nm)} 비용 구조: ${L[j]} 매출원가율 ${n(COGS[j], 1)}%, 판관비율 ${n(SGR[j], 1)}%, 판관비 ${T(S[j])}</b></summary><div class="qgrid" style="margin-top:6px">${b1}${b2}${b3}${b4}</div>
+    h += `<details class="card" style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>💸 ${esc(nm)} 비용 구조: ${L[j]} 매출원가율 ${n(COGS[j], 1)}%, 판관비율 ${n(SGR[j], 1)}%, 판관비 ${T(S[j])}</b></summary><div class="qgrid" style="margin-top:6px">${b1}${b2}${b3}${b4}</div>
       <div class="note src">판관비 = 매출총이익 − 영업이익 (계산 · 기타 영업 손익이 영업이익에 들어가는 회사는 조금 다를 수 있음) · 매출원가율 = 100 − GPM</div></details>`;
   }
   return h;
