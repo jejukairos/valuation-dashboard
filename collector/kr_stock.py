@@ -226,7 +226,8 @@ def dart_history(stock_code, splits=()):
     last_fy = now.year - 1 if now.month >= 4 else now.year - 2
     # 사용자 11/6 '모든 종목 10년치 이상': 3년 간격이면 '전전기' 칸이 없는 회사는 중간 해가 비어서 → 해마다 사업보고서 (2015 보고서의 전기 = 2014)
     years = list(range(last_fy, 2014, -1))
-    if cache.get("last_fy") == last_fy and cache.get("data") and cache.get("v") == 3:
+    ver = 4 if splits else 3  # 분할 보정 고친 뒤(11/14) 분할 있는 종목만 한 번 다시 받음
+    if cache.get("last_fy") == last_fy and cache.get("data") and cache.get("v") == ver:
         return {int(k): v for k, v in cache["data"].items()}
 
     cc = corp_code(stock_code)
@@ -291,17 +292,20 @@ def dart_history(stock_code, splits=()):
                 if v is None:
                     continue
                 if "주당 현금배당금" in se and r.get("stock_knd", "보통주") in ("보통주", "", None):
-                    data.setdefault(y, {})["dps"] = v
+                    data.setdefault(y, {}).update(dps=v, dps_report=ry)  # 배당 표는 분할 뒤 보고서에도 옛 금액 그대로라 보고서 해를 따로
                 elif "현금배당성향" in se:
                     data.setdefault(y, {})["payout"] = v
-    # 액면분할 보정: 분할 이전에 제출된 보고서 값은 비율로 나눈다
+    # 액면분할 보정: 분할 이전에 제출된 보고서 값은 비율로 나눈다 · 사업보고서는 다음 해 3월 말까지 냄
+    #   (11/14: 삼성전자 2017 보고서는 2018-03 제출 = 5월 분할 전인데 '보고서 해 + 1 < 분할 해' 로 빠져서 2015 EPS 126,305원이 남아 그 해가 버려졌음)
     for sp in splits or []:
-        sy = int(str(sp["date"])[:4])
         for y, rec in data.items():
-            if rec.get("src_report", 9999) + 1 < sy:
-                for k in ("eps", "bps", "dps"):
-                    if rec.get(k) is not None:
-                        rec[k] = rec[k] / float(sp["ratio"])
+            for k in ("eps", "bps", "dps"):
+                ry = rec.get("dps_report" if k == "dps" else "src_report", 9999)
+                if rec.get(k) is not None and f"{ry + 1}-03-31" < str(sp["date"]):
+                    rec[k] = rec[k] / float(sp["ratio"])
+            # 분할 뒤 보고서인데도 3년 전 칸 배당이 옛 금액인 경우 (삼성 2018 보고서의 2016 DPS 28,500원): 배당성향으로 본 금액의 '분할 비율 배'면 나눔
+            if rec.get("dps") and rec.get("eps") and rec.get("payout") and 0.7 < rec["dps"] / (rec["eps"] * rec["payout"] / 100) / float(sp["ratio"]) < 1.4:
+                rec["dps"] = rec["dps"] / float(sp["ratio"])
     # ROE = 순이익 ÷ 평균 자본
     for y, rec in data.items():
         prev = data.get(y - 1, {})
@@ -314,7 +318,7 @@ def dart_history(stock_code, splits=()):
             data[int(k)] = {**v, **{kk: vv for kk, vv in data.get(int(k), {}).items() if vv is not None}}
     if not data:
         raise RuntimeError("DART 재무 데이터 없음")
-    write_json(path, {"last_fy": last_fy, "data": data, "v": 3})
+    write_json(path, {"last_fy": last_fy, "data": data, "v": ver})
     return data
 
 
