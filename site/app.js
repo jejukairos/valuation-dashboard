@@ -761,6 +761,57 @@ function scenHTML(code, price, hist) {
       ${["base", "bear"].map((k) => `<tr><td style="text-align:left"><span style="color:${COL[k]}">●</span> PBR ${NM[k]}</td>${S[k].pbr.map((v) => `<td>${n(v, 2)}</td>`).join("")}</tr><tr><td style="text-align:left"><span style="color:${COL[k]}">●</span> PER ${NM[k]}</td>${S[k].per.map((v) => `<td>${n(v, 2)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>
     <div class="note src">'지금 PER·PBR' = 오늘 주가 ÷ 표의 EPS·BPS (매일 자동) · 컨센서스 = 이 사이트 연도별 추정치 (와이즈리포트, 매일 자동) · Base·Bear 숫자는 새 표를 받으면 바꿔요 · 참고용 (매수·매도 추천 아님)</div></details>`;
 }
+// 📉 고점 → 오더컷 → 하단 (사용자 11/14 SK증권 SK하이닉스 그림 2장 "꼭 넣어줘, 트래킹도") ← pbr_watch.yaml cycle {bands, wins}
+//   선 = 우리 12MF PBR (주간, per12mfSeries) · 고점 = wins 기간 안 주가가 가장 높은 주 · 오더컷 자리 = 13주 뒤 ('3M') · 분기 영업이익 = d.longq · 지금 = 오늘 주가 ÷ 12MF BPS
+function hxCycleHTML(code, d, price) {
+  const Cy = (PBR?.items || []).find((x) => x.code === code)?.cycle, S = Cy && per12mfSeries(d, "all", "bps");
+  if (!S) return "";
+  const P = S.pts.filter((p) => p[1] != null), N = P.length, v = P.map((p) => p[1] / p[2]), fb = S.f12(kstToday()), now = price && fb ? price / fb : v.at(-1);
+  const E = (Cy.wins || []).map(([a, b]) => { const ix = P.map((_, i) => i).filter((i) => P[i][0].slice(0, 7) >= a && P[i][0].slice(0, 7) <= b);
+    if (!ix.length) return null; const i = ix.reduce((m, j) => (P[j][1] > P[m][1] ? j : m)); return { i, c: i + 13 < N ? i + 13 : null }; }).filter(Boolean);
+  const qOf = (ds) => `${ds.slice(2, 4)}.${Math.ceil(+ds.slice(5, 7) / 3)}Q`, ym2 = (ds) => `${ds.slice(2, 4)}.${+ds.slice(5, 7)}`;
+  // ① 12MF PBR 선 + SK증권 띠 (2.2배 위는 잘라서 글자로)
+  const W = 480, x0 = 26, x1 = 446, top = 14, bot = 176, lo = 0.5, hi = 2.2, X = (i) => x0 + ((x1 - x0) * i) / Math.max(1, N - 1), Y = (y) => bot - ((Math.min(Math.max(y, lo), hi) - lo) / (hi - lo)) * (bot - top);
+  let g = [0.5, 1, 1.5, 2].map((t) => `<line x1="${x0}" x2="${x1}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)"/><text x="${x0 - 4}" y="${Y(t) + 3}" text-anchor="end" class="qx">${t}</text>`).join("");
+  P.forEach((p, i) => { if (p[0].slice(5, 7) === "01" && (i === 0 || P[i - 1][0].slice(5, 7) !== "01")) g += `<text x="${X(i)}" y="${bot + 14}" text-anchor="middle" class="qx">'${p[0].slice(2, 4)}</text>`; });
+  for (const B of Cy.bands || []) g += `<rect x="${x0}" y="${Y(B.hi)}" width="${x1 - x0}" height="${Y(B.lo) - Y(B.hi)}" fill="${B.col}" opacity=".22"/><text x="${x1 + 2}" y="${(Y(B.hi) + Y(B.lo)) / 2 + 3}" class="qx" style="fill:${B.col};font-weight:700">${esc(B.n)}</text>`;
+  g += `<path d="${v.map((y, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(y).toFixed(1)}`).join("")}" fill="none" stroke="#ed7d31" stroke-width="1.6"/>`;
+  const top3 = v.reduce((m, y, i) => (y > v[m] ? i : m), 0);
+  if (v[top3] > hi) g += `<text x="${X(top3)}" y="${top + 9}" text-anchor="middle" class="qv b" style="fill:#ed7d31">${ym2(P[top3][0])} ${n(v[top3], 2)}배 ↑</text>`;
+  const dot = (i, fill, st, lab, up) => `<circle cx="${X(i)}" cy="${Y(v[i])}" r="6.5" fill="${fill}" stroke="${st}" stroke-width="2"/>${lab ? `<text x="${X(i)}" y="${Y(v[i]) + (up ? -10 : 18)}" text-anchor="middle" class="qv b" style="font-size:10px">${lab}</text>` : ""}`;
+  E.forEach((e) => { g += dot(e.i, "#fff27a", "#c8102e", v[e.i] <= hi ? n(v[e.i], 2) : "", true) + (e.c != null ? dot(e.c, "#8fa9bf", "#1f3f5f", n(v[e.c], 2), false) : ""); });
+  g += `<circle cx="${X(N - 1)}" cy="${Y(now)}" r="4" fill="var(--ink)"/><text x="${X(N - 1) - 6}" y="${Y(now) - 8}" text-anchor="end" class="qv b">지금 ${n(now, 2)}</text>`;
+  const c1 = `<div class="qp" style="grid-column:1/-1"><div class="qt"><b>SK하이닉스 주가 고점 · 오더컷 · 하단 — 12MF PBR <span class="src">배</span></b></div><div class="src">선 = 우리 계산 (주간, 매일 자동) · 띠 = SK증권 숫자 · 🟡 = 그 사이클 주가 고점 주 · 🔵 = 13주(3개월) 뒤 오더컷 자리</div>
+    <svg viewBox="0 0 ${W} ${bot + 20}" role="img" aria-label="SK하이닉스 12MF PBR 고점 오더컷">${g}</svg></div>`;
+  // ② 분기 영업이익 (조원): 지난 사이클 / 이번 사이클 — 고점·오더컷 분기에 동그라미
+  const LQ = d.longq || {}, qs = Object.keys(LQ).filter((q) => LQ[q]?.op != null).sort(), mk = {};
+  E.forEach((e) => { mk[qOf(P[e.i][0])] = "p"; if (e.c != null) mk[qOf(P[e.c][0])] = mk[qOf(P[e.c][0])] === "p" ? "pc" : "c"; });
+  const opBars = (Q, t) => { if (Q.length < 3) return "";
+    const w = 320, a = 8, bb = 140, tp = 34, vs = Q.map((q) => LQ[q].op / 1e4), mx = Math.max(...vs, 0), mn = Math.min(...vs, 0), bw = (w - 2 * a) / Q.length, YY = (y) => bb - ((y - mn) / ((mx - mn) || 1)) * (bb - tp);
+    let s = `<line x1="${a}" x2="${w - a}" y1="${YY(0)}" y2="${YY(0)}" stroke="var(--axis)"/>`;
+    Q.forEach((q, i) => { const x = a + bw * i, y = vs[i];
+      s += `<rect x="${x + bw * 0.12}" y="${Math.min(YY(y), YY(0))}" width="${bw * 0.76}" height="${Math.max(1, Math.abs(YY(y) - YY(0)))}" fill="${y < 0 ? "var(--bad)" : "#c8102e"}" opacity=".75"><title>${q} ${n(y, 2)}조원</title></rect>`;
+      if (mk[q]) s += `<circle cx="${x + bw / 2}" cy="${YY(Math.max(y, 0)) - 7}" r="5" fill="${mk[q] === "c" ? "#8fa9bf" : "#fff27a"}" stroke="${mk[q] === "c" ? "#1f3f5f" : "#c8102e"}" stroke-width="1.6"/>${mk[q] === "pc" ? `<circle cx="${x + bw / 2}" cy="${YY(Math.max(y, 0)) - 18}" r="5" fill="#8fa9bf" stroke="#1f3f5f" stroke-width="1.6"/>` : ""}`;
+      if (q.endsWith("1Q") || i === Q.length - 1) s += `<text x="${x + bw / 2}" y="${bb + 13}" text-anchor="middle" class="qx">${i === Q.length - 1 ? q : `'${q.slice(0, 2)}`}</text>`;
+      if (i === Q.length - 1 || mk[q]) s += `<text x="${x + bw / 2}" y="${YY(Math.max(y, 0)) - (mk[q] ? (mk[q] === "pc" ? 27 : 15) : 4)}" text-anchor="middle" class="qv${i === Q.length - 1 ? " b" : ""}" style="font-size:9px">${n(y, 1)}</text>`; });
+    return `<div class="qp"><div class="qt"><b>${t} <span class="src">조원</span></b></div><svg viewBox="0 0 ${w} ${bb + 18}" role="img" aria-label="${esc(t)}">${s}</svg></div>`; };
+  const c2 = opBars(qs.filter((q) => q < "24"), "분기 영업이익 — 지난 사이클"), c3 = opBars(qs.filter((q) => q >= "24"), "분기 영업이익 — 이번 사이클");
+  // 🐣 지금 자리 (매일) + 과거 3번 + 이번 사이클
+  const band = (nm) => (Cy.bands || []).find((b) => b.n === nm), oc = band("오더컷"), bt = band("하단");
+  const where = oc ? (now > oc.hi ? "위" : now >= oc.lo ? "안" : bt && now < bt.lo ? "아래 (하단 띠도 아래)" : "아래") : "";
+  const past = E.filter((e) => P[e.i][0] < "2024"), cur = E.find((e) => P[e.i][0] >= "2024");
+  const lastQ = qs.at(-1), prevQ = qs.at(-2), qoq = lastQ && prevQ && LQ[prevQ].op > 0 ? (LQ[lastQ].op / LQ[prevQ].op - 1) * 100 : null;
+  const cutTop = past.filter((e) => e.c != null).map((e) => { const q = qOf(P[e.c][0]), k = qs.indexOf(q); if (k < 0) return null;
+    const near = qs.slice(Math.max(0, k - 4), k + 5).map((x) => LQ[x].op); return `${q} ${n(LQ[q].op / 1e4, 2)}조${LQ[q].op >= Math.max(...near) ? " (그 사이클 최고)" : ""}`; }).filter(Boolean);
+  const wk = cur ? Math.round((Date.parse(kstToday()) - Date.parse(P[cur.i][0])) / 6048e5) : null;
+  const kid = [oc ? `지금 12MF PBR ${n(now, 2)}배 — SK증권 오더컷 띠(${oc.lo}~${oc.hi}배) ${where}${bt ? ` · 하단 띠(${bt.lo}~${bt.hi}배)까지 주가 ${pct((bt.hi / now - 1) * 100, 0, true)} ~ ${pct((bt.lo / now - 1) * 100, 0, true)}` : ""}` : "",
+    cur ? `이번 사이클: 고점 ${P[cur.i][0].slice(2).replace(/-/g, ".")} ${n(v[cur.i], 2)}배 → 13주 뒤 ${cur.c != null ? `${n(v[cur.c], 2)}배` : "아직"} → 지금 ${n(now, 2)}배 (고점 뒤 ${wk}주)${band("고점") && v[cur.i] > band("고점").hi * 1.3 ? ` · 고점이 SK증권 고점 띠(${band("고점").lo}~${band("고점").hi}배)의 ${n(v[cur.i] / band("고점").hi, 1)}배까지 갔었어요` : ""}` : "",
+    past.length ? `지난 ${past.length}번 (우리 선): 고점 ${past.map((e) => n(v[e.i], 2)).join("·")}배 → 13주 뒤 ${past.map((e) => (e.c != null ? n(v[e.c], 2) : "-")).join("·")}배 — SK증권 블룸버그 선(1.6~1.8 → 1.1~1.2배)과 같은 모양, 고점은 조금 낮게 나와요` : "",
+    lastQ ? `분기 영업이익 ${lastQ} ${n(LQ[lastQ].op / 1e4, 1)}조원${qoq != null ? ` — 직전 분기보다 ${pct(qoq, 0, true)}` : ""}${cutTop.length ? ` · 과거 오더컷 분기: ${cutTop.join(" · ")} → 다음 분기부터 크게 줄었어요` : ""}` : ""].filter(Boolean);
+  return `<details class="card" open style="margin:8px 0"><summary class="chart-title" style="margin-top:0"><b>📉 고점 → 오더컷 → 하단 (12MF PBR)</b> <span class="src">${esc(Cy.src || "")} · 매일 자동</span></summary>
+    <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div><div class="qgrid">${c1}${c2}${c3}</div>
+    <div class="note src">오더컷 = 고객(서버·PC·스마트폰 회사)이 반도체 주문을 줄이기 시작한 때 (SK증권 그림: 주가 고점 3개월 뒤, 12MF PBR 1.1~1.2배) · 우리 선은 지난 날짜도 지금 아는 실적으로 계산해서 블룸버그보다 고점이 조금 낮게 나와요 — 지금 값은 둘 다 지금 컨센서스라 띠와 바로 비교돼요 (11/9 유진 그림과 1.15배로 같았음) · 참고용 (매수·매도 추천 아님)</div></details>`;
+}
 function bandChartsHTML(d, px, tag, pbrFirst) {
   return pbrNoteHTML(d.code || d.card?.code) + bandChartsBody(d, px, tag, pbrFirst);
 }
@@ -4730,7 +4781,7 @@ async function openStock(code) {
     const kpiHtml = await kpiBlock(code, d);
     const growHtml = await growthBlock(code, d);
     if (!PBR) { try { PBR = await (await fetch(`data/pbr_watch.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { /* 📊 시나리오 칸만 빠짐 */ } }
-    const topHtml = scenHTML(code, c?.price || d.price, d.history) + ((await keyLoad()).stock?.[code]?.cards || []).filter((x) => x.top).map((x) => keyCard(x, true)).join("");  // keychart.yaml top: true = 상세 맨 위 (사용자 11/13 테슬라 FSD 유럽 승인) · 📊 시나리오 = pbr_watch.yaml scen (11/14)
+    const topHtml = scenHTML(code, c?.price || d.price, d.history) + hxCycleHTML(code, d, c?.price || d.price) + ((await keyLoad()).stock?.[code]?.cards || []).filter((x) => x.top).map((x) => keyCard(x, true)).join("");  // keychart.yaml top: true = 상세 맨 위 (사용자 11/13 테슬라 FSD 유럽 승인) · 📊 시나리오 = pbr_watch.yaml scen (11/14)
     try { OHLC[code] = OHLC[code] || await (await fetch(`data/ohlc/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { OHLC[code] = null; }  // 📉 5년 하락률 그림 (📐 선 읽기와 같은 파일)
     const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + ddHTML(code) + cycHTML(code) + patHTML(d) +(await keyBlock(code));  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
@@ -5085,7 +5136,7 @@ async function signalHTML() {
     out.push(sigTable({ name: c.name, unit: "주가 (원)", L, date: `${d.price_date || ""} 종가 기준`.trim(),
       m: { pbf: fm.PBR?.["12MF"], pbt: now.pbr && now.pbr * adj, pef: fm.PER?.["12MF"], pet: now.per && now.per * adj }, marks: mk,
       pos: b ? `PBR (1년 뒤 BPS 기준) 10년 중 아래에서 <b>${n(b.pos, 0)}%</b> 자리 (하단 ${n(b.low, 2)} · 평균 ${n(b.avg, 2)} · 상단 ${n(b.high, 2)}배)` : "",
-      src: `12MF = 증권사 컨센서스 앞으로 12개월 EPS·BPS (카드 위 숫자와 같음) · TTM = 네이버 지난 실적 PER·PBR${mk.length ? " · 📏 = 🧮 PBR 기준선 (아래 계산기와 같음)" : ""}`, extra: scenHTML(code, L, d.history) + pbrNoteHTML(code) + stockBandBox(code) }));
+      src: `12MF = 증권사 컨센서스 앞으로 12개월 EPS·BPS (카드 위 숫자와 같음) · TTM = 네이버 지난 실적 PER·PBR${mk.length ? " · 📏 = 🧮 PBR 기준선 (아래 계산기와 같음)" : ""}`, extra: scenHTML(code, L, d.history) + hxCycleHTML(code, d, L) + pbrNoteHTML(code) + stockBandBox(code) }));
   }
   // 📈 밴드 차트 (사용자 11/6): 보유 종목마다 눌러서 — bandAllRender (그림 먼저, 그다음 카드와 같은 적정주가 표)
   const own = DASH.stocks.filter((c) => grp(c) === "보유" && !/우$/.test(c.name)).sort((a, b) => (a.market === "US") - (b.market === "US"));
