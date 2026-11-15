@@ -715,7 +715,7 @@ def long_q(mkt, dq, kqd, qtrs, sec=None):
     if mkt == "KR":
         for k, r in (dq or {}).items():
             if r.get("sales") is not None:
-                out[kq.label(k)] = {f: rnd(r[s] / 1e8) for f, s in (("rev", "sales"), ("op", "op"), ("gp", "gp")) if r.get(s) is not None}
+                out[kq.label(k)] = {f: rnd(r[s] / 1e8) for f, s in (("rev", "sales"), ("op", "op"), ("gp", "gp"), ("ocf", "ocf"), ("capex", "capex")) if r.get(s) is not None}
         for q in (kqd or {}).get("quarters") or []:
             if q.get("sales") is not None and q["q"] not in out:
                 out[q["q"]] = {"rev": q["sales"], **({"op": q["op"]} if q.get("op") is not None else {})}
@@ -723,7 +723,7 @@ def long_q(mkt, dq, kqd, qtrs, sec=None):
             r = out.get(_klabel(e))
             if r is not None and v.get("gp") is not None and "gp" not in r:  # 보고서 전 잠정 분기의 매출총이익 (kpi.yaml qtr_add = 회사 IR)
                 r["gp"] = rnd(v["gp"] / 1e8)
-            if v.get("capex") is not None and v.get("fcf") is not None and r is not None:
+            if v.get("capex") is not None and v.get("fcf") is not None and r is not None and "ocf" not in r:  # DART 현금흐름이 먼저 (11/15)
                 r.update(capex=rnd(abs(v["capex"]) / 1e8), ocf=rnd((v["fcf"] + abs(v["capex"])) / 1e8))
     else:
         for e, v in (sec or {}).items():

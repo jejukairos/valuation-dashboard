@@ -391,8 +391,28 @@ def q_from_reports(cache):
                 row[k] = a.get("thstrm_amount")
                 row[k + "_ago"] = a.get("frmtrm_q_amount") if a.get("frmtrm_q_amount") is not None else (
                     a.get("frmtrm_add_amount") if rc == "11013" else None)  # 1분기는 누적 = 3개월
+        for k in ("ocf", "capex"):  # 현금흐름표는 누적뿐 → 이번 누적 − 직전 보고서 누적 = 3개월
+            cur, pk = (v.get(k) or {}).get("ytd"), CF_PREV.get(rc)
+            prv = ((cache.get(f"{year}_{pk}") or {}).get(k) or {}).get("ytd") if pk else 0
+            if cur is not None and prv is not None:
+                row[k] = cur - prv
         out[f"{year}{QREP[rc]}"] = row
     return dict(sorted(out.items()))
+
+
+CF_PREV = {"11013": None, "11012": "11013", "11014": "11012", "11011": "11014"}
+CF_ACCTS = {"ocf": (["CashFlowsFromUsedInOperatingActivities"], ["영업활동현금흐름", "영업활동으로인한현금흐름", "영업활동순현금흐름", "영업활동으로부터의현금흐름", "영업활동으로인한순현금흐름"]),
+            "capex": (["PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities", "PurchaseOfPropertyPlantAndEquipment"], ["유형자산의취득", "유형자산취득", "유형자산의증가"])}
+
+
+def _cf_ytd(rows, k):
+    """현금흐름표(CF) 누적 금액 (원) — 영업활동현금흐름(ocf) · 유형자산 취득(capex, 회사마다 부호가 달라 절댓값)."""
+    ids, names = CF_ACCTS[k]
+    cf = [r for r in rows if r.get("sj_div") == "CF"]
+    r = next((r for r in cf if r.get("account_id", "").split("_", 1)[-1] in ids), None) or next((r for r in cf if r.get("account_nm", "").replace(" ", "") in names), None)
+    v = _amt((r or {}).get("thstrm_add_amount")) if r else None
+    v = v if v is not None else _amt((r or {}).get("thstrm_amount"))
+    return abs(v) if v is not None and k == "capex" else v
 
 
 def dart_quarters(stock_code, limit=None):
@@ -406,11 +426,12 @@ def dart_quarters(stock_code, limit=None):
     y = now.year
     limit = SETTINGS_LIMIT if limit is None else limit
     todo = [(yy, rc) for yy in range(y, 2014, -1) for rc in ("11014", "11012", "11013", "11011")
-            if f"{yy}_{rc}" not in cache or (cache[f"{yy}_{rc}"] and "gp" not in cache[f"{yy}_{rc}"])]
+            if f"{yy}_{rc}" not in cache or (cache[f"{yy}_{rc}"] and not {"gp", "ocf"} <= cache[f"{yy}_{rc}"].keys())]  # 11/15 현금흐름(ocf·capex) 추가 → 예전 보고서도 다시 받음
     for year, rc in todo[:limit]:
         rows = _dart_fin(cc, year) if rc == "11011" else _dart_fin_q(cc, year, rc)
         if rows:
-            cache[f"{year}_{rc}"] = {k: {f: _amt((_acct_row(rows, k) or {}).get(f)) for f in QF} for k in ("sales", "op", "gp")}
+            cache[f"{year}_{rc}"] = {**{k: {f: _amt((_acct_row(rows, k) or {}).get(f)) for f in QF} for k in ("sales", "op", "gp")},
+                                     **{k: {"ytd": _cf_ytd(rows, k)} for k in ("ocf", "capex")}}
         elif year < y - 1:  # 2년 넘게 지난 보고서가 없으면 상장 전 → 빈 칸으로 기억 (다시 안 받음). 최근 것은 아직 안 냈을 수 있어 그냥 둠
             cache[f"{year}_{rc}"] = {}
     write_json(path, cache)
@@ -436,7 +457,7 @@ def dart_shares(stock_code, limit=8):
     path = CACHE / f"darts_{stock_code}.json"
     cache = read_json(path, {})
     cc, y = corp_code(stock_code), now_kst().year
-    todo = [(yy, rc) for yy in range(y, y - 4, -1) for rc in ("11014", "11012", "11013", "11011") if f"{yy}_{rc}" not in cache]
+    todo = [(yy, rc) for yy in range(y, 2014, -1) for rc in ("11014", "11012", "11013", "11011") if f"{yy}_{rc}" not in cache]  # 11/15 기간 버튼 10년 → 2015년~
     for year, rc in todo[:limit]:
         j = HTTP.get("https://opendart.fss.or.kr/api/stockTotqySttus.json",
                      params={"crtfc_key": dart_key(), "corp_code": cc, "bsns_year": year, "reprt_code": rc}).json()
@@ -617,6 +638,13 @@ if __name__ == "__main__":  # 자체 점검: 분기 3개월 영업이익과 1년
     assert q["202509"]["op"] == 30 and q["202509"]["op_ago"] == 20
     assert q["202512"]["op"] == 40 and q["202512"]["op_ago"] == 30
     assert q["202603"]["op"] == 50 and q["202603"]["op_ago"] == 25
+    # 현금흐름 누적 → 3개월: 1분기 그대로 · 반기 − 1분기 · 3분기 − 반기 · 연간 − 3분기 · 직전 누적이 없으면 빈칸
+    cf = {"2025_11013": {"ocf": {"ytd": 10}}, "2025_11012": {"ocf": {"ytd": 25}}, "2025_11014": {"ocf": {"ytd": 45}, "capex": {"ytd": 9}},
+          "2025_11011": {"ocf": {"ytd": 70}, "capex": {"ytd": 12}}, "2024_11014": {"ocf": {"ytd": 5}}}
+    q = q_from_reports(cf)
+    assert (q["202503"]["ocf"], q["202506"]["ocf"], q["202509"]["ocf"], q["202512"]["ocf"], q["202512"]["capex"]) == (10, 15, 20, 25, 3)
+    assert "ocf" not in q["202409"] and "capex" not in q["202509"]
+    assert _cf_ytd([{"sj_div": "CF", "account_id": "-표준계정코드 미사용-", "account_nm": "유형자산의 취득", "thstrm_amount": "-1,500"}], "capex") == 1500
     # 옛 DART 값 바로잡기: 주식 수 100주 · 2014년 EPS 가 1,000배(원↔천원) → 1/1000 · 2015년 EPS 빔 → 2016년 주식 수로 · 2013년 10배 차이(증자일 수 있음) → 버림
     dd = {2014: {"ni": 1000, "eps": 10000}, 2015: {"ni": 2000}, 2016: {"ni": 3000, "eps": 30}, 2017: {"ni": 4000, "eps": 40},
           2018: {"ni": 5000, "eps": 50}, 2013: {"ni": 1000, "eps": 100}}

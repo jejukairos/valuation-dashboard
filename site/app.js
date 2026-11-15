@@ -1165,6 +1165,7 @@ const PRE_Q = [
     ["done3", "정량(숫자)·정성(스토리)·기술적(차트) 분석을 다 했나?", "chk:정량|정성|기술적"]]],
 ];
 /* ---------- 분기 실적 한눈에: 4칸 핵심지표 + 돈의 흐름 (야후 분기 재무제표, cache 에 쌓음) ---------- */
+const qShow = (N, i) => (N - 1 - i) % (N <= 12 ? 1 : N <= 24 ? 2 : 4) === 0;  // 칸이 많으면 분기 이름을 2·4칸마다 (마지막 칸 기준)
 function qLabel(end) { const [y, m] = end.split("-").map(Number); return m % 3 ? `${String(y).slice(2)}.${m}월` : `${String(y).slice(2)}.${m / 3}Q`; }
 function qMoney(v, usd) {
   if (v == null) return "-";
@@ -1447,7 +1448,7 @@ function kqBars(title, qs, f, est, color, cur, opt = {}) {  // opt.tag = 제목 
   const li = qs.map((q) => !q.est).lastIndexOf(true);  // 연간 보기: 추정 연도(E)는 회색, 마지막 실적 연도를 색으로
   qs.forEach((q, i) => {
     const cx = x0 + bw * i + bw / 2, last = i === li;
-    g += `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(q.q)}</text>`;
+    if (qShow(n0, i)) g += `<text x="${cx}" y="166" text-anchor="middle" class="qx">${esc(q.q)}</text>`;
     if (q[f] == null) {  // 실적이 아직 없는 칸 (잠정실적엔 EPS 가 없음): 예상만 회색으로, 실적 자리는 비워 둠
       if (last && ev != null) g += bar(cx - bw * 0.21, bw * 0.38, ev, "var(--muted)") + lab(cx - bw * 0.21, ly(ev), ev, "qv", "var(--muted)");
       return;
@@ -1461,7 +1462,7 @@ function kqBars(title, qs, f, est, color, cur, opt = {}) {  // opt.tag = 제목 
         else if (v <= ev) ya = ye + 11; else ye = ya + 11;  // 음수는 막대 아래라 더 작은 값을 한 줄 아래로
       }
       g += bar(xe, bw * 0.38, ev, "var(--muted)") + bar(xa, bw * 0.38, v, color) + lab(xe, ye, ev, "qv", "var(--muted)") + lab(xa, ya, v, "qv b", color);
-    } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? (q[f] < 0 ? "var(--bad)" : color) : null);
+    } else g += bar(cx, bw * 0.5, q[f], last ? color : "var(--grid)") + (last || n0 <= 12 ? lab(cx, ly(q[f]), q[f], last ? "qv b" : "qv", last ? (q[f] < 0 ? "var(--bad)" : color) : null) : "");  // 칸이 많으면 숫자는 마지막만 (나머지는 눌러서)
   });
   g += tipCols((i) => x0 + bw * i + bw / 2, bw, 0, 172, qs.map((q, i) => `${q.q}${q.est ? " (예상 E)" : ""}\n${title}: ${q[f] == null ? "-" : SV(q[f]) + unit}${i === li && ev != null ? `\n예상(컨센서스): ${SV(ev)}${unit}` : ""}`));
   const s = ev != null && ev > 0 && qs[li]?.[f] != null ? (qs[li][f] / ev - 1) * 100 : null;  // 마지막 실적 분기 (뒤에 예상 E 가 붙어도)
@@ -3330,7 +3331,7 @@ function kpiChart(ch) {
   const many = ch.s.length > 1, W = 320, x0 = 26, x1 = W - (many ? 62 : 26), top = 28, bot = 138;  // 선이 여러 개면 끝 숫자를 오른쪽에
   const lo0 = Math.min(...vals), hi0 = Math.max(...vals), pad = (hi0 - lo0) * 0.18 || Math.abs(hi0) * 0.2 || 1;
   const lo = lo0 - pad, hi = hi0 + pad, Y = (v) => bot - ((v - lo) / (hi - lo)) * (bot - top), X = (i) => x0 + ((x1 - x0) * i) / (qs.length - 1);
-  const lab = (i) => qs.length <= 7 || (qs.length - 1 - i) % 2 === 0;  // 칸이 많으면 하나 걸러 이름 (마지막은 항상)
+  const lab = (i) => (qs.length <= 7 ? true : qs.length <= 14 ? (qs.length - 1 - i) % 2 === 0 : qShow(qs.length, i)), rr = qs.length > 14 ? 2.5 : 4;  // 칸이 많으면 걸러서 이름 (마지막은 항상)
   let g = qs.map((q, i) => `<line x1="${X(i)}" x2="${X(i)}" y1="${top - 6}" y2="${bot}" stroke="var(--grid)"/>${lab(i) ? `<text x="${X(i)}" y="${bot + 16}" text-anchor="middle" class="qx">${esc(q)}</text>` : ""}`).join("");
   if (lo0 < 0 && hi0 > 0) g += `<line x1="${x0 - 10}" x2="${x1 + 10}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)" stroke-dasharray="3 3"/>`;
   const ends = [];  // 선이 여러 개면 마지막 값만 글자로 (겹치지 않게 아래로 밀기)
@@ -3340,9 +3341,9 @@ function kpiChart(ch) {
     const xy = pts.map(([i, v]) => [X(i), Y(v)]);
     pts.forEach(([i, v], j) => {
       const last = j === pts.length - 1;
-      g += `<circle cx="${X(i)}" cy="${Y(v)}" r="4" fill="var(--surface)" stroke="${col}" stroke-width="2.5"/>`;
+      g += `<circle cx="${X(i)}" cy="${Y(v)}" r="${rr}" fill="var(--surface)" stroke="${col}" stroke-width="2.5"/>`;
       if (many) { if (last) ends.push([X(i), Y(v), v, col]); }  // 선이 여럿이면 끝 숫자만 오른쪽 빈칸에
-      else g += `<text x="${X(i)}" y="${clearY(xy, j, 20)}" text-anchor="middle" class="qv${last ? " b" : ""}"${last ? ` style="fill:${col};font-size:13px"` : ""}>${kpiF(v, ch.u)}</text>`;  // 선 위로 비켜서
+      else if (last || qs.length <= 14 || lab(i)) g += `<text x="${X(i)}" y="${clearY(xy, j, 20)}" text-anchor="middle" class="qv${last ? " b" : ""}"${last ? ` style="fill:${col};font-size:13px"` : ""}>${kpiF(v, ch.u)}</text>`;  // 선 위로 비켜서
     });
   });
   ends.sort((a, b) => a[1] - b[1]).forEach((e, i, a) => { if (i && e[1] - a[i - 1][1] < 14) e[1] = a[i - 1][1] + 14; });
@@ -3395,24 +3396,29 @@ function longCagrHTML(d) {
     <div class="note src">📌 읽는 법: 오래 보면 주가 상승률 ≈ 이익 성장률 + 값(PER)이 변한 몫. 같은 이익 성장이라도 싸게 산 한미반도체(PER 5~7배)는 이익 14배에 주가 120배, 비싸게 산 씨젠(PER 35배)은 이익 12배에 주가 4배 — 그래서 '이익이 얼마나 늘까'와 '지금 값이 과거보다 비싼가'를 같이 봐요. 반도체처럼 오르내림이 큰 회사는 시작·끝이 호황이냐 불황이냐에 따라 숫자가 크게 달라져요. 영업이익은 회사 전체 숫자라, 자사주를 많이 사서 주식 수가 줄면(애플) 주가가 이익보다 빨리 오른 것처럼 보이고 새 주식을 많이 찍으면 반대예요.</div></div>`;
 }
 // 📈 영업이익 성장률 (YoY): 매출 성장률 바로 아래 — 국내는 이 성장률로 PER 을 몇 배 줄지 정함 (kpi.yaml 에 같은 제목 그래프가 있으면 그걸 씀)
-function opYoyHTML(d, k) {
-  const v = d.op_yoy;
-  if (!v || k.charts.some((c) => /^영업이익 성장률/.test(c.t))) return "";
+function opYoyHTML(d, k) {  // 10년 분기 실적으로 계산 + 수집기 op_yoy(야후·네이버·DART·kpi.yaml 손 입력)가 있으면 그 값 · 기간 버튼(QN)만큼
+  if (k.charts.some((c) => /^영업이익 성장률/.test(c.t))) return "";
+  const L = d.longq || {}, ago = (q) => `${String(+q.slice(0, 2) - 1).padStart(2, "0")}${q.slice(2)}`, base = {};
+  for (const [q, r] of Object.entries(L)) { const p = L[ago(q)]?.op; if (r.op != null && p > 0) base[q] = rnd1((r.op / p - 1) * 100); }
+  const v = Object.fromEntries(Object.entries({ ...base, ...(d.op_yoy || {}) }).sort(([a], [b]) => (a < b ? -1 : 1)).slice(-QN));
+  if (!Object.keys(v).length) return "";
   return kpiChart({ t: "영업이익 성장률 (YoY)", u: "%", s: [{ n: "영업이익", v }], why: "1년 전 같은 분기보다 영업이익이 얼마나 늘었나 · 국내 종목은 이 성장률로 PER 을 몇 배 줄지 정해요" + (k.op_note ? ` · ⚠ ${k.op_note}` : "") })
     || `<div class="qp"><div class="qt"><b>영업이익 성장률 (YoY)</b></div><div class="note">${Object.entries(v).map(([q, x]) => `${esc(q)} <b>${pct(x, 1, true)}</b>`).join(" · ")} <span class="src">분기 자료가 더 쌓이면 그래프로</span></div></div>`;
 }
 // 현금흐름(FCF = 영업현금흐름 − 설비투자): 야후 분기 재무제표 + 야후에 아직 없는 최신 분기는 kpi.yaml fcf_add (보도자료)
-function fcfSeries(d, k) {
+function fcfSeries(d, k, keep = 6) {
   const usd = d.currency === "USD", qs = Object.entries(d.qtrs || {}).filter(([, q]) => q.fcf != null).map(([e, q]) => ({ q: qLabel(e), fcf: q.fcf, capex: q.capex }));
   for (const [q, v] of Object.entries(k?.fcf_add || {})) if (!qs.some((x) => x.q === q)) qs.push({ q, fcf: v * (usd ? 1e6 : 1e8), add: true });
-  return qs.slice(-6);
+  return qs.slice(-keep);
 }
 function fcfTag(a, b) {  // 직전 분기 a → 이번 분기 b
   return a >= 0 && b < 0 ? ["적자 전환", "bad"] : a < 0 && b < 0 ? (b < a ? ["적자 폭 확대", "bad"] : ["적자 폭 축소", "warn"])
     : a < 0 ? ["흑자 전환", ""] : b >= a ? ["직전 분기보다 늘어남", ""] : ["직전 분기보다 줄어듦", "warn"];
 }
-function fcfBars(d, k) {
-  const s = fcfSeries(d, k), usd = d.currency === "USD";
+function fcfBars(d, k) {  // 10년 분기 실적(longq ocf·capex: 한국 DART 현금흐름표 · 미국 SEC, 야후 분기 포함)이 있으면 그걸로 기간 버튼(QN)만큼
+  const usd = d.currency === "USD", m = usd ? 1e6 : 1e8;
+  const lq = Object.entries(d.longq || {}).filter(([, r]) => r.ocf != null && r.capex != null).map(([q, r]) => ({ q, fcf: (r.ocf - r.capex) * m, capex: -r.capex * m }));
+  const s = lq.length >= 2 ? [...lq, ...fcfSeries(d, k, 99).filter((x) => x.add && !lq.some((z) => z.q === x.q))].sort((a, b) => (a.q < b.q ? -1 : 1)).slice(-QN) : fcfSeries(d, k);
   if (s.length < 2) return "";
   const [t, cls] = fcfTag(s.at(-2).fcf, s.at(-1).fcf), cx = s.filter((x) => x.capex != null).at(-1);
   const sub = `영업현금흐름 − 설비투자(CapEx)${cx ? ` · ${esc(cx.q)} CapEx ${qMoney(Math.abs(cx.capex), usd)}` : ""}${s.some((x) => x.add) ? ` · ${s.filter((x) => x.add).map((x) => esc(x.q)).join("·")} 는 보도자료 숫자 (야후 반영 전)` : ""}`;
@@ -3651,7 +3657,7 @@ function multiCard(t, s, col, star, word, pts, why) {
 }
 // 📉 주식 수 증가율 (YoY): 새 주식을 찍으면(증자·주식 보상·전환사채 전환) 이익이 그대로여도 한 주당 몫(EPS)이 줄어요 — 모든 종목
 function dilHTML(d) {
-  const S = d.shq, v = last6(yoyOf(Object.entries(S?.q || {}))), ks = Object.keys(v);
+  const S = d.shq, v = Object.fromEntries(Object.entries(yoyOf(Object.entries(S?.q || {}))).slice(-QN)), ks = Object.keys(v);
   if (ks.length < 2) return "";
   const g = v[ks.at(-1)], eps = (1 / (1 + g / 100) - 1) * 100;
   const kid = Math.abs(g) < 0.5 ? "1년 전과 주식 수가 거의 같아요 — 한 주가 가져가는 몫이 묽어지지 않았어요."
@@ -3687,18 +3693,19 @@ async function kpiBlock(code, d) {
   if (KPI === null) { try { KPI = (await (await fetch("data/kpi.json?v=" + encodeURIComponent(DASH.updated_at))).json()) || {}; } catch (_) { KPI = {}; } }
   if (EMP === null) { try { EMP = (await (await fetch("data/employees.json?t=" + Date.now(), { cache: "no-store" })).json()) || {}; } catch (_) { EMP = {}; } }
   const k = KPI[code] || KPI[KPI_ALIAS[code]] || { charts: [], auto: true };  // kpi.yaml 에 없는 종목도 자동 그림(손익·현금흐름·주식 수)은 보여 줌
-  const ch = k.charts.filter((c) => !GROW_RE.test(c.t)).map(kpiChart);  // 매출·지역 성장률은 ⭐ 성장률 한눈에 로
-  ch.unshift(comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률
+  const cut = (c) => (QN === 11 || c.kind === "stack" ? c : { ...c, s: c.s.map((s) => ({ ...s, v: Object.fromEntries(Object.entries(s.v || {}).sort().slice(-QN)) })) });  // 기간 버튼: 손으로 넣은 그림은 있는 만큼만 (늘리진 못함)
+  const ch = k.charts.filter((c) => !GROW_RE.test(c.t)).map((c) => kpiChart(cut(c)));  // 매출·지역 성장률은 ⭐ 성장률 한눈에 로
+  ch.unshift(Object.values(d.longq || {}).filter((q) => q.rev != null && q.op != null).length >= 4 ? "" : comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률 — 맨 위 📊 실적 4칸에 같은 그림이 있으면 뺌 (11/15 중복)
   ch.splice(2, 0, opYoyHTML(d, k), fcfBars(d, k), intHTML(d), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 그다음 영업이익 성장률 · 현금흐름 · 영업이익 vs 이자 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
   if (!ch.some(Boolean)) return "";
-  return `<h3>🔑 핵심 지표 <span class="src">${k.auto ? "자동 계산 — 분기 실적·현금흐름·주식 수 (사업부별 숫자는 아직 안 넣음)" : `${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김`}</span></h3><div class="card kpi">
+  return `<div class="kpiw" data-code="${esc(code)}"><h3>🔑 핵심 지표 <span class="src">${k.auto ? "자동 계산 — 분기 실적·현금흐름·주식 수 (사업부별 숫자는 아직 안 넣음)" : `${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김`}</span></h3>${qnChips(d)}<div class="card kpi">
     ${k.key ? `<div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key)}</div>` : ""}
     ${(k.patterns || []).map(patternHTML).join("")}
     <div class="qgrid" style="margin-top:8px">${ch.join("")}</div>
     ${ordersGuideHTML(k, d)}
     ${k.memo ? `<div class="note src">${esc(k.memo)}</div>` : ""}
     ${k.src?.length ? `<div class="note src">출처: ${k.src.map((s) => (s.u ? `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>` : esc(s.t))).join(" · ")}</div>` : ""}
-  </div>`;
+  </div></div>`;
 }
 // 🎯 사업부문별 컨센서스(예상) vs 실적 (config/seg_cons.yaml) — 실적이 비어 있으면 '다음 실적 전에 볼 예상치'
 function segcHTML(d) {
@@ -6424,6 +6431,33 @@ function cycHTML(code, open = false) {
 // 📊 실적 한눈에 4칸 + 💸 비용 구조 4칸 (사용자 11/14: 이오테크닉스 그림 2장 '너무 깔끔' → 보유·관심·공동 전 종목 상세 맨 위)
 //   d.longq (한국 억원 · 미국 백만 달러, 11분기) · d.segq.geo (국내/해외) · d.qtrs (야후 분기 재무상태, 원·달러) — 판관비 = 매출총이익 − 영업이익 (계산)
 const F4C = { a: "#5b9bd5", b: "#ed7d31", y: "#f2b800", g: "#a5a5a5" };
+// 📅 기간 버튼 (사용자 11/15): 📊 실적 4칸 · 💸 비용 구조 · 🔑 핵심 지표가 같이 바뀜 · 기본 11분기 (1Q24~3Q26) · 1년 = 작년 같은 분기부터 5분기 · 고른 값은 이 기기에 기억
+const QNS = [["기본", 11], ["1년", 5], ["2년", 9], ["5년", 21], ["10년", 41]];
+let QN = 11, QND = null;
+try { QN = +localStorage.getItem("qn") || 11; } catch (_) {}
+if (!QNS.some(([, v]) => v === QN)) QN = 11;
+function qnChips(d) {
+  const nq = Object.values(d.longq || {}).filter((q) => q.rev != null).length;
+  return `<div class="seg" style="display:flex;flex-wrap:wrap;margin:6px 0">${QNS.map(([t, v]) => `<a class="segl${v === QN ? " on" : ""}" href="#" data-qn="${v}" style="font-size:12px;padding:4px 10px;min-height:28px">${t}</a>`).join("")}${nq && nq < QN ? `<span class="src" style="align-self:center;margin-left:6px">실적 자료는 ${nq}분기까지</span>` : ""}</div>`;
+}
+function qnSwap(w, html) {  // 다시 그리면서 펼쳐 둔 칸은 그대로
+  const op = [...w.querySelectorAll("details")].map((x) => x.open), t = document.createElement("div");
+  t.innerHTML = html;
+  const nw = t.firstElementChild;
+  if (!nw) return w.remove();
+  nw.querySelectorAll("details").forEach((x, i) => { if (op[i] != null) x.open = op[i]; });
+  w.replaceWith(nw);
+}
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-qn]");
+  if (!a) return;
+  e.preventDefault();
+  QN = +a.dataset.qn;
+  try { localStorage.setItem("qn", QN); } catch (_) {}
+  if (!QND) return;
+  document.querySelectorAll(".f4w").forEach((w) => qnSwap(w, fin4HTML(QND)));
+  document.querySelectorAll(".kpiw").forEach((w) => kpiBlock(w.dataset.code, QND).then((h) => qnSwap(w, h)));
+});
 function f4Bars(L, S, o = {}) {  // S = [{n, v, c(색 또는 i → 색)}] · o.stack 쌓기 + o.top 막대 위 글자 · o.clamp 막대 높이 한도 (글자는 원래 값)
   const W = 360, H = 190, x0 = 4, x1 = 356, top = 16, bot = H - 18, N = L.length, bw = (x1 - x0) / N, F = o.f || ((v) => n(v, 0));
   const cl = (v) => (o.clamp ? Math.max(-o.clamp, Math.min(o.clamp, v)) : v), vals = S.flatMap((s) => s.v.filter((v) => v != null).map(cl));
@@ -6431,20 +6465,20 @@ function f4Bars(L, S, o = {}) {  // S = [{n, v, c(색 또는 i → 색)}] · o.s
   const hi = Math.max(0, ...(o.stack ? tot : vals)) || 1, lo = o.stack ? 0 : Math.min(0, ...vals), Y = (v) => bot - ((v - lo) / (hi - lo || 1)) * (bot - top);
   let g = lo < 0 ? `<line x1="${x0}" x2="${x1}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--ink-2)" stroke-width=".8"/>` : "";
   L.forEach((q, i) => {
-    const cx = x0 + bw * (i + 0.5);
-    g += `<text x="${cx}" y="${H - 5}" text-anchor="middle" class="qx" style="font-size:8.5px">${esc(q)}</text>`;
+    const cx = x0 + bw * (i + 0.5), sh = qShow(N, i), tx = N <= 12 || i === N - 1 || (sh && S.length === 1);  // 칸이 많으면 이름은 걸러서, 숫자는 마지막(한 줄짜리는 이름 칸)만
+    if (sh) g += `<text x="${cx}" y="${H - 5}" text-anchor="middle" class="qx" style="font-size:8.5px">${esc(q)}</text>`;
     if (o.stack) {
       let acc = 0;
       S.forEach((s) => { const v = s.v[i]; if (!v) return; g += `<rect x="${cx - bw * 0.34}" y="${Y(acc + v)}" width="${bw * 0.68}" height="${Y(acc) - Y(acc + v)}" fill="${s.c}"/>`; acc += v; });
-      if (o.top?.[i] != null) g += `<text x="${cx}" y="${Y(tot[i]) - 3}" text-anchor="middle" class="qv" style="font-size:8.5px">${o.top[i]}</text>`;
+      if (o.top?.[i] != null && (sh || N <= 12)) g += `<text x="${cx}" y="${Y(tot[i]) - 3}" text-anchor="middle" class="qv" style="font-size:8.5px">${o.top[i]}</text>`;
       return;
     }
     const w = (bw * 0.8) / S.length;
     S.forEach((s, j) => {
       const v0 = s.v[i]; if (v0 == null) return;
       const v = cl(v0), x = cx - bw * 0.4 + j * w, c = typeof s.c === "function" ? s.c(i) : s.c;
-      g += `<rect x="${x.toFixed(1)}" y="${Y(Math.max(v, 0)).toFixed(1)}" width="${(w - 0.8).toFixed(1)}" height="${Math.max(0.8, Math.abs(Y(v) - Y(0))).toFixed(1)}" fill="${c}"/>`
-        + `<text x="${(x + w / 2).toFixed(1)}" y="${(v < 0 ? Y(v) + 9 : Y(v) - 2.5).toFixed(1)}" text-anchor="middle" class="qv" style="font-size:${S.length > 1 ? 7.5 : 8.5}px${s.tc ? `;fill:${s.tc}` : ""}">${F(v0)}</text>`;
+      g += `<rect x="${x.toFixed(1)}" y="${Y(Math.max(v, 0)).toFixed(1)}" width="${Math.max(0.6, w - 0.8).toFixed(1)}" height="${Math.max(0.8, Math.abs(Y(v) - Y(0))).toFixed(1)}" fill="${c}"/>`
+        + (!tx ? "" : `<text x="${(x + w / 2).toFixed(1)}" y="${(v < 0 ? Y(v) + 9 : Y(v) - 2.5).toFixed(1)}" text-anchor="middle" class="qv" style="font-size:${S.length > 1 ? 7.5 : 8.5}px${s.tc ? `;fill:${s.tc}` : ""}">${F(v0)}</text>`);
     });
   });
   return `<svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg>`;
@@ -6455,11 +6489,11 @@ function f4Lines(L, S) {  // S = [{n, v, c, below: 숫자를 점 아래에}]
   if (!vs.length) return "";
   const hi = Math.max(...vs), lo = Math.min(0, ...vs), Y = (v) => bot - ((v - lo) / (hi - lo || 1)) * (bot - top);
   let g = `<line x1="${x0}" x2="${x1}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--grid)"/>`;
-  L.forEach((q, i) => { g += `<text x="${X(i)}" y="${H - 5}" text-anchor="middle" class="qx" style="font-size:8.5px">${esc(q)}</text>`; });
+  L.forEach((q, i) => { if (qShow(N, i)) g += `<text x="${X(i)}" y="${H - 5}" text-anchor="middle" class="qx" style="font-size:8.5px">${esc(q)}</text>`; });
   S.forEach((s) => {
     let d = "", pen = false;
     s.v.forEach((v, i) => { if (v == null) { pen = false; return; } d += `${pen ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; pen = true; });
-    g += `<path d="${d}" fill="none" stroke="${s.c}" stroke-width="2"/>` + s.v.map((v, i) => (v == null ? "" : `<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="2.6" fill="${s.c}"/><text x="${X(i).toFixed(1)}" y="${(Y(v) + (s.below ? 11 : -5)).toFixed(1)}" text-anchor="middle" class="qv" style="font-size:8.5px;fill:${s.c}">${n(v, 0)}</text>`)).join("");
+    g += `<path d="${d}" fill="none" stroke="${s.c}" stroke-width="2"/>` + s.v.map((v, i) => (v == null ? "" : `<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="${N > 12 ? 1.8 : 2.6}" fill="${s.c}"/>` + (!qShow(N, i) ? "" : `<text x="${X(i).toFixed(1)}" y="${(Y(v) + (s.below ? 11 : -5)).toFixed(1)}" text-anchor="middle" class="qv" style="font-size:8.5px;fill:${s.c}">${n(v, 0)}</text>`))).join("");
   });
   return `<svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg>`;
 }
@@ -6477,9 +6511,11 @@ function f4Fall(st, F) {  // 영업이익 브릿지: st = [[이름, 값, 처음�
 }
 function fin4HTML(d) {
   const lq = d.longq || {}, us = d.currency === "USD", nm = d.name || d.code;
-  const all = Object.keys(lq).sort(), Q = all.filter((k) => lq[k].rev != null && lq[k].op != null).slice(-11);
+  QND = d;
+  const all = Object.keys(lq).sort(), Q = all.filter((k) => lq[k].rev != null && lq[k].op != null).slice(-QN);
   if (Q.length < 4) return "";
-  const at = (k, f) => lq[k]?.[f] ?? null, ago = (k) => `${String(+k.slice(0, 2) - 1).padStart(2, "0")}${k.slice(2)}`, prevQ = (k) => all[all.indexOf(k) - 1];
+  // 매출총이익 = 매출이면 원가 줄이 없는 회사 (NAVER 처럼 영업수익 − 영업비용) → GPM·원가율 그림은 뺌 (100%·0% 로 보였음, 11/15)
+  const at = (k, f) => { const v = lq[k]?.[f] ?? null; return f === "gp" && v != null && lq[k].rev > 0 && v >= lq[k].rev * 0.999 ? null : v; }, ago = (k) => `${String(+k.slice(0, 2) - 1).padStart(2, "0")}${k.slice(2)}`, prevQ = (k) => all[all.indexOf(k) - 1];
   const R = Q.map((k) => at(k, "rev")), O = Q.map((k) => at(k, "op")), G = Q.map((k) => at(k, "gp")), S = Q.map((k, i) => (G[i] != null ? G[i] - O[i] : null));
   const big = Math.max(...R.map(Math.abs));
   const bf = us ? (v) => n(v / 100, big >= 1e4 ? 0 : 1) : big >= 1e4 ? (v) => n(v / 1e4, 1) : (v) => n(v, 0), unit = us ? "억 달러" : big >= 1e4 ? "조원" : "억원";  // 막대 위 숫자 (단위는 제목에)
@@ -6524,10 +6560,18 @@ function fin4HTML(d) {
       `${cols.map(([e], j) => sw([F4C.g, F4C.a, F4C.b][j + 3 - cols.length], lab(e))).join(" · ")} · <span class="src">야후 분기 재무상태표 · 현금 = 현금성 + 단기 투자 · 차입금 = 총 차입 − 리스</span>`);
   }
   const hA = `${esc(nm)} ${L[i]}: 매출 ${T(R[i])} (YoY ${yoy(R[i], at(k4, "rev"))}), 영업이익 ${T(O[i])} (OPM ${n(OPM[i], 1)}%)${p3 ? `, 해외 비중 ${n((GE[ge].x / GE[ge].t) * 100, 0)}%` : ""}`;
-  let h = `<details class="card" open style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>📊 ${hA}</b></summary><div class="qgrid" style="margin-top:6px">${p1}${p2}${p3}${p4}</div>
+  let h = `<details class="card" open style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>📊 ${hA}</b></summary>${qnChips(d)}<div class="qgrid" style="margin-top:6px">${p1}${p2}${p3}${p4}</div>
     <div class="note src">${esc(d.sources?.history || "")} · ${us ? "SEC·야후 분기 (백만 달러 → 억 달러)" : "DART 분기·반기·사업보고서 (보고서 전 최신 분기는 잠정)"} · 분기 이름 = 달력 분기 · 비율은 직접 계산</div></details>`;
+  // 증분 이익률 = 영업이익 YoY 증감 ÷ 매출 YoY 증감 (매출 증감이 그 분기 매출의 3% 미만이면 빈칸) — 매출총이익이 없어도 그림
+  const INC = Q.map((k, x) => { const r0 = at(ago(k), "rev"), o0 = at(ago(k), "op"); if (r0 == null || o0 == null) return null; const dR = R[x] - r0; return Math.abs(dR) < Math.abs(R[x]) * 0.03 ? null : ((O[x] - o0) / dR) * 100; });
+  const ir0 = at(k4, "rev"), io0 = at(k4, "op");
+  const b3 = INC.filter((v) => v != null).length >= 3 ? qp("증분 이익률 <span class=\"src\">(영업이익 YoY 증감 ÷ 매출 YoY 증감, %)</span>",
+    INC[i] != null ? `${L[i]} 매출 ${sg(R[i] - ir0)}, 영업이익 ${sg(O[i] - io0)} → 증분 이익률 <b>${n(INC[i], 0)}%</b> (같은 분기 OPM ${n(OPM[i], 0)}%)` : `${L[i]} 은 매출 변화가 작아(3% 미만) 빈칸`,
+    f4Bars(L, [{ n: "증분 이익률", v: INC, c: (x) => (R[x] - (at(ago(Q[x]), "rev") ?? 0) >= 0 ? F4C.b : F4C.g) }], { clamp: 200 }),
+    `${sw(F4C.b, "매출 증가 분기")} · ${sw(F4C.g, "매출 감소 분기 (매출과 이익이 함께 줄어든 비율)")} · 막대는 ±200% 에서 자름`) : "";
   // 💸 비용 구조 (매출총이익이 있는 분기만)
   const gj = gi.map(([, j]) => j);
+  if (gj.length < 4 && b3) h += `<details class="card" style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>💸 ${esc(nm)} 증분 이익률${INC[i] != null ? `: ${L[i]} ${n(INC[i], 0)}%` : ""}</b> <span class="src">매출총이익(원가) 줄이 없는 회사라 원가율 그림은 없음</span></summary><div class="qgrid" style="margin-top:6px">${b3}</div></details>`;
   if (gj.length >= 4) {
     const j = gj.at(-1), COGS = GPM.map((v) => (v == null ? null : 100 - v)), SGR = Q.map((_, x) => P(S[x], R[x]));
     const cmx = COGS.map((v, x) => [v, x]).filter(([v]) => v != null).reduce((a, b) => (b[0] > a[0] ? b : a)), j4 = Q.indexOf(ago(Q[j]));
@@ -6535,13 +6579,6 @@ function fin4HTML(d) {
       f4Lines(L, [{ n: "매출원가율", v: COGS, c: F4C.a }, { n: "판관비율", v: SGR, c: F4C.g, below: true }]), `${sw(F4C.a, "매출원가율", 1)} · ${sw(F4C.g, "판관비율", 1)}`);
     const b2 = qp(`분기 매출총이익 · 판관비 <span class="src">(${unit} · 둘의 차이 = 영업이익)</span>`, j4 >= 0 && S[j4] != null ? `판관비 ${L[j4]} ${T(S[j4])} → ${L[j]} ${T(S[j])} (${sg(S[j] - S[j4])}), 매출총이익 ${T(G[j4])} → ${T(G[j])} (<b>${sg(G[j] - G[j4])}</b>)` : `${L[j]} 매출총이익 ${T(G[j])} · 판관비 ${T(S[j])}`,
       f4Bars(L, [{ n: "매출총이익", v: G, c: F4C.y }, { n: "판관비", v: S, c: F4C.g }], { f: bf }), `${sw(F4C.y, "매출총이익")} · ${sw(F4C.g, "판관비")}`);
-    // 증분 이익률 = 영업이익 YoY 증감 ÷ 매출 YoY 증감 (매출 증감이 그 분기 매출의 3% 미만이면 빈칸)
-    const INC = Q.map((k, x) => { const r0 = at(ago(k), "rev"), o0 = at(ago(k), "op"); if (r0 == null || o0 == null) return null; const dR = R[x] - r0; return Math.abs(dR) < Math.abs(R[x]) * 0.03 ? null : ((O[x] - o0) / dR) * 100; });
-    const ir0 = at(k4, "rev"), io0 = at(k4, "op");
-    const b3 = INC.filter((v) => v != null).length >= 3 ? qp("증분 이익률 <span class=\"src\">(영업이익 YoY 증감 ÷ 매출 YoY 증감, %)</span>",
-      INC[i] != null ? `${L[i]} 매출 ${sg(R[i] - ir0)}, 영업이익 ${sg(O[i] - io0)} → 증분 이익률 <b>${n(INC[i], 0)}%</b> (같은 분기 OPM ${n(OPM[i], 0)}%)` : `${L[i]} 은 매출 변화가 작아(3% 미만) 빈칸`,
-      f4Bars(L, [{ n: "증분 이익률", v: INC, c: (x) => (R[x] - (at(ago(Q[x]), "rev") ?? 0) >= 0 ? F4C.b : F4C.g) }], { clamp: 200 }),
-      `${sw(F4C.b, "매출 증가 분기")} · ${sw(F4C.g, "매출 감소 분기 (매출과 이익이 함께 줄어든 비율)")} · 막대는 ±200% 에서 자름`) : "";
     // 영업이익 브릿지: 올해 누적 vs 작년 같은 분기 누적 = 매출 증가(작년 GPM) + GPM 변화 + 판관비
     const yy = Q[j].slice(0, 2), cur = all.filter((k) => k.startsWith(yy + ".") && k <= Q[j]), old = cur.map(ago);
     const ok = [...cur, ...old].every((k) => at(k, "rev") != null && at(k, "op") != null && at(k, "gp") != null);
@@ -6556,7 +6593,7 @@ function fin4HTML(d) {
     h += `<details class="card" style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>💸 ${esc(nm)} 비용 구조: ${L[j]} 매출원가율 ${n(COGS[j], 1)}%, 판관비율 ${n(SGR[j], 1)}%, 판관비 ${T(S[j])}</b></summary><div class="qgrid" style="margin-top:6px">${b1}${b2}${b3}${b4}</div>
       <div class="note src">판관비 = 매출총이익 − 영업이익 (계산 · 기타 영업 손익이 영업이익에 들어가는 회사는 조금 다를 수 있음) · 매출원가율 = 100 − GPM</div></details>`;
   }
-  return h;
+  return `<div class="f4w">${h}</div>`;
 }
 // 📉 5년 주가 & 고점 대비 하락률 (사용자 11/13 '엔비디아, 고점 대비 -30% 하락' 그림처럼 전 종목 상세 · 매일 자동) — data/ohlc/{코드}.json dd ← collector/ohlc.py dd5
 // 위 = 일봉 종가 (고점보다 20% 넘게 빠진 날은 빨강) · 아래 = 고점 대비 % (분홍) · 빨간 점선 = 지금 수준 · 고점 = 그날까지 가장 높은 종가 (5년 전 고점 pk0 포함)
