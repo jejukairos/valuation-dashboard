@@ -5317,12 +5317,14 @@ function showView() {
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#exports": "exports", "#feed": "feed" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#pattern": "pattern", "#exports": "exports", "#feed": "feed" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   const eg = { earn: "보유", earnw: "관심", earnj: "공동" }[view];  // 🧾 실적 보유 · 관심 · 공동 (같은 화면, 종목 묶음만 바꿈)
   $("#earnView").hidden = !eg;
   if (eg) { EARN_GRP = eg; renderEarn(); }  // 보유·관심·공동을 바꿔도 전체/한국/미국 고른 건 그대로
   $("#chartView").hidden = view !== "chart";
   if (view === "chart") loadAlign();
+  $("#patternView").hidden = view !== "pattern";
+  if (view === "pattern") loadPattern();
   $("#reportsView").hidden = view !== "reports";
   if (view === "reports") loadReports();
   $("#pbrView").hidden = view !== "pbr";
@@ -5691,6 +5693,14 @@ async function loadAlign() {
   $("#chartBody").innerHTML = chartRulesHTML() + drawHTML(BOARD.draw, BOARD.updated_at) + boardHTML() + scanHTML() + `<h2 data-jump="align" data-jname="📈 주봉 정배열">📈 주봉 정배열</h2><p class="sub">코스피·코스닥 시가총액 3,000억 이상에서 주봉 이동평균이 4주 &gt; 13주 &gt; 26주 &gt; 52주로 줄 선(정배열) 종목 — 매주 금요일 종가 기준, 평일 아침·장 마감 뒤 갱신. 종목을 누르면 주봉 차트가 열려요. 매수·매도 추천 아님.</p>`
     + (ALIGN ? alignHTML(ALIGN) : `<div class="empty">⏳ 다음 차트 스캔(평일 아침·장 마감 뒤) 때 채워져요.</div>`) + pbHTML();
   chartJump();
+}
+// 🧩 패턴 탭 (사용자 11/16: "증안펀드 넣으면 반등·선거 뒤 전쟁 확대 같은 패턴 — 글 대신 핵심 키워드·문장만, 닫아 두기") ← keychart.yaml pattern: [{t 키워드, rule 한 줄, hit 적중, cases [[시기, 무엇, 결과]], now, src, d}], 최신이 위
+async function loadPattern() {
+  const L = (await keyLoad()).pattern || [];
+  $("#patBody").innerHTML = L.map((p) => `<details class="card" style="margin-top:8px"><summary><b>${esc(p.t)}</b>${p.hit ? ` <span class="pill">${esc(p.hit)}</span>` : ""}<div style="margin-top:4px">${esc(p.rule || "")}</div><span class="src">${esc(p.d || "")}</span></summary>
+    ${(p.cases || []).length ? `<div class="tbl-wrap" style="margin-top:6px"><table class="compact" style="width:100%"><thead><tr><th>시기</th><th style="text-align:left">무슨 일</th><th style="text-align:left">그 뒤</th></tr></thead><tbody>${p.cases.map(([a, b, c]) => `<tr><td style="white-space:nowrap">${esc(a)}</td><td style="text-align:left;white-space:normal">${esc(b)}</td><td style="text-align:left;white-space:normal">${esc(c || "")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    ${p.now ? `<div class="kidbox" style="margin-top:6px">👀 ${esc(p.now)}</div>` : ""}${p.src ? `<div class="note src">출처: ${esc(p.src)}</div>` : ""}</details>`).join("")
+    || `<div class="empty">config/keychart.yaml 의 pattern 에 넣으면 여기에 보여요.</div>`;
 }
 // 📚 돌파 vs 눌림목 (사용자 11/4: 블로그 '요약하는 고잉' 글을 차트 탭 맨 아래에) — 글의 그림은 같은 모양으로 다시 그리고, 지금 그 자리에 있는 종목을 붙임
 const PB_Z = [[35, 625], [175, 460], [232, 538], [348, 392], [407, 495], [512, 312], [583, 440], [683, 227], [754, 365], [848, 138], [910, 292]];  // 계단처럼 오르는 지그재그 (홀수 번째 = 고점)
