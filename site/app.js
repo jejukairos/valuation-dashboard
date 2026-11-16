@@ -1782,7 +1782,12 @@ function trendLines(v, wk, c, X, Y, x1) {
   // 읽기 (닫힌 칸)
   const mo = (s) => (s == null ? null : (s * pm / last) * 100), fx = (x) => (x >= 10000 ? n(Math.round(x / 100) * 100, 0) : n(x, x < 100 ? 2 : 0)), pp = (x) => pct((x / last - 1) * 100, 0, true);
   const kind = up && dn ? (up.s > 0 && dn.s > 0 ? "우상향 채널" : up.s < 0 && dn.s < 0 ? "우하향 채널" : up.s < 0 && dn.s > 0 ? "좁아지는 삼각형 (고점은 낮아지고 저점은 높아짐)" : "넓어지는 모양") : null;
+  // 📉📈 고점·저점 방향 (사용자 11/16 SOXX 글 "저점과 고점이 낮아진다 = 하락추세, 높아진다 = 상승추세" — 차트 탭 맨 위 강조 칸과 같은 규칙)
+  const dir = (P) => (P.at(-1)[1] > P.at(-2)[1] * 1.01 ? 1 : P.at(-1)[1] < P.at(-2)[1] * 0.99 ? -1 : 0);  // 1% 안은 '같음' (잔물결 빼기)
+  const hd = H.length > 1 && L.length > 1 ? dir(H) + dir(L) : 0;
+  const trd = hd === -2 ? "📉 고점·저점 둘 다 낮아짐 = 하락추세" : hd === 2 ? "📈 고점·저점 둘 다 높아짐 = 상승추세" : null;
   const li = [];
+  if (trd) li.push(`<b>${trd}</b> · 고점 ${fx(H.at(-2)[1])} → ${fx(H.at(-1)[1])} · 저점 ${fx(L.at(-2)[1])} → ${fx(L.at(-1)[1])}${hd < 0 ? " — 저점이 높아지는지부터 확인" : ""}`);
   if (kind) li.push(`채널: <b>${kind}</b> · 고점선 기울기 한 달 ${pct(mo(up.s), 1, true)}${up.prev != null ? ` (그 전 ${pct(mo(up.prev), 1, true)}${Math.abs(up.s) < Math.abs(up.prev) * 0.6 ? " → <b>완만해짐</b>" : ""})` : ""} · 저점선 한 달 ${pct(mo(dn.s), 1, true)}`);
   if (up && last > up.at(N - 1) * 1.01) li.push(`🔔 지금 가격이 <b>고점선 위</b> (${up.s < 0 ? "내려오던 채널 위로 뚫음 — 형님 원칙: 이때 성공 확률이 높고, 고점선이 완만해질수록 더 좋음" : "오르는 채널 위로 — 가파르면 바로 조정이 올 수 있음"})`);
   if (dn && last < dn.at(N - 1) * 0.99) li.push(`⚠ 지금 가격이 <b>저점선 아래</b> (지지가 깨짐 — 깨진 지지가 위에서 저항이 됨, 반등해도 그 근처까지)`);
@@ -1794,7 +1799,7 @@ function trendLines(v, wk, c, X, Y, x1) {
   if (c.market !== "US" && c.market_cap && c.market_cap < 1e12) li.push(`🚫 시가총액 약 ${n(c.market_cap / 1e8, 0)}억 — 형님 원칙: 국장은 1조 미만은 손대지 않음 (거래대금·수급 때문)`);
   if (!li.length) return { svg, note: "" };
   // 보유 탭 카드(카드 전체가 버튼이라 접는 칸이 안 열림)용 한 줄
-  const sh = [kind && `${kind.split(" (")[0]}${up?.prev != null && Math.abs(up.s) < Math.abs(up.prev) * 0.6 ? " · 고점선 완만해짐" : ""}`, up && last > up.at(N - 1) * 1.01 && "🔔 고점선 돌파", dn && last < dn.at(N - 1) * 0.99 && "⚠ 저점선 이탈",
+  const sh = [trd && `${trd.slice(0, 2)} ${trd.split(" = ")[1]}`, kind && `${kind.split(" (")[0]}${up?.prev != null && Math.abs(up.s) < Math.abs(up.prev) * 0.6 ? " · 고점선 완만해짐" : ""}`, up && last > up.at(N - 1) * 1.01 && "🔔 고점선 돌파", dn && last < dn.at(N - 1) * 0.99 && "⚠ 저점선 이탈",
     res && `저항 ${fx(res.v)} (${pp(res.v)}, ${res.n}번)`, sup && `지지 ${fx(sup.v)} (${pp(sup.v)}, ${sup.n}번)`, fib && `50% ${fx(fib)} (${pp(fib)})`, run >= 5 && `🚫 ${n(run, 1)}배 급등`].filter(Boolean);
   return { svg, short: `<div class="src" style="padding:2px 4px 4px">📐 ${sh.join(" · ")} <span style="opacity:.7">— 회색 선 · 자세히는 종목 상세</span></div>`, note: `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title">📐 선 읽기 <span class="src">일봉·주봉·월봉 캔들 + 거래량 · 채널 · 지지·저항 · 피보나치 · 박스 (자동 계산 · 추천 아님)</span></summary>
     <div class="tabox" data-code="${esc(c.code)}" hidden><div class="seg taseg" style="margin-top:6px">${TA_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === "d" ? "on" : ""}" onclick="taTab(this)">${l}</button>`).join("")}</div><div class="tain"><div class="src">불러오는 중…</div></div></div>
@@ -5704,7 +5709,7 @@ async function loadAlign() {
   if (!BOARD) { try { BOARD = await (await fetch("data/board.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { BOARD = {}; } }
   if (!SCAN) { try { SCAN = await (await fetch("data/scan.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SCAN = {}; } }
   if (!ALIGN) { try { ALIGN = await (await fetch("data/align.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { ALIGN = null; } }
-  $("#chartBody").innerHTML = chartRulesHTML() + drawHTML(BOARD.draw, BOARD.updated_at) + boardHTML() + scanHTML() + `<h2 data-jump="align" data-jname="📈 주봉 정배열">📈 주봉 정배열</h2><p class="sub">코스피·코스닥 시가총액 3,000억 이상에서 주봉 이동평균이 4주 &gt; 13주 &gt; 26주 &gt; 52주로 줄 선(정배열) 종목 — 매주 금요일 종가 기준, 평일 아침·장 마감 뒤 갱신. 종목을 누르면 주봉 차트가 열려요. 매수·매도 추천 아님.</p>`
+  $("#chartBody").innerHTML = hlTrendHTML() + chartRulesHTML() + drawHTML(BOARD.draw, BOARD.updated_at) + boardHTML() + scanHTML() + `<h2 data-jump="align" data-jname="📈 주봉 정배열">📈 주봉 정배열</h2><p class="sub">코스피·코스닥 시가총액 3,000억 이상에서 주봉 이동평균이 4주 &gt; 13주 &gt; 26주 &gt; 52주로 줄 선(정배열) 종목 — 매주 금요일 종가 기준, 평일 아침·장 마감 뒤 갱신. 종목을 누르면 주봉 차트가 열려요. 매수·매도 추천 아님.</p>`
     + (ALIGN ? alignHTML(ALIGN) : `<div class="empty">⏳ 다음 차트 스캔(평일 아침·장 마감 뒤) 때 채워져요.</div>`) + pbHTML();
   chartJump();
 }
@@ -5739,6 +5744,12 @@ const CHART_RULES = [
   ["🚫 국장에서 하지 말 것", ["짧은 기간 6·7·8배·10배 오른 종목(현대로템·단기 급등한 SK하이닉스·삼성전자 등)은 최소 1~2년 쉰다고 보고 쳐다보지 않음 (한화에어로스페이스·삼양식품은 예외로 봄)", "시가총액 1조 미만은 손대지 않음 (여의도 생태계 — 수급·거래대금)", "1조 이상이라도 그 섹터 대장(1등주)에서 잘 먹힘 — 거래대금이 많아서"]],
   ["📝 11/13 메모 (전달받은 엔비디아 주봉 글 · 형님 원칙 아님)", ["내려오면서 거래량이 크게 터지면 '손바뀜' — 던지는 물량을 새로 받아 가는 사람이 있다는 뜻으로 보는 시각", "그 자리가 전고점(예전에 위에서 막혔던 가격)이면, 예전 저항이 이번엔 받쳐 주는지(지지) 보는 자리 — 엔비디아 26년 11월 둘째 주: 24~25년 전고점 약 150달러(약 20만 원) 근처까지 내려오며 주간 거래량이 20주 평균의 약 3배", "많이 빠졌다 = 반드시 오른다는 아님 (글쓴이도 강조) · '📐 선 읽기' 일봉·주봉에 📝 줄로 자동 표시"]],
 ];
+// 📉📈 추세 = 고점·저점 방향 (사용자 11/16 "차트 쪽에 이거 강조해 줘" — 🐒 SOXX 일봉 글) · 종목마다 '📐 선 읽기' 맨 위 줄에 자동 (trendLines hd)
+function hlTrendHTML() {
+  return `<div class="warnbox" style="margin-bottom:12px;border-color:var(--bad)"><div style="font-size:16px;font-weight:700">📉📈 추세는 고점·저점으로 본다</div>
+    <ul class="irl" style="margin:6px 0 4px;font-size:15px"><li><b>고점·저점이 둘 다 낮아짐 = 하락추세</b></li><li><b>고점·저점이 둘 다 높아짐 = 상승추세</b></li><li>하락추세에선 <b>저점이 높아지는지부터 확인</b> — 확인한 뒤에 봐도 늦지 않다는 시각</li></ul>
+    <div class="src">예) SOXX(미국 반도체 ETF) 일봉 26년 10~11월: 고점 약 $199 → $175 → $157, 저점 약 $157 → $131 로 둘 다 낮아짐 = 하락추세 · 11/16 종가 $144.26 (-3.4%) · 200일선($160.5) 아래 (🐒 전달 글 · 숫자는 그림에서 읽음) · 종목마다 '📐 선 읽기' 맨 위 줄에 자동으로 📉·📈 표시 · 추천 아님</div></div>`;
+}
 function chartRulesHTML() {
   return `<details class="card" style="margin-bottom:12px"><summary class="chart-title" style="margin-top:0"><b>📚 차트 원칙</b> <span class="src">차트 10년 넘게 본 형님에게 배운 것 (11/7) + 📝 11/13 손바뀜 메모 ·주가 그림의 연한 회색 선·'📐 선 읽기'가 이 원칙으로 계산 · 눌러서 열기 · 추천 아님</span></summary>
     ${CHART_RULES.map(([h, l]) => `<div style="margin-top:8px"><b>${h}</b><ul class="irl">${l.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")}
