@@ -3401,14 +3401,17 @@ function longCagrHTML(d) {
     ${fwd}
     <div class="note src">📌 읽는 법: 오래 보면 주가 상승률 ≈ 이익 성장률 + 값(PER)이 변한 몫. 같은 이익 성장이라도 싸게 산 한미반도체(PER 5~7배)는 이익 14배에 주가 120배, 비싸게 산 씨젠(PER 35배)은 이익 12배에 주가 4배 — 그래서 '이익이 얼마나 늘까'와 '지금 값이 과거보다 비싼가'를 같이 봐요. 반도체처럼 오르내림이 큰 회사는 시작·끝이 호황이냐 불황이냐에 따라 숫자가 크게 달라져요. 영업이익은 회사 전체 숫자라, 자사주를 많이 사서 주식 수가 줄면(애플) 주가가 이익보다 빨리 오른 것처럼 보이고 새 주식을 많이 찍으면 반대예요.</div></div>`;
 }
-// 📈 영업이익 성장률 (YoY): 매출 성장률 바로 아래 — 국내는 이 성장률로 PER 을 몇 배 줄지 정함 (kpi.yaml 에 같은 제목 그래프가 있으면 그걸 씀)
-function opYoyHTML(d, k) {  // 10년 분기 실적으로 계산 + 수집기 op_yoy(야후·네이버·DART·kpi.yaml 손 입력)가 있으면 그 값 · 기간 버튼(QN)만큼
-  if (k.charts.some((c) => /^영업이익 성장률/.test(c.t))) return "";
-  const L = d.longq || {}, ago = (q) => `${String(+q.slice(0, 2) - 1).padStart(2, "0")}${q.slice(2)}`, base = {};
-  for (const [q, r] of Object.entries(L)) { const p = L[ago(q)]?.op; if (r.op != null && p > 0) base[q] = rnd1((r.op / p - 1) * 100); }
-  const v = Object.fromEntries(Object.entries({ ...base, ...(d.op_yoy || {}) }).sort(([a], [b]) => (a < b ? -1 : 1)).slice(-QN));
+// 📈 영업이익 성장률 (YoY): ⭐ 성장률 한눈에 안 영업이익률 바로 앞 (사용자 11/16, 🔑 핵심 지표에서 옮김) — 국내는 이 성장률로 PER 을 몇 배 줄지 정함
+function opYoyHTML(d, k, FQ = [], pts = []) {  // 10년 분기 실적으로 계산 + 수집기 op_yoy(야후·네이버·DART) + kpi.yaml 같은 제목 그래프 손 숫자 · 기간 버튼(QN)만큼 · 끝에 예상 점선
+  const L = d.longq || {}, base = {}, kOp = k.charts.find((c) => /^영업이익 성장률/.test(c.t));
+  for (const [q, r] of Object.entries(L)) { const p = L[agoQ(q)]?.op; if (r.op != null && p > 0) base[q] = rnd1((r.op / p - 1) * 100); }
+  const v = Object.fromEntries(Object.entries({ ...base, ...(d.op_yoy || {}), ...(kOp?.s[0]?.v || {}) }).sort(([a], [b]) => (a < b ? -1 : 1)).slice(-QN));
   if (!Object.keys(v).length) return "";
-  return kpiChart({ t: "영업이익 성장률 (YoY)", u: "%", s: [{ n: "영업이익", v }], why: "1년 전 같은 분기보다 영업이익이 얼마나 늘었나 · 국내 종목은 이 성장률로 PER 을 몇 배 줄지 정해요" + (k.op_note ? ` · ⚠ ${k.op_note}` : "") })
+  const es = estSer(v, FQ, (x) => { const p = L[agoQ(x.q)]?.op; return p > 0 && x.op != null ? rnd1((x.op / p - 1) * 100) : null; });  // 1년 전 적자면 % 가 안 나옴
+  const tt = turnOf(v, 5, ["가속", "둔화"], true);
+  if (tt?.pt) pts.push(`영업이익 성장률 <b>${esc(tt.t)}</b> (${n(tt.f, 1)}% → ${n(tt.a, 1)}%)`);
+  return kpiChart({ t: "영업이익 성장률 (YoY)", u: "%", s: [{ n: "영업이익", v }, ...(es ? [es] : [])], col: ["var(--s7)", "var(--s7)"], tag: growTag(tt && `성장 ${tt.t}`, /둔화|역성장/.test(tt?.t || "")),
+    why: (kOp?.why || "1년 전 같은 분기보다 영업이익이 얼마나 늘었나 · 국내 종목은 이 성장률로 PER 을 몇 배 줄지 정해요") + (k.op_note ? ` · ⚠ ${k.op_note}` : "") + (es ? " · 점선 = 증권사 예상 평균 (컨센서스, 실적 아님)" : "") })
     || `<div class="qp"><div class="qt"><b>영업이익 성장률 (YoY)</b></div><div class="note">${Object.entries(v).map(([q, x]) => `${esc(q)} <b>${pct(x, 1, true)}</b>`).join(" · ")} <span class="src">분기 자료가 더 쌓이면 그래프로</span></div></div>`;
 }
 // 현금흐름(FCF = 영업현금흐름 − 설비투자): 야후 분기 재무제표 + 야후에 아직 없는 최신 분기는 kpi.yaml fcf_add (보도자료)
@@ -3512,7 +3515,7 @@ function estSer(main, F, f) {  // 점선 선: 마지막 실제 값에서 시작 
 // ⭐ 성장률 한눈에 (애플·팔란티어 요약 그림처럼): 매출 성장률 · 매출총이익률 · 영업이익률 · 제품별 · 지역별 (+ 고객·부문 비중)
 // 숫자는 자동(10년 분기 실적·segments.yaml) — 별표·가이던스·지역·조정 이익률은 config/growth.yaml, 📍 변곡점·🐣 설명은 여기서 계산
 let GROWTH = null;
-const GROW_RE = /^매출 성장률|지역별 성장률|해외 매출 성장률|국내·해외 매출 성장률/;  // kpi.yaml 의 이 그래프는 🔑 핵심 지표 대신 이 칸에
+const GROW_RE = /^매출 성장률|^영업이익 성장률|지역별 성장률|해외 매출 성장률|국내·해외 매출 성장률/;  // kpi.yaml 의 이 그래프는 🔑 핵심 지표 대신 이 칸에
 const agoQ = (q) => `${String(+q.slice(0, 2) - 1).padStart(2, "0")}${q.slice(2)}`;  // '26.3Q' → '25.3Q'
 function revYoy(d) {  // 10년 분기 실적 (키 = 달력 분기 '26.3Q') — 없으면 야후 분기 실적
   const L = d.longq || {}, v = {};
@@ -3621,6 +3624,7 @@ function growAllHTML(code, d, k) {
       why: (key === "gp" ? "100원어치 팔아 재료·생산비를 빼고 남는 돈" : `인건비·광고·연구비까지 빼고 남는 돈${extra ? " · 회사 조정 = 주식 보상 비용 등을 뺀 숫자 (회사가 이걸로 말함)" : ""}`) + (es ? EN : "") }));
   };
   mg("gp", "매출총이익률", "var(--s2)", "gm");
+  cards.push(opYoyHTML(d, k, FQ, pts));  // 영업이익 성장률은 영업이익률 앞 (사용자 11/16)
   mg("op", "영업이익률", "var(--s4)", "opm", G.adj_opm);
   cards.push(...costCards(d, pts, F4));
   // ④ 제품·부문별 성장률 (segments.yaml 금액, 비중 3% 넘는 큰 제품 5개까지)
@@ -3721,7 +3725,7 @@ async function kpiBlock(code, d) {
   const cut = (c) => (QN === 11 || c.kind === "stack" ? c : { ...c, s: c.s.map((s) => ({ ...s, v: Object.fromEntries(Object.entries(s.v || {}).sort().slice(-QN)) })) });  // 기간 버튼: 손으로 넣은 그림은 있는 만큼만 (늘리진 못함)
   const ch = k.charts.filter((c) => !GROW_RE.test(c.t)).map((c) => kpiChart(cut(c)));  // 매출·지역 성장률은 ⭐ 성장률 한눈에 로
   ch.unshift(Object.values(d.longq || {}).filter((q) => q.rev != null && q.op != null).length >= 4 ? "" : comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률 — 맨 위 📊 실적 4칸에 같은 그림이 있으면 뺌 (11/15 중복)
-  ch.splice(2, 0, opYoyHTML(d, k), fcfBars(d, k), intHTML(d), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 그다음 영업이익 성장률 · 현금흐름 · 영업이익 vs 이자 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
+  ch.splice(2, 0, fcfBars(d, k), intHTML(d), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 그다음 (영업이익 성장률은 11/16 ⭐ 성장률 한눈에로) · 현금흐름 · 영업이익 vs 이자 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
   if (!ch.some(Boolean)) return "";
   return `<div class="kpiw" data-code="${esc(code)}"><h3>🔑 핵심 지표 <span class="src">${k.auto ? "자동 계산 — 분기 실적·현금흐름·주식 수 (사업부별 숫자는 아직 안 넣음)" : `${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김`}</span></h3>${qnChips(d)}<div class="card kpi">
     ${k.key ? `<div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key)}</div>` : ""}
