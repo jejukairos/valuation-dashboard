@@ -238,10 +238,19 @@ def collect_us(tkr, qtrs, hist):
     seen.setdefault(last, {"seen": "" if first else today})
     lab, nxt_end = _qlabel(last), (pd.Timestamp(last) + pd.Timedelta(days=91)).strftime("%Y-%m-%d")
     up = next((x for x in rep if x[1] is None and x[0] >= today), None)
+    fwd = []
     try:  # 다음 분기(아직 발표 전) 매출 예상을 저장 → 발표되면 '예상 대비'
         rv = tk.revenue_estimate
         if up is not None and rv is not None and "0q" in rv.index:
             cons[_qlabel(nxt_end)] = {"sales": f_(rv.loc["0q", "avg"]), "eps": up[2], "date": today}
+        ee = tk.earnings_estimate  # 다음 2개 분기 예상 (0q = 아직 발표 전 분기) → 분기 막대 E · ⭐ 성장률 점선 (사용자 11/16 "예상치 나온 거까지")
+        lt = pd.Timestamp(last)
+        for i, r in enumerate(("0q", "+1q"), 1):
+            e = lt + pd.DateOffset(months=3 * i)
+            e = (e + pd.offsets.MonthEnd(0) if lt.is_month_end else e).strftime("%Y-%m-%d")  # 12/31 + 91일 = 4/1 이 되지 않게
+            if rv is not None and r in rv.index:
+                fwd.append({"q": _qlabel(e) + "E", "end": e, "est": True, "sales": f_(rv.loc[r, "avg"]),
+                            "eps": f_(ee.loc[r, "avg"]) if ee is not None and r in ee.index else None})
     except Exception:  # noqa: BLE001
         pass
     val = lambda k, f: None if k is None else (eps.get(k) or {}).get("eps") if f == "eps" else (qtrs.get(k) or {}).get("rev" if f == "sales" else f)  # noqa: E731
@@ -255,7 +264,7 @@ def collect_us(tkr, qtrs, hist):
     annual = [{"q": f"{str(y)[2:]}{'E' if r.get('estimate') else ''}", "est": bool(r.get("estimate")), "eps": r.get("eps")}
               for y, r in sorted((hist or {}).items()) if isinstance(r, dict) and r.get("eps") is not None][-8:]
     return {"cur": "USD", "latest": lab, "prelim": None, "seen": seen[last]["seen"], "date": (eps.get(last) or {}).get("date") or seen[last]["seen"], "rows": rows, "quarters": qs, "est_bar": est,
-            "est_date": (cons.get(lab) or {}).get("date"), "points": points(qs), "waiting": False, "annual": annual,
+            "est_date": (cons.get(lab) or {}).get("date"), "points": points(qs), "waiting": False, "annual": annual, "fwd": fwd,
             "filing": {"date": (eps.get(last) or {}).get("date"), "name": "실적발표 (야후)", "url": f"https://finance.yahoo.com/quote/{tkr}/"},
             "next": {"q": _qlabel(nxt_end), "eps": up[2], "sales": (cons.get(_qlabel(nxt_end)) or {}).get("sales"), "date": up[0]} if up else None}
 
@@ -301,6 +310,7 @@ def fill(kqd, ents, mkt):
         cur = {"q": s["q"], "sales": None, "op": None, "ni": None, "eps": None}
         qs = (qs + [cur])[-8:]
         k.update(latest=s["q"], prelim=True, est_bar={f: nx.get(f) for f in ROWS if nx.get(f) is not None} or None, est_date=nx.get("date"),
+                 fwd=[x for x in kqd.get("fwd") or [] if x.get("q") != s["q"] + "E"],  # 실적이 된 분기는 예상에서 뺌
                  next=None, waiting=False, filing=None, date=s["date"] or k.get("date"), seen=s["date"] or k.get("seen"))
         k["rows"] = [{**r, "est": (k["est_bar"] or {}).get(r.get("f") or {"매출액": "sales", "영업이익": "op", "순이익": "ni"}.get(r["item"]))} for r in k.get("rows") or []]
     got = [f for f in ("sales", "op", "ni") if cur.get(f) is None and s.get(f) is not None]
