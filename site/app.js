@@ -6281,7 +6281,8 @@ function costHTML(c, d) {
 }
 async function keyBlock(code) {
   const K = await keyLoad(), c = DASH.stocks.find((x) => x.code === code), ind = c?.industry || "";
-  const gs = [...Object.entries(K.industry || {}).filter(([k, g]) => ind.includes(k) || (g.codes || []).includes(code)), ...(K.stock?.[code] ? [[c?.name || code, K.stock[code]]] : [])];
+  // 종목 키팩터가 업종(음식료 등)보다 먼저 (사용자 11/17 "삼양식품 키팩터가 먼저 보여야") — 맨 위 카드 하나만 펼쳐지므로 종목 카드가 펼쳐짐
+  const gs = [...(K.stock?.[code] ? [[c?.name || code, K.stock[code]]] : []), ...Object.entries(K.industry || {}).filter(([k, g]) => ind.includes(k) || (g.codes || []).includes(code))];
   return gs.length ? `<h3>🔑 키팩터 · 키차트 <span class="src">주가를 움직이는 숫자 · 변곡점 체크 (산업 탭에도 있어요)</span></h3>${((st) => gs.map(([k, g]) => keyGroup(k, g, code, st)).join(""))({ n: 0 })}` : "";
 }
 // 🛡 방산 (config/defense.yaml): 지정학 연표(사실) + 글쓴이 가설 + 우리 방산 종목 숫자 (stocks.yaml industry 에 '방산')
