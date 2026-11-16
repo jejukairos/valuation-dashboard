@@ -119,6 +119,29 @@ def parse_daol(text):
     return {"ym": ym, "upto": upto, "p": p, "item": ITEM[k], "rows": rows}
 
 
+# 🏙 다올 '★ YYYY.M월 수출데이터 확정치' 시군구 표 (사용자 11/16 "클래시스·파마리서치·실리콘투만 트래킹") — (품목, 시군구) → 종목 (다올 표 '주요기업' 칸)
+STITLE = re.compile(r"★\s*(\d{4})\.(\d{1,2})월\s*수출\s*데이터\s*확정치")
+SGG_CO = {("미용 의료기기", "강남구"): "클래시스", ("필러", "강릉시"): "파마리서치", ("화장품", "성남시+강남구+중구"): "실리콘투"}
+
+
+def parse_sgg(text):
+    """다올 확정치 글 → {ym, rows {종목: [백만$, 전년비, 전월비]}} · 우리 종목 줄이 없으면 None."""
+    m = STITLE.search(" ".join(text.strip().split("\n")[:3]))
+    if not m:
+        return None
+    top, rows = None, {}
+    for line in text.split("\n"):
+        s = line.strip()
+        h = re.match(r"^\d+\.\s*([^>]+?)\s*(?:>|$)", s)  # '2. 미용 의료기기' · '7. 화장품 > 성남시+강남구+중구 …'
+        if h:
+            top = h.group(1).strip()
+        r = re.search(r">\s*(\S+)\s+([\d,.]+)\s*백만달러\s*\(YoY\s*([+-]?[\d.]+)%\s*,\s*MoM\s*([+-]?[\d.]+)%\)", s)
+        co = r and SGG_CO.get((top, r.group(1).replace(" ", "")))
+        if co:
+            rows[co] = [float(r.group(2).replace(",", "")), float(r.group(3)), float(r.group(4))]
+    return {"ym": f"{m[1]}-{int(m[2]):02d}", "rows": rows} if rows else None
+
+
 def cross(x):
     """다른 증권사 채널의 수출 데이터 글 → 제목 + 숫자 줄 (없으면 None)."""
     t = x["text"].strip()
@@ -161,6 +184,14 @@ def collect():
                         e["days"] = r["days"]
             except Exception as e:  # noqa: BLE001 - 한 채널이 막혀도 나머지는 모은다
                 fails.append(f"{ch} {q}: {str(e)[:60]}")
+    sgg = {}
+    try:
+        for x in sorted(tg_reports.search(DAOL, "확정치", cut), key=lambda x: x["id"]):  # 같은 달 글이 또 오면 나중 글로
+            r = parse_sgg(x["text"])
+            if r:
+                sgg[r["ym"]] = {**r, "src": f"다올 박종현 텔레그램 {x['d']} (자동)", "u": f"https://t.me/{x['id']}", "d": x["d"]}
+    except Exception as e:  # noqa: BLE001
+        fails.append(f"{DAOL} 확정치: {str(e)[:60]}")
     posts = {}
     for ch in CROSS:
         try:
@@ -171,7 +202,7 @@ def collect():
         except Exception as e:  # noqa: BLE001
             fails.append(f"{ch}: {str(e)[:60]}")
     return {"updated_at": now.strftime("%Y-%m-%d %H:%M"), "ten": sorted(ten.values(), key=lambda e: (e["ym"], e["upto"], e["how"]), reverse=True),
-            "posts": sorted(posts.values(), key=lambda p: p["d"] + p["hm"], reverse=True)[:40], "fails": fails}
+            "sgg": [sgg[k] for k in sorted(sgg)], "posts": sorted(posts.values(), key=lambda p: p["d"] + p["hm"], reverse=True)[:40], "fails": fails}
 
 
 if __name__ == "__main__":
@@ -205,6 +236,11 @@ if __name__ == "__main__":
         c = cross({"d": "2026-10-12", "hm": "09:00", "id": "HJS_YSK/866", "text": "[전력기기/음식료 수출입 통계 Update]\n\n※ 10/1~10/10 잠정치\n\n*Comment\n"
                    "(초고압변압기) 미국향 수출 호조세 · GIS YoY 상승률에 주목\n(라면 및 담배) 라면 YoY 수출 지속. 담배는 미국향 MoM 상승\n(담배) 인도네시아 MoM (+) 전환"})
         assert c["items"] == ["ramen", "power"] and c["lines"] == ["(초고압변압기) 미국향 수출 호조세 · GIS YoY 상승률에 주목", "(라면) 라면 YoY 수출 지속."], c
+        r = parse_sgg("[의료기기(Overweight) 다올 의료기기/화장품 박종현]\n\n★ 2026.10월 수출데이터 확정치\n\n1. 톡신\n > 춘천시 21.4백만달러 (YoY +126.1%, MoM +73.3%)\n\n"
+                      "2. 미용 의료기기\n > 강남구 21.8백만달러 (YoY +103.0%, MoM +26.0%)\n > 고양시 24.6백만달러 (YoY +93.1%, MoM +19.1%)\n\n4. 필러\n > 강릉시 14.8백만달러 (YoY +88.9%, MoM +10.1%)\n\n"
+                      "7. 화장품 > 성남시+강남구+중구 248.4백만달러 (YoY -0.7%, MoM -10.8%)\n\n9. 체성분 분석기 > 강남구 7.6백만달러 (YoY +68.3%, MoM +55.6%)")
+        assert r == {"ym": "2026-10", "rows": {"클래시스": [21.8, 103.0, 26.0], "파마리서치": [14.8, 88.9, 10.1], "실리콘투": [248.4, -0.7, -10.8]}}, r
+        assert parse_sgg("★ 2026.11월 1-10일 의료기기 수출데이터\n2. 미용 의료기기\n > 강남구 1.0백만달러 (YoY +1%, MoM +1%)") is None
         print("ok")
     else:
         d = collect()

@@ -4313,12 +4313,26 @@ function xpItem(k) {
   return `<section data-jump="${esc(K.t)}" data-jname="${esc(K.t)}" id="kc-xp-${k}" style="margin-top:18px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">${K.t} ${isNew ? `<span class="pill red">‼️ ${esc(nw.p || `${+nw.ym.slice(5)}월`)} 새로 나옴</span>` : ""}</h2>
     ${k === "cosmetics" ? cosHeroHTML() : ""}<div class="card">${body}<div class="note src">${esc(K.hs)} · 1개월 = 채널 글 자동 (교보 음식료·화장품 · 다올 의료기기·화장품 · TRASS-BF) · 3개월~전체 = 관세청 월별 확정치 (다음 달 중순)</div></div>${extra}</section>`;
 }
+// 🏙 내 종목 시군구 수출 (사용자 11/16 "클래시스·파마리서치·실리콘투만 트래킹") ← exp_ten.json sgg (다올 '★ YYYY.M월 수출데이터 확정치' 글, 매달 15일쯤 자동)
+const SGG_W = { 클래시스: "강남구 미용 의료기기", 파마리서치: "강릉시 필러", 실리콘투: "성남시+강남구+중구 화장품" };
+function sggHTML() {
+  const L = XT?.sgg || [];
+  if (!L.length) return "";
+  const last = L.at(-1), lab = L.map((x) => x.ym), cos = Object.keys(SGG_W), isNew = kDays(last.d) >= -1 && kDays(last.d) <= 7;
+  const tbl = chgChart({ t: `${last.ym.slice(2, 4)}년 ${+last.ym.slice(5)}월 확정치`, qh: "지난달보다",
+    rows: cos.filter((c) => last.rows[c]).map((c) => ({ n: `${c} (${SGG_W[c]})`, now: last.rows[c][0], u: "백만$", d: 1, yoy: last.rows[c][1], qoq: last.rows[c][2] })) });
+  const ch = cos.map((c) => { const r = last.rows[c];
+    return lineChart({ t: `${c} — ${SGG_W[c]}`, why: `막대 = 백만$${r ? ` · 예) ${n(r[0], 1)}백만$ = ${last.ym.slice(2, 4)}년 ${+last.ym.slice(5)}월` : ""}`, labels: lab, zero: true, tick: (i) => `${lab[i].slice(2, 4)}.${+lab[i].slice(5)}`,
+      fl: (v) => n(v, 1), fr: (v) => `${n(v, 0)}%`, s: [{ n: "수출 (백만$)", v: L.map((x) => x.rows[c]?.[0] ?? null), bar: true, col: "var(--s1)" }, { n: "1년 전보다 %", v: L.map((x) => x.rows[c]?.[1] ?? null), right: true, col: "#e8692f" }] }); });
+  return `<section data-jump="🏙 내 종목 시군구" data-jname="🏙 내 종목 시군구 수출" style="margin-top:8px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">🏙 내 종목 시군구 수출 ${isNew ? `<span class="pill red">‼️ ${+last.ym.slice(5)}월 확정치 새로 나옴</span>` : ""}</h2>
+    <div class="card">${tbl}<div class="qgrid">${ch.join("")}</div><div class="note src">${esc(last.src)} · <a href="${esc(last.u)}" target="_blank" rel="noopener">원문</a> · 시군구 수출 = 그 지역 회사들 합계라 회사 매출과 딱 맞진 않아요 (증권가가 회사 신호로 보는 칸) · 관세청 시군구 API 승인 전이라 다올 글로 채움</div></div></section>`;
+}
 async function renderExports() {
   const get = (f) => fetch(`data/${f}.json?t=` + Date.now(), { cache: "no-store" }).then((r) => r.json()).catch(() => ({}));
   if (!EXP || !EXP.ramen) EXP = await get("exports");
   if (!XT) XT = await get("exp_ten");
   const h = XP_ITEMS.map(xpItem).join("");
-  $("#exportsBody").innerHTML = h ? expBanner() + h : `<div class="empty">수출 데이터를 불러오지 못했어요.</div>`;
+  $("#exportsBody").innerHTML = h ? expBanner() + sggHTML() + h : `<div class="empty">수출 데이터를 불러오지 못했어요.</div>`;
   jumpBar("#exportsBody", "#expJump", "🔎 품목 검색 (예: 화장품) → Enter");
   setTimeout(kcGo, 50);
 }
