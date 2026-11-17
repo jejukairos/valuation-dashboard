@@ -5408,12 +5408,43 @@ function pbrCard(it, base, i) {
     <div class="note src">${esc(it.source)} · 굵은 칸 = 지금 가격과 10% 이내 · 표의 %는 지금 가격 대비</div>
   </div>`;
 }
+// 📝 체크 탭 (사용자 11/17): 종목마다 매매 원칙 질문 5개 + 빈칸, 답은 이 기기 localStorage "chk:<code>"
+const CHK_Q = [
+  ["wait", "원하는 가격까지 얼마나 기다릴 것인가?"],
+  ["drop", "주가가 하락할 때 손절할 것인가? 추가 매수할 것인가?"],
+  ["zone", "그 판단의 기준이 되는 가격대는 어디인가?"],
+  ["bad", "반드시 매도해야 할 부정적 사건은 무엇인가?"],
+  ["exit", "목표 가격에 도달했을 때 어떤 방식으로 매도할 것인가?"],
+];
+const chkLoad = (code) => { try { return JSON.parse(localStorage.getItem("chk:" + code) || "{}"); } catch (_) { return {}; } };
+const chkCnt = (a) => CHK_Q.filter(([k]) => String(a[k] || "").trim()).length;
+function renderCheck() {
+  const box = $("#chkBody");
+  if (!DASH || box.dataset.done) return;  // 한 번만 그림 (다시 그려도 답은 저장돼 있지만 열어 둔 칸이 닫힘)
+  box.dataset.done = 1;
+  box.innerHTML = [["보유", "💼 보유"], ["관심", "⭐ 관심"], ["공동", "🤝 공동자산"]].map(([g, h]) => {
+    const L = DASH.stocks.filter((c) => c.group === g);
+    return L.length ? `<h3>${h} <span class="src">${L.length}곳</span></h3>${L.map((c) => {
+      const a = chkLoad(c.code);
+      return `<details class="card chk" data-code="${esc(c.code)}" style="margin-bottom:8px"><summary class="chart-title"><b>${esc(c.name)}</b> <span class="src">지금 ${money(c.price, c.currency)}${c.avg_price ? ` · 내 평단 ${money(c.avg_price, c.currency)}` : ""}</span> <span class="qtag chkn">${chkCnt(a)} / 5</span></summary>
+        ${CHK_Q.map(([k, q], i) => `<div class="preq"><div class="preq-q">${i + 1}. ${esc(q)}</div><textarea data-k="${k}" rows="2" placeholder="내 답">${esc(a[k] || "")}</textarea></div>`).join("")}</details>`;
+    }).join("")}` : "";
+  }).join("");
+  box.addEventListener("input", (e) => {
+    const t = e.target.closest("textarea"), card = t?.closest(".chk");
+    if (!card) return;
+    const a = chkLoad(card.dataset.code);
+    a[t.dataset.k] = t.value;
+    try { localStorage.setItem("chk:" + card.dataset.code, JSON.stringify(a)); } catch (_) { /* 저장 못 하는 브라우저(사생활 보호 창)면 화면에만 */ }
+    card.querySelector(".chkn").textContent = `${chkCnt(a)} / 5`;
+  });
+}
 function showView() {
   const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#pattern": "pattern", "#exports": "exports", "#feed": "feed" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#pattern": "pattern", "#check": "check", "#exports": "exports", "#feed": "feed" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   const eg = { earn: "보유", earnw: "관심", earnj: "공동" }[view];  // 🧾 실적 보유 · 관심 · 공동 (같은 화면, 종목 묶음만 바꿈)
   $("#earnView").hidden = !eg;
   if (eg) { EARN_GRP = eg; renderEarn(); }  // 보유·관심·공동을 바꿔도 전체/한국/미국 고른 건 그대로
@@ -5421,6 +5452,8 @@ function showView() {
   if (view === "chart") loadAlign();
   $("#patternView").hidden = view !== "pattern";
   if (view === "pattern") loadPattern();
+  $("#checkView").hidden = view !== "check";
+  if (view === "check") renderCheck();
   $("#reportsView").hidden = view !== "reports";
   if (view === "reports") loadReports();
   $("#pbrView").hidden = view !== "pbr";
