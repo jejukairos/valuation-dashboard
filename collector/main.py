@@ -627,6 +627,8 @@ def stock_detail(h, rates_now, fx):
         # 미국: 연도별 EPS 추정치 출처 (야후·나스닥·Finviz) 와 쓴 평균값
         "eps_srcs": {C.ylabel(yy): {**hist[yy]["srcs"], "평균": rnd(hist[yy]["eps"], 2), "note": hist[yy].get("srcs_note")}
                      for yy in sorted(hist) if hist[yy].get("estimate") and hist[yy].get("srcs")} if mkt == "US" else None,
+        # ⭐ 관심 밖 종목 (신호 탭, 사용자 11/17): 미국은 야후 컨센서스 애널리스트 수 '야후 컨센서스 (N명)'
+        "n_anal": max((int(m[1]) for h in hist.values() if (m := re.search(r"\((\d+)명\)", h.get("src") or ""))), default=None) if mkt == "US" else None,
         "fv": _fair_table(bands, hist, price, currency,
                           [k for k in ("PER", "PBR") if k in fm] + [k for k in ("PER", "PBR") if k not in fm]),
     }

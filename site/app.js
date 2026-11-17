@@ -5309,6 +5309,28 @@ document.addEventListener("click", (e) => {
   if (us) renderBigTech();
 });
 
+// ⭐ 관심 밖 종목 (사용자 11/17, 리처드 번스타인 『소음과 투자』 "모두가 떠들 때가 아니라 아무 말도 없을 때가 기회") → 📡 신호 탭 맨 위 · 보유 → 관심 → 공동
+//   한국 = 한경 공개 기업 리포트 6개월 개수 (rep_all.json, 매일) · 미국 = 야후 컨센서스 애널리스트 수 (n_anal) · 우선주는 보통주와 같아서 뺌
+//   ⭐⭐ = 6개월 0개 (미국 5명 이하) · ⭐ = 3개 이하 또는 마지막 리포트 90일 넘음 (미국 10명 이하) · 🆕 = ⭐ 종목에 7일 안 새 리포트 (다시 관심 받기 시작)
+async function quietHTML() {
+  const R = (await repAllGet()).rows || [], today = kstToday(), cnt = {}, lastD = {}, G = { 보유: 0, 관심: 1, 공동: 2 };
+  for (const [d, code] of R) { cnt[code] = (cnt[code] || 0) + 1; if (!lastD[code] || d > lastD[code]) lastD[code] = d; }
+  const rows = DASH.stocks.filter((c) => !PREF_COMMON[c.code] && (c.market === "KR" || c.n_anal != null)).map((c) => {
+    const kr = c.market === "KR", k = kr ? cnt[c.code] || 0 : c.n_anal, ld = kr ? lastD[c.code] : null, dd = ld ? Math.round((Date.parse(today) - Date.parse(ld)) / 864e5) : null;
+    return { c, kr, k, ld, dd, star: kr ? (k === 0 ? 2 : k <= 3 || dd > 90 ? 1 : 0) : k <= 5 ? 2 : k <= 10 ? 1 : 0 };
+  }).sort((a, b) => (G[a.c.group] ?? 3) - (G[b.c.group] ?? 3) || b.star - a.star || a.k - b.k);
+  if (!rows.length) return "";
+  const tr = (r) => `<tr${r.star ? ' style="background:var(--warn-bg)"' : ""}><td>${esc(r.c.group || "")}</td><td style="text-align:left;white-space:nowrap">${"⭐".repeat(r.star)} <a href="#stock/${esc(r.c.code)}">${esc(r.c.name)}</a>${r.star && r.dd != null && r.dd <= 7 ? ' <span class="pill red">🆕 리포트 다시 나옴</span>' : ""}</td>
+    <td><b>${r.kr ? `${r.k}개` : `${r.k}명`}</b></td><td class="src">${r.kr ? (r.ld ? `${r.ld.slice(2).replace(/-/g, ".")} (${r.dd}일 전)` : "6개월 없음") : "애널리스트 수"}</td><td>${hi1(r.c)}</td></tr>`;
+  const hi1 = (c) => { const v = (c.chart?.close || []).filter((x) => x > 0), h = v.length ? Math.max(...v) : 0; return h && c.price ? pct((c.price / h - 1) * 100, 0) : "-"; };  // 1년 고점 대비 (사상 최고가는 2000년대 옛 고점이 섞여서 안 씀)
+  const th = `<thead><tr><th>묶음</th><th style="text-align:left">종목</th><th>리포트<br><span class="src">6개월</span></th><th>마지막 리포트</th><th>1년 고점<br>대비</th></tr></thead>`;
+  const S = rows.filter((r) => r.star), med = [...rows.filter((r) => r.kr).map((r) => r.k)].sort((a, b) => a - b), md = med[Math.floor(med.length / 2)];
+  return `<div class="card" style="margin-bottom:10px"><div class="chart-title"><b>⭐ 관심 밖 종목 — 리포트가 거의 안 나오는 내 종목</b> <span class="src">${S.length}곳 · 보유 → 관심 → 공동 · 매일</span></div>
+    <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 리처드 번스타인 『소음과 투자』: 다들 무섭다고 떠들 때보다, <b>아무도 말하지 않을 때</b>가 기회일 수 있어요. 인기 종목은 알려진 정보가 이미 주가에 들어가 있거든요. 리포트가 끊긴 종목은 값이 내릴 만큼 내린 뒤, 리포트가 다시 나오기 시작할 때(🆕) 그게 주가에 반영되는 흐름을 보려는 칸이에요.</div>
+    ${S.length ? `<div class="tbl-wrap"><table class="compact" style="width:100%">${th}<tbody>${S.map(tr).join("")}</tbody></table></div>` : `<div class="note">지금 ⭐ 종목 없음</div>`}
+    <details class="fvt"><summary class="chart-title">전체 순위 (${rows.length}곳 · 묶음마다 리포트 적은 순 · 우리 한국 종목 가운데값 ${md ?? "-"}개)</summary><div class="tbl-wrap"><table class="compact" style="width:100%">${th}<tbody>${rows.map(tr).join("")}</tbody></table></div></details>
+    <div class="note src">⭐⭐ = 6개월 리포트 0개 (미국은 애널리스트 5명 이하) · ⭐ = 3개 이하 또는 마지막 리포트가 90일 넘음 (미국 10명 이하) · 🆕 = ⭐ 종목에 7일 안 새 리포트 · 한국 = 한경 컨센서스 공개 기업 리포트 (모든 증권사 리포트가 다 올라오진 않아 실제보다 적게 셈) · 우선주는 보통주와 같아서 뺌 · 관심 밖 = 살펴볼 후보이지 사고팔 판단이 아니에요</div></div>`;
+}
 /* ---------- PBR 계산기 (📡 신호 탭 아래쪽) ---------- */
 let PBR = null;
 async function loadPBR() {
@@ -5317,6 +5339,7 @@ async function loadPBR() {
     catch (e) { $("#pbrCards").innerHTML = `<div class="empty">PBR 계산기 데이터를 불러오지 못했어요.</div>`; return; }
   }
   signalHTML().then((h) => { $("#signalBody").innerHTML = h; }).catch(() => { $("#signalBody").innerHTML = `<div class="empty">신호 표를 못 그렸어요.</div>`; });
+  quietHTML().then((h) => { $("#sigQuiet").innerHTML = h; }).catch(() => {});
   etfHTML().then((h) => { $("#sigEtf").innerHTML = h; });
   const base = PBR.base_year;
   $("#pbrIntro").innerHTML = `연도별 추정 BPS(주당순자산) × PBR 배수로 가격을 계산해요. <b>${esc(base)}</b> 열이 기준 연도예요. 갱신 ${esc(PBR.updated_at)}`;
