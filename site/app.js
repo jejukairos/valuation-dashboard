@@ -4839,7 +4839,7 @@ async function openStock(code) {
     const topHtml = scenTblHTML(code, c?.price || d.price, d.history) + hxCycleHTML(code, d, c?.price || d.price) + ((await keyLoad()).stock?.[code]?.cards || []).filter((x) => x.top).map((x) => keyCard(x, true)).join("");  // keychart.yaml top: true = 상세 맨 위 (사용자 11/13 테슬라 FSD 유럽 승인) · 📊 시나리오 = pbr_watch.yaml scen (11/14)
     try { OHLC[code] = OHLC[code] || await (await fetch(`data/ohlc/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { OHLC[code] = null; }  // 📉 5년 하락률 그림 (📐 선 읽기와 같은 파일)
     if (!TL) { try { TL = await (await fetch(`data/timeline.json?t=${Date.now()}`, { cache: "no-store" })).json(); } catch (_) { TL = {}; } }  // 🗓 주요 타임라인
-    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + cycHTML(code) + patHTML(d), keyHtml = await keyBlock(code);  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
+    const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + cycHTML(code) + patHTML(d), keyHtml = await keyBlock(code, d);  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
     const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : DR_CODES.includes(code) ? (await drGet(), drHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬 · 💾 메모리 회사는 D램 값
     await consGet();
@@ -5973,15 +5973,15 @@ function evLine(ch) {
   const mx = Math.max(...v), im = v.indexOf(mx), last = v.at(-1), m6 = Math.min(...v.slice(-7));
   // 🛍 소비자심리: 지금 반등 신호인지 (6개월 최저 < 100 에서 +5 이상) · 예전에 롯데쇼핑 주가가 오른 건 최저 80 아래였을 때
   const stat = ch.kind === "ccsi" ? `<div class="note">${last - m6 >= 5 && m6 < 100 ? `🔔 <b>반등 신호</b> — 6개월 최저 ${n(m6, 1)} → 지금 ${n(last, 1)}${m6 < 80 ? " · 최저가 80 아래 (예전에 주가가 오른 조건)" : " · 최저가 80 위 (예전엔 이때 주가가 대부분 안 오름)"}` : `신호 없음 — 6개월 최저 ${n(m6, 1)} · 지금 ${n(last, 1)} (100 = 보통)`}${ch.src_auto ? ` <span class="src">${esc(ch.src_auto)}</span>` : ""}</div>` : "";
-  g += tipCols(X, (x1 - x0) / (N - 1), 0, bot + 16, q.map((d, i) => `${d}\n시가총액 ${n(v[i], 0)}${ch.u ? " " + ch.u : ""}${ev.filter((e) => e.i === i).map((e) => `\n${e.k}. ${e.t}`).join("")}`));
+  g += tipCols(X, (x1 - x0) / (N - 1), 0, bot + 16, q.map((d, i) => `${d}\n${ch.vn || "시가총액"} ${n(v[i], ch.d || 0)}${ch.u ? " " + ch.u : ""}${ev.filter((e) => e.i === i).map((e) => `\n${e.k}. ${e.t}`).join("")}`));
   return `<div class="qp" style="grid-column:1/-1"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}
-    ${stat || `<div class="note">지금 <b>${n(last, 0)}${esc(ch.u || "")}</b> (${esc(q.at(-1))}) · 최고 ${n(mx, 0)} (${esc(q[im])}) 대비 <b>${pct((last / mx - 1) * 100, 0, true)}</b></div>`}
+    ${stat || `<div class="note">지금 <b>${n(last, ch.d || 0)}${esc(ch.u || "")}</b> (${esc(q.at(-1))}) · 최고 ${n(mx, ch.d || 0)} (${esc(q[im])}) 대비 <b>${pct((last / mx - 1) * 100, 0, true)}</b></div>`}
     <svg viewBox="0 0 ${W} ${bot + 20}" width="100%" role="img" aria-label="${esc(ch.t)}">${g}</svg>
     <ol class="irl" style="font-size:12px;margin:4px 0 0;padding-left:22px">${ev.map((e) => `<li value="${e.k}"><span class="src">${esc(e.d.slice(2, 7).replace("-", "."))}</span> ${esc(e.t)}</li>`).join("")}</ol>
     ${ch.kid ? `<div class="kidbox">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
 function keyChart(ch) {
-  if (ch.kind === "mcap" || ch.kind === "ccsi") return evLine(ch);
+  if (ch.kind === "mcap" || ch.kind === "ccsi" || ch.kind === "pbr12") return evLine(ch);  // pbr12 = 12MF PBR 주간 선 + 사건 (keyBlock 이 채움, 11/17 삼성SDI 사이클)
   // kind: line → 0 아래(적자)도 그리는 꺾은선 + 칸마다 숫자 (종목 그래프와 같은 모양)
   if (ch.kind === "line") return kpiChart({ ...ch, s: (ch.lines || []).map((s) => ({ n: s.n, v: Object.fromEntries((ch.q || []).map((q, i) => [q, s.v[i]]).filter(([, v]) => v != null)) })) });
   if (ch.kind === "chg") return chgChart(ch);
@@ -6075,7 +6075,7 @@ function keyCard(c, open) {
 }
 // 묶음 하나: 키팩터 한 줄 + 변곡점 체크 + 카드들 (code = 지금 보는 종목 → 그 종목이 주인공인 카드만 펼침, 산업 탭은 모두 펼침)
 function keyGroup(name, g, code, st = { n: 0 }) {  // st = 상세에서 이미 펼친 카드 수 — 맨 위 하나만 펼침 (사용자 11/15 긴 글 줄이기, 나머지는 제목 줄만)
-  return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}
+  return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}${leadHTML(name)}
     ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${evHTML(g.ev)}${vcHTML(g.vc)}
     ${(g.cards || []).filter((c) => (code || !c.stock_only) && !(code && c.top)).map((c) => keyCard(c, !code || ([].concat(c.code).includes(code) && !st.n++))).join("")}</div>`;
 }
@@ -6106,6 +6106,43 @@ function vcHTML(vc) {
   return vc.map((v) => `<details class="fvt" open style="margin-top:8px"><summary class="chart-title"><b>🔗 ${esc(v.t)}</b> <span class="src">굵은 글씨 = 이 사이트에서 보는 종목</span></summary>
     <div class="tbl-wrap"><table class="compact" style="width:100%"><tbody>${v.rows.map(([s, x]) => `<tr><td style="white-space:nowrap;text-align:left"><b>${esc(s)}</b></td><td style="text-align:left;white-space:normal">${bold(x)}</td></tr>`).join("")}</tbody></table></div>
     ${v.kid ? `<div class="kidbox" style="margin-top:6px">🐣 ${esc(v.kid)}</div>` : ""}${v.why ? `<div class="note src">${esc(v.why)}</div>` : ""}</details>`).join("");
+}
+// ⏱ AI 서버 부품 리드타임 (사용자 11/17: "리드타임 트래킹, 산업별로 · 특히 MLCC·ABF·DRAM·NAND · 완만해지면 위험 신호") ← keychart.yaml leadtime {items, weeks, fe}
+//   반도체 묶음 = DRAM·NAND·GPU·CPU·HDD, 기판 묶음 = MLCC·ABF (+ 퓨처일렉트로닉스 MLCC 회사별 달 평균) · ⚠ = 상태가 한 단계라도 풀리거나 리드타임이 짧아짐
+const LT_RK = { "Very Tight": 4, Tight: 3, Tightening: 2, Balanced: 1, Easing: 0 }, LT_KO = { "Very Tight": "아주 부족", Tight: "부족", Tightening: "부족해지는 중", Balanced: "균형", Easing: "풀리는 중" };
+const ltMid = (s) => { const m = String(s ?? "").match(/(\d+)(?:\s*[-–]\s*(\d+))?/); return m ? (m[2] ? (+m[1] + +m[2]) / 2 : +m[1]) : null; };  // '24-30' → 27 · '52+' → 52
+function leadHTML(name) {
+  const L = KEYC?.leadtime, W = [...(L?.weeks || [])].sort((a, b) => (a.d < b.d ? -1 : 1)), its = Object.entries(L?.items || {}).filter(([, x]) => x.g === name);
+  if (!W.length || !its.length) return "";
+  const cur = W.at(-1), prev = W.at(-2), md = (d) => d.slice(5).replace("-", "/"), warn = [];
+  const rows = its.map(([k, it]) => {
+    const [s, lt] = cur.v[k] || [], [ps, plt] = prev?.v[k] || [], dl = plt != null ? ltMid(lt) - ltMid(plt) : null, dr = ps ? LT_RK[s] - LT_RK[ps] : 0, x = ltMid(lt) / ltMid(it.bal);
+    const sig = dr < 0 || dl < 0 ? "⚠ 풀리기 시작" : dr > 0 || dl > 0 ? "🔺 더 부족" : "↔ 그대로";
+    if (sig.startsWith("⚠")) warn.push(`${it.n}: ${ps !== s ? `${ps} → ${s}` : ""}${dl < 0 ? ` 리드타임 ${n(-dl, 0)}주 짧아짐` : ""}`);
+    const col = LT_RK[s] >= 4 ? "var(--bad)" : LT_RK[s] === 3 ? "#e8564f" : LT_RK[s] === 2 ? "#e8902f" : "var(--good)";
+    return `<tr><td style="text-align:left"><b>${esc(it.n)}</b><br><span class="src">${esc(it.who || "")}</span></td><td><span class="pill" style="background:${col};color:#fff">${esc(LT_KO[s] || s || "-")}</span></td>
+      <td><b>${esc(lt || "-")}주</b>${dl ? `<br><span style="color:var(${dl > 0 ? "--bad-ink" : "--good-ink"})">${dl > 0 ? "+" : ""}${n(dl, 0)}주</span>` : ""}</td><td>${esc(it.bal)}주<br><span class="src">${x ? `${n(x, 1)}배` : ""}</span></td><td style="white-space:nowrap">${sig}</td></tr>`;
+  }).join("");
+  const ch = W.length >= 2 ? kpiChart({ t: "리드타임 (주) — 매주", u: "주", s: its.map(([k, it]) => ({ n: it.n.split(" ")[0], v: Object.fromEntries(W.filter((w) => w.v[k]).map((w) => [w.d.slice(2).replace(/-/g, "."), ltMid(w.v[k][1])])) })) }) : "";  // '26.11.16' — 해가 바뀌어도 순서 맞게
+  // 퓨처일렉트로닉스 MLCC 회사·제품별 표 → 한 줄 숫자: 평균 리드타임 · 길어진/짧아진 제품 수 · 가격 올린 제품 수
+  let fe = "";
+  const F = L.fe;
+  if (name === "기판" && F?.rows?.length) {
+    const M = F.m, P = (c) => String(c).split(/\s+/), avg = (i) => F.rows.reduce((a, r) => a + ltMid(P(r[2 + i])[0]), 0) / F.rows.length, la = M.length - 1;
+    const up = F.rows.filter((r) => ltMid(P(r[2 + la])[0]) > ltMid(P(r[1 + la])[0])), dn = F.rows.filter((r) => ltMid(P(r[2 + la])[0]) < ltMid(P(r[1 + la])[0]));
+    const pr = (i) => F.rows.filter((r) => P(r[2 + i])[2] === "↗").length, sem = F.rows.filter((r) => r[0] === "삼성전기");
+    const by = (rs) => [...new Set(rs.map((r) => r[0]))].map((m) => `${m} ${rs.filter((r) => r[0] === m).length}`).join(" · ");
+    if (avg(la) < avg(la - 1) || dn.length > up.length) warn.push(`MLCC 회사별 평균 리드타임 ${n(avg(la - 1), 1)} → ${n(avg(la), 1)}주 (짧아진 제품 ${dn.length}개)`);
+    const c2 = kpiChart({ t: `MLCC 리드타임 — 회사 ${new Set(F.rows.map((r) => r[0])).size}곳 · 제품 ${F.rows.length}개 평균 vs 삼성전기`, u: "주", s: [{ n: "평균", v: Object.fromEntries(M.map((m, i) => [m, +avg(i).toFixed(1)])) }, ...(sem.length ? [{ n: "삼성전기", v: Object.fromEntries(M.map((m, i) => [m, ltMid(P(sem[0][2 + i])[0])])) }] : [])] });
+    fe = `<div class="qgrid">${c2}</div><div class="note">📦 ${esc(M[la])}: 리드타임 길어진 제품 <b>${up.length}개</b> · 짧아진 제품 <b>${dn.length}개</b> · 가격 올림(↗) <b>${pr(la)}/${F.rows.length}</b> (${esc(M[la - 1])} ${pr(la - 1)}개)${up.length ? `<br><span class="src">길어진 곳: ${esc(by(up))}</span>` : ""}</div>
+      <div class="note src">'52+'·'30+' 는 52·30주로, 범위는 가운데 값으로 계산 · ${esc(F.src || "")}</div>`;
+  }
+  return `<details class="fvt" open style="margin-top:8px"><summary class="chart-title"><b>⏱ 부품 리드타임 — 주문하고 받기까지 몇 주?</b> <span class="src">${esc(md(cur.d))} · 매주</span></summary>
+    ${warn.length ? `<div class="warnbox" style="margin-top:6px">⚠ <b>완화 신호</b> — ${warn.map(esc).join(" · ")}<br><span class="src">부족이 풀리기 시작하면 값 오름도 멈출 수 있어요 — 2주 넘게 이어지는지 보기</span></div>` : `<div class="note">✅ 완화 신호 없음 — 이번 주 풀린 부품이 없어요</div>`}
+    <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th style="text-align:left">부품</th><th>지금 상태</th><th>리드타임</th><th>정상 때<br><span class="src">지금은 몇 배</span></th><th>지난주보다</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${ch ? `<div class="qgrid">${ch}</div>` : ""}${fe}
+    <div class="kidbox" style="margin-top:6px">🐣 리드타임 = 주문하고 물건을 받기까지 걸리는 시간이에요. 길어질수록 물건이 모자라 값이 오르는 쪽 → 만드는 회사엔 좋은 흐름이에요. 거꾸로 '아주 부족 → 부족'처럼 한 단계 풀리거나 리드타임이 짧아지기 시작하면, 값 오름이 꺾이는 첫 신호일 수 있어 ⚠ 로 알려 드려요.</div>
+    <div class="note src">출처: ${esc(L.src || "")} · 상태 = 트렌드포스 5단계 (아주 부족 → 부족 → 부족해지는 중 → 균형 → 풀리는 중)</div></details>`;
 }
 /* ---------- 📈 업종별 매출·영업이익 컨센서스 추이 (data/cons_ind.json ← collector/cons_trend.py) — 사용자 11/5: 증권사 '셀 업체 컨센서스' 그림처럼 모든 업종, 종목 상세에선 닫아 둠 ---------- */
 let CONS = null;
@@ -6281,8 +6318,12 @@ function costHTML(c, d) {
   return `<div class="kidbox">⚖️ <b>비용 구조${r ? `: ${esc(r.t)}` : ""}</b>${r ? ` <span class="src">${esc(r.n)} · ${costDots(r.lv)}</span>` : ""}
     <div>${esc(s || r.big)}</div>${P.length ? `<div class="src">재무제표로 보면 (${qLabel(e4[0][0])}~${qLabel(e4[3][0])} 4분기 합계, 매출 대비): ${P.join(" · ")}</div>` : ""}${so ? `<div>👉 ${esc(so)}</div>` : ""}</div>`;
 }
-async function keyBlock(code) {
+async function keyBlock(code, d) {
   const K = await keyLoad(), c = DASH.stocks.find((x) => x.code === code), ind = c?.industry || "";
+  if (d) for (const cd of K.stock?.[code]?.cards || []) for (const ch of cd.charts || []) if (ch.kind === "pbr12" && !ch.v) {  // 📈 우리 12MF PBR 주간 선 (매일 자동)
+    const P = (per12mfSeries(d, "all", "bps")?.pts || []).filter((p) => p[1] != null);
+    ch.q = P.map((p) => p[0]); ch.v = P.map((p) => +(p[1] / p[2]).toFixed(2));
+  }
   // 종목 키팩터가 업종(음식료 등)보다 먼저 (사용자 11/17 "삼양식품 키팩터가 먼저 보여야") — 맨 위 카드 하나만 펼쳐지므로 종목 카드가 펼쳐짐
   const gs = [...(K.stock?.[code] ? [[c?.name || code, K.stock[code]]] : []), ...Object.entries(K.industry || {}).filter(([k, g]) => ind.includes(k) || (g.codes || []).includes(code))];
   return gs.length ? `<h3>🔑 키팩터 · 키차트 <span class="src">주가를 움직이는 숫자 · 변곡점 체크 (산업 탭에도 있어요)</span></h3>${((st) => gs.map(([k, g]) => keyGroup(k, g, code, st)).join(""))({ n: 0 })}` : "";
