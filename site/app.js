@@ -4145,6 +4145,8 @@ function expRel(k) {  // 가장 최근에 새 숫자를 받은 날 {ym, d}
   if (ym) out.push({ ym, d: sn[ym] });
   const T = K.lk && xTen().find((t) => t[K.lk]), td = T?.src?.match(/\d{4}-\d{2}-\d{2}/)?.[0];  // 📦 채널 1~10일·1~20일 잠정 (exp_ten.json)
   if (td) out.push({ ym: T.ym, d: td, p: T.p });
+  const SY = k === "ramen" && (XT?.sy?.at(-1) || (EXP?.samyang_est && { ym: Object.keys(EXP.samyang_est.v).sort().at(-1), d: EXP.samyang_est.src.match(/\d{4}-\d{2}-\d{2}/)?.[0] }));  // 🍜 삼양 추정 수출 새 달
+  if (SY?.d) out.push({ ym: SY.ym, d: SY.d, p: `삼양 추정 ${+SY.ym.slice(5)}월` });
   return out.sort((a, b) => b.d.localeCompare(a.d) || b.ym.localeCompare(a.ym))[0] || null;
 }
 const expNew = (code) => (EXPW[code] || []).map((k) => ({ k, r: expRel(k) })).filter((x) => x.r && kDays(x.r.d) >= -1 && kDays(x.r.d) <= 7);
@@ -4185,13 +4187,36 @@ function expwOne(k, isNew) {
     ${k === "ramen" || k === "cosmetics" ? `<div class="note src">2026년 1~8월 나라별 칸은 비어 있어요 — 관세청 '품목별 국가별 수출입실적' API 를 신청하면 자동으로 채워져요 (9·10월은 글로 받은 숫자)</div>` : ""}
     ${k === "tech" ? `<div class="note src">💾 D램 현물 가격(매일)은 이 화면 맨 위 칸에 있어요 · 산업 탭 💾 반도체 칸에 품목 전체</div>` : ""}</div>`;
 }
+// 🍜 삼양식품 추정 수출 (사용자 11/17 한화 그림 "키팩터 — 삼양 상세 📦 + 수출입 탭 라면, 추정 방법 짧게") ← exports.yaml samyang_est (그림 값) + exp_ten.json sy (한화 채널 글, 자동)
+//   막대 = 삼양 추정 수출 (백만$) · 선 = 라면 전체 대비 비중 = 삼양 ÷ 우리 관세청 라면 전체 (한화 그림과 ±0.3%p)
+function syExpHTML() {
+  const S = EXP?.samyang_est, R = EXP?.ramen?.["전체"];
+  if (!S?.v) return "";
+  const A = Object.fromEntries((XT?.sy || []).map((x) => [x.ym, x])), V = { ...S.v, ...Object.fromEntries(Object.entries(A).map(([k, x]) => [k, x.v[0]])) };
+  const lab = Object.keys(V).sort(), last = lab.at(-1), prev = ymAdd(last, -1), ago = ymAdd(last, -12), sh = (x) => (V[x] && R?.[x] ? (V[x] / R[x]) * 100 : null);
+  const yo = V[ago] ? (V[last] / V[ago] - 1) * 100 : A[last]?.v[1], ry = R?.[last] && R?.[ago] ? (R[last] / R[ago] - 1) * 100 : null, mx = lab.filter((x) => x !== last).reduce((m, x) => (V[x] > V[m] ? x : m), lab[0]);
+  const c1 = lineChart({ t: "삼양식품 추정 수출 (막대) · 라면 전체 대비 비중 (선)", why: `막대 = 백만 달러 · 예) ${n(V[last], 1)} = ${+last.slice(5)}월 약 ${n(V[last] / 100, 2)}억$`, labels: lab, tick: (i) => (lab[i].endsWith("-01") || i === lab.length - 1 ? `${lab[i].slice(2, 4)}.${+lab[i].slice(5)}` : ""),
+    fl: (v) => n(v, 0), fr: (v) => `${n(v, 0)}%`, s: [{ n: "삼양 추정 수출 (백만$)", v: lab.map((x) => V[x]), bar: true, col: "#b9b9b9" }, { n: "라면 전체 대비 비중 %", v: lab.map(sh), right: true, col: "#e0251b" }] });
+  const C = S.city?.ym === last ? S.city.rows : null, rest = C ? V[last] - Object.values(C).reduce((a, [v]) => a + v, 0) : null;
+  const c2 = C ? keyChart({ t: `${+last.slice(5)}월 지역별 — 어디서 늘었나`, u: "백만$", d: 1, side: true, q: [...Object.keys(C), "성북·중구"], col: ["#b9b9b9", "#e0251b"],
+    bars: [{ n: "지난달", v: [...Object.values(C).map((x) => x[1]), null] }, { n: `${+last.slice(5)}월`, v: [...Object.values(C).map((x) => x[0]), rest > 0 ? +rest.toFixed(1) : null] }], note: "지난달 칸이 빈 곳 = 글에 '전월과 비슷'으로만 적힘 · 성북·중구 = 합계에서 세 곳을 뺀 값 (직접 계산)" }) : "";
+  const kid = [`${+last.slice(5)}월 약 ${n(V[last] / 100, 2)}억$ — 1년 전보다 ${sg(yo)}${V[last] > V[mx] ? `, 역대 최대 (이전 최대 ${mx.slice(2, 4)}년 ${+mx.slice(5)}월 ${n(V[mx] / 100, 2)}억$)` : ""}`,
+    ry != null ? `같은 달 라면 전체는 ${sg(ry)} → 삼양이 더 빨리 늘어 비중 ${n(sh(last), 1)}% (지난달 ${n(sh(prev), 1)}% · 1년 전 ${n(sh(ago), 1)}%)` : "",
+    C && Object.values(C).some(([a, b]) => b && a > b) ? `늘어난 곳: ${Object.entries(C).filter(([, [a, b]]) => b && a > b).map(([k, [a, b]]) => `${k} ${n(b, 1)} → ${n(a, 1)}백만$ (${sg((a / b - 1) * 100)})`).join(" · ")}` : ""].filter(Boolean);
+  const src = A[last] ? `한화 한유정 텔레그램 ${A[last].d} (자동)` : S.src, u = A[last]?.u || S.u;
+  return `<div class="card" style="margin-top:8px" data-jump="sy-exp" data-jname="🍜 삼양 추정 수출"><div class="chart-title"><b>🍜 삼양식품 추정 수출 — 매달 (🔑 키팩터)</b> <span class="src">${esc(last)}까지</span></div>
+    <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div><div class="qgrid">${c1}${c2}</div>
+    <details class="fvt"><summary class="chart-title">📐 어떻게 추정했나 (짧게)</summary><ul class="irl">${(S.how || []).map((x) => `<li>${esc(x)}</li>`).join("")}
+      <li>🔎 비중 선 = 이 값 ÷ 우리 관세청 라면 전체 (HS 1902.30.1010) — 한화 그림 비중과 24개월 모두 ±0.3%p 안 ✅</li></ul></details>
+    <div class="note src">출처: <a href="${esc(u)}" target="_blank" rel="noopener">${esc(src)}</a> · 새 달 글은 한화 채널에서 자동으로 읽어요 (매달 중순 확정치 뒤) · 그 전 달은 그림에서 읽은 값 ±1 · 사고팔 판단이 아니라 숫자 확인용</div></div>`;
+}
 function expwHTML(code) {
   const all = EXPW[code] || [], ks = all.filter((k) => EXPW_K[k].s()?.[EXPW_K[k].m]);
   if (!all.length) return "";
   const nw = expNew(code).map((x) => x.k), open = nw.length || GOTO === "expw";
   const wait = all.includes("med") && !ks.includes("med") ? `<div class="warnbox" style="margin-top:8px">💉 강릉 화장품·필러 수출(리쥬란 신호): 관세청 '시군구별 품목별 수출입실적' API 를 공공데이터포털에서 활용신청하면 2020년부터 자동으로 들어와요 (11/10 시험: '등록되지 않은 서비스키')</div>` : "";
   return `<details class="fvt" id="expw"${open ? " open" : ""}><summary class="chart-title" style="margin-top:12px"><b>📦 수출·입국 데이터 추적</b> ${nw.length ? `<span class="pill red">‼️ 새로 나옴</span> ` : ""}<span class="src">${all.map((k) => EXPW_K[k].t).join(" · ")} · 기관도 개인도 같이 보는 원천 숫자 · 누르면 펼침</span></summary>
-    ${ks.map((k) => expwOne(k, nw.includes(k))).join("")}${wait}
+    ${code === "003230" ? syExpHTML() : ""}${ks.map((k) => expwOne(k, nw.includes(k))).join("")}${wait}
     <div class="note src">📅 발표: 매달 1일 지난달 잠정 · 11일·21일 1~10일·1~20일 잠정 (교보·다올·TRASS-BF 텔레그램 글을 자동으로 읽어 <a href="#exports">📦 수출입 탭</a>에 기간별로) · 15일쯤 지난달 확정 (관세청 API, 여기 그림에 자동) · 외국인 입국자는 다음 달 하순 (자동) · 빨간 ‼️ 는 새 숫자를 받은 뒤 7일 · 사고팔 판단이 아니라 숫자 확인용이에요</div></details>`;
 }
 // 📦 수출입 탭 (사용자 11/11 "수출입 탭 — 화장품·라면·의료기기, 1개월·3개월·6개월·1년·3년·5년·전체, 시각화 · 채널 글로 크로스 체크")
@@ -4335,7 +4360,7 @@ function xpItem(k) {
   if (!K.s()?.[K.m] && !xTen().some((t) => t[k])) return "";
   const body = xTabs(XP_TABS.map((t) => t[0]), XP_TABS.map(([l, km]) => (km === 1 ? xpTen(k) : xpMonths(k, km, l))), 0, "seg lseg");
   const MT = EXP?.medtour_latest, DN = EXP?.dram_latest;
-  const extra = k === "ramen" ? expHTML("ramen") + ramenYtdHTML() : k === "cosmetics" ? expHTML("cosmetics")
+  const extra = k === "ramen" ? syExpHTML() + expHTML("ramen") + ramenYtdHTML() : k === "cosmetics" ? expHTML("cosmetics")
     : k === "medx" && MT ? `<h3>🏥 외국인 의료관광 소비 <span class="src">${esc(MT.ym)} · 억원 · ${esc(MT.src)}</span></h3><div class="card">${chgChart({ t: `${+MT.ym.slice(5)}월 의료관광 카드 소비`, qh: "지난달보다",
       rows: Object.entries(MT.rows).map(([c, [v, y, m]]) => ({ n: c, now: v, u: "억원", d: 0, yoy: y, qoq: m })) })}${(MT.notes || []).length ? `<ul class="irl">${MT.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}</div>`
     : k === "tech" ? `${DN ? `<div class="card" style="margin-top:8px"><div class="chart-title"><b>📝 ${esc(DN.p || DN.ym)} 증권사 코멘트</b> <span class="src">${esc(DN.src)}</span></div><ul class="irl">${DN.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}<div class="note"><a href="#industry" data-kc="exp-tech">💾 반도체·IT 품목 전체 월별 그림 → 산업 탭</a></div>`

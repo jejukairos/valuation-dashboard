@@ -142,6 +142,23 @@ def parse_sgg(text):
     return {"ym": f"{m[1]}-{int(m[2]):02d}", "rows": rows} if rows else None
 
 
+# 🍜 한화 한유정 '💎삼양식품 10월 수출 확정치' — '삼양식품 10월 수출은 1억 3,530만달러로 전년 대비 58.4% 증가' · '추정 비중은 78.2%' (사용자 11/17 키팩터)
+HANWHA = "hanwha_yujunghan"
+SY = re.compile(r"삼양식품\s*(\d{1,2})월\s*수출은\s*(?:(\d+)억\s*)?([\d,]+)만\s*달러로\s*전년\s*대비\s*([\d.]+)%\s*(증가|감소)")
+
+
+def parse_sy(text, d):
+    """→ {ym, v: [백만$, 전년비 %, 비중 %|None]} · 그 문장이 없으면 None (글 모양이 바뀌면 화면은 yaml 값 그대로)."""
+    t = " ".join(text.split())
+    m = SY.search(t)
+    if not m:
+        return None
+    s, mo = re.search(r"추정\s*비중은\s*([\d.]+)%", t), int(m[1])
+    y = int(d[:4]) - (mo > int(d[5:7]))  # 1월에 올라온 12월 글
+    usd = int(m[2] or 0) * 100 + int(m[3].replace(",", "")) / 100
+    return {"ym": f"{y}-{mo:02d}", "v": [round(usd, 2), float(m[4]) * (1 if m[5] == "증가" else -1), float(s[1]) if s else None]}
+
+
 def cross(x):
     """다른 증권사 채널의 수출 데이터 글 → 제목 + 숫자 줄 (없으면 None)."""
     t = x["text"].strip()
@@ -192,6 +209,14 @@ def collect():
                 sgg[r["ym"]] = {**r, "src": f"다올 박종현 텔레그램 {x['d']} (자동)", "u": f"https://t.me/{x['id']}", "d": x["d"]}
     except Exception as e:  # noqa: BLE001
         fails.append(f"{DAOL} 확정치: {str(e)[:60]}")
+    sy = {}
+    try:
+        for x in sorted(tg_reports.search(HANWHA, "삼양식품", cut), key=lambda x: x["id"]):  # 같은 달 글이 또 오면 나중 글로
+            r = parse_sy(x["text"], x["d"])
+            if r:
+                sy[r["ym"]] = {**r, "d": x["d"], "u": f"https://t.me/{x['id']}"}
+    except Exception as e:  # noqa: BLE001
+        fails.append(f"{HANWHA} 삼양: {str(e)[:60]}")
     posts = {}
     for ch in CROSS:
         try:
@@ -202,7 +227,7 @@ def collect():
         except Exception as e:  # noqa: BLE001
             fails.append(f"{ch}: {str(e)[:60]}")
     return {"updated_at": now.strftime("%Y-%m-%d %H:%M"), "ten": sorted(ten.values(), key=lambda e: (e["ym"], e["upto"], e["how"]), reverse=True),
-            "sgg": [sgg[k] for k in sorted(sgg)], "posts": sorted(posts.values(), key=lambda p: p["d"] + p["hm"], reverse=True)[:40], "fails": fails}
+            "sgg": [sgg[k] for k in sorted(sgg)], "sy": [sy[k] for k in sorted(sy)], "posts": sorted(posts.values(), key=lambda p: p["d"] + p["hm"], reverse=True)[:40], "fails": fails}
 
 
 if __name__ == "__main__":
@@ -217,6 +242,11 @@ if __name__ == "__main__":
         r = parse("⚡️2026년 10월 음식료/담배 수출\n\n라면\n> 전체 $173.0m (yy 33%, mm 2%)\n> 미국 $31.8m (yy 64%, mm 20%)\n\n소스\n> 전체 $40.0m (yy 43%, mm 4%)")
         assert (r["p"], r["upto"], r["item"], r["rows"]) == ("10월 한 달", 31, "ramen", {"전체": [173.0, 33, 2], "미국": [31.8, 64, 20]}), r
         assert parse("음식료/화장품 데일리 뉴스\nK라면 수출 4.2배") is None
+        r = parse_sy("💎삼양식품 10월 수출 확정치역대 최대(추정)\n\n- 무역통계 지역별 데이터로 추정한 삼양식품 10월 수출은 1억 3,530만달러로 전년 대비 58.4% 증가\n\n"
+                     "- 삼양식품 추정 비중은 78.2%로 역시 최대치", "2026-11-16")
+        assert r == {"ym": "2026-10", "v": [135.3, 58.4, 78.2]}, r
+        assert parse_sy("삼양식품 12월 수출은 9,850만달러로 전년 대비 3.1% 감소", "2027-01-15") == {"ym": "2026-12", "v": [98.5, -3.1, None]}
+        assert parse_sy("삼양식품(003230/Buy): 모든 변수를 이겨내는 실적", "2026-11-09") is None
         r = parse_daol("[다올 의료기기/화장품 박종현]\n★ 2026.11월 1-10일 의료기기 수출데이터\n(백만달러, YoY / MoM)\n\n1. 톡신 38.0 (+21.5% / -11.5%)\n- 미국 0.4 (-33.0% / -52.7%)\n\n"
                        "3. 임플란트 59.3 (-7.0% / -15.8%)\n- 중국 16.6 (-17.4% / -25.0%)\n\n5. 필러 351.8 (+40.1% / -17.6%)")
         assert (r["p"], r["item"], r["rows"]) == ("11월 1~10일", "medx", {"톡신": [38.0, 21.5, -11.5], "톡신 · 미국": [0.4, -33.0, -52.7], "필러": [351.8, 40.1, -17.6]}), r
