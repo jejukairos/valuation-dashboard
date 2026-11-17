@@ -123,6 +123,14 @@
 <main class="wrap" id="jointView" hidden>
   <h2>공동자산</h2>
   <p class="sub">함께 투자하는 종목이에요. 보유종목과 똑같이 적정주가·분기 실적·실적발표 요약까지 봐요. 종목은 config/stocks.yaml 의 joint 에 넣어요.</p>
+  <h3>📋 공동자산 비교표 <span class="src">보유 탭과 같은 숫자 · 종목 이름을 누르면 아래 그 종목 칸으로</span></h3>
+  <div class="cmp-bar">
+    <div class="seg" id="jcmpMkt"></div>
+    <div class="seg" id="jcmpGroup"></div>
+    <div class="chips" id="jcmpInd"></div>
+  </div>
+  <div class="card cmp-card"><div class="cmp-wrap" id="jcmpTable"></div></div>
+  <p class="note" id="jcmpNote"></p>
   <div id="jointAccel"></div>
   <div class="grid g3" id="jointCards"></div>
 </main>

@@ -62,6 +62,7 @@ def kr_row(wise, hist, price, cap, px, own_cap=True):
         "years": [lab(v) for v in ys],
         "sales_g": [_g(w(v, "sales"), w(v - 1, "sales")) for v in ys[1:]],
         "op_g": [_g(w(v, "op"), w(v - 1, "op")) for v in ys[1:]],
+        "eps_g": [_g(w(v, "eps"), w(v - 1, "eps")) for v in ys[1:]],  # 해마다 EPS 증가율 25→26E·26E→27E·27E→28E (사용자 11/18)
         "sales_cagr": _cagr(w(y + 2, "sales"), w(y - 1, "sales"), 3),
         "op_cagr": _cagr(w(y + 2, "op"), w(y - 1, "op"), 3),
         "eps_cagr": eps_cagr,
@@ -120,6 +121,7 @@ def us_row(code, hist, price, cap, px):
     per12 = price / f_eps if f_eps and f_eps > 0 else None
     # EPS 성장률: 작년 실적 → 28E 3년 연평균 (나스닥 추정이 없으면 내년까지 2년 연평균)
     eps_cagr = _cagr(eps(y + 2), eps(y - 1), 3) if eps(y + 2) else _cagr(eps(y + 1), eps(y - 1), 2)
+    out["eps_g"] = [_g(eps(v), eps(v - 1)) for v in (y, y + 1, y + 2)]  # 미국은 영업이익 추정이 없어 EPS 증가율만
     out.update({"per12": rnd(per12), "eps_cagr": eps_cagr, "peg": _peg(per12, eps_cagr), "dd52": _drawdown(px),
                 "sales_cagr": None, "op_cagr": None, "us": True})
     return out

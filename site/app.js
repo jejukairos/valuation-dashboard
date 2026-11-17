@@ -920,8 +920,10 @@ function cmpCols(mk = MKT) {
   for (let i = 0; i < 3; i++) {
     c["sg" + i] = { h: `매출<br>${arrow(i)}`, v: t("sales_g", i), f: G };
     c["og" + i] = { h: `영업이익<br>${arrow(i)}`, v: t("op_g", i), f: G };
+    // 해마다 EPS 증가율 (사용자 11/18) · shortcut: tbl.eps_g 가 들어오기 전(다음 데이터 갱신)엔 26E→27E 만 PER 두 칸으로 역산 (둘 다 지금 주가 ÷ EPS)
+    c["eg" + i] = { h: `EPS<br>${arrow(i)}`, v: (s) => s.tbl?.eps_g?.[i] ?? (i === 1 && s.tbl?.per?.[1] > 0 && s.tbl?.per?.[2] > 0 ? (s.tbl.per[1] / s.tbl.per[2] - 1) * 100 : null), f: G };
     c["per" + i] = { h: `PER<br>${ys[i]}`, v: t("per", i), f: P(1) };
-    c["pbr" + i] = { h: `PBR<br>${ys[i]}`, v: t("pbr", i), f: P(2) };
+    c["pbr" + i] = { h: usd && !i ? "PBR<br>지금" : `PBR<br>${ys[i]}`, v: t("pbr", i), f: P(2) };  // 미국 첫 칸 = 야후 지금 PBR (예상 BPS 는 무료 자료 없음)
     c["roe" + i] = { h: `ROE<br>${ys[i]}`, v: t("roe", i), f: R(0) };
   }
   for (let i = 0; i < 4; i++) {
@@ -956,9 +958,11 @@ function cmpCols(mk = MKT) {
 }
 const CMP_GROUPS = [
   // 앞쪽은 올해(26E) 한눈에, "|" 뒤로는 같은 지표를 연도순으로 이어서 (기울기·연속성 보기)
-  ["sum", "요약", ["cap", "salesC", "opC", "per12", "peg", "opm1", "roe1", "debt1", "pf1", "dy0", "dd",
+  // 맨 앞 = 해외 증권사가 중요하게 보는 칸 (사용자 11/18): PEG · FCF · 영업이익·EPS 다음 해·그다음 해 증가율 · 내년 예상 PBR
+  ["sum", "요약", ["cap", "peg", "fcfT", "fcfY", "pf1", "og1", "og2", "eg1", "eg2", "pbr2",  // pf1 = 야후 FCF 가 비는 종목(삼성전자·현대차 등)도 와이즈리포트 예상 FCF 로 보이게
+    "|", "salesC", "opC", "per12", "opm1", "roe1", "debt1", "dy0", "dd",
     "|", "opm0", "opm1", "opm2", "opm3", "|", "roe0", "roe1", "roe2", "|", "debt0", "debt1", "debt2", "debt3", "|", "pf0", "pf1", "pf2", "pf3"]],
-  ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC", "op10", "px10", "rr10"]],
+  ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC", "eg0", "eg1", "eg2", "op10", "px10", "rr10"]],
   ["qual", "수익성", ["gpm0", "opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2", "roic", "roicT", "roicE0", "roicE1"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "psr", "pf0", "pf1", "pf2", "pf3"]],
   ["fin", "재무·배당", ["nc", "ncp", "ncx", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
@@ -967,8 +971,8 @@ const CMP_GROUPS = [
 ];
 // 미국은 무료로 받을 수 있는 숫자가 달라서 (추정은 EPS·매출 위주, 나머지는 최근 실적) 칸 구성을 따로
 const CMP_GROUPS_US = [
-  ["sum", "요약", ["cap", "sg0", "sg1", "epsC", "per12", "peg", "gpm0", "opm0", "roic", "roicE1", "ncx", "fcfT", "fcfY", "dy0", "dd"]],
-  ["grow", "성장", ["sg0", "sg1", "epsC", "op10", "px10", "rr10"]],
+  ["sum", "요약", ["cap", "peg", "fcfT", "fcfY", "eg1", "eg2", "pbr0", "|", "sg0", "sg1", "epsC", "per12", "gpm0", "opm0", "roic", "roicE1", "ncx", "dy0", "dd"]],
+  ["grow", "성장", ["sg0", "sg1", "epsC", "eg0", "eg1", "eg2", "op10", "px10", "rr10"]],
   ["qual", "수익성", ["gpm0", "gpm1", "gpm2", "opm0", "roe0", "roic", "roicT", "roicE0", "roicE1"]],
   ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "psr"]],
   ["fin", "재무·배당", ["nc", "ncp", "ncx", "ncxp", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "dy0", "dd"]],
@@ -978,14 +982,18 @@ const CMP_GROUPS_US = [
 // 같은 비교표를 🇰🇷/🇺🇸 보유 탭과 ⭐ 관심 탭에 (관심은 🇰🇷/🇺🇸 버튼) — 종목 이름을 누르면 아래 그 종목 칸으로, 나머지 칸은 상세 화면
 const CMPW = { group: "sum", ind: "전체", sort: "cap", dir: -1, mkt: "KR" };
 try { Object.assign(CMPW, JSON.parse(localStorage.getItem("cmpw") || "{}")); } catch (_) {}
+const CMPJ = { group: "sum", ind: "전체", sort: "cap", dir: -1, mkt: "KR" };
+try { Object.assign(CMPJ, JSON.parse(localStorage.getItem("cmpj") || "{}")); } catch (_) {}
 const CMP_T = {
   main: { grp: "보유", st: CMP, save: "cmp", mkt: () => MKT, cards: "#stockCards", el: { group: "#cmpGroup", ind: "#cmpInd", table: "#cmpTable", note: "#cmpNote" } },
   watch: { grp: "관심", st: CMPW, save: "cmpw", mkt: () => CMPW.mkt, cards: "#watchFull", el: { group: "#wcmpGroup", ind: "#wcmpInd", table: "#wcmpTable", note: "#wcmpNote" } },  // 시장은 🇰🇷/🇺🇸 관심 탭이 정함
+  joint: { grp: "공동", st: CMPJ, save: "cmpj", mkt: () => CMPJ.mkt, cards: "#jointCards", el: { mkt: "#jcmpMkt", group: "#jcmpGroup", ind: "#jcmpInd", table: "#jcmpTable", note: "#jcmpNote" } },  // 🤝 공동자산도 같은 표 (사용자 11/18) — 표 위 🇰🇷/🇺🇸 버튼
 };
 const inGrp = (s, g) => grp(s) === g || (s.also || []).includes(g);
 function renderCmp(T = CMP_T.main) {
   const MK = T.mkt(), S = T.st, cols = cmpCols(MK);
   if (!$(T.el.table)) return;
+  const ys = (DASH.stocks.find((c) => c.tbl && c.tbl.years) || {}).tbl?.years || ["25", "26E", "27E", "28E"];  // 아래 설명 줄의 연도 이름
   const GROUPS = MK === "US" ? CMP_GROUPS_US : CMP_GROUPS;
   const g = GROUPS.find((x) => x[0] === S.group) || GROUPS[0];
   const raw = g[2] || [...new Set(GROUPS.slice(0, -1).flatMap((x) => x[2]))];
@@ -1011,7 +1019,8 @@ function renderCmp(T = CMP_T.main) {
   $(T.el.table).innerHTML = `<table class="cmp"><thead><tr>${th("name", "종목")}${th("ind", "산업")}${keys.map((k, i) => th(k, cols[k].h, i)).join("")}</tr></thead>
     <tbody>${rows.map((s) => `<tr data-code="${esc(s.code)}"><td class="nm" title="아래 ${esc(s.name)} 칸으로 이동">${esc(s.name)} ↓</td><td class="ind">${esc(s.industry || "")}</td>
       ${keys.map((k, i) => `<td${sepAt.has(i) ? ' class="sep"' : ""}>${cols[k].f(cols[k].v(s), s)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  $(T.el.note).innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · <b>종목 이름(↓)을 누르면 아래 그 종목 칸으로</b>, 숫자 칸을 누르면 상세 화면 · 3년 연평균 = 25년 실적 → 28년 추정 ·
+  $(T.el.note).innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · <b>종목 이름(↓)을 누르면 아래 그 종목 칸으로</b>, 숫자 칸을 누르면 상세 화면 ·
+    <b>요약 맨 앞 칸</b> = PEG · FCF(최근 4분기, 시총 대비) · ${MK === "US" ? "EPS" : "영업이익·EPS"} 증가율 ${ys[1]}→${ys[2]}·${ys[2]}→${ys[3]} (증권사 예상 평균, 적자인 해가 끼면 비움) · ${MK === "US" ? "지금 PBR (미국은 영업이익 예상·내년 예상 PBR 을 무료로 받을 곳이 없어 비움)" : `PBR ${ys[2]} = 지금 주가 ÷ 내년 예상 주당순자산`} · 3년 연평균 = 25년 실적 → 28년 추정 ·
     PEG = 12MF PER ÷ EPS 3년 연평균 성장률(%) (1 아래면 성장에 비해 싼 편, 피터 린치 기준) · * = 이익이 크게 출렁이는 업종이라 PER·PEG 가 실제보다 싸 보일 수 있음 ·
     P/FCF = 지금 시가총액 ÷ 그해 잉여현금흐름 (25 = 확정 실적) · PSR = 시가총액 ÷ 올해 예상 매출 · 순현금 = 현금·단기투자 − 총차입금(최근 분기, 야후) · GPM·ROIC·FCF = 야후 연간 실적 ·
     ${MK === "US" ? "미국: 추정치는 야후·나스닥 컨센서스(EPS·매출), 나머지는 최근 실적 · 25 PER 은 지금 주가 ÷ 작년 EPS" : "25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준"}`;
@@ -5486,7 +5495,7 @@ function showView() {
   if (view === "market") drawMarketCharts(); // 숨겨진 상태에서 그린 차트는 크기가 0이라 보일 때 다시 그림
   if (view === "pbr") loadPBR();
   if (view === "watch" || view === "uswatch") renderWatchTab(view === "uswatch" ? "US" : "KR");
-  if (view === "joint") renderGroup("공동", "#jointCards");
+  if (view === "joint") { renderGroup("공동", "#jointCards"); renderCmp(CMP_T.joint); }
 }
 // ⭐ 관심 탭도 보유 탭처럼 🇰🇷/🇺🇸 따로 (같은 화면, 시장만 바꿈) — 2027 주도섹터 그림·빠른 판단 표는 한국 종목뿐이라 🇰🇷 에만, 🆕 상장 준비 회사는 🇺🇸 에만
 function renderWatchTab(mk) {
