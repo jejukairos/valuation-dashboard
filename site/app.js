@@ -3441,14 +3441,17 @@ function intHTML(d) {
   const usd = d.currency === "USD", dv = usd ? 1e6 : 1e8, qs = Object.entries(d.qtrs || {}).filter(([, q]) => q.op != null && q.intx > 0 && !q.prelim).slice(-6);
   if (qs.length < 2) return "";
   const op = qs.map(([, q]) => q.op / dv), ix = qs.map(([, q]) => q.intx / dv), L = qs.map(([e]) => qLabel(e)), r = op.at(-1) / ix.at(-1), u = usd ? "백만$" : "억원";
-  const tag = op.at(-1) <= 0 ? "영업이익 적자" : `이자의 ${n(r, r >= 10 ? 0 : 1)}배`;
+  // 3년 연속 연간 이자보상배율 1 미만 = 채권은행 신용위험평가 '한계기업' 기준 (사용자 11/17)
+  const yr = Object.entries(d.qtrs_y || {}).filter(([, q]) => q.op != null && q.intx > 0).slice(-3), zb = yr.length === 3 && yr.every(([, q]) => q.op < q.intx);
+  const zl = zb ? `🚨 3년 연속 이자보상배율 1배 미만 (${yr.map(([e, q]) => `${e.slice(2, 4)}년 ${n(q.op / q.intx, 1)}배`).join(" · ")}) — 은행 신용위험평가의 '한계기업' 기준에 걸려요. ` : "";
+  const tag = (op.at(-1) <= 0 ? "영업이익 적자" : `이자의 ${n(r, r >= 10 ? 0 : 1)}배`) + (zb ? " · 🚨 3년 연속 1배 미만" : "");
   if (op.every((v, i) => v >= 20 * ix[i]))  // 이자가 영업이익의 5% 미만이면 막대가 안 보여서 한 줄로
     return `<div class="qp"><div class="qt"><b>💸 영업이익 vs 이자비용 · ${tag}</b></div><div class="note">${L.map((q, i) => `${esc(q)} <b>${n(op[i] / ix[i], 0)}배</b>`).join(" · ")}<br><span class="src">이자가 영업이익의 5%도 안 돼요 — 이자 부담은 거의 없어요 (야후 분기 재무제표)</span></div></div>`;
   const g = (a) => (a.length >= 5 && a.at(-5) > 0 && a.at(-1) > 0 ? (a.at(-1) / a.at(-5) - 1) * 100 : null), go = g(op), gi = g(ix);
-  const kid = op.at(-1) <= 0 ? "파란 막대(영업이익)가 0 아래예요. 본업에서 아직 돈을 못 벌어서 이자는 빌린 돈이나 가진 현금으로 내고 있어요."
+  const kid = zl + (op.at(-1) <= 0 ? "파란 막대(영업이익)가 0 아래예요. 본업에서 아직 돈을 못 벌어서 이자는 빌린 돈이나 가진 현금으로 내고 있어요."
     : r < 1 ? `파란 막대(영업이익)가 주황 막대(이자)보다 작아요. 본업으로 번 돈이 이자의 ${n(r, 1)}배라 이자를 다 못 내요. 파란 막대가 주황을 따라잡는지가 핵심이에요.`
     : r < 3 ? `본업으로 번 돈이 이자의 ${n(r, 1)}배예요. 이자는 낼 수 있지만 여유가 크지 않아요 — 이자가 이익보다 빨리 늘면 위험해요.`
-    : `본업으로 번 돈이 이자의 ${n(r, 1)}배라 이자 부담은 작은 편이에요.`;
+    : `본업으로 번 돈이 이자의 ${n(r, 1)}배라 이자 부담은 작은 편이에요.`);
   return keyChart({ t: `💸 영업이익 vs 이자비용 · ${tag}`, u, d: Math.max(...op.map(Math.abs), ...ix) < 100 ? 1 : 0, side: true, tbl: true, q: L, col: ["#2f6db5", "#e8873a"],
     bars: [{ n: "영업이익 (회계 기준)", v: op }, { n: "이자비용", v: ix }],
     why: `야후 분기 재무제표 · 영업이익 ÷ 이자 = 이자보상배율 (1배 아래면 번 돈으로 이자를 다 못 냄)${go != null && gi != null ? ` · 1년 새 영업이익 ${pct(go, 0, true)}, 이자 ${pct(gi, 0, true)}` : ""} · 야후 반영 전 최신 분기는 빠져요`, kid });
