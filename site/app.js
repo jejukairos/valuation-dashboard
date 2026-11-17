@@ -1558,7 +1558,9 @@ function irBriefHTML(code, name, k) {
     <div class="note src">영어 원문은 휴대폰 크롬 메뉴의 '번역' → 한국어로 볼 수 있어요. 사이트 저장소가 공개라 원문 글을 그대로 옮겨 담지는 않아요.</div>`) : "";
   const story = e.story?.length ? det("📖 핵심 요약", e.story.map((p) => `<p class="note" style="margin:8px 0;line-height:1.6">${tag(p)}</p>`).join("")) : "";
   const src = e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.src || "회사 IR 자료")}</a>` : esc(e.src || "");
-  return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${raw}${story}${box("IR 요약", e.sum, cd.s)}${box("IR 분석", e.ana, cd.a)}${e.qa?.length ? box("🎤 어닝콜 질의응답", e.qa) : ""}
+  // 📌 사용자가 보낸 IR노트 (11/17 삼양) — 제목·날짜만 보이고 내용은 닫힘, IR 칸 맨 위
+  const nt = e.note?.s?.length ? box(`${e.note.t || "📌 IR노트"} (${String(e.note.d || "").slice(5).replace("-", "/")})`, e.note.s, e.note.src ? `<div class="src" style="margin-top:6px">${tag(e.note.src)}</div>` : "") : "";
+  return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${nt}${raw}${story}${box("IR 요약", e.sum, cd.s)}${box("IR 분석", e.ana, cd.a)}${e.qa?.length ? box("🎤 어닝콜 질의응답", e.qa) : ""}
     ${e.bear?.length ? box("⚖️ 반대 의견 · 리스크", e.bear) : ""}${e.pts?.length && !(EARNINGS[code] || []).find((x) => x.quarter === e.quarter)?.easy?.length ? box("⭐ 핵심 포인트", [{ l: e.pts }]) : ""}
     <div class="src" style="margin-top:6px">📋 ${esc(e.date || "")} · ${src} · ${e.auto ? "회사 설명·해석은 발표가 끝나면 예약 작업이 바꿔 넣어요" : "증감률·이익률은 발표 숫자로 계산한 값"} · 분석은 해석이고 매매 추천이 아니에요</div></div>`;
 }
