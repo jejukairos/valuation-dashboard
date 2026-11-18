@@ -791,9 +791,9 @@ def seg_quarters(raw, seg, longq, mkt, long=None):
             nm, q = _match(sa, lg), dict(lg)
             q.update({lb: {nm[x]: v for x, v in r.items()} for lb, r in sa.items() if lb > max(lg) and r and all(x in nm for x in r)})
             src = long["src_" + k] + (" + 최근 분기 stockanalysis" if max(q) > max(lg) else "")
-        else:
-            q = sa or (ko if k == "prod" else {})
-            src = "stockanalysis.com (TipRanks · 회사 실적 자료)" if sa else (seg or {}).get("src")
+        else:  # 지역은 긴 자료가 8분기 안 돼도(새로 상장·최근 추가) 있으면 씀 — 11/18 달바글로벌·LG엔솔 등 7분기가 버려져 🌍 비중 그림이 없었음
+            q = sa or (ko if k == "prod" else lg)
+            src = "stockanalysis.com (TipRanks · 회사 실적 자료)" if sa else (seg or {}).get("src") if k == "prod" else (long or {}).get("src_geo")
         if not q:
             continue
         out["src_" + k] = src

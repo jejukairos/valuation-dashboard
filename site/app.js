@@ -2243,7 +2243,7 @@ function longHTML(d, span = 40) {
   const usd = c.currency === "USD", ks = all.slice(-span), s = longSeries(q, ks, usd), fm = usd ? usdB : kqFmt;
   const ch = [
     lineChart({ t: "매출 · 영업이익", labels: ks, s: [{ n: "매출", v: s.rev, col: "var(--s1)" }, { n: "영업이익", v: s.op, col: "var(--warn)", right: true, lab: "below" }], fl: fm, fr: fm, zero: true }),
-    stackChart("🧱 제품군별 매출", d.segq?.prod, span, usd, q, d.segq?.src_prod), segPanelHTML(d, usd), callBriefHTML(c.code), stackChart("🌍 지역별 매출", d.segq?.geo, span, usd, q, d.segq?.src_geo),
+    stackChart("🧱 제품군별 매출", d.segq?.prod, span, usd, q, d.segq?.src_prod), segPanelHTML(d, usd), callBriefHTML(c.code),  // 🌍 지역별 매출은 ⭐ 성장률 한눈에로 옮김 (11/18)
     lineChart({ t: "매출 성장률 (YoY)", labels: ks, s: [{ n: "YoY", v: s.yoy, col: "var(--s1)", bar: true }], fl: fPct }),
     lineChart({ t: "영업이익률 (OPM)", labels: ks, s: [{ n: "OPM", v: s.opm, col: "var(--good)" }], fl: fPct }),
     s.gpm.filter((v) => v != null).length >= 4 ? lineChart({ t: "매출총이익률 (GPM)", labels: ks, s: [{ n: "GPM", v: s.gpm, col: "var(--s3)" }], fl: fPct }) : "",
@@ -3697,6 +3697,8 @@ function growAllHTML(code, d, k) {
     const sl = starLine("region");
     cards.push(multiCard("지역별 매출 성장률 (YoY)", reg.map((s) => ({ ...s, star: sl.includes(s.n) })), null, st.has("region"), "지역", pts, G.region_src || kReg?.why));
   }
+  // ⑦ 국가·지역별 매출 비중 — 사용자 11/18 엔비디아 그림 "매출 성장률·매출총이익률·부문별 성장률·국가별 비중은 모든 종목 같게" → 📈 10년 실적 추이의 쌓은 막대를 여기로 옮김 (같은 그림 두 번 금지)
+  cards.push(stackChart("🌍 국가·지역별 매출 비중", d.segq?.geo, QN, d.currency === "USD", d.longq, d.segq?.src_geo));
   if (!cards.some(Boolean)) return "";
   // 🧭 가이던스 줄 + 🐣 쉬운 설명 (숫자 → 그림 → 🐣)
   const usd = d.currency === "USD", x = G.guide, gTxt = x ? [x.rev_yoy && `매출 ${pct(x.rev_yoy[0], 0, true)}~${n(x.rev_yoy[1], 0)}%`,
