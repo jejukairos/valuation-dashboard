@@ -244,6 +244,10 @@
    - 매달 중순(자료 달의 두 달 뒤)에 site/data/ess.json 의 ym 이 안 바뀌었으면 `python collector/ess.py` 를 돌려 보고, 안 되면 이유만 보고 (숫자를 지어내지 않음).
    - 새 호 글에 사건(수주 계약·투자·정책)이 있으면 config/keychart.yaml 2차전지 카드 lines 에 날짜와 함께 한 줄 (ESS 숫자는 카드가 자동으로 보여 주니 다시 적지 않음).
    - 사용자가 '달마다 나오는 업종 숫자' 글을 새로 보내면: 원본이 달마다 올라오는 주소(증권사 목록·공공 API)를 먼저 찾고 → 달별 값이 13개월 넘게 있어야 신호를 낼 수 있음 → site/app.js trendRows 에 한 줄 (업종 칸 이름 sec · 이어진 종목 rel).
+3-15. ⏱ 리드타임 · 📰 트렌드포스 새 소식 (config/keychart.yaml leadtime — 화면: 📡 신호 탭 추세판 바로 아래 + 산업 탭·종목 상세 반도체/기판 키팩터 · 사용자 11/18 "트렌드포스가 소식을 내면 신호 탭에 딱 띄워 줘"):
+   - 매일 https://www.trendforce.com/news/ 와 https://www.trendforce.com/presscenter/news 의 새 글 제목을 보고, 우리 업종(메모리·D램·낸드·HBM·MLCC·기판·AI 서버·AI 칩·배터리) 글만 본문 앞부분을 읽어 leadtime.news 에 한 줄: {d, k: 부품·주제, t: 쉬운 한국어 80자 안, u}. 좋은 소식만 고르지 말고 값 내림·수요 약함도 그대로. 7일 지난 줄은 지운다.
+   - 리드타임 주간 표(트렌드포스 5단계: Very Tight·Tight·Tightening·Balanced·Easing + 주 수)가 기사·증권사 글로 새로 나오면 leadtime.weeks 맨 아래에 한 줄 (모르는 부품은 지난주 값을 옮기지 말고 빼기). 상태가 한 단계라도 풀리거나 주 수가 줄면 화면이 ⚠ 를 스스로 띄우니 숫자만 정확히.
+   - 표·그림에 이미 있는 숫자를 memo 에 또 적지 않는다. 전망·해석은 누가 한 말인지 적고, 기사에서 확인 못 한 말은 '확인 못 함'이라고 쓴다. 매수·매도 추천 문구 금지.
 4. (tools/ir_live.ps1 이 부른 경우엔 파일 수정까지만 — 확인·올리기는 스크립트가 함)
    YAML 이 읽히는지 확인(python 으로 load) → 커밋 메시지 "<종목> <분기> 실적발표 요약" + 끝에 빈 줄과
    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" → `git pull --rebase; git push`.
