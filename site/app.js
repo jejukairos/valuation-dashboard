@@ -4919,7 +4919,8 @@ async function openStock(code) {
     if (seq !== OPEN_SEQ) return;
     // 사용자 11/15 "그림 먼저 · 긴 글 줄이기 · 중복 정리": 위 = 신호등·적정주가 → 실적 그림 → 최신 실적 → 하락률·타임라인 → 성장률, 그 아래는 묶음 8개로 접어 두고 눌러서 보기 (맨 위 바로가기 칩)
     const [headHtml, tailHtml = ""] = detailHTML(d).split("<!--profile-->");
-    const G = [["earn", "📞 실적발표 · 컨콜 · 업종 컨센서스", consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code))],
+    const G = [["hist", "📜 역사 · 이 회사가 걸어온 길", histBlock(code, await keyLoad())],
+      ["earn", "📞 실적발표 · 컨콜 · 업종 컨센서스", consHtml + (d.kq && !(EARNINGS[code] || []).length ? "" : earningsHTML(code))],
       ["news", "📢 공시 · 🎯 리포트 · 📈 추정치", issueHtml],
       ["key", "🔑 키팩터 · 키차트", keyHtml],
       ["biz", "🧩 사업부문 · 수출 · 핵심 지표", segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml],
@@ -6196,8 +6197,21 @@ function keyCard(c, open) {
     <div class="note src">출처: ${esc(c.src || "")}${(c.u || []).map((x) => ` · <a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a>`).join("")}</div></details>`;
 }
 // 묶음 하나: 키팩터 한 줄 + 변곡점 체크 + 카드들 (code = 지금 보는 종목 → 그 종목이 주인공인 카드만 펼침, 산업 탭은 모두 펼침)
+// 📜 역사 (사용자 11/18 "기술을 몰라도 역사부터 — 쉽게·짧게·닫아 두기"): keychart.yaml history {stock, industry} = {one 한 줄, rows [[시기, 무슨 일]], so 그래서 앞으로}
+function histHTML(h) {
+  if (!h?.rows?.length) return "";
+  return `${h.one ? `<div class="kidbox">🐣 ${esc(h.one)}</div>` : ""}<table class="compact" style="width:100%;margin-top:6px"><tbody>${h.rows.map(([w, t]) => `<tr><td style="white-space:nowrap;vertical-align:top;text-align:left"><b>${esc(w)}</b></td><td style="text-align:left;white-space:normal">${esc(t)}</td></tr>`).join("")}</tbody></table>
+    ${h.so ? `<div class="note">🔭 <b>그래서 앞으로</b> ${esc(h.so)}</div>` : ""}<div class="src">큰 흐름만 쉽게 줄인 글이에요 (연도·세부 내용은 조금 다를 수 있어요)</div>`;
+}
+const histFold = (t, h) => (histHTML(h) ? `<details class="fvt" style="margin-top:8px"><summary class="chart-title"><b>📜 ${esc(t)}</b> <span class="src">눌러서 보기</span></summary>${histHTML(h)}</details>` : "");
+// 종목 상세 '📜 역사' 묶음: 그 회사 역사(펼침) + 그 업종 역사(닫힘) — 우선주는 보통주 글
+function histBlock(code, K) {
+  const H = K.history || {}, c = DASH.stocks.find((x) => x.code === code), ind = c?.industry || "", own = H.stock?.[code] || H.stock?.[PREF_COMMON[code]];
+  const inds = Object.entries(H.industry || {}).filter(([k]) => ind.includes(k) || (K.industry?.[k]?.codes || []).includes(code));
+  return (own ? `<div class="card" style="margin-top:8px">${histHTML(own)}</div>` : "") + (inds.length ? `<div class="card" style="margin-top:8px">${inds.map(([k, h]) => histFold(`${k === "AI 자금줄" ? "AI 투자 붐" : k + " 업종"} 역사`, h)).join("")}</div>` : "");
+}
 function keyGroup(name, g, code, st = { n: 0 }) {  // st = 상세에서 이미 펼친 카드 수 — 맨 위 하나만 펼침 (사용자 11/15 긴 글 줄이기, 나머지는 제목 줄만)
-  return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}${leadHTML(name)}
+  return `<div class="card" style="margin-top:8px"><b>🔑 ${esc(name)} 키팩터</b> ${esc(g.key || "")}${code ? "" : histFold(`${name === "AI 자금줄" ? "AI 투자 붐" : name} 역사`, KEYC?.history?.industry?.[name])}${leadHTML(name)}
     ${(g.turn || []).length ? `<div class="kidbox" style="margin-top:6px">🔄 <b>업종 변곡점 체크</b><ul class="irl">${g.turn.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${evHTML(g.ev)}${vcHTML(g.vc)}
     ${(g.cards || []).filter((c) => (code || !c.stock_only) && !(code && c.top)).map((c) => keyCard(c, !code || ([].concat(c.code).includes(code) && !st.n++))).join("")}</div>`;
 }
