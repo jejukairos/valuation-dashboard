@@ -6905,8 +6905,13 @@ function fin4HTML(d) {
     const bigB = Math.max(...cols.flatMap(([, v]) => IT.map(([, f]) => Math.abs(f(v) || 0)))), Fb = us ? (v) => n(v / 1e8, 0) : bigB >= 1e12 ? (v) => n(v / 1e12, 1) : (v) => n(v / 1e8, 0);
     const Tb = us ? (v) => `${n(v / 1e8, 0)}억$` : (v) => (Math.abs(v) >= 1e12 ? `${n(v / 1e12, 2)}조` : `${n(v / 1e8, 0)}억`), dl = (a, b) => (a != null && b != null ? `${b - a >= 0 ? "+" : "−"}${Tb(Math.abs(b - a))}` : "-");
     const f0 = cols[0][1], fL = cols.at(-1)[1], lab = (e) => `${e.slice(2, 4)}.${+e.slice(5, 7)}말`;
+    // 매출채권 회수 기간 = 매출채권 ÷ 그 분기 매출 × 분기 일수 — 사용자 11/18 메르 글 "엔비디아 45 → 60 → 64일, 두 분기 연속 늘어난 건 지켜볼 부분" → 모든 종목
+    const QE = Object.keys(d.qtrs || {}).sort(), dso = QE.map((e, j) => { const v = d.qtrs[e], dd = j ? (new Date(e) - new Date(QE[j - 1])) / 864e5 : 91;
+      return v.ar > 0 && v.rev > 0 ? [e, (v.ar / v.rev) * (dd > 80 && dd < 100 ? dd : 91)] : null; }).filter(Boolean).slice(-4);
+    const up2 = dso.length >= 3 && dso.at(-1)[1] > dso.at(-2)[1] + 1 && dso.at(-2)[1] > dso.at(-3)[1] + 1;
+    const dsoT = dso.length >= 2 ? `<br>매출채권 회수 기간 (돈 받는 데 며칠): ${dso.map(([e, x]) => `${lab(e)} ${n(x, 0)}일`).join(" → ")}${up2 ? ` <b style="color:var(--warn-ink)">⚠ 두 분기 연속 늘어남</b> — 회사 설명(분기 말 출하 몰림 등)을 IR 분석에서 확인` : ""}` : "";
     p4 = qp(`재무상태 <span class="src">(${us ? "억 달러" : bigB >= 1e12 ? "조원" : "억원"})</span>`,
-      `차입금 ${lab(cols[0][0])} ${debt(f0) != null ? Tb(debt(f0)) : "-"} → ${lab(cols.at(-1)[0])} ${debt(fL) != null ? Tb(debt(fL)) : "-"} (${dl(debt(f0), debt(fL))}), 현금 ${f0.cash != null ? Tb(f0.cash) : "-"} → ${fL.cash != null ? Tb(fL.cash) : "-"} · 재고 ${dl(f0.inv, fL.inv)}, 매출채권 ${dl(f0.ar, fL.ar)}, 매입채무 ${dl(f0.ap, fL.ap)}`,
+      `차입금 ${lab(cols[0][0])} ${debt(f0) != null ? Tb(debt(f0)) : "-"} → ${lab(cols.at(-1)[0])} ${debt(fL) != null ? Tb(debt(fL)) : "-"} (${dl(debt(f0), debt(fL))}), 현금 ${f0.cash != null ? Tb(f0.cash) : "-"} → ${fL.cash != null ? Tb(fL.cash) : "-"} · 재고 ${dl(f0.inv, fL.inv)}, 매출채권 ${dl(f0.ar, fL.ar)}, 매입채무 ${dl(f0.ap, fL.ap)}${dsoT}`,
       f4Bars(IT.map(([t]) => t), cols.map(([e, v], j) => ({ n: lab(e), v: IT.map(([, f]) => f(v) ?? null), c: [F4C.g, F4C.a, F4C.b][j + 3 - cols.length] })), { f: Fb }),
       `${cols.map(([e], j) => sw([F4C.g, F4C.a, F4C.b][j + 3 - cols.length], lab(e))).join(" · ")} · <span class="src">야후 분기 재무상태표 · 현금 = 현금성 + 단기 투자 · 차입금 = 총 차입 − 리스</span>`);
   }
