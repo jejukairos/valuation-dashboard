@@ -513,15 +513,37 @@ function tipranksHTML(c) {
 }
 // 📐 PEG 4개 (사용자 11/12): 12MF PER ÷ 내년·내후년 영업이익 증가율 · EPS 증가율 (전년 대비) — 영업이익 = 와이즈리포트 예상 (tbl.op_g),
 //    EPS 증가율 = 그해 PER 끼리 (같은 주가라 EPS 27E÷26E = PER 26E÷27E) · 미국은 무료 영업이익 예상이 없어 영업이익 줄은 '-'
-function peg4(c) {
-  const p = c.fwd_per, t = c.tbl || {}, P = c.fwd_mult?.PER || {}, y0 = new Date().getFullYear(), lab = (k) => `${String(y0 + k).slice(2)}E`, Y = [lab(1), lab(2)];
+function peg4(c, bare = false) {  // bare = 위에 새 PEG 한 줄(pegHow)이 있으면 제목 없이 표만 · PER 도 그 줄과 같은 내년 예상 PER
+  const ph = c.tbl?.peg_how, p = ph?.per ?? c.fwd_per, t = c.tbl || {}, P = c.fwd_mult?.PER || {}, y0 = new Date().getFullYear(), lab = (k) => `${String(y0 + k).slice(2)}E`, Y = [lab(1), lab(2)];
   if (!(p > 0)) return "";
   const opg = (y) => { const i = (t.years || []).indexOf(y); return i > 0 ? t.op_g?.[i - 1] ?? null : null; };
   const epg = (y) => { const a = P[`${String(+y.slice(0, 2) - 1).padStart(2, "0")}E`], b = P[y]; return a > 0 && b > 0 ? (a / b - 1) * 100 : null; };
   if (!Y.some((y) => opg(y) != null || epg(y) != null)) return "";
   const cell = (g) => (g == null ? "-" : g <= 0 ? `<span class="src">감익 ${n(g, 0)}%</span>` : `<b>${n(p / g, 2)}</b> <span class="src">${pct(g, 0, true)}</span>`);
-  return `📐 PEG <span class="src">= 12MF PER ${n(p, 1)} ÷ 1년 증가율</span><table class="peg4"><tr><td></td>${Y.map((y) => `<td class="src">${y}</td>`).join("")}</tr>`
+  return `${bare ? `<div class="src">해마다 따로 보면 (같은 PER ÷ 그해 1년 증가율)</div>` : `📐 PEG <span class="src">= 12MF PER ${n(p, 1)} ÷ 1년 증가율</span>`}<table class="peg4"><tr><td></td>${Y.map((y) => `<td class="src">${y}</td>`).join("")}</tr>`
     + [["영업이익", opg], ["EPS", epg]].map(([l, f]) => `<tr><td class="src">${l}</td>${Y.map((y) => `<td>${cell(f(y))}</td>`).join("")}</tr>`).join("") + `</table>`;
+}
+// 📐 새 PEG 한 줄 + 근거 (사용자 11/18, collector/table.py peg_kr·peg_us → tbl.peg·peg_how — 비교표 PEG 칸과 같은 값)
+//    🇰🇷 내년 예상 PER ÷ 영업이익·EPS 연평균 중 낮은 쪽 (첫해가 크게 뛰면 올해부터 2년) · 🇺🇸 내년 예상 PER ÷ 시킹알파(없으면 Finviz → Zacks → 나스닥) + 출처별·내가 정한 성장률
+const PEG_FLAG = { big: "성장률이 50% 를 넘어 PEG 가 실제보다 싸 보일 수 있어요", per: "내년 예상 PER 이 12MF PER 과 30% 넘게 달라요" };
+function pegHow(c) {
+  const h = c.tbl?.peg_how, p = c.tbl?.peg;
+  if (!h) return "";
+  const G = (v) => (v == null ? "-" : pct(v, 1, true)), us = !!h.srcs, warn = (h.flags || []).filter((f) => PEG_FLAG[f]).map((f) => PEG_FLAG[f]);
+  let body;
+  if (us) {
+    const my = myPerGet(c.code), rows = h.srcs.filter((r) => r[0] !== "내가 정한" || !my).concat(my ? [["내가 정한", my, h.per / my]] : []).filter((r) => r[1] != null);
+    const sa = rows.find((r) => r[0] === "시킹알파")?.[1], fv = rows.find((r) => r[0] === "Finviz")?.[1];
+    if ((h.flags || []).includes("gap")) warn.unshift(`시킹알파 ${n(sa, 1)}% 와 Finviz ${n(fv, 1)}% 가 ${n(Math.abs(sa - fv), 1)}%p 달라요 — 표의 두 PEG 사이로 보세요`);
+    body = `<table class="peg4"><tr><td></td>${rows.map((r) => `<td class="src">${esc(r[0])}</td>`).join("")}</tr>
+      <tr><td class="src">성장률</td>${rows.map((r) => `<td class="src">${n(r[1], 1)}%</td>`).join("")}</tr>
+      <tr><td class="src">PEG</td>${rows.map((r) => `<td>${r[2] == null ? '<span class="src">-</span>' : r[0] === h.by ? `<b>${n(r[2], 2)}</b>` : n(r[2], 2)}</td>`).join("")}</tr></table>`;
+  } else {
+    if ((h.flags || []).includes("gap")) warn.unshift(`영업이익 ${G(h.op)} 와 EPS ${G(h.eps)} 가 10%p 넘게 달라요 — 환율·일회성 같은 영업 밖 손익이 섞였을 수 있어 낮은 쪽을 썼어요`);
+    body = `<div class="src">연평균 영업이익 ${G(h.op)} · EPS ${G(h.eps)} 중 낮은 쪽${h.jump ? " · 첫해가 크게 뛰어서(또는 작년 적자) 올해부터 계산" : ""}${h.alt && (h.flags || []).includes("gap") ? ` · ${esc(h.alt.by)} 기준이면 ${n(h.alt.peg, 2)}` : ""}${p == null ? " · 이익이 줄어드는 예상이라 PEG 없음" : ""}</div>${peg4(c, true)}`;
+  }
+  return `📐 PEG <b>${p == null ? "-" : n(p, 2)}</b> <span class="src">= ${esc(h.per_y)} 예상 PER ${n(h.per, 1)} ÷ ${esc(h.by)} ${us ? "3~5년 성장률" : "연평균"} ${G(h.g)}${h.win ? ` (${esc(h.win)})` : ""}</span>${body}
+    ${warn.map((w) => `<div class="src" style="color:var(--warn-ink)">⚠ ${w}</div>`).join("")}`;
 }
 function stockCard(c) {
   const L = LIGHT[c.verdict] || LIGHT.na;
@@ -571,8 +593,9 @@ function stockCard(c) {
   const [gA, gL] = gB > 0 ? [gB, "② 보정값"] : c.currency === "USD" && fv5 > 0 ? [fv5, "Finviz 5년 성장률"] : [null, ""];
   // 📐 PEG 4개 (사용자 11/12) 를 현재가 바로 아래에 — 위 한 줄짜리 PEG(보정값·Finviz·시킹알파)는 '참고' 한 줄로 줄임 (같은 이름 두 번 안 나오게)
   const seen = [c.fwd_per > 0 && gA ? `${gL} 성장률 ${n(gA, 1)}% → ${n(c.fwd_per / gA, 2)}` : "", fvp != null ? `Finviz ${n(fvp, 2)}` : "", sp ? `시킹알파 ${[sp.ngaap != null ? `${n(sp.ngaap, 2)} (Non-GAAP 예상)` : "", sp.gaap != null ? `${n(sp.gaap, 2)} (GAAP 지난 1년)` : ""].filter(Boolean).join(" · ")}${sp.date ? ` ${esc(String(sp.date).slice(5).replace("-", "/"))}` : ""}` : ""].filter(Boolean);
-  const pg = peg4(c) || (c.currency === "USD" ? `📐 PEG <b>-</b> <span class="src">앞으로 12개월 EPS 가 적자라 계산 안 됨</span>` : "");
-  if (pg || seen.length) pe.unshift(`${pg}${seen.length ? `<div class="src">참고 PEG: ${seen.join(" · ")}</div>` : ""}`);
+  const ph = pegHow(c);  // 새 PEG 근거가 있으면 그 한 칸만 (예전 '참고 PEG' 줄은 출처별 표로 들어감 — 같은 숫자 두 번 안 나오게)
+  const pg = ph || peg4(c) || (c.currency === "USD" ? `📐 PEG <b>-</b> <span class="src">앞으로 12개월 EPS 가 적자라 계산 안 됨</span>` : "");
+  if (pg || seen.length) pe.unshift(`${pg}${seen.length && !ph ? `<div class="src">참고 PEG: ${seen.join(" · ")}</div>` : ""}${ph && sp ? `<div class="src">시킹알파 화면 PEG: ${[sp.ngaap != null ? `${n(sp.ngaap, 2)} (Non-GAAP 예상)` : "", sp.gaap != null ? `${n(sp.gaap, 2)} (GAAP 지난 1년)` : ""].filter(Boolean).join(" · ")}</div>` : ""}`);
   if (c.naver_per > 0) pe.push(`<span class="src">참고: 네이버 추정 PER (올해 ${String(new Date().getFullYear()).slice(2)}E 기준) ${n(c.naver_per, 2)}배</span>`);
   return `<button class="card stock" data-code="${esc(c.code)}" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">
     <div class="row1"><span class="name">${esc(c.name)}</span><span class="price">${money(c.price, c.currency)}</span></div>
@@ -906,7 +929,11 @@ function cmpCols(mk = MKT) {
     op10: { h: "영업이익<br>10년 연평균", v: t("op10"), f: G },  // 📏 지난 최대 10년 (종목 상세 '이익 vs 주가')
     px10: { h: "주가<br>10년 연평균", v: t("px10"), f: G },
     rr10: { h: "이익 대비 주가<br>10년 새 몇 배", v: t("rr10"), f: (v) => (v == null ? "-" : `${n(v, 1)}배`) },
-    peg: { h: "PEG", v: t("peg"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 2)}${s.cyclical ? "*" : ""}</span>`) },
+    // PEG (사용자 11/18): tbl.peg_how 가 있으면 새 방식 — ⚠ = 출처·지표끼리 차이가 크거나 성장률 50% 넘음 (카드 📐 줄에 이유) · 감익이면 '감익'
+    peg: { h: usd && DASH.stocks.some((s) => s.tbl?.peg_how?.srcs) ? "PEG<br>시킹알파 먼저" : "PEG", v: t("peg"), f: (v, s) => (v == null ? (s.tbl?.peg_how?.g <= 0 ? '<span class="src">감익</span>' : "-")
+      : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 2)}${s.cyclical ? "*" : ""}${(s.tbl?.peg_how?.flags || []).length ? " ⚠" : ""}</span>`) },
+    pegF: { h: "PEG<br>Finviz", v: (s) => (s.tbl?.peg_how?.srcs || []).find((r) => r[0] === "Finviz")?.[2] ?? null, f: P(2) },
+    pegM: { h: "PEG<br>내가 정한", v: (s) => (s.tbl?.peg_how?.srcs || []).find((r) => r[0] === "내가 정한")?.[2] ?? null, f: P(2) },
     per12: { h: "PER<br>12MF", v: t("per12"), f: (v, s) => (v == null ? "-" : `<span class="${s.cyclical ? "dim" : ""}">${n(v, 1)}${s.cyclical ? "*" : ""}</span>`) },
     dd: { h: "52주 고점<br>대비", v: t("dd52"), f: (v) => (v == null ? "-" : n(v, 0) + "%") },
     nc: usd ? { h: "순현금 ($B)<br>리스 포함", v: (s) => ncUsd(s, false), f: Bn }
@@ -971,10 +998,10 @@ const CMP_GROUPS = [
 ];
 // 미국은 무료로 받을 수 있는 숫자가 달라서 (추정은 EPS·매출 위주, 나머지는 최근 실적) 칸 구성을 따로
 const CMP_GROUPS_US = [
-  ["sum", "요약", ["cap", "peg", "fcfT", "fcfY", "eg1", "eg2", "pbr0", "|", "sg0", "sg1", "epsC", "per12", "gpm0", "opm0", "roic", "roicE1", "ncx", "dy0", "dd"]],
+  ["sum", "요약", ["cap", "peg", "pegF", "pegM", "fcfT", "fcfY", "eg1", "eg2", "pbr0", "|", "sg0", "sg1", "epsC", "per12", "gpm0", "opm0", "roic", "roicE1", "ncx", "dy0", "dd"]],
   ["grow", "성장", ["sg0", "sg1", "epsC", "eg0", "eg1", "eg2", "op10", "px10", "rr10"]],
   ["qual", "수익성", ["gpm0", "gpm1", "gpm2", "opm0", "roe0", "roic", "roicT", "roicE0", "roicE1"]],
-  ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "psr"]],
+  ["val", "밸류", ["per12", "peg", "pegF", "pegM", "per0", "per1", "per2", "pbr0", "psr"]],
   ["fin", "재무·배당", ["nc", "ncp", "ncx", "ncxp", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "dy0", "dd"]],
   ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
   ["all", "전체", null],
@@ -1021,7 +1048,9 @@ function renderCmp(T = CMP_T.main) {
       ${keys.map((k, i) => `<td${sepAt.has(i) ? ' class="sep"' : ""}>${cols[k].f(cols[k].v(s), s)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   $(T.el.note).innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · <b>종목 이름(↓)을 누르면 아래 그 종목 칸으로</b>, 숫자 칸을 누르면 상세 화면 ·
     <b>요약 맨 앞 칸</b> = PEG · FCF(최근 4분기, 시총 대비) · ${MK === "US" ? "EPS" : "영업이익·EPS"} 증가율 ${ys[1]}→${ys[2]}·${ys[2]}→${ys[3]} (증권사 예상 평균, 적자인 해가 끼면 비움) · ${MK === "US" ? "지금 PBR (미국은 영업이익 예상·내년 예상 PBR 을 무료로 받을 곳이 없어 비움)" : `PBR ${ys[2]} = 지금 주가 ÷ 내년 예상 주당순자산`} · 3년 연평균 = 25년 실적 → 28년 추정 ·
-    PEG = 12MF PER ÷ EPS 3년 연평균 성장률(%) (1 아래면 성장에 비해 싼 편, 피터 린치 기준) · * = 이익이 크게 출렁이는 업종이라 PER·PEG 가 실제보다 싸 보일 수 있음 ·
+    ${mine.some((s) => s.tbl?.peg_how) ? (MK === "US" ? "PEG = 내년 예상 PER ÷ 3~5년 EPS 성장률 — 시킹알파 값 먼저, 없으면 Finviz → Zacks → 나스닥 · 옆 칸은 Finviz·내가 정한 성장률로 계산한 값"
+      : "PEG = 내년 예상 PER ÷ 앞으로 연평균 성장률 — 영업이익·EPS 중 낮은 쪽 · 25→28E 3년, 첫해가 +50% 넘게 뛰거나 작년이 적자면 26E→28E 2년") + " · ⚠ = 지표·출처끼리 차이가 크거나 성장률 50% 넘음 (아래 종목 칸 📐 줄에 이유)"
+      : "PEG = 12MF PER ÷ EPS 3년 연평균 성장률(%)"} (1 아래면 성장에 비해 싼 편, 피터 린치 기준) · * = 이익이 크게 출렁이는 업종이라 PER·PEG 가 실제보다 싸 보일 수 있음 ·
     P/FCF = 지금 시가총액 ÷ 그해 잉여현금흐름 (25 = 확정 실적) · PSR = 시가총액 ÷ 올해 예상 매출 · 순현금 = 현금·단기투자 − 총차입금(최근 분기, 야후) · GPM·ROIC·FCF = 야후 연간 실적 ·
     ${MK === "US" ? "미국: 추정치는 야후·나스닥 컨센서스(EPS·매출), 나머지는 최근 실적 · 25 PER 은 지금 주가 ÷ 작년 EPS" : "25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준"}`;
   try { localStorage.setItem(T.save, JSON.stringify(S)); } catch (_) {}

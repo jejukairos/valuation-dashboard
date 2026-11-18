@@ -49,6 +49,73 @@ def _peg(per12, eps_cagr):
     return rnd(per12 / eps_cagr, 2) if (per12 and per12 > 0 and eps_cagr and eps_cagr > 0) else None
 
 
+def peg_kr(w, price, y, per12=None):
+    """🇰🇷 PEG (사용자 11/18 "한국은 PEG 왜곡이 심함") = 내년 예상 PER ÷ 앞으로 성장률. (PEG, 근거) 를 돌려줌.
+    성장률 = 영업이익·EPS 연평균 중 낮은 쪽 — 환차손·일회성으로 순이익만 튀면 둘이 벌어지니 덜 부풀린 쪽.
+    구간 = 작년 실적 → 내후년 3년. 첫해가 +50% 넘게 뛰었거나 작년이 적자면 올해 → 내후년 2년 (뻥튀기 방지)."""
+    lab = lambda yy: f"{str(yy)[2:]}{'' if yy < y else 'E'}"  # noqa: E731
+    e1 = w(y + 1, "eps")
+    per = price / e1 if (e1 or 0) > 0 else None
+    end = y + 2 if (w(y + 2, "eps") or w(y + 2, "op")) else y + 1
+
+    def jumped(k):
+        a, b = w(y, k), w(y - 1, k)
+        return a is not None and b is not None and (b <= 0 or a / b - 1 > 0.5)
+
+    start = y if (jumped("op") or jumped("eps")) else y - 1
+    cg = {k: _cagr(w(end, k), w(start, k), end - start) for k in ("op", "eps")}
+    if start == y - 1 and not any(v is not None for v in cg.values()):  # 작년 숫자가 없으면 올해부터
+        start, cg = y, {k: _cagr(w(end, k), w(y, k), end - y) for k in ("op", "eps")}
+    cands = [(v, k) for k, v in cg.items() if v is not None]
+    if not per or not cands:
+        return None, None
+    g, by = min(cands)
+    alt = max(cands) if len(cands) == 2 else None  # 다른 쪽(높은 쪽) 기준이면 얼마인지도 같이 — 화면에 '○○ 기준이면'
+    flags = ((["gap"] if len(cands) == 2 and abs(cg["op"] - cg["eps"]) > 10 else []) + (["big"] if g > 50 else [])
+             + (["per"] if per12 and abs(per / per12 - 1) > 0.3 else []))
+    return (rnd(per / g, 2) if g > 0 else None), {
+        "per": rnd(per, 2), "per_y": lab(y + 1), "per12": rnd(per12, 2) if per12 else None, "g": g, "by": {"op": "영업이익", "eps": "EPS"}[by],
+        "win": f"{lab(start)}→{lab(end)}", "n": end - start, "op": cg["op"], "eps": cg["eps"], "jump": start == y, "flags": flags,
+        "alt": {"by": {"op": "영업이익", "eps": "EPS"}[alt[1]], "g": alt[0], "peg": rnd(per / alt[0], 2)} if alt and alt[0] > 0 and alt[0] != g else None}
+
+
+def peg_us(hist, price, y, per12, ltg_cmp, my_per=None):
+    """🇺🇸 PEG (사용자 11/18) = 내년 예상 PER ÷ 3~5년 EPS 성장률 — 시킹알파 먼저, 없으면 Finviz → Zacks → 나스닥.
+    출처별 성장률·PEG 와 내가 정한 성장률(somong.yaml my_per)도 같이, 시킹알파와 Finviz 가 5%p 넘게 다르면 flags 에 gap."""
+    e1 = (hist.get(y + 1) or {}).get("eps")
+    per, per_y = (price / e1, f"{str(y + 1)[2:]}E") if (e1 or 0) > 0 else (per12, "12MF")
+    if not per or per <= 0:
+        return None, None
+    src = {str(k).split("(")[0]: v for k, v in (ltg_cmp or [])}
+    rows = [[k, rnd(src.get(k), 1), rnd(per / src[k], 2) if (src.get(k) or 0) > 0 else None] for k in ("시킹알파", "Finviz", "Zacks", "나스닥")]
+    if my_per and my_per > 0:
+        rows.append(["내가 정한", my_per, rnd(per / my_per, 2)])
+    use = next((r for r in rows[:4] if r[2] is not None), None)
+    if not use:
+        return None, None
+    sa, fv = src.get("시킹알파"), src.get("Finviz")
+    flags = ((["gap"] if sa and fv and abs(sa - fv) > 5 else []) + (["big"] if use[1] > 50 else [])
+             + (["per"] if per12 and abs(per / per12 - 1) > 0.3 else []))
+    return use[2], {"per": rnd(per, 2), "per_y": per_y, "per12": rnd(per12, 2) if per12 else None, "g": use[1], "by": use[0], "srcs": rows, "flags": flags}
+
+
+def _selftest():  # python collector/table.py
+    y = 2026
+    W = lambda d: (lambda yy, k: (d.get(yy) or {}).get(k))  # noqa: E731
+    p, h = peg_kr(W({y - 1: {"op": 100, "eps": 100}, y: {"op": 120, "eps": 130}, y + 1: {"op": 144, "eps": 169}, y + 2: {"op": 172.8, "eps": 219.7}}), 1690, y, 10.5)
+    assert (p, h["win"], h["by"], h["g"], h["flags"], h["alt"]["peg"]) == (0.5, "25→28E", "영업이익", 20.0, [], 0.33), (p, h)  # 3년 · 낮은 쪽
+    p, h = peg_kr(W({y - 1: {"op": 10, "eps": -5}, y: {"op": 100, "eps": 100}, y + 1: {"op": 150, "eps": 200}, y + 2: {"op": 225, "eps": 220}}), 2000, y, 10)
+    assert h["jump"] and h["n"] == 2 and (h["by"], h["g"]) == ("EPS", 48.3), (p, h)  # 작년 적자·첫해 급증 → 올해부터 2년
+    p, h = peg_kr(W({y: {"op": 100, "eps": 100}, y + 1: {"op": 90, "eps": 80}}), 800, y)
+    assert p is None and h["g"] < 0 and h["n"] == 1, (p, h)  # 감익이면 PEG 없음
+    p, h = peg_us({y + 1: {"eps": 10}}, 200, y, 21, [["시킹알파", 20], ["Zacks", 18], ["Finviz", 26], ["나스닥(내 계산)", None]], 25)
+    assert (p, h["by"], h["flags"], h["srcs"][-1]) == (1.0, "시킹알파", ["gap"], ["내가 정한", 25, 0.8]), (p, h)
+    p, h = peg_us({y + 1: {"eps": 10}}, 200, y, 21, [["시킹알파", None], ["Zacks", 18], ["Finviz", 25], ["나스닥(내 계산)", 30]])
+    assert (p, h["by"]) == (0.8, "Finviz"), (p, h)  # 시킹알파 없으면 Finviz
+    assert peg_us({}, 200, y, 21, []) == (None, None)
+    print("table.py PEG 자체 점검 통과")
+
+
 def kr_row(wise, hist, price, cap, px, own_cap=True):
     """own_cap=False: 우선주처럼 실적이 다른 코드 기준이면 시총으로 나누는 P/FCF 는 비움."""
     y = now_kst().year
@@ -58,6 +125,7 @@ def kr_row(wise, hist, price, cap, px, own_cap=True):
     f_eps = C.fwd12(hist, "eps")
     per12 = price / f_eps if f_eps and f_eps > 0 else None
     eps_cagr = _cagr(w(y + 2, "eps"), w(y - 1, "eps"), 3)
+    peg, peg_how = peg_kr(w, price, y, per12)
     return {
         "years": [lab(v) for v in ys],
         "sales_g": [_g(w(v, "sales"), w(v - 1, "sales")) for v in ys[1:]],
@@ -67,7 +135,7 @@ def kr_row(wise, hist, price, cap, px, own_cap=True):
         "op_cagr": _cagr(w(y + 2, "op"), w(y - 1, "op"), 3),
         "eps_cagr": eps_cagr,
         "per12": rnd(per12),
-        "peg": _peg(per12, eps_cagr),
+        "peg": peg, "peg_how": peg_how,
         "opm": [rnd(w(v, "opm"), 1) for v in ys],
         # 25 = 그해 말 주가 기준(와이즈리포트 값), 26E·27E = 지금 주가 ÷ 추정 EPS·BPS
         "per": [w(y - 1, "per")] + [rnd(price / w(v, "eps")) if (w(v, "eps") or 0) > 0 else None for v in (y, y + 1)],
@@ -81,8 +149,9 @@ def kr_row(wise, hist, price, cap, px, own_cap=True):
     }
 
 
-def us_row(code, hist, price, cap, px):
-    """야후에서 받을 수 있는 것만: 매출 추정 성장률(올해·내년), 최근 연간 실적 기준 OPM·부채비율·P/FCF, PER·배당."""
+def us_row(code, hist, price, cap, px, ltg_cmp=None, my_per=None):
+    """야후에서 받을 수 있는 것만: 매출 추정 성장률(올해·내년), 최근 연간 실적 기준 OPM·부채비율·P/FCF, PER·배당.
+    ltg_cmp = 3~5년 성장률 출처 비교 [[시킹알파, %], [Zacks, %], …] · my_per = 내가 정한 성장률 → PEG (peg_us)."""
     import yfinance as yf
 
     from us_stock import _label
@@ -122,6 +191,13 @@ def us_row(code, hist, price, cap, px):
     # EPS 성장률: 작년 실적 → 28E 3년 연평균 (나스닥 추정이 없으면 내년까지 2년 연평균)
     eps_cagr = _cagr(eps(y + 2), eps(y - 1), 3) if eps(y + 2) else _cagr(eps(y + 1), eps(y - 1), 2)
     out["eps_g"] = [_g(eps(v), eps(v - 1)) for v in (y, y + 1, y + 2)]  # 미국은 영업이익 추정이 없어 EPS 증가율만
-    out.update({"per12": rnd(per12), "eps_cagr": eps_cagr, "peg": _peg(per12, eps_cagr), "dd52": _drawdown(px),
+    peg, peg_how = peg_us(hist, price, y, per12, ltg_cmp, my_per)
+    if peg_how is None:  # 성장률 출처가 하나도 없거나 PER 을 못 구하면 예전 방식 (12MF PER ÷ 컨센서스 EPS 연평균)
+        peg = _peg(per12, eps_cagr)
+    out.update({"per12": rnd(per12), "eps_cagr": eps_cagr, "peg": peg, "peg_how": peg_how, "dd52": _drawdown(px),
                 "sales_cagr": None, "op_cagr": None, "us": True})
     return out
+
+
+if __name__ == "__main__":
+    _selftest()

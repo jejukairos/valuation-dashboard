@@ -346,7 +346,7 @@ def stock_detail(h, rates_now, fx):
             checks.append({"item": f"{C.ylabel(now_kst().year)} EPS", "a": now["fwd_eps"], "a_src": "네이버 증권",
                            "b": w_eps, "b_src": "와이즈리포트", "warn": abs(diff) >= 0.05})
     try:  # 보유종목 비교표 한 줄 (실패해도 카드는 그대로)
-        tbl = (table.us_row(code, hist, price, now.get("market_cap"), px) if mkt == "US" else
+        tbl = (table.us_row(code, hist, price, now.get("market_cap"), px, ltg_cmp, my.get("my_per")) if mkt == "US" else
                table.kr_row(wise or {}, hist, price, cap_krw, px, own_cap=not h.get("data_code")))
     except Exception as e:  # noqa: BLE001
         REPORT.fail(f"{name} 비교표", f"{type(e).__name__}: {e}")
