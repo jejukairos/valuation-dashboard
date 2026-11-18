@@ -1155,6 +1155,13 @@ def main():
     except Exception as e:  # noqa: BLE001
         REPORT.block("📉 고점 대비 낙폭 사이클", str(e)[:80])
 
+    print("■ 🔋 글로벌 ESS 설치량 (하나증권 월간 — 새 호가 있을 때만)")
+    try:
+        import ess
+        ess.collect()
+    except Exception as e:  # noqa: BLE001 - 못 받으면 지난 달 숫자 그대로
+        REPORT.block("🔋 ESS 설치량", str(e)[:80])
+
     print("■ 📊 섹터별 대표 ETF (📡 신호 탭 한국 맨 위)")
     try:
         import sector_etf

@@ -893,6 +893,7 @@ function jumpBar(rootSel, barSel, ph = "🔎 종목 이름 검색 (예: 에이�
   const go = (c) => {
     const el = seen.get(c)?.[1];
     if (!el) return;
+    openUp(el);
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     el.classList.add("flash");
     setTimeout(() => el.classList.remove("flash"), 1600);
@@ -5375,7 +5376,96 @@ async function quietHTML() {
 }
 /* ---------- PBR 계산기 (📡 신호 탭 아래쪽) ---------- */
 let PBR = null;
+/* ---------- 📊 데이터 추세판 (사용자 11/18: "달마다 나오는 자료를 막대·선으로 — 추세가 살아있나, 꺾여서 완만해졌나 · 신호 탭에 일주일치 · 보유 먼저")
+   📡 신호 탭 맨 위 + 🏭 산업 탭 업종 이름 아래 신호등 + 🔋 ESS 카드 (data/ess.json ← collector/ess.py, 하나증권 월간)
+   규칙: 최근 3개월 합의 전년 대비 증가율 A, 그 앞 3개월의 증가율 B → A ≤ 0 🔴 꺾임 · B − A 가 5%p 와 B 의 20% 보다 크면 🟡 완만해짐 · 그 밖 🟢 살아있음 ---------- */
+let ESS = null;
+async function essGet() { if (!ESS) { try { ESS = await (await fetch("data/ess.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { ESS = {}; } } return ESS; }
+const openUp = (el) => { for (let p = el; p; p = p.parentElement) if (p.tagName === "DETAILS") p.open = true; };  // 접힌 칸 안으로 바로가기할 때 바깥 칸부터 엶
+const TR_L = { g: ["🟢", "추세 살아있음"], y: ["🟡", "완만해짐 (늘지만 느려짐)"], r: ["🔴", "꺾임 (1년 전보다 줄거나 제자리)"] };
+function trendOf(M) {
+  const L = Object.keys(M || {}).filter((k) => M[k] != null).sort().at(-1);
+  if (!L) return null;
+  const sum = (end, c) => { let s = 0; for (let i = 0; i < c; i++) { const v = M[ymAdd(end, -i)]; if (v == null) return null; s += v; } return s; };
+  const g = (end, c) => { const a = sum(end, c), b = sum(ymAdd(end, -12), c); return a != null && b > 0 ? (a / b - 1) * 100 : null; };
+  const g3 = g(L, 3), g3p = g(ymAdd(L, -3), 3);
+  return { L, v: M[L], yoy: g(L, 1), g3, g3p, g3s: (ym) => g(ym, 3), yoys: (ym) => g(ym, 1),
+    k: g3 == null ? null : g3 <= 0 ? "r" : g3p != null && g3p - g3 > Math.max(5, Math.abs(g3p) * 0.2) ? "y" : "g" };
+}
+const essM = (r) => Object.fromEntries((ESS?.m?.[r] || []).map(([d, a, b]) => [d, +(a + b).toFixed(1)]));  // Grid + BTM
+// 지표 목록: sec = 산업 탭 칸 이름 · rel/codes = 이 숫자와 이어진 우리 종목 (보유 > 관심 > 공동 순서용) · day = 숫자가 나온 날 (7일 안이면 🆕)
+function trendRows() {
+  const gOf = (r) => ["보유", "관심", "공동"].find((g) => DASH.stocks.some((s) => grp(s) === g && (r.codes ? r.codes.includes(s.code) : r.rel.test(s.industry || "")))) || "";
+  const E = (k, t, kind, key, sec, rel, go) => {
+    const M = Object.fromEntries(Object.entries(EXP?.[kind]?.[key] || {}).map(([m, v]) => [m, v == null ? null : v / 100])), d = EXP?.seen?.[kind]?.[Object.keys(M).sort().at(-1)];  // 백만$ → 억$
+    return { k, t, u: "억$", M, sec, rel, day: d > "2001" ? d : "", src: "관세청 수출 (달마다)", go };
+  };
+  const es = (k, t, r) => ({ k, t, u: "GWh", d: 1, M: essM(r), sec: "🔋 2차전지·ESS", rel: /2차전지|ESS/, day: ESS?.rep?.d || "", src: "하나증권 ESS 월간 (원자료 Benchmark)", go: ["#industry", "ess"] });
+  return [es("ess", "세계 ESS 새 설치량", "글로벌"), es("ess-na", "북미 ESS 새 설치량", "북미"),
+    E("mem", "메모리 반도체 수출", "tech", "메모리", "💾 반도체", /반도체/, ["#industry", "exp-tech"]),
+    E("ramen", "라면 수출", "ramen", "전체", "🍜 라면·음식료", /음식료/, ["#exports", "xp-ramen"]),
+    E("cos", "화장품 수출", "cosmetics", "전체", "💄 화장품", /화장품/, ["#exports", "xp-cosmetics"]),
+    E("car", "승용차 수출", "car", "승용차 (HS 8703)", "🚗 자동차", /자동차/, ["#industry", "exp-car"]),
+    ...(AUTOS?.cars || []).map((c) => ({ k: `auto-${c.code}`, t: `${c.name} 세계 판매`, u: "만 대", M: Object.fromEntries(c.months.map((r) => [r[0], r[4] == null ? null : r[4] / 1e4])), sec: "🚗 자동차", codes: [c.code],
+      day: c.last?.date || "", src: "DART 월 판매 공시", go: ["#industry", "exp-car"] })),
+    E("tr", "초고압변압기 수출", "power", "초고압변압기", "⚡ 전력기기", /전력/, ["#industry", "exp-power"]),
+    E("mlcc", "MLCC 수출", "tech", "MLCC", "🧱 기판·CCL", /전자부품|기판/, ["#industry", "exp-tech"]),
+    E("bat", "2차전지 수출", "tech", "2차전지", "🔋 2차전지·ESS", /2차전지/, ["#industry", "exp-tech"]),
+  ].map((r) => ({ ...r, g: gOf(r), s: trendOf(r.M) })).filter((r) => r.s?.k);
+}
+const trDec = (v) => (v >= 100 ? 0 : v >= 10 ? 1 : 2);
+// 최근 13개월 막대 + 위쪽 선 = 최근 3개월 합의 전년 대비 (신호와 같은 숫자) · bars 를 주면 쌓은 막대 (ESS Grid·BTM)
+function trendChart(r, bars) {
+  const ms = Array.from({ length: 13 }, (_, i) => ymAdd(r.s.L, i - 12)), v = ms.map((m) => r.M[m] ?? null);
+  return keyChart({ t: `${r.t} — 최근 13개월`, q: ms.map((m) => `${m.slice(2, 4)}.${+m.slice(5)}`), bars: bars ? bars(ms) : [{ n: r.t, v }], u: r.u, d: r.d ?? trDec(Math.max(...v.map((x) => x || 0))), every: 3,
+    col: ["var(--s1)", "var(--s3)"], pct: { n: "최근 3개월 합의 전년 대비", v: ms.map((m) => r.s.g3s(m)) } });
+}
+function trendRow(r, isNew) {
+  const s = r.s, [ic, lab] = TR_L[s.k], ms = Array.from({ length: 12 }, (_, i) => s.yoys(ymAdd(s.L, i - 11))), mx = Math.max(10, ...ms.map((x) => Math.abs(x || 0)));
+  const spark = `<svg viewBox="0 0 120 24" style="width:96px;height:20px;float:right" role="img" aria-label="최근 12개월 전년 대비"><line x1="0" x2="120" y1="12" y2="12" stroke="var(--axis)"/>${ms.map((x, i) => (x == null ? ""
+    : `<rect class="${kcol(x)}" fill="currentColor" x="${i * 10 + 1}" y="${x >= 0 ? 12 - (x / mx) * 11 : 12}" width="8" height="${Math.max(1, (Math.abs(x) / mx) * 11)}"/>`)).join("")}</svg>`;
+  return `<details class="fvt" style="border-top:1px solid var(--border);padding:8px 0"><summary style="cursor:pointer">${spark}<b>${ic} ${esc(r.t)}</b>${r.g ? ` <span class="src">${FG[r.g]}</span>` : ""}${isNew ? ` <span class="pill red">🆕 ${+r.day.slice(5, 7)}/${+r.day.slice(8)} 나옴</span>` : ""}
+    <div class="src" style="margin-top:2px">${s.L.slice(2, 4)}년 ${+s.L.slice(5)}월 <b>${n(s.v, r.d ?? trDec(s.v))}${esc(r.u)}</b> · 1년 전보다 <b class="${kcol(s.yoy)}">${sg(s.yoy)}</b> · 최근 3개월 <b class="${kcol(s.g3)}">${sg(s.g3)}</b>${s.g3p != null ? ` (그 앞 3개월 ${sg(s.g3p)})` : ""} → <b>${lab}</b></div></summary>
+    ${trendChart(r)}<div class="note src">출처: ${esc(r.src)}${r.day ? ` · ${esc(r.day)} 나옴` : ""} · <a href="${r.go[0]}" data-kc="${esc(r.go[1])}">자세한 그림 →</a></div></details>`;
+}
+async function trendBoardHTML() {  // (trendHTML 은 종목 상세의 다른 함수 — 이름 겹치지 않게)
+  await essGet();
+  if (!EXP) { try { EXP = await (await fetch("data/exports.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { EXP = {}; } }
+  if (!AUTOS) { try { AUTOS = await (await fetch("data/autosales.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { AUTOS = {}; } }
+  const today = kstToday(), isNew = (r) => !!r.day && (Date.parse(today) - Date.parse(r.day)) / 864e5 <= 7, GO = { 보유: 0, 관심: 1, 공동: 2, "": 3 };
+  const rows = trendRows().sort((a, b) => isNew(b) - isNew(a) || GO[a.g] - GO[b.g]), cnt = (k) => rows.filter((r) => r.s.k === k).length, nw = rows.filter(isNew);
+  if (!rows.length) return "";
+  return `<h3 style="margin-top:0">📊 데이터 추세판 <span class="src">달마다 나오는 숫자 ${rows.length}개 — 추세가 살았나, 꺾였나</span></h3><div class="card" style="margin-bottom:14px">
+    <div class="kidbox" style="margin-top:0">🐣 🟢 살아있음 ${cnt("g")}개 · 🟡 완만해짐 ${cnt("y")}개 · 🔴 꺾임 ${cnt("r")}개 · ${nw.length ? `🆕 최근 7일에 새로 나온 숫자 ${nw.length}개가 맨 위 (${nw.map((r) => esc(r.t)).join(", ")})` : "최근 7일에 새로 나온 숫자는 없어요"}. 줄을 누르면 막대 그림이 열려요.</div>
+    ${rows.map((r) => trendRow(r, isNew(r))).join("")}
+    <div class="note src">신호 규칙: 최근 3개월을 더한 값이 1년 전 같은 3개월보다 얼마나 늘었는지(A)와, 그 앞 3개월은 얼마나 늘었었는지(B)를 봐요. A 가 0 아래 = 🔴 꺾임 · A 가 B 보다 눈에 띄게 낮아짐(5%p 넘게, 그리고 B 의 20% 넘게) = 🟡 완만해짐 · 그 밖 = 🟢 살아있음.
+    순서: 🆕 최근 7일 → 💼 보유 → ⭐ 관심 → 🤝 공동 관련 숫자 · 오른쪽 작은 막대 = 최근 12개월의 전년 대비 (위 = 늘어남) · 한 달 숫자는 들쭉날쭉해서 3개월로 봄 · 매수·매도 추천 아님</div></div>`;
+}
+// 🔋 글로벌 ESS 새 설치량 (하나증권 월간 — 지역별 표 + 달별 쌓은 막대) · 산업 탭 2차전지 칸 맨 위 (id kc-ess)
+function essHTML() {
+  const T = ESS?.tbl, g = T?.글로벌;
+  if (!g) return "";
+  const ym = ESS.ym, mo = +ym.slice(5), r0 = { t: "세계 ESS 새 설치량", u: "GWh", d: 1, M: essM("글로벌") }, s = trendOf(r0.M);
+  const cum = (M, end) => { let a = 0, b = 0; for (let m = `${end.slice(0, 4)}-01`; m <= end; m = ymAdd(m, 1)) { if (M[m] == null || M[ymAdd(m, -12)] == null) return null; a += M[m]; b += M[ymAdd(m, -12)]; } return b ? (a / b - 1) * 100 : null; };
+  const flow = (r) => { const M = essM(r); return [-3, -2, -1, 0].map((k) => ymAdd(ym, k)).filter((m) => m.slice(0, 4) === ym.slice(0, 4) && cum(M, m) != null).map((m) => `${+m.slice(5)}월 ${sg(cum(M, m))}`).join(" → "); };
+  const row = (r) => { const v = T[r], t = trendOf(essM(r)); return `<tr><td style="text-align:left">${esc(r === "글로벌" ? "세계" : r)}</td><td><b>${n(v[4], 1)}</b></td><td class="${kcol(v[5])}">${sg(v[5])}</td><td>${n(v[10], 1)}</td><td class="${kcol(v[11])}">${sg(v[11])}</td><td>${t?.k ? `${TR_L[t.k][0]} ${sg(t.g3)}` : "-"}</td></tr>`; };
+  const stack = (ms) => [["전력망용 (Grid)", 1], ["건물·공장용 (BTM)", 2]].map(([nm, j]) => ({ n: nm, v: ms.map((m) => (ESS.m.글로벌.find((x) => x[0] === m) || [])[j] ?? null) }));
+  return `<div class="card" style="margin-top:8px" id="kc-ess" data-jump="ess" data-jname="🔋 ESS 설치량"><div class="chart-title"><b>🔋 세계 ESS 새 설치량 (달마다)</b> <span class="src">${esc(ym.slice(2, 4))}년 ${mo}월치 · ${esc(ESS.rep?.d || "")} 나옴${s?.k ? ` · <b>${TR_L[s.k][0]} ${TR_L[s.k][1]}</b>` : ""}</span></div>
+    <div class="kidbox">🐣 ESS 는 전기를 모아 두었다가 필요할 때 꺼내 쓰는 큰 배터리 창고예요. ${mo}월에 세계에서 새로 단 양은 <b>${n(g[4], 1)}GWh</b>로 1년 전보다 <b>${sg(g[5], 0)}</b>예요. 달마다 들쭉날쭉해서, 1~${mo}월을 다 더한 숫자(<b>${sg(g[11], 0)}</b>)와 최근 3개월 흐름을 같이 봐요.</div>
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">지역</th><th>${mo}월 (GWh)</th><th>1년 전보다</th><th>1~${mo}월 누적</th><th>누적 1년 전보다</th><th>최근 3개월</th></tr></thead><tbody>${Object.keys(T).map(row).join("")}</tbody></table></div>
+    ${s?.k && ESS.m?.글로벌 ? trendChart({ ...r0, s }, stack) : ""}
+    <ul class="irl" style="margin-top:6px">
+      ${flow("글로벌") ? `<li>📈 누적 증가율 흐름 (1월부터 더한 값 · 1년 전 같은 기간 대비): 세계 ${flow("글로벌")}${flow("북미") ? ` · 북미 ${flow("북미")}` : ""}</li>` : ""}
+      <li>🇺🇸 북미를 따로 보는 까닭: 한국 배터리 회사(LG에너지솔루션·삼성SDI)가 공장을 두고 ESS 주문을 받는 곳이라서예요</li>
+      ${ESS.alone ? `<li>⚡ 발전소 없이 전력망에 바로 붙는 독립형(Stand-alone): ${mo}월 ${n(ESS.alone[0], 1)}GWh (${sg(ESS.alone[1], 0)}) · 누적 ${n(ESS.alone[2], 1)}GWh (${sg(ESS.alone[3], 0)})</li>` : ""}
+      <li>⚠ 한 달 숫자는 크게 튀어요 (연말·분기 말에 몰림). 하나증권은 "지난 달 숫자가 나중에 크게 고쳐지는 일이 많다"며 두 달 늦게 내요${ESS.rev ? ` · 이번 호에서 ${+ESS.rev.ym.slice(5)}월 ${n(ESS.rev.was, 1)} → ${n(ESS.rev.now, 1)}GWh 로 고쳐짐` : ""}</li></ul>
+    <div class="note src">출처: ${esc(ESS.src || "")} · ${ESS.rep?.u ? `<a href="${esc(ESS.rep.u)}" target="_blank" rel="noopener">${esc(ESS.rep.t || "원문")} (하나증권 PDF)</a> · ` : ""}새 호가 나오면 자동으로 바뀜 (다음 = ${mo % 12 + 1}월치, 두 달 뒤 중순쯤) · 달별 막대는 PDF 그림에서 읽은 값이라 ±0.1GWh 차이가 날 수 있어요</div></div>`;
+}
+document.addEventListener("toggle", (e) => {  // 접힌 채 그린 Chart.js 그림은 크기가 0 → 산업 탭 칸을 펼칠 때 다시 맞춤 (toggle 은 capture 로)
+  if (e.target.matches?.(".indsec") && e.target.open) charts.forEach((c) => { if (e.target.contains(c.canvas)) c.resize(); });
+}, true);
 async function loadPBR() {
+  trendBoardHTML().then((h) => { $("#sigTrend").innerHTML = h; }).catch(() => {});
   if (!PBR) {
     try { PBR = await (await fetch("data/pbr_watch.json?t=" + Date.now(), { cache: "no-store" })).json(); }
     catch (e) { $("#pbrCards").innerHTML = `<div class="empty">PBR 계산기 데이터를 불러오지 못했어요.</div>`; return; }
@@ -5994,17 +6084,21 @@ async function loadIndustry() {
   await liGet();
   await drGet();
   await consGet();
+  await essGet();
   // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const xpL = (k, t) => `<div class="note" style="margin-top:8px"><a href="#exports" data-kc="xp-${k}">📦 ${t} (1~10일 잠정 · 월별 · 나라별, 1개월~전체) → 수출입 탭</a></div>`;  // 11/11 수출입 탭으로 옮김
   const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + xpL("cosmetics", "화장품 수출") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + xpL("ramen", "라면 수출") + expHTML("food")],
-    ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
+    ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => essHTML() + liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => gpeCard("M7") + key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🎤 엔터", () => key("엔터")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
   secs.push(["🔑 그 밖의 업종", Object.keys(K).filter((k) => !used.has(k)).map((k) => keyGroup(k, K[k])).join("")], ["⚖️ 고정비·변동비 (전 업종)", costIndHTML()]);
-  $("#industryBody").innerHTML = secs.filter(([, h]) => h).map(([t, h]) => `<section data-jump="${esc(t)}" data-jname="${esc(t)}" style="margin-top:18px"><h2 style="border-bottom:2px solid var(--border);padding-bottom:4px">${t}</h2>${h}</section>`).join("");
+  // 업종 칸은 모두 접어 둠 (사용자 11/18 "산업 탭이 너무 방대해") — 이름 아래 신호등 = 📡 신호 탭 추세판과 같은 숫자 · 바로가기(kcGo·jumpBar)는 openUp 으로 엶
+  const TR = trendRows(), light = (t) => TR.filter((r) => r.sec === t).map((r) => `${TR_L[r.s.k][0]} ${esc(r.t)}`).join(" · ");
+  $("#industryBody").innerHTML = `<div class="kidbox">🐣 업종 이름을 누르면 펼쳐져요 · 이름 아래 신호등 = 달마다 나오는 숫자의 추세 (🟢 살아있음 · 🟡 완만해짐 · 🔴 꺾임, 📡 신호 탭 '데이터 추세판'과 같아요)</div>`
+    + secs.filter(([, h]) => h).map(([t, h]) => `<details class="grp indsec" data-jump="${esc(t)}" data-jname="${esc(t)}" style="margin-top:10px"><summary style="cursor:pointer;padding:12px 14px;border-radius:12px;background:var(--surface-2);font-weight:700;font-size:15px">${t} <span class="src">눌러서 보기</span>${light(t) ? `<div class="src" style="font-weight:400;margin-top:2px">${light(t)}</div>` : ""}</summary>${h}</details>`).join("");
   jumpBar("#industryBody", "#indJump", "🔎 업종 검색 (예: 화장품) → Enter");
   setTimeout(kcGo, 50);  // 종목 상세에서 '자세한 내용 →' 으로 왔으면 그 카드로
   drawAmz();
@@ -6327,7 +6421,7 @@ document.addEventListener("click", (e) => {  // 한눈에 표의 업종 이름 �
   const a = e.target.closest("[data-cons]"); if (!a) return;
   e.preventDefault();
   const d = document.querySelector(`#consAll [data-consk="${CSS.escape(a.dataset.cons)}"] details`);
-  if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (d) { openUp(d); d.scrollIntoView({ behavior: "smooth", block: "start" }); }
 });
 const consFor = (code) => (CONS?.groups || []).find((g) => g.codes.includes(code));
 const consSec = (ks) => [...new Set(ks.flatMap((k) => (CONS?.groups || []).filter((g) => g.k.includes(k))))].map((g) => consHTML(g, true)).join("");  // ks 순서대로 (2차전지 → ESS)
@@ -6422,6 +6516,7 @@ function kcGo() {
   if (!el) return;
   KC_GO = null;
   el.open = true;
+  openUp(el);
   el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function keyIndHTML() {
