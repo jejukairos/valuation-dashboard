@@ -107,11 +107,22 @@ def label(k):
     return f"{k[2:4]}.{int(k[4:]) // 3}Q"
 
 
-def points(qs):
+def _chg(a, b):
+    """증감 한 칸: 둘 다 흑자면 %, 0 이하가 끼면 말 (app.js turnTxt 와 같은 말)."""
+    if a is None or b is None:
+        return None
+    if a > 0 and b > 0:
+        return f"{(a / b - 1) * 100:+.1f}%"
+    return "흑자전환" if b <= 0 < a else "적자전환" if a <= 0 < b else "적자축소" if a > b else "적자확대" if a < b else "적자지속"
+
+
+def points(qs, tg=False):
     """✦포인트 — 텔레그램 실적 알림(t.me/maddingStock)과 같은 규칙 (사용자 11/6, 9개 회사로 맞춰 봄):
     1줄 = 최근 5개 분기 최대인 항목 + 영업이익률(직전, 5개 분기 최대면 표시) / 2줄 = QoQ 엇갈림·동반 성장 중 하나
     (매출↓영업이익↑ > 영업이익↑순이익↓ > 매출·영업이익↑ 순서 · 둘 다 줄면 안 씀). 예상 대비는 표에 있어서 안 씀.
-    순이익이 적자로 바뀐 분기는 QoQ 가 % 가 아니라 '적자전환'이라 '순이익 감소' 줄을 안 쓰고 다음 규칙(동반 성장)으로 넘어감 (11/18 영화테크)."""
+    순이익이 적자로 바뀐 분기는 QoQ 가 % 가 아니라 '적자전환'이라 '순이익 감소' 줄을 안 쓰고 다음 규칙(동반 성장)으로 넘어감 (11/18 영화테크).
+    tg=True = 채널 글 모양 그대로 (자체 점검용). 기본 = 사이트용 — 사용자 11/18 "QoQ·YoY 가 헷갈려, 분류해 줘" →
+    칸마다 '이름|내용' 한 줄씩 (🏆 최고 기록 · 💰 영업이익률 · 📈 직전 분기보다 · 📅 1년 전 같은 분기보다), 숫자 앞엔 항상 무엇의 % 인지."""
     qs = qs[-5:]
     cur, prev, n = qs[-1], qs[-2] if len(qs) > 1 else None, len(qs)
     tops = [nm for f, nm in (("sales", "매출"), ("op", "영업이익"), ("ni", "순이익"), ("eps", "EPS"))
@@ -119,21 +130,40 @@ def points(qs):
     # 1년 전 같은 분기 영업이익 적자 → 지금 흑자면 맨 앞에 '영업이익 흑자전환' (11/11 도우인시스) · 순이익은 안 씀 (CJ CGV 25.3Q 순손실 → 흑자인데 채널에 없음)
     yo = qs[0] if n == 5 else None
     turn = yo is not None and yo.get("op") is not None and cur.get("op") is not None and yo["op"] < 0 < cur["op"]
-    line = ", ".join((["영업이익 흑자전환"] if turn else []) + ([f"{'·'.join(tops)} 최근 {n}개 분기 최대"] if tops and n >= 3 else []))
-    opm = lambda q: q["op"] / q["sales"] * 100 if q.get("op") is not None and q.get("sales") else None  # noqa: E731
-    if opm(cur) is not None and prev and opm(prev) is not None:
-        best = all(opm(cur) >= (opm(q) if opm(q) is not None else -1e9) for q in qs)
-        line += f"{', ' if line else ''}영업이익률 {opm(cur):.1f}% (직전 {opm(prev):.1f}%{f', {n}개 분기 최대' if best and n >= 3 else ''})"
-    out = [line] if line else []
+    opm = lambda q: q["op"] / q["sales"] * 100 if q and q.get("op") is not None and q.get("sales") else None  # noqa: E731
+    o, b = opm(cur), opm(prev)
+    best = o is not None and n >= 3 and all(o >= (opm(q) if opm(q) is not None else -1e9) for q in qs)
+    kind = None  # 2줄 (채널 규칙): 직전 분기 대비 엇갈림·동반 성장
     if prev:
         so, oo = _pct(cur.get("sales"), prev.get("sales")), _pct(cur.get("op"), prev.get("op"))
         no = _pct(cur.get("ni"), prev.get("ni")) if (cur.get("ni") or 0) > 0 else None  # 적자전환이면 % 가 없음
-        if so is not None and oo is not None and so < 0 < oo:
+        kind = ("A" if so is not None and oo is not None and so < 0 < oo else
+                "B" if oo is not None and no is not None and oo > 0 > no else
+                "C" if so is not None and oo is not None and so > 0 and oo > 0 else None)
+    if tg:
+        line = ", ".join((["영업이익 흑자전환"] if turn else []) + ([f"{'·'.join(tops)} 최근 {n}개 분기 최대"] if tops and n >= 3 else []))
+        if o is not None and b is not None:
+            line += f"{', ' if line else ''}영업이익률 {o:.1f}% (직전 {b:.1f}%{f', {n}개 분기 최대' if best else ''})"
+        out = [line] if line else []
+        if kind == "A":
             out.append(f"매출 감소(QoQ {so:+.1f}%)에도 영업이익 개선(QoQ {oo:+.1f}%)")
-        elif oo is not None and no is not None and oo > 0 > no:
+        elif kind == "B":
             out.append(f"영업이익 증가(QoQ {oo:+.1f}%)에도 순이익 감소(QoQ {no:+.1f}%)")
-        elif so is not None and oo is not None and so > 0 and oo > 0:
+        elif kind == "C":
             out.append(f"매출·영업이익 동반 성장(QoQ {so:+.1f}% · {oo:+.1f}%)")
+        return out
+    pair = lambda p, ni=False: " · ".join(f"{nm} {c}" for f, nm in (("sales", "매출"), ("op", "영업이익"), ("ni", "순이익"))  # noqa: E731
+                                          if (f != "ni" or ni) and (c := _chg(cur.get(f), p.get(f))))
+    out = []
+    if tops and n >= 3:
+        out.append(f"🏆 최고 기록|{'·'.join(tops)} — 최근 {n}개 분기 중 가장 많아요")
+    if o is not None:
+        out.append(f"💰 영업이익률|{o:.1f}%{f' (직전 분기 {b:.1f}%)' if b is not None else ''}{f' · 최근 {n}개 분기 중 가장 높아요' if best else ''}")
+    if prev and pair(prev):
+        out.append(f"📈 직전 분기보다 (QoQ)|{pair(prev, kind == 'B')}" + {"A": " → 덜 팔고도 더 남겼어요", "B": " → 영업이익은 늘고 순이익은 줄었어요 (영업 밖 손익 영향일 수 있어요)",
+                                                         "C": " → 둘 다 늘었어요"}.get(kind, ""))
+    if yo and pair(yo):
+        out.append(f"📅 1년 전 같은 분기보다 (YoY)|{pair(yo)}")
     return out
 
 
@@ -393,8 +423,14 @@ if __name__ == "__main__":  # 잠정실적 표 읽기 점검 (HD현대중공업 
                    ["매출·영업이익·EPS 최근 5개 분기 최대, 영업이익률 10.2% (직전 9.5%, 5개 분기 최대)", "영업이익 증가(QoQ +14.9%)에도 순이익 감소(QoQ -29.1%)"])}
     mask =lambda s: re.sub(r"[+-]?\d+(?:\.\d+)?", "#", s)  # noqa: E731
     for nm, (rows, want) in tg.items():
-        got = points([dict(zip(("sales", "op", "ni", "eps"), r)) for r in [(1, 1, 1, 1)] * 3 + rows])  # 앞 3분기는 5개 분기 밖
+        got = points([dict(zip(("sales", "op", "ni", "eps"), r)) for r in [(1, 1, 1, 1)] * 3 + rows], tg=True)  # 앞 3분기는 5개 분기 밖
         assert [mask(x) for x in got] == [mask(x) for x in want], (nm, got)
+    # 사이트용 쉬운 말 (사용자 11/18 "QoQ·YoY 헷갈려, 분류해 줘") — 영화테크(동반 성장) · 도우인시스(1년 전 적자 → 흑자, 순이익 감소)
+    pq = lambda nm: points([dict(zip(("sales", "op", "ni", "eps"), r)) for r in tg[nm][0]])  # noqa: E731
+    assert pq("영화테크") == ["🏆 최고 기록|매출·영업이익 — 최근 5개 분기 중 가장 많아요", "💰 영업이익률|21.7% (직전 분기 14.2%) · 최근 5개 분기 중 가장 높아요",
+                          "📈 직전 분기보다 (QoQ)|매출 +23.1% · 영업이익 +87.5% → 둘 다 늘었어요", "📅 1년 전 같은 분기보다 (YoY)|매출 +35.2% · 영업이익 +108.3%"], pq("영화테크")
+    assert pq("도우인시스")[2:] == ["📈 직전 분기보다 (QoQ)|매출 +15.3% · 영업이익 +63.4% · 순이익 -81.6% → 영업이익은 늘고 순이익은 줄었어요 (영업 밖 손익 영향일 수 있어요)",
+                               "📅 1년 전 같은 분기보다 (YoY)|매출 +127.9% · 영업이익 흑자전환"], pq("도우인시스")
     # 공시 고르기: 기아 11/2 '월별 판매실적'(표 없음)은 건너뛰고 10/30 분기 공시를 씀 · 표는 있는데 못 읽으면 loose 일 때만
     fl = [{"date": "2026-11-02", "rcept_no": "m"}, {"date": "2026-10-30", "rcept_no": "q"}, {"date": "2026-08-01", "rcept_no": "old"}]
     docs = {"m": ("기아 2026년 10월 판매실적 | 첨부",), "q": ("첨부 목록", t), "old": (t,)}

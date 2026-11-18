@@ -1547,7 +1547,7 @@ function irAuto(k) {
   const sum = [...(m[0] != null && mm ? [{ h: "영업이익률", l: [`${n(m[0], 1)}% (${mm})`] }] : []),
     { h: "다음 확인 사항", l: ["회사 설명·부문별 숫자·가이던스 — 회사 IR 자료·컨퍼런스콜이 정리되면 예약 작업이 이 칸을 바꿔 넣어요"] }];
   const o = R.op, s = R.sales, ni = R.ni, ana = [{ h: "한 줄 평가", l: [[o?.vs_est != null ? `영업이익 예상 대비 ${n(o.vs_est, 1)}% ${vsTag(o.vs_est)}` : "", s?.vs_est != null ? `매출 ${n(s.vs_est, 1)}% ${vsTag(s.vs_est)}` : ""].filter(Boolean).join(" · ") || "예상(컨센서스)이 없어 비교 못 함"] }];  // ✦ 포인트는 표 바로 아래 있어서 안 씀
-  if (o?.qoq != null && ni?.qoq != null && (o.qoq > 0) !== (ni.qoq > 0)) ana.push({ h: "영업이익과 순이익의 차이", l: [`영업이익 QoQ ${n(o.qoq, 1)}% · 순이익 ${n(ni.qoq, 1)}% — 방향이 달라요. 영업 밖 손익(환율·이자·지분법·평가손익 등) 영향일 수 있어 분기보고서로 확인`] });
+  if (o?.qoq != null && ni?.qoq != null && (o.qoq > 0) !== (ni.qoq > 0)) ana.push({ h: "영업이익과 순이익의 차이", l: [`직전 분기보다 영업이익 ${n(o.qoq, 1)}% · 순이익 ${n(ni.qoq, 1)}% — 방향이 달라요. 영업 밖 손익(환율·이자·지분법·평가손익 등) 영향일 수 있어 분기보고서로 확인`] });
   return { quarter: k.latest, period: `${k.latest}${k.prelim ? " 잠정" : ""} · 숫자로 먼저`, date: k.filing?.date || k.date, src: "잠정실적 숫자로 자동 요약 (네이버·DART)", u: k.filing?.url, sum, ana, auto: true };
 }
 // 🧾 큰 숫자 카드 (사용자 11/11: 셀트리온제약·원익IPS 텔레그램 그림처럼, 보유·관심 전 종목) — 숫자는 잠정실적 표(k, 같은 분기일 때만), 글은 IR 요약·분석의 첫 줄들 · 한국식 오름 빨강·내림 파랑
@@ -1604,7 +1604,8 @@ function irBriefHTML(code, name, k) {
     <div class="src" style="margin-top:6px">📋 ${esc(e.date || "")} · ${src} · ${e.auto ? "회사 설명·해석은 발표가 끝나면 예약 작업이 바꿔 넣어요" : "증감률·이익률은 발표 숫자로 계산한 값"} · 분석은 해석이고 매매 추천이 아니에요</div></div>`;
 }
 // ✦ 포인트 (collector/kq.py points — 텔레그램 실적 알림과 같은 규칙: 5개 분기 최대·영업이익률 / QoQ 엇갈림·동반 성장)
-const kqPtHTML = (k) => ((k.points || []).length ? `<div class="kqpt" style="margin-top:8px"><b>✦ 포인트</b> <span class="src">최근 5개 분기 기준</span><ul class="irl">${k.points.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "");
+// 사용자 11/18 "QoQ·YoY 헷갈려, 분류해 줘" → 한 줄 = '이름|내용' (🏆 최고 기록 · 💰 영업이익률 · 📈 직전 분기보다 · 📅 1년 전 같은 분기보다), '|' 없는 옛 글은 그대로
+const kqPtHTML = (k) => ((k.points || []).length ? `<div class="kqpt" style="margin-top:8px"><b>✦ 포인트</b> <span class="src">최근 5개 분기 기준</span><ul class="irl">${k.points.map((x) => { const [a, b] = x.split("|"); return `<li>${b == null ? esc(a) : `<b>${esc(a)}</b> ${esc(b)}`}</li>`; }).join("")}</ul></div>` : "");
 // 실적 · 예상 · 예상 대비 · QoQ · YoY 표 (상세 화면과 첫 화면 '🧾 실적 발표' 같이 씀)
 // 흑자전환·적자전환·적자축소·적자확대 — 0 이하가 끼면 % 대신 말로 (텔레그램 실적 알림처럼, 사용자 11/6 CJ CGV 순이익 YoY '흑자전환')
 const turnTxt = (a, b) => (a == null || b == null || (a > 0 && b > 0) ? null : b <= 0 && a > 0 ? "흑자전환" : a <= 0 && b > 0 ? "적자전환" : a > b ? "적자축소" : a < b ? "적자확대" : "적자지속");
@@ -1616,7 +1617,7 @@ function kqTurns(k) {  // 줄마다 {vs, qoq, yoy} 말 (null 이면 % 로)
 function kqTable(k) {
   const P = (v) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${v >= 0 ? "+" : ""}${n(v, 1)}%</span>`), T = kqTurns(k);
   const C = (t, v) => (t ? `<span class="${/^적자(?!축소)/.test(t) ? "neg" : ""}">${t}</span>` : P(v));
-  return `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(k.latest)}${k.prelim ? " 잠정" : ""}</th><th>실적</th><th>예상</th><th>예상 대비</th><th>QoQ</th><th>YoY</th></tr></thead><tbody>
+  return `<div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">${esc(k.latest)}${k.prelim ? " 잠정" : ""}</th><th>실적</th><th>예상</th><th>예상 대비</th><th>직전 분기 대비<br><span class="src">QoQ</span></th><th>1년 전 대비<br><span class="src">YoY</span></th></tr></thead><tbody>
     ${k.rows.map((r, j) => `<tr><td>${esc(r.item)}</td><td><b>${r.act == null ? "-" : kqF(r.f, k.cur)(r.act)}</b></td><td>${r.est == null ? "-" : kqF(r.f, k.cur)(r.est)}</td><td>${C(T[j].vs, r.vs_est)}</td><td>${C(T[j].qoq, r.qoq)}</td><td>${C(T[j].yoy, r.yoy)}</td></tr>`).join("")}
   </tbody></table></div>`;
 }
