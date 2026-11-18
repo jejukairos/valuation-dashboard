@@ -580,9 +580,13 @@ def stock_detail(h, rates_now, fx):
         if SEGS.get(fcode):
             det["seg"] = {"unit": "pct", "src": "와이즈리포트 주요제품 매출구성 (분기·반기·사업보고서)", "hist": SEGS[fcode]}
     s = SEG_US.get(code) or SEG_US.get(fcode)  # 회사 실적 자료를 보고 직접 적은 분기 금액이 있으면 그걸 씀 (미국 백만 달러, 한국 억원)
-    if s:
-        det["seg"] = {"unit": "amt", "src": s.get("src"), "hist": {q: {k: v * (1e6 if mkt == "US" else 1e8) for k, v in m.items()} for q, m in s["quarters"].items()}}
-    det["segq"] = seg_quarters(SEGQ.get(code) or SEGQ.get(oc), det["seg"], det["longq"], mkt, SEGL.get(code) or SEGL.get(oc))
+    mul = 1e6 if mkt == "US" else 1e8
+    if s and s.get("quarters"):
+        det["seg"] = {"unit": "amt", "src": s.get("src"), "hist": {q: {k: v * mul for k, v in m.items()} for q, m in s["quarters"].items()}}
+    lg = SEGL.get(code) or SEGL.get(oc) or {}
+    if (s or {}).get("geo") and not lg.get("geo"):  # 🌍 자동 지역 자료가 없는 종목은 segments.yaml geo (분기보고서 지역별 매출을 손으로, earnings_task 3-11 · 11/18)
+        lg = {**lg, "geo": {e: {k: v * mul for k, v in r.items()} for e, r in s["geo"].items()}, "src_geo": s.get("geo_src") or "분기보고서 지역별 매출 (손으로 적음)"}
+    det["segq"] = seg_quarters(SEGQ.get(code) or SEGQ.get(oc), det["seg"], det["longq"], mkt, lg or None)
     sg = SGA.get(code) or SGA.get(oc)
     if sg:  # 💰 판관비 항목 최근 8분기 (⭐ 성장률 한눈에 비용 칸)
         det["sga"] = {"src": sg.get("src"), "q": dict(sorted(sg["q"].items())[-8:])}
