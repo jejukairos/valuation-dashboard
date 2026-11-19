@@ -6201,7 +6201,31 @@ function evLine(ch) {
     <ol class="irl" style="font-size:12px;margin:4px 0 0;padding-left:22px">${ev.map((e) => `<li value="${e.k}"><span class="src">${esc(e.d.slice(2, 7).replace("-", "."))}</span> ${esc(e.t)}</li>`).join("")}</ol>
     ${ch.kid ? `<div class="kidbox">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
 }
+// 🆕 상장 주가별 시가총액·순위 (kind: ipomc, 사용자 11/19 앤트로픽 그림 2장 + "어떻게 추정했는지 누르면 보이게")
+//   p0 공모가 $ · mc0 공모가 기준 시총 (조$) · prices [$] · hl [초록 칸 주가] · peers [[회사, 시총 조$, 올해 %]] 큰 순 · pd 시총 날짜 · how [덧붙일 줄]
+function ipoMcap(ch) {
+  const sh = ch.mc0 / ch.p0, rk = (m) => 1 + ch.peers.filter((x) => x[1] > m).length, me = rk(ch.mc0);
+  const bg = (p) => (p === ch.p0 ? "background:var(--warn-bg)" : (ch.hl || []).includes(p) ? "background:var(--good-bg)" : "");
+  const t1 = ch.prices.map((p) => `<tr style="${bg(p)}"><td>$${n(p)}</td><td>${n(p * sh, 2)}</td><td>${rk(p * sh)}위</td><td>${p === ch.p0 ? "공모가" : pct((p / ch.p0 - 1) * 100, 0, true)}</td></tr>`).join("");
+  const L = [...ch.peers.slice(0, me - 1), [ch.name, ch.mc0, null], ...ch.peers.slice(me - 1)];
+  const t2 = L.map(([nm, m, y], i) => `<tr style="${y == null ? "background:var(--warn-bg)" : ""}"><td>${i + 1}</td><td style="text-align:left">${esc(nm)}${y == null ? ' <span class="src">(공모가 기준)</span>' : ""}</td><td>${n(m, 2)}</td><td>${y == null ? "<b>NEW</b>" : pct(y, 1, true)}</td></tr>`).join("");
+  // 계산 순서는 데이터에서 바로 만듦 (예시 = 초록 칸 주가) → 숫자를 바꿔도 설명이 같이 바뀜
+  const ex = (ch.hl || [ch.prices[0]])[0], m = ex * sh, r = rk(m), up = ch.peers[r - 2], dn = ch.peers[r - 1];
+  const how = [`① 주식 수 = 공모가 기준 시가총액 ÷ 공모가 = ${n(ch.mc0, 2)}조$ ÷ ${n(ch.p0)}$ ≈ ${n(sh * 1e4, 0)}억 주`,
+    `② 시가총액 = 주가 × 주식 수 → 예: ${n(ex)}$ × ${n(sh * 1e4, 0)}억 주 ≈ ${n(m, 2)}조$`,
+    `③ 상승률 = 주가 ÷ 공모가 − 1 → ${n(ex)} ÷ ${n(ch.p0)} − 1 = ${pct((ex / ch.p0 - 1) * 100, 1, true)}`,
+    `④ 순위 = 아래 표 회사들의 시가총액과 크기 비교 → ${n(m, 2)}조$ 는${up ? ` ${up[0]} ${n(up[1], 2)}조$ 보다 작고` : ""}${dn ? ` ${dn[0]} ${n(dn[1], 2)}조$ 보다 커서` : ""} ${r}위`, ...(ch.how || [])];
+  const th = (a) => `<tr>${a.map((x) => `<th>${x}</th>`).join("")}</tr>`;
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}
+    <div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:12px">${th(["주가", "시가총액<br><span class=\"src\">조$</span>", "순위", "공모가 대비"])}${t1}</table></div>
+    <details class="fvt" style="margin:6px 4px"><summary><b>🔎 어떻게 계산했나</b> <span class="src">눌러서 보기</span></summary><ul class="irl">${how.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>
+    ${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>
+    <div class="qp"><div class="qt"><b>세계 시가총액 순위 — ${esc(ch.name)} 넣으면</b> <span class="src">${esc(ch.pd || "")}</span></div>
+    <div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:12px">${th(["순위", "회사", "시가총액<br><span class=\"src\">조$</span>", "올해 주가"])}${t2}</table></div>
+    <div class="src" style="padding:4px">다른 회사 시가총액은 매일 바뀌어서 순위도 매일 바뀌어요</div></div>`;
+}
 function keyChart(ch) {
+  if (ch.kind === "ipomc") return ipoMcap(ch);
   if (ch.kind === "mcap" || ch.kind === "ccsi" || ch.kind === "pbr12") return evLine(ch);  // pbr12 = 12MF PBR 주간 선 + 사건 (keyBlock 이 채움, 11/17 삼성SDI 사이클)
   // kind: line → 0 아래(적자)도 그리는 꺾은선 + 칸마다 숫자 (종목 그래프와 같은 모양)
   if (ch.kind === "line") return kpiChart({ ...ch, s: (ch.lines || []).map((s) => ({ n: s.n, v: Object.fromEntries((ch.q || []).map((q, i) => [q, s.v[i]]).filter(([, v]) => v != null)) })) });
