@@ -4846,7 +4846,7 @@ function drawHolders(code) {
 
 /* ---------- 4. 동종업계 비교 ---------- */
 let PEERS = null;
-const FLAG = { KR: "🇰🇷", US: "🇺🇸", EU: "🇪🇺", JP: "🇯🇵", TW: "🇹🇼", CN: "🇨🇳" };
+const FLAG = { KR: "🇰🇷", US: "🇺🇸", EU: "🇪🇺", JP: "🇯🇵", TW: "🇹🇼", CN: "🇨🇳", AU: "🇦🇺" };
 async function peersBlock(code, noPbr) {
   if (!PEERS) {
     try { PEERS = await (await fetch("data/peers.json?t=" + encodeURIComponent(DASH.updated_at))).json(); }

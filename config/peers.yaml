@@ -431,3 +431,16 @@ groups:
       - {name: 파나소닉, market: JP, code: 6752.T}
       - {name: 테슬라, market: US, code: TSLA}
       - {name: 플루언스 에너지, market: US, code: FLNC}
+
+  # 🪨 사용자 2026-11-19: "리튬에 의해 모든 게 움직이니 경쟁사가 아니라 업계의 탑라인 — LG엔솔·삼성SDI 상세 맨 밑 동종업계에 SQM·앨버말도"
+  - name: 🪨 리튬 — 배터리 값(매출)을 움직이는 원재료 회사
+    holdings: ["373220", "006400", "096770"]
+    why: 경쟁사가 아니라 배터리 회사 매출(판가)을 움직이는 리튬을 캐고 만드는 회사 — 칠레 SQM · 미국 앨버말·리튬아메리카스 · 중국 간펑·톈치 · 호주 PLS(옛 필바라) · 한국 포스코홀딩스(철강이 주력, 리튬은 일부) · 유럽엔 큰 상장 리튬 회사가 없어 비움
+    peers:
+      - {name: SQM, market: US, code: SQM}
+      - {name: 앨버말, market: US, code: ALB}
+      - {name: 리튬아메리카스, market: US, code: LAC}
+      - {name: 간펑리튬, market: CN, code: 002460.SZ}
+      - {name: 톈치리튬, market: CN, code: 002466.SZ}
+      - {name: PLS (옛 필바라), market: AU, code: PLS.AX}
+      - {name: 포스코홀딩스, market: KR, code: "005490"}

@@ -218,6 +218,8 @@
      quote = 경영진 핵심 한 문장 (영어 15단어 이하). 숫자(vs·short)는 화면에서 '🔢 숫자 보기'로 접힘. 새로 넣은 diff 는 보고에도 모아서 적기.
    - 우리가 earnings.yaml 로 요약하는 종목은 calls 에 넣지 않음 (화면이 그 요약을 그대로 씀).
    - 경쟁사 고르는 규칙: 업종마다 6곳 · 미국 2 + 유럽/일본 2 + 한국 2 · 시총 1조 원 미만 제외 · 새 경쟁사는 peers.yaml 그룹에도 넣어 시총을 받기.
+   - 🪨 2차전지(LG엔솔·삼성SDI·SK이노)는 경쟁사 대신 리튬 회사 SQM·앨버말(ALB) 콜을 넣음 (사용자 11/19 "리튬이 업계의 탑라인") — 꼭 적을 것: 리튬 평균 판가($/kg)·직전 분기 대비,
+     다음 분기 판가 방향, 수요 전망(전체·ESS·EV), 생산·설비투자 계획이 바뀌었는지. us 칸은 '리튬 값 → 셀·양극재 판가(매출)'로. 같은 내용을 keychart.yaml 2차전지 'bat-lithium-sqm' 카드 숫자에도 반영.
 3-10. 📄 오늘·어제 증권사 리포트 요약 (config/reports.yaml, 화면: 보유 탭 카드 '📄 오늘·어제 리포트' — 줄을 누르면 펼쳐짐):
    - site/data/reports.json 의 보유 종목(group 보유) list 에서 오늘·어제(d) 리포트 중 reports.yaml 에 같은 날짜·증권사가 없는 것.
    - PDF 숫자 읽기: `.venv\Scripts\python.exe -X utf8 tools\report_text.py <u>` → 그 종목 맨 위에 {d, firm, t, tp, tp_prev, rating, why 3~4줄, eps, val} 추가.
