@@ -141,9 +141,24 @@ groups:
       - {name: SK하이닉스, market: KR, code: "000660"}
       - {name: 한미반도체, market: KR, code: "042700"}
 
-  - name: 기판·전자부품
+  # 사용자 11/20 (iM증권 삼성전기 표5): "동종업계 MLCC·PCB 나눠서 보는 것도 좋다" → 한 묶음이던 '기판·전자부품'을 둘로 (삼성전기는 두 표 다, 대덕전자·이수페타시스는 기판 표만)
+  - name: 🔩 MLCC (적층세라믹콘덴서)
+    holdings: ["009150"]
+    why: 삼성전기 컴포넌트 부문과 같은 MLCC 를 만드는 회사 — iM증권 11/19 비교표 5곳(무라타·다이요유덴·야교·펑화·CCTC) + TDK·삼화콘덴서·미국 비셰이 · 유럽엔 큰 상장 MLCC 회사가 없어 비움
+    peers:
+      - {name: 삼성전기, market: KR, code: "009150"}
+      - {name: 삼화콘덴서, market: KR, code: "001820"}
+      - {name: 무라타, market: JP, code: 6981.T}
+      - {name: TDK, market: JP, code: 6762.T}
+      - {name: 다이요유덴, market: JP, code: 6976.T}
+      - {name: 야교(Yageo), market: TW, code: 2327.TW}
+      - {name: 펑화(Fenghua), market: CN, code: 000636.SZ}
+      - {name: CCTC(싼환), market: CN, code: 300408.SZ}
+      - {name: 비셰이, market: US, code: VSH}
+
+  - name: 🟩 기판 (패키지 기판·PCB)
     holdings: ["009150", "353200", "007660"]
-    why: AI 서버용 기판·MLCC
+    why: AI 서버용 패키지 기판(FC-BGA)·고다층 기판 회사 — iM증권 11/19 비교표 4곳(이비덴·유니마이크론·난야PCB·킨서스) + 한국 4곳·미국 TTM·유럽 AT&S
     peers:
       - {name: 삼성전기, market: KR, code: "009150"}
       - {name: 대덕전자, market: KR, code: "353200"}
@@ -151,9 +166,10 @@ groups:
       - {name: 심텍, market: KR, code: "222800"}
       - {name: TTM 테크놀로지스, market: US, code: TTMI}
       - {name: AT&S(오스트리아), market: EU, code: ATS.VI}
-      - {name: 무라타, market: JP, code: 6981.T}
       - {name: 이비덴, market: JP, code: 4062.T}
       - {name: 유니마이크론, market: TW, code: 3037.TW}
+      - {name: 난야 PCB, market: TW, code: 8046.TW}
+      - {name: 킨서스, market: TW, code: 3189.TW}
 
   # ---------- 자동차: 완성차 / 부품 ----------
   - name: 🚗 자동차 · 완성차

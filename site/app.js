@@ -6479,6 +6479,11 @@ function leadHTML(name, brief = false) {  // brief = 📡 신호 탭용 (사용�
     fe = `<div class="qgrid">${c2}</div><div class="note">📦 ${esc(M[la])}: 리드타임 길어진 제품 <b>${up.length}개</b> · 짧아진 제품 <b>${dn.length}개</b> · 가격 올림(↗) <b>${pr(la)}/${F.rows.length}</b> (${esc(M[la - 1])} ${pr(la - 1)}개)${up.length ? `<br><span class="src">길어진 곳: ${esc(by(up))}</span>` : ""}</div>
       <div class="note src">'52+'·'30+' 는 52·30주로, 범위는 가운데 값으로 계산 · ${esc(F.src || "")}</div>`;
   }
+  // more = 덧붙이는 그림 (사용자 11/20 삼성전기 리포트: TTI 종류별 리드타임·MLCC 보유재고) · ease down/up = 마지막 값이 줄면/늘면 ⚠
+  const more = L.more?.[name] || [];
+  more.forEach((c) => c.ease && (c.lines || []).forEach((s) => { const v = s.v.filter((x) => x != null), d = v.at(-1) - v.at(-2);
+    if (c.ease === "down" ? d < 0 : d > 0) warn.push(`${c.t.split(" — ")[0]} ${s.n}: ${v.at(-2)} → ${v.at(-1)}${c.u || ""}`); }));
+  if (more.length) fe += `<div class="qgrid">${more.map(keyChart).join("")}</div>`;
   return `<details class="fvt" open style="margin-top:8px"><summary class="chart-title"><b>⏱ 부품 리드타임 — 주문하고 받기까지 몇 주?</b> <span class="src">${esc(md(cur.d))} · 매주</span></summary>
     ${warn.length ? `<div class="warnbox" style="margin-top:6px">⚠ <b>완화 신호</b> — ${warn.map(esc).join(" · ")}<br><span class="src">부족이 풀리기 시작하면 값 오름도 멈출 수 있어요 — 2주 넘게 이어지는지 보기</span></div>` : `<div class="note">✅ 완화 신호 없음 — 이번 주 풀린 부품이 없어요</div>`}
     ${table}${(L.memo?.[name] || []).length ? `<ul class="irl" style="margin-top:6px">${L.memo[name].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
