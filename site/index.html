@@ -22,6 +22,7 @@
     <a href="#feed" data-view="feed">🔔 새 소식</a>
     <a href="#signal" data-view="pbr">📡 신호</a>
     <a href="#earn" data-view="earn" class="on">🧾 실적</a>
+    <a href="#all" data-view="all">🌐 전체</a>
     <a href="#kr" data-view="main">💼 보유</a>
     <a href="#watch" data-view="watch">⭐ 관심</a>
     <a href="#check" data-view="check">📝 체크</a>
@@ -133,6 +134,27 @@
   <p class="note" id="jcmpNote"></p>
   <div id="jointAccel"></div>
   <div class="grid g3" id="jointCards"></div>
+</main>
+<main class="wrap" id="allView" hidden>
+  <h2>🌐 전체</h2>
+  <p class="sub">보유·관심·공동자산 모든 종목을 한 표에 — 무엇이 적정주가보다 싸고 앞으로 이익이 빨리 크는지 + 매일 바뀐 것 중 가장 중요한 것만 · 매수·매도 추천 아님</p>
+  <div id="allSum"></div>
+  <h3>🇰🇷 한국 전 종목 <span class="src">머리글을 누르면 정렬 (한 번 더 = 반대로) · 종목 이름 = 상세</span></h3>
+  <div class="cmp-bar">
+    <div class="seg" id="acmpGroupKR"></div>
+    <div class="chips" id="acmpIndKR"></div>
+  </div>
+  <div class="card cmp-card"><div class="cmp-wrap" id="acmpTableKR"></div></div>
+  <p class="note" id="acmpNoteKR"></p>
+  <h3>🇺🇸 미국 전 종목</h3>
+  <div class="cmp-bar">
+    <div class="seg" id="acmpGroupUS"></div>
+    <div class="chips" id="acmpIndUS"></div>
+  </div>
+  <div class="card cmp-card"><div class="cmp-wrap" id="acmpTableUS"></div></div>
+  <p class="note" id="acmpNoteUS"></p>
+  <div id="allMap"></div>
+  <div id="allKey"><div class="empty">불러오는 중…</div></div>
 </main>
 <main class="wrap" id="feedView" hidden>
   <h2>🔔 새 소식</h2>

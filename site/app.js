@@ -951,6 +951,9 @@ function cmpCols(mk = MKT) {
       : { h: "순현금 (조원)<br>리스 제외", v: (s) => (s.tbl?.net_cash_xl != null ? s.tbl.net_cash_xl / 1e12 : null), f: Bn },
     ncxp: { h: "순현금 리스 제외<br>÷ 시총", v: t("net_cash_xl_pct"), f: R(0) },
     fcfY: { h: "FCF ÷ 시총<br>최근 4분기", v: t("fcf_ttm_yield"), f: R(1) },
+    // 🌐 전체 탭 (사용자 11/20): 어느 묶음 종목인지 · 우리 적정주가(Base) 대비 지금 주가 (마이너스 = 적정가보다 쌈 → 초록)
+    grp: { h: "구분", v: (s) => ({ 보유: 0, 관심: 1, 공동: 2 })[grp(s)] ?? 3, f: (v, s) => [grp(s), ...(s.also || [])].map((g) => GTAG[g] || "").join("") },
+    gap: { h: "적정가<br>대비", v: (s) => (s.gap == null ? null : s.gap * 100), f: (v) => (v == null ? "-" : `<b class="${v <= 0 ? "ok" : v >= 30 ? "neg" : ""}">${pct(v, 0, true)}</b>`) },
   };
   for (let i = 0; i < 3; i++) {
     c["sg" + i] = { h: `매출<br>${arrow(i)}`, v: t("sales_g", i), f: G };
@@ -991,7 +994,10 @@ function cmpCols(mk = MKT) {
   c.psr = { h: `PSR<br>${ys[1]}`, v: t("psr"), f: P(1) };
   return c;
 }
+const GTAG = { 보유: "💼", 관심: "⭐", 공동: "🤝" };
 const CMP_GROUPS = [
+  // 🌐 전체 탭 첫 화면 (사용자 11/20 "26E·27E PER · PEG · EPS·영업이익 증가율 · 시총 — 무엇이 싸고 성장률이 높은지") — 다른 탭엔 안 보임
+  ["scr", "스크리닝", ["grp", "cap", "gap", "per1", "per2", "per12", "peg", "|", "og0", "og1", "og2", "opC", "|", "eg0", "eg1", "eg2", "epsC"]],
   // 앞쪽은 올해(26E) 한눈에, "|" 뒤로는 같은 지표를 연도순으로 이어서 (기울기·연속성 보기)
   // 맨 앞 = 해외 증권사가 중요하게 보는 칸 (사용자 11/18): PEG · FCF · 영업이익·EPS 다음 해·그다음 해 증가율 · 내년 예상 PBR
   ["sum", "요약", ["cap", "peg", "fcfT", "fcfY", "pf1", "og1", "og2", "eg1", "eg2", "pbr2",  // pf1 = 야후 FCF 가 비는 종목(삼성전자·현대차 등)도 와이즈리포트 예상 FCF 로 보이게
@@ -1006,6 +1012,7 @@ const CMP_GROUPS = [
 ];
 // 미국은 무료로 받을 수 있는 숫자가 달라서 (추정은 EPS·매출 위주, 나머지는 최근 실적) 칸 구성을 따로
 const CMP_GROUPS_US = [
+  ["scr", "스크리닝", ["grp", "cap", "gap", "per1", "per2", "per12", "peg", "|", "sg0", "sg1", "|", "eg0", "eg1", "eg2", "epsC"]],  // 미국은 영업이익 예상이 없어 매출·EPS
   ["sum", "요약", ["cap", "peg", "pegF", "pegM", "fcfT", "fcfY", "eg1", "eg2", "pbr0", "|", "sg0", "sg1", "epsC", "per12", "gpm0", "opm0", "roic", "roicE1", "ncx", "dy0", "dd"]],
   ["grow", "성장", ["sg0", "sg1", "epsC", "eg0", "eg1", "eg2", "op10", "px10", "rr10"]],
   ["qual", "수익성", ["gpm0", "gpm1", "gpm2", "opm0", "roe0", "roic", "roicT", "roicE0", "roicE1"]],
@@ -1023,19 +1030,25 @@ const CMP_T = {
   main: { grp: "보유", st: CMP, save: "cmp", mkt: () => MKT, cards: "#stockCards", el: { group: "#cmpGroup", ind: "#cmpInd", table: "#cmpTable", note: "#cmpNote" } },
   watch: { grp: "관심", st: CMPW, save: "cmpw", mkt: () => CMPW.mkt, cards: "#watchFull", el: { group: "#wcmpGroup", ind: "#wcmpInd", table: "#wcmpTable", note: "#wcmpNote" } },  // 시장은 🇰🇷/🇺🇸 관심 탭이 정함
   joint: { grp: "공동", st: CMPJ, save: "cmpj", mkt: () => CMPJ.mkt, cards: "#jointCards", el: { mkt: "#jcmpMkt", group: "#jcmpGroup", ind: "#jcmpInd", table: "#jcmpTable", note: "#jcmpNote" } },  // 🤝 공동자산도 같은 표 (사용자 11/18) — 표 위 🇰🇷/🇺🇸 버튼
+  // 🌐 전체 탭 (사용자 11/20): 보유·관심·공동 모두 · 한국 표 위, 미국 표 아래 · 처음엔 적정가 대비 싼 순
+  ...Object.fromEntries(["KR", "US"].map((m) => {
+    const st = { group: "scr", ind: "전체", sort: "gap", dir: 1 };
+    try { Object.assign(st, JSON.parse(localStorage.getItem("cmpa" + m) || "{}")); } catch (_) {}
+    return ["all" + m, { grp: "전체", st, save: "cmpa" + m, mkt: () => m, cards: "#none", el: { group: `#acmpGroup${m}`, ind: `#acmpInd${m}`, table: `#acmpTable${m}`, note: `#acmpNote${m}` } }];
+  })),
 };
 const inGrp = (s, g) => grp(s) === g || (s.also || []).includes(g);
 function renderCmp(T = CMP_T.main) {
   const MK = T.mkt(), S = T.st, cols = cmpCols(MK);
   if (!$(T.el.table)) return;
   const ys = (DASH.stocks.find((c) => c.tbl && c.tbl.years) || {}).tbl?.years || ["25", "26E", "27E", "28E"];  // 아래 설명 줄의 연도 이름
-  const GROUPS = MK === "US" ? CMP_GROUPS_US : CMP_GROUPS;
+  const ALL = T.grp === "전체", GROUPS = (MK === "US" ? CMP_GROUPS_US : CMP_GROUPS).filter((x) => ALL || x[0] !== "scr");
   const g = GROUPS.find((x) => x[0] === S.group) || GROUPS[0];
   const raw = g[2] || [...new Set(GROUPS.slice(0, -1).flatMap((x) => x[2]))];
   const sepAt = new Set(raw.map((k, i) => (i && raw[i - 1] === "|" ? i - raw.slice(0, i).filter((x) => x === "|").length : -1)));  // 구분선 칸 위치
   const keys = raw.filter((k) => k !== "|");
   if (!keys.includes(S.sort) && S.sort !== "name" && S.sort !== "ind") S.sort = keys[0];
-  const mine = DASH.stocks.filter((s) => inGrp(s, T.grp) && (s.market === "US" ? "US" : "KR") === MK);
+  const mine = DASH.stocks.filter((s) => (ALL || inGrp(s, T.grp)) && (s.market === "US" ? "US" : "KR") === MK);
   const inds = ["전체", ...new Set(mine.map((s) => s.industry).filter(Boolean))];
   if (!inds.includes(S.ind)) S.ind = "전체";
   if (T.el.mkt) $(T.el.mkt).innerHTML = ["KR", "US"].map((m) => `<button data-m="${m}" class="${m === MK ? "on" : ""}">${m === "US" ? "🇺🇸 미국" : "🇰🇷 한국"} ${DASH.stocks.filter((s) => inGrp(s, T.grp) && (s.market === "US" ? "US" : "KR") === m).length}</button>`).join("");
@@ -1052,9 +1065,9 @@ function renderCmp(T = CMP_T.main) {
   });
   const th = (k, h, i) => `<th data-k="${k}" class="${S.sort === k ? "on" : ""}${sepAt.has(i) ? " sep" : ""}">${h}${S.sort === k ? (S.dir > 0 ? " ▲" : " ▼") : ""}</th>`;
   $(T.el.table).innerHTML = `<table class="cmp"><thead><tr>${th("name", "종목")}${th("ind", "산업")}${keys.map((k, i) => th(k, cols[k].h, i)).join("")}</tr></thead>
-    <tbody>${rows.map((s) => `<tr data-code="${esc(s.code)}"><td class="nm" title="아래 ${esc(s.name)} 칸으로 이동">${esc(s.name)} ↓</td><td class="ind">${esc(s.industry || "")}</td>
+    <tbody>${rows.map((s) => `<tr data-code="${esc(s.code)}"><td class="nm" title="${ALL ? "상세 화면" : `아래 ${esc(s.name)} 칸으로 이동`}">${esc(s.name)}${ALL ? "" : " ↓"}</td><td class="ind">${esc(s.industry || "")}</td>
       ${keys.map((k, i) => `<td${sepAt.has(i) ? ' class="sep"' : ""}>${cols[k].f(cols[k].v(s), s)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  $(T.el.note).innerHTML = `머리글을 누르면 정렬 (한 번 더 누르면 반대로) · <b>종목 이름(↓)을 누르면 아래 그 종목 칸으로</b>, 숫자 칸을 누르면 상세 화면 ·
+  $(T.el.note).innerHTML = `${ALL ? `<b>구분</b> 💼 보유 · ⭐ 관심 · 🤝 공동 · <b>적정가 대비</b> = 지금 주가 ÷ 우리 적정주가(Base) − 1 — 마이너스(초록) = 적정가보다 쌈, +30% 넘으면 빨강, '-' = 적자·자료 부족으로 적정가 없음 · 줄을 누르면 상세 화면 · ` : ""}머리글을 누르면 정렬 (한 번 더 누르면 반대로) · ${ALL ? "" : "<b>종목 이름(↓)을 누르면 아래 그 종목 칸으로</b>, 숫자 칸을 누르면 상세 화면 · "}
     <b>요약 맨 앞 칸</b> = PEG · FCF(최근 4분기, 시총 대비) · ${MK === "US" ? "EPS" : "영업이익·EPS"} 증가율 ${ys[1]}→${ys[2]}·${ys[2]}→${ys[3]} (증권사 예상 평균, 적자인 해가 끼면 비움) · ${MK === "US" ? "지금 PBR (미국은 영업이익 예상·내년 예상 PBR 을 무료로 받을 곳이 없어 비움)" : `PBR ${ys[2]} = 지금 주가 ÷ 내년 예상 주당순자산`} · 3년 연평균 = 25년 실적 → 28년 추정 ·
     ${mine.some((s) => s.tbl?.peg_how) ? (MK === "US" ? "PEG = 내년 예상 PER ÷ 3~5년 EPS 성장률 — 시킹알파 값 먼저, 없으면 Finviz → Zacks → 나스닥 · 옆 칸은 Finviz·내가 정한 성장률로 계산한 값"
       : "PEG = 내년 예상 PER ÷ 앞으로 연평균 성장률 — 영업이익·EPS 중 낮은 쪽 · 25→28E 3년, 첫해가 +50% 넘게 뛰거나 작년이 적자면 26E→28E 2년") + " · ⚠ = 지표·출처끼리 차이가 크거나 성장률 50% 넘음 (아래 종목 칸 📐 줄에 이유)"
@@ -1913,7 +1926,8 @@ function dotMap(o) {  // o = {id, t, pts: [{x, y, n, own}], fx, fy, xt, yt}
   return { svg: `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.t)}">${g}</svg>`, rk, gap, out, b };
 }
 function dotMapHTML(list, g, mk) {  // 사용자 11/6: 탭마다 그 탭 종목만 (보유 = 그 시장 보유 · 관심 = 그 시장 관심 · 공동 = 공동자산 전체)
-  const S = (list || []).filter((c) => c.fwd_mult), key = { 보유: "own", 관심: "watch", 공동: "joint" }[g] + (mk || "");
+  const S = (list || []).filter((c) => c.fwd_mult), key = ({ 보유: "own", 관심: "watch", 공동: "joint" }[g] || "all") + (mk || "");
+  const own = (c) => (g === "전체" ? +(grp(c) === "보유") : 1);  // 🌐 전체 탭: 보유 = 채운 점, 관심·공동 = 빈 점
   if (!S.length) return "";
   const kinds = (c) => (c.scen?.parts || []).map((p) => p.kind), nm = (c) => c.name.replace("디펜스앤에어로스페이스", "디펜스");
   const per = [], pbr = [];
@@ -1925,16 +1939,16 @@ function dotMapHTML(list, g, mk) {  // 사용자 11/6: 탭마다 그 탭 종목�
       let w = a > 0 && a !== b2 ? (1 / P["12MF"] - 1 / b2) / (1 / a - 1 / b2) : NaN;
       if (!(w >= 0 && w <= 1)) { const d = new Date(); w = Math.max(0, (12 - d.getMonth() - d.getDate() / 31) / 12); }
       const p24 = 1 / (w / b2 + (1 - w) / c2);
-      per.push({ x: (P["12MF"] / p24 - 1) * 100, y: P["12MF"], n: nm(c), own: 1 });
+      per.push({ x: (P["12MF"] / p24 - 1) * 100, y: P["12MF"], n: nm(c), own: own(c) });
     }
-    if (kinds(c).includes("PBR") && B["12MF"] > 0 && P["12MF"] > 0) pbr.push({ x: (B["12MF"] / P["12MF"]) * 100, y: B["12MF"], n: nm(c), own: 1 });
+    if (kinds(c).includes("PBR") && B["12MF"] > 0 && P["12MF"] > 0) pbr.push({ x: (B["12MF"] / P["12MF"]) * 100, y: B["12MF"], n: nm(c), own: own(c) });
   });
   const card =(m, t, unit, kid, src) => {
     if (!m) return "";
     const top = (arr) => arr.map((p) => `${esc(p.n)} <span class="src">${pct(m.gap(p), 0, true)}</span>`).join(" · ");
     return `<div class="qp"><div class="qt"><b>${esc(t)}</b></div>
       <div class="src" style="margin:2px 0 4px">선보다 아래 (같은 ${unit}에 비해 배수 낮음): ${top(m.rk.slice(0, 3))}<br>선보다 위 (배수 높음): ${top(m.rk.slice(-3).reverse())}</div>
-      ${m.svg}<div class="src">● ${g === "공동" ? "공동자산" : g} 종목 · 점선 = 이 종목들 평균 관계 · 이름 옆 % = 점선에서 위아래로 떨어진 정도 · 점을 누르면 숫자${m.out.length ? ` · 그림 밖: ${m.out.map((p) => `${esc(p.n)} (${n(p.x, 0)}%, ${n(p.y, 1)}배)`).join(", ")}` : ""}</div>
+      ${m.svg}<div class="src">${g === "전체" ? "● 보유 · ○ 관심·공동" : `● ${g === "공동" ? "공동자산" : g} 종목`} · 점선 = 이 종목들 평균 관계 · 이름 옆 % = 점선에서 위아래로 떨어진 정도 · 점을 누르면 숫자${m.out.length ? ` · 그림 밖: ${m.out.map((p) => `${esc(p.n)} (${n(p.x, 0)}%, ${n(p.y, 1)}배)`).join(", ")}` : ""}</div>
       <div class="kidbox" style="margin-top:6px">🐣 ${kid}${m.b < 0 ? ` <b>지금 이 종목들은 점선이 거꾸로(오른쪽 아래로) 기울어 있어요</b> — ${unit}이 높은 종목이 오히려 배수가 낮게 거래되는 중이에요.` : ""}</div><div class="note src">${src}</div></div>`;
   };
   const m1 = per.length >= 3 && dotMap({ id: `dmper${key}`, t: "", pts: per, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 0)}배`, xt: "다음 1년 EPS 증가율", yt: "12개월 선행 PER" });
@@ -4500,6 +4514,41 @@ async function renderFeed() {
   $("#feedBody").innerHTML = head + [...new Set(it.map((x) => x.d))].map(day).join("")
     + `<div class="note src" style="margin-top:10px">자동 갱신 ${esc(F.updated_at || "")} (하루 여러 번) · 🧾 실적 = 잠정실적 숫자·IR 요약·컨콜 정리 · 📑 리포트 = 한경 목표가 · 🌏 증권사 요약 = 리포트 탭 한 장 요약 · 📢 공시 = 중요 공시 · 📦 수출 = 채널 1~10일 잠정·관세청 확정 · 📈 추정치 = 1주 3% 넘게 바뀐 이익 추정 · 🤖 자동 정리 = PC 예약 작업이 스스로 정리 · 매수·매도 추천 아님</div>`;
 }
+/* ---------- 🌐 전체 탭 (사용자 11/20 "보유·관심·공동 모든 종목을 표로 — 무엇이 가장 저평가되고 성장률이 높은지 + 신호 탭·변화 중 가장 중요한 것만 매일")
+   새 계산은 없고 이미 있는 부품을 모든 종목으로: 비교표(renderCmp allKR·allUS) · 📍 종목 지도 · 🔔 새 소식 · 📈 추정치 · 📐 차트 모양 · 📊 추세판 새 숫자 · ⏱ 리드타임 · 🚀 이익 가속 ---------- */
+function allSumHTML(all) {  // 맨 위 🐣 — 표 숫자로 4줄
+  const S = all.filter((c) => !/우$/.test(c.name)), P = (v) => pct(v, 0, true);  // 우선주는 보통주와 같아서 뺌
+  const g1 = (c) => (mktOf(c.code) === "KR" ? c.tbl?.op_g?.[1] : null) ?? c.tbl?.eps_g?.[1] ?? null;  // 내년 이익 증가율: 한국 영업이익 · 미국 EPS (26E→27E)
+  const nm = (c) => `${GTAG[grp(c)] || ""}<a href="#stock/${esc(c.code)}">${esc(c.name)}</a>`;
+  const top = (xs, f, k = 3) => xs.slice(0, k).map((c) => `${nm(c)} <span class="src">${f(c)}</span>`).join(" · ") || "없음";
+  const cheap = S.filter((c) => c.gap != null && c.gap < 0).sort((a, b) => a.gap - b.gap), both = cheap.filter((c) => g1(c) >= 20);
+  const peg = S.filter((c) => c.tbl?.peg > 0 && !c.cyclical).sort((a, b) => a.tbl.peg - b.tbl.peg), fast = S.filter((c) => g1(c) != null && g1(c) < 500).sort((a, b) => g1(b) - g1(a));
+  return `<div class="kidbox" style="margin-bottom:10px">🐣 <b>한눈에</b> <span class="src">전 종목 ${S.length}곳 (우선주 뺌) · 우리 적정주가·증권사 예상 기준 · 참고용</span><ul class="irl" style="margin:4px 0 0">
+    <li>🎯 적정가보다 싸면서 내년 이익도 +20% 넘게 크는 곳 <b>${both.length}곳</b>: ${top(both, (c) => `적정가 ${P(c.gap * 100)} · 이익 ${P(g1(c))}`, 8)}</li>
+    <li>🏷 적정가보다 가장 아래: ${top(cheap, (c) => P(c.gap * 100))}</li>
+    <li>📐 PEG 가장 낮은 곳 (1 아래 = 성장에 비해 쌈 · 반도체처럼 이익이 크게 출렁이는 업종은 뺌): ${top(peg, (c) => n(c.tbl.peg, 2))}</li>
+    <li>🚀 내년 이익 증가율 높은 곳 (한국 영업이익 · 미국 EPS): ${top(fast, (c) => P(g1(c)))}</li></ul></div>`;
+}
+function allNewsHTML(F) {  // 오늘·어제 새 소식 — 같은 날은 보유 → 관심 → 공동 → 공통, 날마다 12개까지
+  const GO = { 보유: 0, 관심: 1, 공동: 2, 공통: 3 }, it = (F?.items || []).filter((x) => x.k !== SITE_K && x.d >= kstDay(1));
+  const day = (d, lab) => { const xs = it.filter((x) => x.d === d).sort((a, b) => (GO[a.g] ?? 4) - (GO[b.g] ?? 4));
+    return xs.length ? `<div class="chart-title" style="margin-top:6px"><b>${lab}</b> <span class="src">${xs.length}개${xs.length > 12 ? " 중 12개" : ""}</span></div>${xs.slice(0, 12).map(feedRow).join("")}` : ""; };
+  return it.length ? `<h3>🔔 오늘·어제 바뀐 것 <span class="src">실적·목표가·공시·추정치·수출 · 다 보기 = <a href="#feed">🔔 새 소식 탭</a></span></h3><div class="card" style="margin-bottom:14px">${day(kstToday(), "오늘")}${day(kstDay(1), "어제")}</div>` : "";
+}
+async function renderAllTab() {  // (renderAll 은 처음 화면 전체를 그리는 다른 함수 — 이름 겹치지 않게)
+  const all = DASH.stocks || [], by = (m) => all.filter((c) => mktOf(c.code) === m);
+  $("#allSum").innerHTML = allSumHTML(all);
+  renderCmp(CMP_T.allKR);
+  renderCmp(CMP_T.allUS);
+  $("#allMap").innerHTML = dotMapHTML(by("KR"), "전체", "KR") + dotMapHTML(by("US"), "전체", "US");
+  const [F, tr] = await Promise.all([feedGet().catch(() => ({})), trendBoardHTML(true).catch(() => "")]);
+  if (location.hash !== "#all") return;  // 기다리는 사이 다른 탭으로 갔으면 그리지 않음
+  feedBadge();
+  const W = (KEYC?.leadtime?.weeks || []).map((w) => w.d).sort().at(-1), lead = W && (Date.parse(kstToday()) - Date.parse(W)) / 864e5 <= 7 ? leadHTML(null, true) : "";  // 리드타임은 이번 주 표가 새로 왔을 때만
+  $("#allKey").innerHTML = `<h2 style="margin-top:18px">📌 오늘의 핵심 <span class="src">모든 종목에서 바뀐 것·신호만 · 매일 자동 · 매수·매도 추천 아님</span></h2>`
+    + allNewsHTML(F) + estAlertHTML(all) + patAlertHTML(all) + tr + lead + accelHTML(all).replace('<details class="card" open', '<details class="card"');
+  accSecFill();
+}
 // 12MF 밴드 (key eps = PER · bps = PBR): 선 = 배수 × 그 시점의 12개월 선행 EPS·BPS, 오른쪽은 추정치로 그린 앞으로의 선
 const P12K = (key) => (key === "bps" ? { k: "PBR", v: "BPS", id: "b12", dg: 2 } : { k: "PER", v: "EPS", id: "p12", dg: 1 });
 function per12mfHTML(d, px = "", tag = "button", key = "eps") {
@@ -5508,13 +5557,14 @@ function trendRow(r, isNew) {
     <div class="src" style="margin-top:2px">${s.L.slice(2, 4)}년 ${+s.L.slice(5)}월 <b>${n(s.v, r.d ?? trDec(s.v))}${esc(r.u)}</b> · 1년 전보다 <b class="${kcol(s.yoy)}">${sg(s.yoy)}</b> · 최근 3개월 <b class="${kcol(s.g3)}">${sg(s.g3)}</b>${s.g3p != null ? ` (그 앞 3개월 ${sg(s.g3p)})` : ""} → <b>${lab}</b></div></summary>
     ${trendChart(r)}<div class="note src">출처: ${esc(r.src)}${r.day ? ` · ${esc(r.day)} 나옴` : ""} · <a href="${r.go[0]}" data-kc="${esc(r.go[1])}">자세한 그림 →</a></div></details>`;
 }
-async function trendBoardHTML() {  // (trendHTML 은 종목 상세의 다른 함수 — 이름 겹치지 않게)
+async function trendBoardHTML(onlyNew = false) {  // (trendHTML 은 종목 상세의 다른 함수 — 이름 겹치지 않게) · onlyNew = 🌐 전체 탭: 최근 7일 새 숫자 줄만
   await essGet();
   if (!EXP) { try { EXP = await (await fetch("data/exports.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { EXP = {}; } }
   if (!AUTOS) { try { AUTOS = await (await fetch("data/autosales.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { AUTOS = {}; } }
   const today = kstToday(), isNew = (r) => !!r.day && (Date.parse(today) - Date.parse(r.day)) / 864e5 <= 7, GO = { 보유: 0, 관심: 1, 공동: 2, "": 3 };
   const rows = trendRows().sort((a, b) => isNew(b) - isNew(a) || GO[a.g] - GO[b.g]), cnt = (k) => rows.filter((r) => r.s.k === k).length, nw = rows.filter(isNew);
   await keyLoad();
+  if (onlyNew) return nw.length ? `<h3>📊 새로 나온 달별 숫자 <span class="src">최근 7일 · 📡 신호 탭 추세판에서 · 줄을 누르면 막대</span></h3><div class="card" style="margin-bottom:14px">${nw.map((r) => trendRow(r, true)).join("")}</div>` : "";
   if (!rows.length) return leadHTML(null, true);
   return `<h3 style="margin-top:0">📊 데이터 추세판 <span class="src">달마다 나오는 숫자 ${rows.length}개 — 추세가 살았나, 꺾였나</span></h3><div class="card" style="margin-bottom:14px">
     <div class="kidbox" style="margin-top:0">🐣 🟢 살아있음 ${cnt("g")}개 · 🟡 완만해짐 ${cnt("y")}개 · 🔴 꺾임 ${cnt("r")}개 · ${nw.length ? `🆕 최근 7일에 새로 나온 숫자 ${nw.length}개가 맨 위 (${nw.map((r) => esc(r.t)).join(", ")})` : "최근 7일에 새로 나온 숫자는 없어요"}. 줄을 누르면 막대 그림이 열려요.</div>
@@ -5654,7 +5704,7 @@ function showView() {
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#pattern": "pattern", "#check": "check", "#exports": "exports", "#feed": "feed" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#pattern": "pattern", "#check": "check", "#exports": "exports", "#feed": "feed", "#all": "all" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
   const eg = { earn: "보유", earnw: "관심", earnj: "공동" }[view];  // 🧾 실적 보유 · 관심 · 공동 (같은 화면, 종목 묶음만 바꿈)
   $("#earnView").hidden = !eg;
   if (eg) { EARN_GRP = eg; renderEarn(); }  // 보유·관심·공동을 바꿔도 전체/한국/미국 고른 건 그대로
@@ -5679,6 +5729,8 @@ function showView() {
   if (view === "exports") renderExports();
   $("#feedView").hidden = view !== "feed";
   if (view === "feed") renderFeed();
+  $("#allView").hidden = view !== "all";
+  if (view === "all") renderAllTab();
   $("#marketView").hidden = view !== "market";
   $("#scoreView").hidden = view !== "score";
   if (view === "score") renderScore();
@@ -6819,8 +6871,8 @@ function tpCnt(code) {  // 최근 30일 목표가 올린 곳·내린 곳
   const cut = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), X = ((REPS?.stocks || []).find((x) => x.code === code)?.list || []).filter((x) => x.d >= cut && x.tp);
   return [X.filter((x) => (x.tp_prev && x.tp > x.tp_prev) || x.tp_dir === "상향").length, X.filter((x) => (x.tp_prev && x.tp < x.tp_prev) || x.tp_dir === "하향").length];
 }
-function estAlertHTML() {  // 첫 화면: 방향 개수 + 변곡점 종목만
-  const L = (DASH?.stocks || []).filter((c) => c.est?.sig && mktOf(c.code) === MKT && c.group === "보유");  // 보유 탭이라 보유 종목만 (사용자 11/11)
+function estAlertHTML(list = (DASH?.stocks || []).filter((c) => mktOf(c.code) === MKT && c.group === "보유")) {  // 첫 화면: 방향 개수 + 변곡점 종목만 · 보유 탭이라 보유 종목만 (사용자 11/11), 🌐 전체 탭은 모두
+  const L = list.filter((c) => c.est?.sig);
   if (!L.length) return "";
   const cnt = (s) => L.filter((c) => c.est.sig === s).length, turn = L.filter((c) => /전환|꺾임/.test(c.est.sig));
   return `<div class="card" style="margin-bottom:12px"><b>📈 이익 추정치 방향</b> <span class="src">증권사 예상 이익이 올라가면 기대감·수급이 따라올 수 있어요 · 매일 갱신 · 참고용</span>
