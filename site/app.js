@@ -3489,13 +3489,18 @@ function fcfTag(a, b) {  // 직전 분기 a → 이번 분기 b
 }
 function fcfBars(d, k) {  // 10년 분기 실적(longq ocf·capex: 한국 DART 현금흐름표 · 미국 SEC, 야후 분기 포함)이 있으면 그걸로 기간 버튼(QN)만큼
   const usd = d.currency === "USD", m = usd ? 1e6 : 1e8;
-  const lq = Object.entries(d.longq || {}).filter(([, r]) => r.ocf != null && r.capex != null).map(([q, r]) => ({ q, fcf: (r.ocf - r.capex) * m, capex: -r.capex * m }));
-  const s = lq.length >= 2 ? [...lq, ...fcfSeries(d, k, 99).filter((x) => x.add && !lq.some((z) => z.q === x.q))].sort((a, b) => (a.q < b.q ? -1 : 1)).slice(-QN) : fcfSeries(d, k);
+  const lq = Object.entries(d.longq || {}).filter(([, r]) => r.ocf != null && r.capex != null).map(([q, r]) => ({ q, ocf: r.ocf * m, fcf: (r.ocf - r.capex) * m, capex: -r.capex * m }));
+  const s = lq.length >= 2 ? [...lq, ...fcfSeries(d, k, 99).filter((x) => x.add && !lq.some((z) => z.q === x.q))].sort((a, b) => (a.q < b.q ? -1 : 1)).slice(-QN) : fcfSeries(d, k, QN);
   if (s.length < 2) return "";
-  const [t, cls] = fcfTag(s.at(-2).fcf, s.at(-1).fcf), cx = s.filter((x) => x.capex != null).at(-1);
-  const sub = `영업현금흐름 − 설비투자(CapEx)${cx ? ` · ${esc(cx.q)} CapEx ${qMoney(Math.abs(cx.capex), usd)}` : ""}${s.some((x) => x.add) ? ` · ${s.filter((x) => x.add).map((x) => esc(x.q)).join("·")} 는 보도자료 숫자 (야후 반영 전)` : ""}`;
-  return kqBars("💸 현금흐름 (FCF)", s.map((x) => ({ q: x.q, fcf: usd ? x.fcf : x.fcf / 1e8 })), "fcf", null, "var(--s1)", usd ? "USD" : "KRW",
-    { tag: `<span class="qtag ${cls}">${t}</span>`, sub });
+  const [t, cls] = fcfTag(s.at(-2).fcf, s.at(-1).fcf), cx = s.filter((x) => x.capex != null).at(-1), add = s.filter((x) => x.add).map((x) => x.q);
+  const tag = `<span class="qtag ${cls}">${t}</span>`, cap = (x) => (x.capex == null ? null : -Math.abs(x.capex));  // 야후 capex 는 음수, DART 는 위에서 음수로 → 그림은 늘 0 아래 (사용자 엑셀 그림처럼)
+  // 사용자 11/21 엑셀 그림: 영업현금흐름(파랑) · 설비투자(주황, 0 아래) · FCF(회색) 선 3개, 📅 기간 버튼만큼
+  return lineChart({ t: "💸 현금흐름 (OCF · CAPEX · FCF)", tag, labels: s.map((x) => x.q), zero: true, fl: (v) => qMoney(v, usd),
+    s: [{ n: "영업현금흐름 OCF", v: s.map((x) => x.ocf ?? (x.capex != null && x.fcf != null ? x.fcf + Math.abs(x.capex) : null)), col: "#2f6db5", nolab: true },  // 끝 숫자 3개는 위에서 겹쳐 잘림 → FCF 만 (셋 다 아래 범례에)
+      { n: "설비투자 CAPEX", v: s.map(cap), col: "#e8873a", nolab: true }, { n: "FCF", v: s.map((x) => x.fcf), col: "var(--muted)" }],
+    why: `FCF = 영업현금흐름 − 설비투자 · 0 위면 현금이 남고, 아래면 모자라요${add.length ? ` · ${add.join("·")} 는 보도자료 숫자 (야후 반영 전, FCF 만)` : ""}` })
+    || kqBars("💸 현금흐름 (FCF)", s.map((x) => ({ q: x.q, fcf: usd ? x.fcf : x.fcf / 1e8 })), "fcf", null, "var(--s1)", usd ? "USD" : "KRW",  // 분기가 2개뿐이면 막대
+      { tag, sub: `영업현금흐름 − 설비투자(CapEx)${cx ? ` · ${esc(cx.q)} CapEx ${qMoney(Math.abs(cx.capex), usd)}` : ""}` });
 }
 // 💸 영업이익 vs 이자비용 (야후 분기 재무제표 intx, 모든 종목 자동 — 사용자 11/11 코어위브 그림): 번 돈으로 이자를 몇 번 낼 수 있나
 function intHTML(d) {
