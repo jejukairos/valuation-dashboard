@@ -6924,6 +6924,8 @@ const CYC_COL = ["#a3a3a3", "#c9a27a", "#9cb8d8", "#5b8fd1", "#2a9d8f", "#b39ddb
 const CYC_NOTE = {  // 전달받은 시각 (닫힘) — 사용자 11/7
   "005930": ["최악이면 '진짜 바닥'은 10만원 중후반으로 봄 — 28년 이익 60% 넘게 역성장 + PBR 0.9배를 가정", "컨센서스를 안 믿고 28년을 보수적으로 잡아도 PBR 은 1배 수준", "지금 50% 넘는 고점 대비 낙폭은 닷컴버블 수준 — 'AI 버블'이 이미 터진 걸 가정한 주가·밸류라는 시각 (연쇄 청산이 나면 더 빠질 수도)", "내년 배당수익률이 10% 가까울 수 있다고 봄"],
 };
+// 🏷 역사상 반토막(고점 대비 −50%) — 사용자 전달 글 11/20: [이름, 글의 '몇 개월 만에', 우리 사이클 고점 해 (null = 우리 일봉 자료 밖) 또는 "now"]
+const CYC_HALF = { "005930": [["97~99년 IMF 사태", 34, null], ["00~01년 닷컴버블 붕괴", 14, 2000], ["26년 6월~11월 (지금)", 5, "now"]] };
 function cycHTML(code, open = false) {
   const S = CYC?.stocks?.[code];
   if (!S?.cycles?.length) return "";
@@ -6953,11 +6955,18 @@ function cycHTML(code, open = false) {
   ] : [];
   const leg = [...past.map((x, i) => `<span style="display:inline-block;width:16px;height:0;border-top:3px solid ${CYC_COL[i % CYC_COL.length]};vertical-align:middle;margin-right:4px"></span>${lab(x)} 고점 (${esc(x.label)}) 바닥 ${n(x.trough, 0)}% · ${n(x.trough_m, 1)}개월 뒤${x.back_m != null ? ` · 고점 되찾는 데 ${n(x.back_m, 0)}개월` : ""}`),
     ...(cur ? [`<span style="display:inline-block;width:16px;height:0;border-top:4px solid var(--bad);vertical-align:middle;margin-right:4px"></span><b>${lab(cur)} 고점 (지금, ${esc(cur.label)})</b>`] : [])];
-  const note = CYC_NOTE[code];
-  return `<details class="fvt"${open ? " open" : ""}><summary class="chart-title"><b>📉 ${esc(S.name)} 고점 대비 낙폭: 지금 vs 과거 하락 사이클</b> <span class="src">${cur ? `지금 ${n(L.dd, 1)}% · 고점 뒤 ${n(L.m, 1)}개월 · ` : ""}매일 자동 · 눌러서 열기</span></summary>
+  const note = CYC_NOTE[code], half = CYC_HALF[code];
+  const halfRow = ([t, m, y], i) => { const x = y === "now" ? cur : past.find((c) => +c.peak_d.slice(0, 4) === y), f = x?.pts.find((p) => p[1] <= -50);
+    const chk = !x ? "우리 일봉 자료 없음 (1999년 11월부터)" : `우리 일봉: ${lab(x)} 고점 → ${f ? `약 ${n(f[0], 1)}개월 만에 처음 −50% 아래 · ` : "종가로는 아직 −50% 위 · "}`
+      + (x.now ? `지금 ${n(L.dd, 1)}% (${n(L.m, 1)}개월, 매일 바뀜)` : `${m}개월 뒤 ${n(at(x, m), 0)}% · 가장 깊게 ${n(x.trough, 0)}% (${n(x.trough_m, 1)}개월)`);
+    return `<li><b>${i + 1}. ${esc(t)}</b>: ${m}개월 만에 고점 대비 −50% <span class="src">— ${chk}</span></li>`; };
+  const halfHTML = half ? `<div class="chart-title" style="margin-top:8px"><b>🏷 역사상 세 번째 반토막</b> <span class="src">전달받은 글 (11/20) · 옆 회색 글 = 우리 일봉 종가로 맞춰 본 것</span></div>
+    <ul class="irl">${half.map(halfRow).join("")}</ul><div class="kidbox">🐣 삼성전자 주가가 고점에서 반값이 된 건 이번이 세 번째예요. 앞의 두 번(IMF 34개월 · 닷컴 14개월)보다 훨씬 빠른 5개월 만에 반값 근처까지 왔어요. '몇 개월 만에'는 글쓴이 기준이라 우리 일봉 숫자와 조금 달라요.</div>` : "";
+  return `<details class="fvt"${open ? " open" : ""}><summary class="chart-title"><b>📉 ${esc(S.name)} 고점 대비 낙폭: 지금 vs 과거 하락 사이클</b> <span class="src">${cur ? `지금 ${n(L.dd, 1)}% · 고점 뒤 ${n(L.m, 1)}개월 · ` : ""}${half ? "🏷 역사상 세 번째 반토막 · " : ""}매일 자동 · 눌러서 열기</span></summary>
     <svg viewBox="0 0 ${W} ${bot + 36}" role="img" aria-label="${esc(S.name)} 고점 대비 낙폭">${g}</svg>
     <div class="src" style="line-height:1.7">${leg.join("<br>")}</div>
     <ul class="irl" style="margin-top:6px">${lines.map((x) => `<li>${x}</li>`).join("")}</ul>
+    ${halfHTML}
     <div class="kidbox" style="margin-top:6px">🐣 고점을 0%로 놓고, 고점 뒤 몇 달 동안 얼마나 빠졌는지를 사이클마다 겹쳐 그린 거예요. 빨간 굵은 선(지금)이 과거 선들 중 어디쯤 있는지 보면 '이번 하락이 얼마나 깊고 빠른지'를 비교할 수 있어요. 과거에 여기서 멈췄다고 이번에도 멈춘다는 뜻은 아니에요.</div>
     ${note ? `<details class="fvt"><summary class="chart-title">📌 전달받은 시각 (11/7) <span class="src">그 글의 생각 · 추천 아님 · 눌러서 보기</span></summary><ul class="irl">${note.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}
     <div class="note src">고점 = 앞 1년 중 가장 높은 종가이면서 그 뒤 30개월 안에 33% 넘게 빠진 자리 · 바닥 = 고점 뒤 30개월 안 가장 낮은 종가 · 일봉 종가(장중 저가 아님) · ${esc(CYC.src || "")} · ${esc(CYC.updated_at || "")}</div></details>`;
