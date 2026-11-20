@@ -597,8 +597,8 @@ NVDA:
     override: {}
     my_per: 30
     my_per_note: 하방잡기
-    sa_ltg: 49.99
-    sa_ltg_date: '2026-10-26'
+    sa_ltg: 49.44
+    sa_ltg_date: '2026-11-20'
     sa_peg: {ngaap: 0.38, gaap: 0.18, date: '2026-11-10'}  # 시킹알파 밸류에이션 탭 PEG Non-GAAP (FWD) · PEG GAAP (TTM) — 사용자 11/11 화면
 MSFT:
   name: 마이크로소프트
