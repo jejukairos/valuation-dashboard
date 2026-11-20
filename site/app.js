@@ -6301,8 +6301,34 @@ function ipoMcap(ch) {
     <div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:12px">${th(["순위", "회사", "시가총액<br><span class=\"src\">조$</span>", "올해 주가"])}${t2}</table></div>
     <div class="src" style="padding:4px">다른 회사 시가총액은 매일 바뀌어서 순위도 매일 바뀌어요</div></div>`;
 }
+// 📊 업종 PER 비교 막대표 (kind: perx, 사용자 11/20 신한 화장품·의류 26E/27E PER 표 "우리 종목 크로스체크 + 직관적으로")
+//   rows [[회사, 26E, 27E, 코드]] (NR = null) · avg [26E, 27E] 증권사 평균 · ck {코드: [26E, 27E]} = 우리 종목이 아닌 회사의 우리 계산 (고정)
+//   우리 종목은 매일 바뀌는 카드 값(tbl.per) · 27E 싼 순 · 이익↑ = 26E PER ÷ 27E PER − 1 (= 내년 예상 이익 증가율) · 27E 가 10% 넘게 다르면 ⚠
+function perxChart(ch) {
+  const [h0, h1] = ch.h || ["26E", "27E"], A = ch.avg, TAG = { 보유: "💼", 관심: "⭐", 공동: "🤝" };
+  const mine = (code) => {
+    const c = code && DASH.stocks.find((x) => x.code === code), t = c?.tbl, i = t?.years?.indexOf(h0) ?? -1;
+    return c && i >= 0 && t.per ? { g: c.group, v: [t.per[i], t.per[i + 1]] } : ch.ck?.[code] ? { v: ch.ck[code] } : null;
+  };
+  const R = ch.rows.map(([nm, a, b, code]) => ({ nm, a, b, m: mine(code) }));
+  const S = [...R.filter((r) => r.b != null).sort((x, y) => x.b - y.b), ...R.filter((r) => r.b == null)];
+  if (A) { const i = S.findIndex((r) => r.b == null || r.b > A[1]); S.splice(i < 0 ? S.length : i, 0, { nm: "— 업종 평균 —", a: A[0], b: A[1], avg: true }); }
+  const mx = Math.max(...S.flatMap((r) => [r.a, r.b]).filter((v) => v != null));
+  const bar = (v, c) => (v == null ? `<span class="src">NR</span>` : `<span class="cbar"><i style="width:${Math.max(2, (v / mx) * 40)}px;background:${c}"></i>${n(v, 1)}</span>`);
+  const ok = (r) => {
+    const [x, y] = r.m?.v || [];
+    return y == null || r.b == null ? "" : `${n(x, 1)} · ${n(y, 1)} ${Math.abs(y / r.b - 1) <= 0.1 ? "✅" : "⚠"}`;
+  };
+  const tr = (r) => `<tr style="${r.avg ? "background:var(--surface-2);font-weight:700" : r.m?.g ? "background:var(--warn-bg)" : ""}"><td style="text-align:left;white-space:nowrap">${r.m?.g ? `${TAG[r.m.g] || ""}<b>${esc(r.nm)}</b>` : esc(r.nm)}</td>`
+    + `<td style="text-align:left">${bar(r.a, "var(--muted)")}</td><td style="text-align:left">${bar(r.b, r.avg ? "var(--ink-2)" : "var(--s1)")}</td><td>${r.a && r.b ? pct((r.a / r.b - 1) * 100, 0, true) : "-"}</td><td class="src" style="white-space:nowrap">${ok(r)}</td></tr>`;
+  return `<div class="qp"><div class="qt"><b>${esc(ch.t)}</b></div>${ch.why ? `<div class="src">${esc(ch.why)}</div>` : ""}
+    <div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:11.5px"><tr><th style="text-align:left">회사 <span class="src">${esc(h1)} 싼 순</span></th><th style="text-align:left">${esc(h0)} PER</th><th style="text-align:left">${esc(h1)} PER</th><th>이익↑</th><th>우리 계산</th></tr>${S.map(tr).join("")}</table></div>
+    <div class="src" style="padding:4px">💼 보유 · ⭐ 관심 = 노란 줄 · 이익↑ = ${esc(h0)} PER ÷ ${esc(h1)} PER − 1 = 내년 예상 이익 증가율 · 우리 계산 = ${esc(h0)} · ${esc(h1)} (우리 종목은 매일 바뀜), ✅ = ${esc(h1)} 차이 10% 안${ch.note ? ` · ${esc(ch.note)}` : ""}</div>
+    ${ch.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(ch.kid)}</div>` : ""}</div>`;
+}
 function keyChart(ch) {
   if (ch.kind === "ipomc") return ipoMcap(ch);
+  if (ch.kind === "perx") return perxChart(ch);
   if (ch.kind === "mcap" || ch.kind === "ccsi" || ch.kind === "pbr12") return evLine(ch);  // pbr12 = 12MF PBR 주간 선 + 사건 (keyBlock 이 채움, 11/17 삼성SDI 사이클)
   // kind: line → 0 아래(적자)도 그리는 꺾은선 + 칸마다 숫자 (종목 그래프와 같은 모양)
   if (ch.kind === "line") return kpiChart({ ...ch, s: (ch.lines || []).map((s) => ({ n: s.n, v: Object.fromEntries((ch.q || []).map((q, i) => [q, s.v[i]]).filter(([, v]) => v != null)) })) });
