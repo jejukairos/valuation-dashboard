@@ -278,6 +278,11 @@ def stock_detail(h, rates_now, fx):
             if ez:
                 pg["easy"] = ez
     scen = C.scenarios(price, hist, bands, [k for k in ("PER", "PBR") if k in fm and k in bands], sec, per_growth=pg, keep=bool(h.get("keep_mult") or s0.get("fixed") or h.get("fixed_per")))
+    if not scen and "PSR" in fm and mkt == "US":  # 적자라 PER 이 안 되는 회사 (앤트로픽, 사용자 11/20 "싼지 비싼지")
+        try:
+            scen = psr_scen(code, h, price)
+        except Exception as e:  # noqa: BLE001
+            REPORT.block("PSR 적정주가", f"{name}: {str(e)[:60]}")
     if scen and pg:
         scen["growth"] = pg
         e27 = (hist.get(y0 + 1) or {}).get("eps")
@@ -326,8 +331,7 @@ def stock_detail(h, rates_now, fx):
         poss = [(bands["DIV"]["periods"].get("10y") or {}).get("pos_cheap")]
     band_pos = sum(poss) / len(poss) if poss and poss[0] is not None else None
     verdict, why, gap = C.judge(price, fair, band_pos)
-    f_eps = C.fwd12(hist, "eps")
-    fwd_per = price / f_eps if f_eps and f_eps > 0 else None
+    fwd_per = C.per12(price, hist)
     bond_per = 100 / rate_kr3y if rate_kr3y else None
     ratio = fwd_per / bond_per if (fwd_per and bond_per) else None
     # 출처 교차확인 (10% 이상 차이면 ⚠)
@@ -683,11 +687,37 @@ def stock_detail(h, rates_now, fx):
     return det
 
 
+def psr_scen(code, h, price):
+    """매출 배수 적정주가 = 내년 예상 매출 ÷ 완전 희석 주식 수 × (동종 내년 PSR 중앙값 × 1 · 1.25 · 1.5), 강세장 × 1.5 · 1.75 · 2.
+    PER 규칙(기준 배수 × 1·1.25·1.5)을 매출에 그대로 — 주식 수는 보도의 완전 희석(스톡옵션 포함)이라 야후 시총보다 보수적."""
+    import statistics
+    _, rev, na = us_stock.rev_next(code)
+    peers = []
+    for t in h["psr_peers"]:
+        try:
+            mc, r, _ = us_stock.rev_next(t)
+            if mc and r > 0:
+                peers.append([t, rnd(mc / r, 1)])
+        except Exception:  # noqa: BLE001 - 한두 곳 못 받아도 중앙값은 나머지로
+            pass
+    if len(peers) < 5:
+        raise RuntimeError(f"동종 PSR {len(peers)}곳만 받음")
+    x = statistics.median(v for _, v in peers)
+    rps = rev / (h["shares_dil"] * 1e8)
+    m = {k: x * f for k, f in C.GROWTH_MULT.items()}
+    bm = {"lo": x * 1.5, "mid": x * 1.75, "hi": x * 2}
+    part = {"kind": "PSR", "base_val": rnd(rps, 2), "lab": "내년", "now": rnd(price / rps, 1), "src": f"동종 {len(peers)}곳 내년 PSR 중앙값",
+            "how": (f"기준 PSR {x:.1f}배 (동종 {len(peers)}곳 내년 PSR 중앙값) × 1 · 1.25 · 1.5 — 적자라 PER 대신 매출 배수 · "
+                    f"내년 예상 매출 {rev / 1e8:,.0f}억$ (야후 {na}명) ÷ 완전 희석 {h['shares_dil']:g}억 주 = 1주당 {rps:.2f}$ · 지금 PSR {price / rps:.1f}배"),
+            "mult": {k: rnd(v, 2) for k, v in m.items()}, "bm": {k: rnd(v, 2) for k, v in bm.items()}, "peers": sorted(peers, key=lambda p: -p[1])}
+    return {**{k: rps * v for k, v in m.items()}, "bull_mkt": {k: rps * v for k, v in bm.items()}, "parts": [part], "note": None}
+
+
 def _scen_text(scen):
     """'12MF EPS × Base PER 22.5배 (화장품 브랜드)' 처럼."""
-    base = {"PER": "EPS", "PBR": "BPS"}
+    base = {"PER": "EPS", "PBR": "BPS", "PSR": "매출/주"}
     parts = [f"12MF {base[p['kind']]} × {p['src']} 평균 {p['kind']}" if "밴드" in p["src"] else
-             f"12MF {base[p['kind']]} × {p['kind']} {p['mult']['base']:g}배 ({p['src']})" for p in scen["parts"]]
+             f"{p.get('lab') or '12MF'} {base[p['kind']]} × {p['kind']} {p['mult']['base']:g}배 ({p['src']})" for p in scen["parts"]]
     return parts[0] if len(parts) == 1 else "두 값 평균: " + " / ".join(parts)
 
 

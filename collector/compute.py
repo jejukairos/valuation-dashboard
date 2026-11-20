@@ -108,6 +108,12 @@ def ylabel(y):
     return f"{str(y)[2:]}E"
 
 
+def per12(price, hist):
+    """12MF PER — 내년 적자 예상이면 None (앤트로픽 11/20: 26E +1.35 · 27E −0.12 를 섞으면 2,159배가 나왔음)."""
+    f, nxt = fwd12(hist, "eps"), (hist.get(now_kst().year + 1) or {}).get("eps")
+    return price / f if f and f > 0 and not (nxt is not None and nxt <= 0) else None
+
+
 def fwd12(hist, key):
     """12개월 선행값: 올해 추정과 내년 추정을 남은 기간 비율로 섞는다.
     미국처럼 회계연도 끝(fy_end)이 있으면 그 날짜 기준 (마이크로소프트 6월, 엔비디아 1월 결산 등)."""
@@ -543,6 +549,8 @@ if __name__ == "__main__":  # 자체 점검: 하방이 지금 가격보다 50% �
     assert per_anchor(12.2, [(12.8, "업종 중앙값"), (13, "업종 바닥")]) == (12.2, "성장률")
     assert per_anchor(11.4, [(36, "업종 중앙값"), (11, "방산 업종 바닥"), (None, "x")]) == (11, "방산 업종 바닥")
     assert judge(154.69, -182, None)[2] is None  # 적자 EPS 로 생긴 마이너스 적정가 → 괴리율 없음 (네비우스 11/12)
+    y1 = now_kst().year + 1  # 내년 적자 예상이면 12MF PER 없음 (앤트로픽 11/20)
+    assert per12(97, {y1 - 1: {"eps": 1.35, "fy_end": f"{y1 - 1}-12-31"}, y1: {"eps": -0.12, "fy_end": f"{y1}-12-31"}}) is None
     # 적자였던 해가 있어 성장률이 없으면 업종 중앙값만으로 (파두 11/11): EPS -500 → 1000 · 업종 중앙값 11.3 → 11.3 · 14.1 · 17.0
     gn = growth_fair({y - 1: {"eps": -500}, y: {"eps": 1000, "estimate": 1}, y + 1: {"eps": 1000, "estimate": 1}}, cands=[(11.3, "업종 중앙값")])
     assert gn["g"] is None and gn["x"] == 11.3 and gn["cands"] == [["업종 중앙값", 11.3]], gn

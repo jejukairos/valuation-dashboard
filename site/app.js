@@ -183,7 +183,7 @@ function scenHTML(c) {
       <span class="dot" style="left:${at(c.price)}%"></span><span class="now" style="left:${at(c.price)}%">지금</span></div>`;
   };
   const fmtB = (x) => (usd ? "$" + n(x, 2) : n(x) + "원");
-  const baseOf = (parts, lab) => (parts || []).map((p) => `${lab} ${p.kind === "PER" ? "EPS" : "BPS"} ${fmtB(p.base_val)}`).join(" · ");
+  const baseOf = (parts, lab) => (parts || []).map((p) => `${p.lab || lab} ${BASE_OF[p.kind]} ${fmtB(p.base_val)}`).join(" · ");
   // 칸: 가격 → 배수 → 지금 가격 대비 % (EPS·BPS 는 제목에 한 번만)
   function scenBoxes(v, parts) {
     return `<div class="scen3">${pts.map(([k, l, ko]) => {
@@ -194,7 +194,7 @@ function scenHTML(c) {
   }
   // PER·PBR 을 같이 보는 종목(현대차 등): 칸 바로 아래에 방법마다 하방·적정·최대를 따로 (위 칸은 두 값의 평균)
   const partRows = (parts) => ((parts || []).length > 1 ? `<div class="tbl-wrap"><table class="compact" style="width:100%;margin-top:6px"><thead><tr><th style="text-align:left">방법별 <span class="src">위 칸 = 평균</span></th>${pts.map(([, l, ko]) => `<th>${l} ${ko}</th>`).join("")}</tr></thead><tbody>
-    ${parts.map((p) => `<tr><td style="text-align:left"><b>${esc(p.kind)}</b> <span class="src">${pts.map(([k]) => n(p.mult[k], p.kind === "PBR" ? 2 : 1)).join(" · ")}배 × ${p.kind === "PER" ? "EPS" : "BPS"}</span></td>${pts.map(([k]) => {
+    ${parts.map((p) => `<tr><td style="text-align:left"><b>${esc(p.kind)}</b> <span class="src">${pts.map(([k]) => n(p.mult[k], p.kind === "PBR" ? 2 : 1)).join(" · ")}배 × ${BASE_OF[p.kind]}</span></td>${pts.map(([k]) => {
       const x = p.base_val * p.mult[k], up = (x / c.price - 1) * 100;
       return `<td><b>${fmtP(x)}</b><br><em class="${up >= 0 ? "up" : "dn"}">${pct(up, 0, true)}</em></td>`;
     }).join("")}</tr>`).join("")}</tbody></table></div>` : "");
@@ -238,12 +238,17 @@ document.addEventListener("click", (e) => {
   box.querySelectorAll("[data-sm-box]").forEach((x) => { x.hidden = x.dataset.smBox !== b.dataset.sm; });
 }, true);
 // 배수를 어떻게 정했는지 한 줄 (성장률 / 업종 PER / 10년 밴드) — 하방·적정주가·상방 칸 아래, '28E 기준' 바로 위 (사용자 11/6 마지막 요청) · 35배 상한 노란 칸은 뺌
+const BASE_OF = { PER: "EPS", PBR: "BPS", PSR: "매출/주" };  // PSR = 적자 회사 매출 배수 (앤트로픽 11/20, main.py psr_scen)
 function multHTML(s) {
   const r = s.sa_ref, ref = r && (r["5y"] != null || r.sector != null)  // 시킹알파 같은 줄의 참고값
     ? ` <span style="opacity:.8">(참고: 이 종목 5년 평균 ${r["5y"] == null ? "-" : n(r["5y"], 1) + "%"} · 업종 중앙값 ${r.sector == null ? "-" : n(r.sector, 1) + "%"})</span>` : "";
   return (s.parts || []).map((p) => {
     const m = p.mult, d = p.kind === "PBR" ? 2 : 1;
-    return `<div class="note src">📐 ${p.kind} ${n(m.bear, d)} · ${n(m.base, d)} · ${n(m.bull, d)}배 = ${esc(p.how || p.src)}${p.kind === "PER" && /성장률/.test(p.how || "") ? ref : ""}</div>`;
+    // PSR: 비교한 회사들의 내년 PSR 표 (높은 순, 지금 이 종목 자리 노란 줄)
+    const pr = p.peers ? [...p.peers, ["👉 지금 이 종목", p.now]].sort((a, b) => b[1] - a[1]) : null;
+    return `<div class="note src">📐 ${p.kind} ${n(m.bear, d)} · ${n(m.base, d)} · ${n(m.bull, d)}배 = ${esc(p.how || p.src)}${p.kind === "PER" && /성장률/.test(p.how || "") ? ref : ""}</div>${pr ? `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title" style="margin-top:6px">🔎 비교한 ${p.peers.length}곳 내년 PSR <span class="src">시가총액 ÷ 다음 회계연도 예상 매출 (야후) · 눌러서 보기</span></summary>
+      <table class="compact" style="width:100%;font-size:12px"><tr><th style="text-align:left">회사</th><th>내년 PSR</th></tr>${pr.map(([t, v]) => `<tr${t.startsWith("👉") ? ' style="background:var(--warn-bg)"' : ""}><td style="text-align:left">${esc(t)}</td><td>${n(v, 1)}배</td></tr>`).join("")}</table>
+      <div class="src">가운데 값(중앙값) = 하방 배수 · 적자 회사는 이익이 없어 PER 을 못 써서 '매출의 몇 배'로 비교해요 · 성장이 빠른 회사일수록 PSR 이 높게 매겨지는 편이라 보수적인 기준이에요</div></details>` : ""}`;
   }).join("");
 }
 // 배당주 점검 (리얼티 인컴 등): somong.yaml my.sa_div 에 적은 시킹알파 숫자

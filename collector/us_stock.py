@@ -21,10 +21,19 @@ def _ticker(t):
 def price_history(t, div=False):
     # div: 배당 방식 종목(리츠 등)은 배당만큼 깎지 않은 주가 (배당으로 깎은 주가로 재면 과거 배당수익률이 부풀어요). 액면분할은 둘 다 반영
     h = _ticker(t).history(period="max", auto_adjust=not div)["Close"]
+    if h.empty:  # 막 상장한 종목은 야후가 period=max 를 거부 (앤트로픽 11/20: '1d, 5d' 만) → 시작 날짜로 다시
+        h = _ticker(t).history(start="2000-01-01", auto_adjust=not div)["Close"]
     if h.empty:
         raise RuntimeError("야후 가격 데이터 없음")
     h.index = h.index.tz_localize(None)
     return h
+
+
+def rev_next(t):
+    """시가총액·다음 회계연도 예상 매출·애널리스트 수 (야후) — 적자 회사 PSR 적정주가용 (앤트로픽 11/20)."""
+    k = _ticker(t)
+    r = k.revenue_estimate
+    return k.info.get("marketCap"), float(r.loc["+1y", "avg"]), int(r.loc["+1y", "numberOfAnalysts"] or 0)
 
 
 def now_info(t):

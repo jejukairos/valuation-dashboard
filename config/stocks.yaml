@@ -258,6 +258,17 @@ watchlist:
   - {name: 코어위브, market: US, code: CRWV, industry: AI 클라우드, methods: [PER]}
   - {name: 네비우스, market: US, code: NBIS, industry: AI 클라우드, methods: [PER]}
   - {name: 어플라이드 머티리얼즈, market: US, code: AMAT, industry: 반도체장비, methods: [PER]}
+  # 🤖 AI 모델(클로드) — 2026-11-20 사용자: "ANT 로 상장했으니 관심 종목에 · 매출·실적발표·컨콜·SEC 서류(S-1·10-K·10-Q) 다 트래킹 · 싼지 비싼지 적정주가도" (11/19 나스닥 상장, 그전엔 keychart.yaml ipo 카드)
+  # 적자라 PER 적정주가가 안 나옴 → fair_methods [PSR]: 내년 예상 매출 × 동종 내년 PSR 중앙값 × 1·1.25·1.5 (main.py psr_scen) · shares_dil = 완전 희석 주식 수(억 주, 보도 1.76조$ ÷ 97.17$)
+  - name: 앤트로픽
+    market: US
+    code: ANT
+    industry: AI 모델
+    methods: [PER]
+    fair_methods: [PSR]
+    shares_dil: 181
+    psr_peers: [PLTR, NVDA, AVGO, CRWV, NBIS, MSFT, GOOG, META, AMZN, ORCL, AMD, ARM, NET, SNOW, CRWD, DDOG, NOW, SHOP, APP]
+    note: "26/11/19 나스닥 상장 (공모가 83$) · 적자라 PER 대신 매출 배수(PSR)로 적정주가 · 위 시가총액은 야후 기준(발행 주식 약 131억 주) — 보도의 1.76조$ 는 스톡옵션 등을 넣은 완전 희석 약 181억 주 기준이고, 적정주가는 더 보수적인 181억 주로 나눠요."
   # 🪙 스테이블코인(USDC) — 2026-11-10 사용자: "써클 실적발표했대, 관심종목 넣어주고 실적 정리" · 매출 대부분이 준비금 이자라 금리에 민감
   - {name: 서클, market: US, code: CRCL, industry: 스테이블코인, methods: [PER]}
   # 🛒 회원제 창고형 할인점 — 2026-11-12 사용자: "코스트코 관심종목 넣고 이미지대로 트래킹" (특별배당 3년에 한 번쯤 · 정기배당 매년 두 자릿수 인상)

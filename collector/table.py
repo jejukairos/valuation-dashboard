@@ -122,8 +122,7 @@ def kr_row(wise, hist, price, cap, px, own_cap=True):
     w = lambda yy, k: (wise.get(yy) or {}).get(k)  # noqa: E731
     ys = [y - 1, y, y + 1, y + 2]
     lab = lambda yy: f"{str(yy)[2:]}{'' if yy < y else 'E'}"  # noqa: E731
-    f_eps = C.fwd12(hist, "eps")
-    per12 = price / f_eps if f_eps and f_eps > 0 else None
+    per12 = C.per12(price, hist)
     eps_cagr = _cagr(w(y + 2, "eps"), w(y - 1, "eps"), 3)
     peg, peg_how = peg_kr(w, price, y, per12)
     return {
@@ -186,8 +185,7 @@ def us_row(code, hist, price, cap, px, ltg_cmp=None, my_per=None):
         out["dy"][0] = rnd(info["dividendRate"] / price * 100, 2)
     eps = lambda yy: (hist.get(yy) or {}).get("eps")  # noqa: E731
     out["per"] = [rnd(price / eps(v)) if (eps(v) or 0) > 0 else None for v in (y - 1, y, y + 1)]
-    f_eps = C.fwd12(hist, "eps")
-    per12 = price / f_eps if f_eps and f_eps > 0 else None
+    per12 = C.per12(price, hist)
     # EPS 성장률: 작년 실적 → 28E 3년 연평균 (나스닥 추정이 없으면 내년까지 2년 연평균)
     eps_cagr = _cagr(eps(y + 2), eps(y - 1), 3) if eps(y + 2) else _cagr(eps(y + 1), eps(y - 1), 2)
     out["eps_g"] = [_g(eps(v), eps(v - 1)) for v in (y, y + 1, y + 2)]  # 미국은 영업이익 추정이 없어 EPS 증가율만

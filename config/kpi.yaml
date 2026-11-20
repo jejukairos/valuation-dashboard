@@ -2165,3 +2165,15 @@ INTC:
   - {t: "인텔 3Q26 실적 보도자료 (SEC 8-K 99.1)", u: "https://www.sec.gov/Archives/edgar/data/0000050863/000005086326000188/q326earningsrelease.htm"}
   - {t: "인텔 2Q26 보도자료", u: "https://www.sec.gov/Archives/edgar/data/50863/000005086326000155/q226earningsrelease.htm"}
   - {t: "인텔 1Q26 보도자료", u: "https://www.sec.gov/Archives/edgar/data/50863/000005086326000077/q126earningsrelease.htm"}
+ANT:
+  name: 앤트로픽
+  key: 분기 매출이 지난 분기 대비 다시 빨라지는지 + 컴퓨팅 비용 ÷ 매출이 내려가 영업이익이 흑자로 가는지 (사용자 11/20 관심 종목 — 상세 '🔑 앤트로픽 키팩터' 카드에 S-1 그림)
+  latest: 26.3Q
+  charts: []
+  op_note: "25.3Q 는 저작권 소송(바르츠) 합의금 15억 달러가 한 번 들어감 — 야후 분기 숫자는 이 합의금을 뺀 영업손실 15.9억$ (S-1 은 30.9억$)"
+  qtr_add:  # 야후에 없는 분기 (상장 서류 S-1/S-1/A 숫자, 백만 달러 — keychart stock.ANT 카드와 같음)
+    '2026-03-31': {rev: 4731, op: -1667, ni: -14440}
+    '2026-06-30': {rev: 11555, op: 974, ni: -66310}
+  memo: "첫 정기 보고서 = 26년 연간 10-K (보도: 27년 3월 말까지) · 그 전까지 분기 숫자는 상장 서류(S-1·S-1/A)뿐 · 야후 분기 손익은 매출원가·R&D·영업·관리로 나눠 (3분기 매출총이익률 약 86%) 상세 카드의 '매출 100$ 당 비용'(컴퓨팅·인건비로 나눔)과 나누는 방식이 달라요 — 원문 대조 못 함"
+  src:
+  - {t: "앤트로픽 S-1·S-1/A (SEC EDGAR)", u: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=2130357&type=&dateb=&owner=include&count=40"}
