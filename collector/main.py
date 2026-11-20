@@ -1189,6 +1189,13 @@ def main():
     except Exception as e:  # noqa: BLE001
         REPORT.block("📉 고점 대비 낙폭 사이클", str(e)[:80])
 
+    print("■ 🔧 전공정 장비 8곳 수주잔고 (새 분기보고서 있을 때만)")
+    try:
+        import fe_backlog
+        fe_backlog.collect()
+    except Exception as e:  # noqa: BLE001
+        REPORT.block("🔧 전공정 수주잔고", str(e)[:80])
+
     print("■ 🔋 글로벌 ESS 설치량 (하나증권 월간 — 새 호가 있을 때만)")
     try:
         import ess

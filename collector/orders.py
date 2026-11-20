@@ -49,7 +49,8 @@ def doc_text(rcept_no):
     """공시 본문(첫 문서)을 '라벨 | 값' 모양의 한 줄 글자로."""
     r = HTTP.get("https://opendart.fss.or.kr/api/document.xml", params={"crtfc_key": dart_key(), "rcept_no": rcept_no})
     z = zipfile.ZipFile(io.BytesIO(r.content))
-    data = z.read(z.namelist()[0])
+    names = z.namelist()  # 사업보고서는 감사보고서(…_00760.xml)가 앞에 올 때가 있음 → 본문(접수번호.xml) 먼저
+    data = z.read(next((x for x in names if x == f"{rcept_no}.xml"), names[0]))
     raw = None
     for enc in ("utf-8", "cp949"):  # 2022년 이전 공시는 EUC-KR(cp949)
         try:

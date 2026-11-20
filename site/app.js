@@ -6218,12 +6218,13 @@ async function loadIndustry() {
   await drGet();
   await consGet();
   await essGet();
+  if (!FEB) { try { FEB = await (await fetch("data/fe_backlog.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { FEB = {}; } }
   // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const xpL = (k, t) => `<div class="note" style="margin-top:8px"><a href="#exports" data-kc="xp-${k}">📦 ${t} (1~10일 잠정 · 월별 · 나라별, 1개월~전체) → 수출입 탭</a></div>`;  // 11/11 수출입 탭으로 옮김
   const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + xpL("cosmetics", "화장품 수출") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + xpL("ramen", "라면 수출") + expHTML("food")],
-    ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => essHTML() + liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
+    ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["🔧 전공정", () => febHTML() + key("전공정")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => essHTML() + liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => gpeCard("M7") + key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🎤 엔터", () => key("엔터")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
@@ -6235,6 +6236,26 @@ async function loadIndustry() {
   jumpBar("#industryBody", "#indJump", "🔎 업종 검색 (예: 화장품) → Enter");
   setTimeout(kcGo, 50);  // 종목 상세에서 '자세한 내용 →' 으로 왔으면 그 카드로
   drawAmz();
+}
+// 🔧 전공정 장비 8곳 분기 말 수주잔고 (사용자 11/20 YM리서치 그림 '수주잔고 공개하는 전공정 장비사') — data/fe_backlog.json ← collector/fe_backlog.py
+//   DART 정기보고서 '수주상황' 표 합계 · 새 분기보고서가 나오면 다음 갱신 때 한 칸 자동 · 숫자 표 → 그림 8개 → 🐣
+let FEB = null;
+function febHTML() {
+  const S = Object.entries(FEB?.stocks || {}).filter(([, s]) => s.q?.length > 1);
+  if (!S.length) return "";
+  const pc = (a, b) => (a != null && b ? (a / b - 1) * 100 : null), cell = (v) => `<b class="${v == null ? "" : v >= 0 ? "kup" : "kdn"}">${sg(v, 0)}</b>`;
+  const R = S.map(([code, s]) => { const v = s.q.map((x) => x[1]), L = v.length - 1;
+    return { code, s, v, L, qoq: pc(v[L], v[L - 1]), yoy: L >= 4 ? pc(v[L], v[L - 4]) : null, top: v[L] >= Math.max(...v) }; })
+    .sort((a, b) => (b.yoy ?? -1e9) - (a.yoy ?? -1e9));
+  const up = R.filter((r) => r.yoy > 0).length, tops = R.filter((r) => r.top).map((r) => r.s.name);
+  const tb = `<div style="overflow-x:auto"><table class="compact" style="width:100%"><tr><th style="text-align:left">회사</th><th>기준</th><th>수주잔고<br><span class="src">억원</span></th><th>지난 분기<br>보다</th><th>1년 전<br>보다</th></tr>
+    ${R.map((r) => `<tr><td style="text-align:left"><b>${esc(r.s.name)}</b>${r.top ? " 🔝" : ""}</td><td>${esc(r.s.q[r.L][0])}</td><td><b>${n(r.v[r.L], 0)}</b></td><td>${cell(r.qoq)}</td><td>${cell(r.yoy)}</td></tr>`).join("")}</table></div>`;
+  const charts = R.map((r) => keyChart({ t: r.s.name, why: `${r.s.q[r.L][0]} ${n(r.v[r.L], 0)}억 · 지난 분기보다 ${sg(r.qoq, 0)}${r.yoy != null ? ` · 1년 전보다 ${sg(r.yoy, 0)}` : ""}`,
+    q: r.s.q.map((x) => x[0]), bars: [{ n: "수주잔고", v: r.v }], u: "억원", endOnly: true, every: 2 })).join("");  // every 2 = 두 칸마다 이름 (15칸이면 '1Q23' 이 옆 칸과 겹침)
+  return `<div class="card" style="margin-top:8px"><div class="chart-title"><b>🔧 전공정 장비 8곳 분기 말 수주잔고</b> <span class="src">DART 정기보고서 · 새 분기보고서가 나오면 자동 · ${esc(FEB.updated_at || "")}</span></div>
+    <div class="kidbox">🐣 수주잔고 = 반도체 회사한테 주문은 받았는데 아직 만들어 넘기지 않은 장비 금액이에요 (앞으로 매출이 될 일감). 1년 전보다 늘어난 곳 ${up}곳 / ${R.length}곳${tops.length ? ` · 지금이 그림에서 가장 높은 곳(🔝): ${tops.map(esc).join(", ")}` : ""}.</div>
+    ${tb}<div class="qgrid" style="margin-top:8px">${charts}</div>
+    <div class="note src">회사마다 보고서 '수주상황' 표의 수주잔고 합계 (연결 기준이 있으면 연결) · 빨간 막대 = 가장 최근 분기 · 막대를 누르면 그 분기 숫자 · 1년 전보다 많이 늘어난 순 · 우리 보유·관심 종목은 아니고 반도체 장비 업황을 보려는 칸 · 그림 출처: 전자공시시스템, YM리서치 (11/20 전달) · ${esc(FEB.src || "")}</div></div>`;
 }
 // 🚗 현대차·기아 월별 글로벌 도매판매 (data/autosales.json ← collector/autosales.py, DART 월 판매 공시가 올라오면 다음 갱신 때 자동)
 //   사용자 2026-11-03: 증권사 막대그림보다 쉽게 — 몇 대 팔았는지 + 전월·전 분기·전년 같은 때 대비 % 를 숫자로 먼저
@@ -6410,8 +6431,9 @@ function keyChart(ch) {
       return;
     }
     let acc = 0;
-    bars.forEach((s, si) => { const v = s.v[i]; if (!v) return; g += `<rect x="${X(i) - bw * 0.32}" y="${Y(acc + v)}" width="${bw * 0.64}" height="${Math.max(1, Y(acc) - Y(acc + v))}" ${fill(BC[si % BC.length])}/>`; acc += v; });
-    g += `<text x="${X(i)}" y="${Y(tot[i]) - 4}" text-anchor="middle" class="qv${i === N - 1 || isG ? " b" : ""}">${V(tot[i])}</text>`;
+    const end = ch.endOnly && i === N - 1;  // endOnly = 마지막 칸만 빨강 + 숫자 (칸이 많아 숫자가 겹칠 때, 나머지는 눌러서 보기 — 11/20 전공정 수주잔고)
+    bars.forEach((s, si) => { const v = s.v[i]; if (!v) return; g += `<rect x="${X(i) - bw * 0.32}" y="${Y(acc + v)}" width="${bw * 0.64}" height="${Math.max(1, Y(acc) - Y(acc + v))}" ${fill(end ? "var(--bad)" : BC[si % BC.length])}/>`; acc += v; });
+    if (!ch.endOnly || end) g += `<text x="${X(i)}" y="${Y(tot[i]) - 4}" text-anchor="middle" class="qv${i === N - 1 || isG ? " b" : ""}"${end ? ' style="fill:var(--bad-ink)"' : ""}>${V(tot[i])}</text>`;
   });
   const ends = [];  // 선은 끝 숫자만 (겹치면 아래로 밀기)
   lines.forEach((s, si) => {
