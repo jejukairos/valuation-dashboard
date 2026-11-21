@@ -5974,6 +5974,8 @@ function drawHTML(list, at) {
     if (x.gap) lines.push(`⤴ ${t[x.gap.i]} 갭 상승 (시가 ${sg(x.gap.pct, 1)}, 하루 종일 전날 고가 위) — 본전 매물을 건너뛰는 오름`);
     const w50 = wk ? x.ch.ma?.["50"]?.at(-1) : null;  // 주봉은 50주선(≈1년 평균)도
     if (m) lines.push(`200일선 ${fmt(m.v)} 대비 <b style="color:${m.s === "up" ? "var(--good)" : "var(--warn-ink)"}">${sg(m.gap, 1)}</b> · ${m.s === "up" ? "위" : "아래"} ${m.days}일째${Math.abs(m.gap) <= 3 ? " · <b>200일선 시험 중</b> (±3% 안)" : ""}${w50 ? ` · 50주선 ${fmt(w50)} 대비 ${sg((x.last / w50 - 1) * 100, 1)}` : ""}`);
+    const w2 = x.w200;  // 🛡 200주선 (약 4년 평균) — 사용자 11/22 엔비디아 글 '대형 우량주 방어선 · 침체 방어선'
+    if (w2) lines.push(`🛡 200주선 (침체 방어선) ${fmt(w2.v)} 대비 <b style="color:${w2.gap >= 0 ? "inherit" : "var(--warn-ink)"}">${sg(w2.gap, 1)}</b>${Math.abs(w2.gap) <= 5 ? " · <b>200주선 시험 중</b> (±5% 안)" : w2.gap < 0 ? " · <b>200주선 아래</b>" : ""} · 2년 고점 대비 <b>${sg(w2.dd, 0)}</b>`);
     if (p) lines.push(`☕ 컵위드핸들: <b>${ST[p.st]}</b> — ${t[p.a]} 고점 ${fmt(p.H)} → ${p.depth}% 눌린 바닥(${t[p.b]}) → 지금 왼쪽 고점의 ${Math.round((x.last / p.H) * 100)}%`
       + `<div class="src">오닐 조건: 앞선 상승 +${p.pre}% ${ok(p.pre >= 25)} · 깊이 ${p.depth}% ${ok(p.depth <= 33)}(12~33%) · 기간 ${p.wk}주 ${ok(p.wk >= 7)}(7주+) · 손잡이 ${p.st === "handle" || p.st === "out" ? `${n(p.dip, 1)}% 눌림 ✅` : "⬜ 아직"}</div>`);
     if (q) lines.push(`📏 채널: <b style="color:${q.st === "below" ? "var(--warn-ink)" : "inherit"}">${q.st === "below" ? "지지선 아래로 이탈" : q.st === "above" ? "저항선 위" : "채널 안"}</b> ${q.run}${u === "주" ? "주" : "일"}째 — 지지선 ${fmt(q.lo)} (${sg((x.last / q.lo - 1) * 100, 1)}) · 저항선 ${fmt(q.up)} (${sg((x.last / q.up - 1) * 100, 1)})`
@@ -5993,6 +5995,7 @@ function drawHTML(list, at) {
         g += `<path d="${ln(0)}" fill="none" stroke="var(--s7)" stroke-width="2.5" opacity=".8"/><path d="${ln(q.off)}" fill="none" stroke="var(--s7)" stroke-width="2.5" opacity=".8"/>`
           + [q.a, q.b].filter((i) => i >= 0).map((i) => `<circle cx="${X(i)}" cy="${Y(Math.exp(q.la + q.s * (i - q.a)))}" r="4" fill="var(--s7)"/>`).join("");
       }
+      if (w2 && Math.abs(w2.gap) <= 5) g += `<circle cx="${X(N - 1)}" cy="${Y(w2.v)}" r="14" fill="none" stroke="#2f6db5" stroke-width="3"/>`;
       if (m && !wk && Math.abs(m.gap) <= 3) g += `<circle cx="${X(N - 1)}" cy="${Y(m.v)}" r="14" fill="none" stroke="var(--good)" stroke-width="3"/>`;
       if (vs) g += `<rect x="${X(0)}" y="${Y(vs.hi)}" width="${X(N - 1) - X(0)}" height="${Math.max(2, Y(vs.lo) - Y(vs.hi))}" fill="var(--bad)" fill-opacity=".12"/><line x1="${X(0)}" x2="${X(N - 1)}" y1="${Y(vs.lo)}" y2="${Y(vs.lo)}" stroke="var(--bad)" stroke-width="2"/>`;
       return g;
@@ -6000,7 +6003,7 @@ function drawHTML(list, at) {
     const ref = p ? (p.st === "handle" || p.st === "out" ? { v: p.R, t: "손잡이 고점" } : { v: p.H, t: "컵 왼쪽 고점" }) : null;
     // 📅 일봉·주봉·월봉·연봉 (사용자 11/4) — 기본 봉엔 계산한 선까지, 다른 봉은 캔들 + 이평선만 (board.py draw tfs)
     const TFN = { d: "일봉", w: "주봉", m: "월봉", y: "연봉" };
-    const cap = (tf) => (tf === x.tf ? `${wk ? "주봉 2년 · 로그 눈금 · 초록 20주선 · 회색 50주선(≈1년 평균)" : al ? "일봉 약 10개월 · 파랑 5일 · 초록 20일 · 주황 60일 · 빨강 120일선" : "일봉 약 10개월 · 초록 20일선 · 회색 50일선 · 주황 200일선"}${vs ? " · 빨간 띠 = 거래량 지지대" : ""}${q ? " · 보라 = 지지선·저항선" : ""}${p ? " · 연두 띠 = 컵 모양" : ""}${M ? " · 주황 굵은 선 = M자 · 점선 = 목선" : ""}`
+    const cap = (tf) => (tf === x.tf ? `${wk ? `주봉 2년 · 로그 눈금 · 초록 20주선 · 회색 50주선(≈1년 평균)${w2 ? " · 파랑 200주선(≈4년 평균)" : ""}` : al ? "일봉 약 10개월 · 파랑 5일 · 초록 20일 · 주황 60일 · 빨강 120일선" : "일봉 약 10개월 · 초록 20일선 · 회색 50일선 · 주황 200일선"}${vs ? " · 빨간 띠 = 거래량 지지대" : ""}${q ? " · 보라 = 지지선·저항선" : ""}${p ? " · 연두 띠 = 컵 모양" : ""}${M ? " · 주황 굵은 선 = M자 · 점선 = 목선" : ""}`
       : `${{ d: "일봉 약 10개월", w: "주봉 2년 · 로그 눈금", m: "월봉 10년 · 로그 눈금", y: "연봉 (올해 봉은 진행 중) · 로그 눈금" }[tf]} · 이평선 ${Object.keys(x.tfs[tf]?.ma || {}).join("·")}${{ d: "일", w: "주", m: "개월", y: "년" }[tf]}${tf === "w" ? " (30주선 = 와인스타인 기준선)" : ""} · 계산한 선은 ${TFN[x.tf]}에서만`);
     DRAWBOX[i] = (tf) => (tf === x.tf || x.tfs?.[tf] ? `${tf === x.tf ? candleSVG(x.ch, x.tf, fmt, ref, over) : candleSVG(x.tfs[tf], tf, fmt)}<div class="src">${cap(tf)} · ${esc(x.date)} 종가</div>` : "");
     const tfBtn = `<div class="seg dtfseg" data-di="${i}" style="margin-top:6px">${["d", "w", "m", "y"].filter((k) => k === x.tf || x.tfs?.[k]).map((k) => `<button data-dtf="${k}" class="${k === x.tf ? "on" : ""}">${TFN[k]}</button>`).join("")}</div>`;
@@ -6009,16 +6012,17 @@ function drawHTML(list, at) {
       ${tfBtn}<div class="cbox" data-di="${i}">${DRAWBOX[i](x.tf)}</div>
       ${x.memo ? `<div class="note src">🗣 ${esc(x.memo)}</div>` : ""}</div>`;
   };
-  return `<h2 data-jump="draw" data-jname="✏️ 선 그은 차트">✏️ 선 그은 차트 <span class="src">컵위드핸들 · 200일선 · 지지선·저항선 채널 · M자 · 역배열·거래량 지지대 · 일·주·월·연봉 · ${esc(at || "")}</span></h2>
+  return `<h2 data-jump="draw" data-jname="✏️ 선 그은 차트">✏️ 선 그은 차트 <span class="src">컵위드핸들 · 200일선 · 200주선 · 지지선·저항선 채널 · M자 · 역배열·거래량 지지대 · 일·주·월·연봉 · ${esc(at || "")}</span></h2>
     <div class="grid g2">${list.map(card).join("")}</div>
-    <div class="kidbox">🐣 <b>컵위드핸들</b>(윌리엄 오닐): 주가가 커피잔처럼 둥글게 내려갔다 올라온 뒤, 손잡이처럼 살짝 쉬었다가 손잡이 고점을 넘는 모양이에요. <b>200일선</b>: 약 10개월 평균 가격 — 위에 있으면 큰 흐름이 위쪽이에요. <b>채널</b>: 바닥끼리 이은 선(지지선)과, 같은 기울기로 꼭대기에 닿는 선(저항선) 사이 길 — 지지선 아래로 내려오면 오르던 길을 벗어난 거예요. <b>역배열</b>: 이평선은 그 기간에 산 사람들의 평균 가격(평단)이에요. 긴 선(120일)이 맨 위·짧은 선(5일)이 맨 아래로 줄 서면, 6개월 안에 산 사람이 모두 손해 중이라 오를 때마다 '본전이면 팔자'는 물량이 겹겹이 나와요. <b>거래량 지지대</b>: 많이 사고판 가격대라 받침이 강해요 — 대신 깨지면 떨어지는 힘도 커요. <b>M자(쌍봉)</b>: 한 번 꼭대기를 찍고 내려왔다가 다시 올라갔는데 첫 꼭대기를 못 넘고(고점이 낮아짐) 또 내려와요. 두 꼭대기 사이 골(목선)까지 깨면 저점도 낮아진 것 — 오르던 흐름이 꺾였다는 신호로 봐요.</div>
+    <div class="kidbox">🐣 <b>컵위드핸들</b>(윌리엄 오닐): 주가가 커피잔처럼 둥글게 내려갔다 올라온 뒤, 손잡이처럼 살짝 쉬었다가 손잡이 고점을 넘는 모양이에요. <b>200일선</b>: 약 10개월 평균 가격 — 위에 있으면 큰 흐름이 위쪽이에요. <b>200주선</b>: 약 4년 평균 가격 — 대형 우량주가 크게 빠질 때 자주 멈춘 자리라 '침체 방어선'이라고도 불러요. 닿으면 짧은 반등이 자주 나오지만, 다시 오르는 흐름이 되기까진 시간이 걸리기도 해요. <b>채널</b>: 바닥끼리 이은 선(지지선)과, 같은 기울기로 꼭대기에 닿는 선(저항선) 사이 길 — 지지선 아래로 내려오면 오르던 길을 벗어난 거예요. <b>역배열</b>: 이평선은 그 기간에 산 사람들의 평균 가격(평단)이에요. 긴 선(120일)이 맨 위·짧은 선(5일)이 맨 아래로 줄 서면, 6개월 안에 산 사람이 모두 손해 중이라 오를 때마다 '본전이면 팔자'는 물량이 겹겹이 나와요. <b>거래량 지지대</b>: 많이 사고판 가격대라 받침이 강해요 — 대신 깨지면 떨어지는 힘도 커요. <b>M자(쌍봉)</b>: 한 번 꼭대기를 찍고 내려왔다가 다시 올라갔는데 첫 꼭대기를 못 넘고(고점이 낮아짐) 또 내려와요. 두 꼭대기 사이 골(목선)까지 깨면 저점도 낮아진 것 — 오르던 흐름이 꺾였다는 신호로 봐요.</div>
     <div class="note src">선은 사람이 긋지 않고 갱신 때마다 같은 규칙으로 다시 계산해요 (평일 아침·한국장 마감 뒤 + 일~목 저녁 8시~새벽 2시 매시간) · 야후, 배당 안 깎은 가격 (증권사 차트와 같은 숫자) · 채널은 로그 가격 기준 · 기술적 분석은 참고 수단일 뿐이에요 (매수·매도 추천 아님)</div>`;
 }
 // 캔들 차트 (일봉 2년 · 주봉 5년 · 월봉 10년): 이평선 · RS 선(지수 대비) · 거래량 · 마지막 가격 · 기준선(전일 종가 / 12주 고점)
 function candleSVG(ch, kind, fmt, ref, over) {  // over(X, Y, lo, hi) = 위에 덧그릴 선 (가격 칸 밖은 잘림)
   if (!ch?.c?.length) return "";
   const N = ch.c.length, W = 600, x0 = 4, x1 = 540, top = 14, bot = 168, rs0 = 178, rs1 = 206, v0 = 214, v1 = 250, H = 262, logS = kind !== "d";
-  const lows = ch.l.filter((v) => v > 0), his = ch.h.filter((v) => v > 0), lo = Math.min(...lows), hi = Math.max(...his);
+  const fit = (ch.fit || []).flatMap((k) => ch.ma?.[k] || []).filter((v) => v > 0);  // fit = 눈금 안에 꼭 넣을 이평선 (엔비디아 200주선: 2년 전엔 캔들보다 한참 아래)
+  const lows = [...ch.l.filter((v) => v > 0), ...fit], his = [...ch.h.filter((v) => v > 0), ...fit], lo = Math.min(...lows), hi = Math.max(...his);
   const f = (v) => (logS ? Math.log(v) : v), Y = (v) => bot - ((f(v) - f(lo)) / (f(hi) - f(lo) || 1)) * (bot - top);
   const X = (i) => x0 + ((x1 - x0) * (i + 0.5)) / N, bw = Math.max(0.6, ((x1 - x0) / N) * 0.7);
   let g = "";

@@ -229,7 +229,11 @@ DRAW = [("WMT", "월마트", "d", "11/3 전달 그림: 6~10월에 컵 모양을 
          {"ma": (5, 20, 60, 120), "kr": True}),
         # 5번째 칸 m = M자(쌍봉) 계산 (m_shape)
         ("EWY", "한국 ETF (MSCI 코리아 · 달러)", "w", "11/6 전달 그림 (EWY 주봉): 6월 고점 뒤 M자 — 고점과 고점이 낮아지고 저점과 저점도 낮아짐. "
-                                               "그림의 첫 봉우리 근처에 'SK하이닉스 ADR 상장' 표시", {"m": True})]
+                                               "그림의 첫 봉우리 근처에 'SK하이닉스 ADR 상장' 표시", {"m": True}),
+        # w200 = 200주선 (약 4년 평균, 전체 기간으로 계산) — '대형 우량주 방어선 · 침체 방어선'
+        ("NVDA", "엔비디아", "w", "11/22 전달 글: 고점 대비 −48% 에서 대형 우량주 방어선이라 불리는 200주선(침체 방어선)에 닿음 — "
+                                "보통 여기서 단기 반등이 나오지만 추세 상승까지는 시간이 걸릴 것이라는 개인 의견. "
+                                "2018년에도 크게 빠지며 200주선 부근까지 내려간 그림을 같이 보냄", {"w200": True})]
 
 
 def cup_shape(c, k):
@@ -391,6 +395,10 @@ def draw():
             g = next((i for i in range(len(C) - 1, len(C) - 11, -1) if Lo[i] > Hi[i - 1]), None)
             x |= {"kr": bool(o.get("kr")), "align": ma_align(b["Close"], o["ma"]), "vs": vol_shelf(Hi, Lo, C, V),
                   "gap": {"i": rel(g), "pct": r_((Op[g] / C[g - 1] - 1) * 100, 1)} if g is not None else None}
+        if o.get("w200"):  # 200주선: 위 b 는 최근 3년뿐이라 전체 주봉으로 계산해서 붙임 · 그림 눈금에 넣고(fit) 파랑 (사용자 그림 색)
+            w = resample(full, "W-FRI")["Close"].rolling(200).mean().reindex(b.index).values[off:]
+            ch["ma"]["200"], ch["fit"], ch["maCol"] = [r_(v, 4) for v in w], ["200"], {"200": "#2f6db5"}
+            x["w200"] = {"v": r_(w[-1], 2), "gap": r_((C[-1] / w[-1] - 1) * 100, 1), "dd": r_((C[-1] / Hi[off:].max() - 1) * 100, 0)}
         if o.get("m"):
             mm = m_shape(C, k, 52 * k)
             if mm and mm["s"] >= off:
