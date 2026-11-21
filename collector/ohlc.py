@@ -1,6 +1,6 @@
 """📐 종목마다 일봉·주봉·월봉 캔들 + 거래량 → site/data/ohlc/{코드}.json (사용자 11/7: '선 읽기' 칸 안 차트 — 지지·저항·피보나치·채널을 고가·저가로).
 한국 = 네이버 차트 데이터(수정주가, board.kr_ohlcv) · 미국 = 야후(분할만 반영, 증권사 차트와 같은 숫자).
-일봉 약 1년 10개월 · 주봉 약 5년 · 월봉 약 12년만 남겨 파일을 작게 (선 계산은 화면에서 봉마다) + dd = 5년 일봉 종가 (📉 고점 대비 하락률 그림).
+일봉 약 1년 10개월 · 주봉 약 5년 · 월봉 약 12년만 남겨 파일을 작게 (선 계산은 화면에서 봉마다) + dd = 10년 일봉 종가 + 200주선 (📉 고점 대비 하락률 그림).
   python collector/ohlc.py [코드 …]   (코드 없으면 보유·관심·공동 전부)"""
 import sys
 
@@ -20,14 +20,17 @@ def pack(df, digits):
             "v": [int(x) for x in df["Volume"].fillna(0)]}
 
 
-def dd5(df, dg):
-    """📉 고점 대비 하락률 그림 (사용자 11/13 엔비디아 그림처럼, 전 종목 상세): 최근 5년 일봉 종가 + 그 전 가장 높은 종가 pk0 (가진 13~15년 중).
+def dd5(df, dg, years=10):
+    """📉 고점 대비 하락률 그림 (사용자 11/13 엔비디아 그림처럼, 전 종목 상세): 최근 10년 일봉 종가 + 그 전 가장 높은 종가 pk0 (가진 13~15년 중)
+    + w200 = 200주선 (주봉 종가 200주 평균, 그 주 값을 날마다 이어 씀 — 11/22 '엔비디아 4년 주기 하락' 그림의 파란 선) · 11/22 5년 → 10년 (2018년이 보이게).
     주봉으로 붙이면 고점·바닥이 흐려져서 (엔비디아 25/4 -36.1% vs 일봉 -36.9%) 일봉 그대로."""
     c = df["Close"].dropna()
-    cut = c.index[-1] - pd.DateOffset(years=5)
+    cut = c.index[-1] - pd.DateOffset(years=years)
     pre, win = c[c.index < cut], c[c.index >= cut]
     r = (lambda x: round(float(x), dg)) if dg else (lambda x: int(round(float(x))))  # noqa: E731
-    return {"pk0": r(pre.max()) if len(pre) else None, "t": [d.strftime("%y-%m-%d") for d in win.index], "c": [r(x) for x in win]}
+    w = c.resample("W-FRI").last().rolling(200).mean().reindex(win.index, method="ffill")
+    return {"pk0": r(pre.max()) if len(pre) else None, "t": [d.strftime("%y-%m-%d") for d in win.index], "c": [r(x) for x in win],
+            "w200": [r(x) if x == x else None for x in w]}
 
 
 def one(df, us):

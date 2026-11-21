@@ -5476,6 +5476,15 @@ function btBars(rows, key) {
   g += `<line x1="${x0}" x2="${W - 4}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--ink)" stroke-width="2"/>`;
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="빅테크 ${key === "dd" ? "고점 대비 하락률" : "올해 수익률"}">${g}</svg>`;
 }
+// RSI(14) 칸: 30 아래 = 과매도 초록 · 70 위 = 과매수 빨강 (사용자 11/22 그림처럼) ← bigtech.py rsi (와일더 방식)
+const rsiTd = (v) => `<td${v == null ? "" : v <= 30 ? ' style="background:color-mix(in srgb, var(--good) 22%, transparent);font-weight:700"' : v >= 70 ? ' style="background:color-mix(in srgb, var(--bad) 18%, transparent);font-weight:700"' : ""}>${v == null ? "-" : n(v, 1)}</td>`;
+function rsiTbl(t, L, feat) {  // 🇺🇸 지수 ETF · AI 인프라 대장주 (그림 순서 그대로)
+  if (!L?.length) return "";
+  const sg = (v) => (v == null ? "-" : `${v > 0 ? "+" : ""}${n(v, 1)}%`), k = L.filter((r) => r.rsi != null && r.rsi <= 30).length;
+  return `<div class="chart-title" style="margin-top:12px"><b>${t}</b> <span class="src">RSI 30 아래(과매도) <b>${L.length}개 중 ${k}개</b> · ${esc(L[0].date)} 종가</span></div>
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">종목</th>${feat ? '<th style="text-align:left">특징</th>' : ""}<th>올해</th><th>고점 대비</th><th>주간</th><th>RSI(14)</th></tr></thead><tbody>
+    ${L.map((r) => `<tr><td style="text-align:left">${esc(r.n)} <span class="src">${esc(r.t)}</span></td>${feat ? `<td style="text-align:left" class="src">${esc(r.f || "")}</td>` : ""}<td>${sg(r.ytd)}</td><td>${sg(r.dd)}</td><td>${sg(r.wk)}</td>${rsiTd(r.rsi)}</tr>`).join("")}</tbody></table></div>`;
+}
 async function renderBigTech() {
   const el = $("#sigUS");
   try { BIGT = BIGT || await (await fetch("data/bigtech.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { el.innerHTML = `<div class="empty">빅테크 자료는 다음 데이터 갱신 뒤에 보여요.</div>`; return; }
@@ -5483,13 +5492,14 @@ async function renderBigTech() {
   const pp = (a, b) => (a == null || b == null ? "" : `<span class="src">${a - b >= 0 ? "▲" : "▼"}${n(Math.abs(a - b), 1)}</span>`), sg = (v) => `${v > 0 ? "+" : ""}${n(v, 1)}%`;
   const rk = (L) => L.findIndex((r) => r.t === BT_HL) + 1;
   const card = (t, key, L, cap) => `<div class="card" style="margin-bottom:10px"><div class="chart-title" style="margin-top:0"><b>${t}</b> <span class="src">${esc(d)} 종가</span></div>${btBars(L, key)}<div class="src">${cap}</div></div>`;
-  el.innerHTML = `${hl ? `<div class="kidbox" style="margin-bottom:10px">🐣 <b>엔비디아 고점 대비 ${sg(hl.dd)}</b> (${R.length}곳 중 ${R.length - rk(dd) + 1}번째로 많이 빠짐) · <b>올해 ${sg(hl.ytd)}</b> (${R.length}곳 중 ${rk(yt)}등). 막대가 아래로 길수록 많이 빠진 거예요. 미국장이 끝난 뒤 아침 갱신 때 매일 새로 계산해요.</div>` : ""}
+  el.innerHTML = `${hl ? `<div class="kidbox" style="margin-bottom:10px">🐣 <b>엔비디아 고점 대비 ${sg(hl.dd)}</b> (${R.length}곳 중 ${R.length - rk(dd) + 1}번째로 많이 빠짐) · <b>올해 ${sg(hl.ytd)}</b> (${R.length}곳 중 ${rk(yt)}등). 막대가 아래로 길수록 많이 빠진 거예요. 미국장이 끝난 뒤 아침 갱신 때 매일 새로 계산해요.${hl.rsi != null ? `<br><b>RSI(14) ${n(hl.rsi, 1)}</b> — 최근 14일 동안 오른 폭과 내린 폭을 비교한 0~100 숫자예요. <b>30 아래(초록 칸)면 단기로 너무 많이 빠진 '과매도'</b>라 짧은 반등이 자주 나오지만, 큰 흐름이 바뀐다는 뜻은 아니에요 (11/22 전달 글: 기술적 반등은 가능하나 추세 반등까진 시간이 더 필요하다는 개인 의견).` : ""}</div>` : ""}
     ${card("📉 주요 빅테크 고점 대비 하락률", "dd", dd, "고점 = 상장 뒤 장중 최고가 (분할 반영)")}
     ${card("📈 주요 빅테크 올해 수익률", "ytd", yt, `작년 마지막 거래일 종가 대비${R.some((r) => r.base_n !== "작년 말 종가") ? ` · ${R.filter((r) => r.base_n !== "작년 말 종가").map((r) => `${esc(r.n)} = ${esc(r.base_n)} 대비`).join(" · ")}` : ""}`)}
-    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>종가</th><th>고점 (날짜)</th><th>고점 대비</th><th>올해</th></tr></thead><tbody>
-      ${dd.map((r) => `<tr${r.t === BT_HL ? ' style="font-weight:700"' : ""}><td style="text-align:left">${esc(r.n)} <span class="src">${esc(r.t)}</span></td><td>$${n(r.close, 2)}</td><td>$${n(r.hi, 2)} <span class="src">${esc(r.hi_d.slice(2).replace(/-/g, "/"))}</span></td><td>${sg(r.dd)} ${pp(r.dd, r.dd_prev)}</td><td>${sg(r.ytd)} ${pp(r.ytd, r.ytd_prev)}</td></tr>`).join("")}
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th style="text-align:left">회사</th><th>종가</th><th>고점 (날짜)</th><th>고점 대비</th><th>올해</th><th>주간</th><th>RSI(14)</th></tr></thead><tbody>
+      ${dd.map((r) => `<tr${r.t === BT_HL ? ' style="font-weight:700"' : ""}><td style="text-align:left">${esc(r.n)} <span class="src">${esc(r.t)}</span></td><td>$${n(r.close, 2)}</td><td>$${n(r.hi, 2)} <span class="src">${esc(r.hi_d.slice(2).replace(/-/g, "/"))}</span></td><td>${sg(r.dd)} ${pp(r.dd, r.dd_prev)}</td><td>${sg(r.ytd)} ${pp(r.ytd, r.ytd_prev)}</td><td>${r.wk == null ? "-" : sg(r.wk)}</td>${rsiTd(r.rsi)}</tr>`).join("")}
     </tbody></table></div>
-    <div class="note src">▲▼ = 전 거래일보다 몇 %p · 야후 일봉 · 매일 07:30 무렵 갱신 (${esc(BIGT.updated_at || "")}) · 11/12 종가로 전달받은 그림 숫자 16개가 모두 같았어요 · 매수·매도 추천 아님</div>`;
+    ${rsiTbl("📊 주요 지수 ETF", BIGT.etf, false)}${rsiTbl("🏗 주요 AI 인프라 대장주", BIGT.ai, true)}
+    <div class="note src">▲▼ = 전 거래일보다 몇 %p · 야후 일봉 · 매일 07:30 무렵 갱신 (${esc(BIGT.updated_at || "")}) · 11/12 종가로 전달받은 그림 숫자 16개가 모두 같았어요 · 11/22 전달 그림(11/21) 대비: AI 인프라 12곳·지수 3개는 모두 같음, S&P500 RSI(그림 31.6)·애플 RSI(53.0)·올해 테슬라(−14.7%)·엔비디아(−19.1%)는 그림과 다름 · 매수·매도 추천 아님</div>`;
 }
 document.addEventListener("click", (e) => {
   const b = e.target.closest(".sigmk button"); if (!b) return;
@@ -7192,19 +7202,19 @@ function fin4HTML(d) {
 function ddHTML(code) {
   const D = OHLC[code]?.dd, cur = (DASH.stocks.find((x) => x.code === code) || {}).currency;
   if (!D?.c?.length || D.c.length < 120) return "";
-  const N = D.c.length, P = [];
-  let mx = D.pk0 || 0, mt = D.pk0 ? "5년 전" : D.t[0];
+  const N = D.c.length, P = [], yrs = Math.max(1, Math.round((new Date(`20${D.t[N - 1]}`) - new Date(`20${D.t[0]}`)) / (365.25 * 864e5)));  // 11/22 5년 → 10년
+  let mx = D.pk0 || 0, mt = D.pk0 ? `${yrs}년 전` : D.t[0];
   D.c.forEach((v, i) => { if (v >= mx) { mx = v; mt = D.t[i]; } P.push({ t: D.t[i], v, mx, mt, dd: (v / mx - 1) * 100 }); });
   // 하락 구간 = 고점에서 내려와 새 고점을 찍을 때까지 · 그중 바닥이 -20% 넘게 빠진 것만
   const ep = [];
   let e = null;
-  P.forEach((p, i) => { if (p.dd < 0) { if (!e) e = { lo: i }; if (p.dd < P[e.lo].dd) e.lo = i; } else if (e) { e.back = i; ep.push(e); e = null; } });
+  P.forEach((p, i) => { if (p.dd < 0) { if (!e) e = { lo: i, st: i }; if (p.dd < P[e.lo].dd) e.lo = i; } else if (e) { e.back = i; ep.push(e); e = null; } });
   if (e) ep.push(e);
   const big = ep.filter((x) => P[x.lo].dd <= -20), L = P[N - 1], live = e && e === big.at(-1) ? e : null;
   const mon = (a, b) => { const f = (s) => new Date(`20${s}T00:00:00`); return Math.round((f(b) - f(a)) / (30.44 * 864e5)); };
   const ym = (t) => `${t.slice(0, 2)}.${+t.slice(3, 5)}`, F = (v) => money(v, cur);
   const W = 640, x0 = 44, x1 = 584, pt = 12, pb = 158, dt = 176, db = 286, X = (i) => x0 + ((x1 - x0) * i) / (N - 1);
-  const vmin = Math.min(...D.c), vmax = Math.max(...D.c), Yp = (v) => pb - ((v - vmin) / (vmax - vmin || 1)) * (pb - pt);
+  const W2 = D.w200 || [], w2v = W2.filter((v) => v > 0), vmin = Math.min(...D.c, ...w2v), vmax = Math.max(...D.c, ...w2v), Yp = (v) => pb - ((v - vmin) / (vmax - vmin || 1)) * (pb - pt);
   const lo = Math.min(-20, Math.floor(Math.min(...P.map((p) => p.dd)) / 20) * 20), Yd = (v) => dt + (v / lo) * (db - dt);
   let g = "";
   const step = [1, 2, 5].map((k) => k * 10 ** Math.floor(Math.log10((vmax - vmin) / 4 || 1))).find((s) => (vmax - vmin) / s <= 5) || 10 ** Math.ceil(Math.log10((vmax - vmin) / 4 || 1));
@@ -7216,24 +7226,51 @@ function ddHTML(code) {
   const flush = () => { if (run.length > 1) g += `<path d="${run.map(([x, y], j) => `${j ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join("")}" fill="none" stroke="${red ? "var(--bad)" : "var(--ink)"}" stroke-width="${red ? 3 : 1.6}" stroke-linejoin="round"/>`; };
   P.forEach((p, i) => { const r = p.dd <= -20, pt2 = [X(i), Yp(p.v)]; if (r !== red) { run.push(pt2); flush(); run = [run.at(-1)]; red = r; } else run.push(pt2); });
   flush();
+  // 파랑 = 200주선 (사용자 11/22 '엔비디아 4년 주기 하락' 그림 · 대형 우량주 침체 방어선)
+  if (w2v.length) g += `<path d="${W2.map((v, i) => (v > 0 ? `${W2[i - 1] > 0 ? "L" : "M"}${X(i).toFixed(1)},${Yp(v).toFixed(1)}` : "")).join("")}" fill="none" stroke="#2f6db5" stroke-width="2"/>`;
   const ddPath = P.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Yd(p.dd).toFixed(1)}`).join("");
   g += `<path d="${ddPath}L${X(N - 1)},${Yd(0)}L${X(0)},${Yd(0)}Z" fill="var(--bad)" fill-opacity=".22"/><path d="${ddPath}" fill="none" stroke="var(--ink)" stroke-width="1.2"/>`;
   if (L.dd <= -5) g += `<line x1="${x0}" x2="${x1}" y1="${Yd(L.dd)}" y2="${Yd(L.dd)}" stroke="var(--bad)" stroke-width="1.5" stroke-dasharray="7 4"/>`;
   // 바닥 숫자: 지금 먼저, 그다음 깊은 순 · 옆 글자와 46px 안이면 뺌
-  const lab = [], put = (i, t) => { if (lab.some((x) => Math.abs(x - X(i)) < 46)) return; lab.push(X(i)); g += `<text x="${Math.min(x1 - 4, Math.max(x0 + 18, X(i)))}" y="${Math.min(db + 2, Yd(P[i].dd) + 14)}" text-anchor="middle" class="qv b" style="fill:var(--bad);font-size:12px">${t}</text>`; };
+  const lab = [], put = (i, t) => { if (lab.some((x) => Math.abs(x - X(i)) < 56)) return; lab.push(X(i)); g += `<text x="${Math.min(x1 - 4, Math.max(x0 + 22, X(i)))}" y="${Math.min(db + 2, Yd(P[i].dd) + 17)}" text-anchor="middle" class="qv b" style="fill:var(--bad);font-size:16px;paint-order:stroke;stroke:var(--surface);stroke-width:3px">${t}</text>`; };
   if (L.dd <= -5) put(N - 1, `${n(L.dd, 0)}%`);
   [...big].filter((x) => x !== live).sort((a, b) => P[a.lo].dd - P[b.lo].dd).forEach((x) => put(x.lo, `${n(P[x.lo].dd, 0)}%`));
   g += `<circle cx="${X(N - 1)}" cy="${Yp(L.v)}" r="3.5" fill="${L.dd <= -20 ? "var(--bad)" : "var(--ink)"}"/>`;
-  const past = big.filter((x) => x !== live), deeper = past.filter((x) => P[x.lo].dd < L.dd);
-  const li = [`지금 <b style="color:var(--bad-ink)">고점 대비 ${pct(L.dd, 1)}</b> · 고점 ${F(L.mx)} (${esc(L.mt)} 종가) → ${F(L.v)} (${esc(L.t)})${L.dd > -1 ? " — 거의 고점" : ""}`,
-    past.length ? `지난 5년 20% 넘게 빠진 적 <b>${past.length}번</b>: ${past.map((x) => `${ym(P[x.lo].t)} <b>${n(P[x.lo].dd, 0)}%</b> (${x.back != null ? `바닥에서 고점 되찾는 데 ${mon(P[x.lo].t, P[x.back].t)}개월` : "아직 못 되찾음"})`).join(" · ")}` : "지난 5년 20% 넘게 빠진 적 없음",
-    live ? `이번 하락: ${P[live.lo].mt === "5년 전" ? "5년보다 전 고점부터" : `${esc(P[live.lo].mt)} 고점 뒤 ${mon(P[live.lo].mt, L.t)}개월`} · 바닥 ${n(P[live.lo].dd, 1)}% (${esc(P[live.lo].t)})${past.length ? ` · 지금보다 깊었던 적 ${deeper.length ? deeper.map((x) => `${ym(P[x.lo].t)} ${n(P[x.lo].dd, 0)}%`).join(" · ") : "없음 (5년 중 가장 깊음)"}` : ""}` : ""].filter(Boolean);
-  return `<details class="fvt" open><summary class="chart-title"><b>📉 5년 주가 & 고점 대비 하락률</b> <span class="src">지금 ${pct(L.dd, 1)} · 매일 자동 · 눌러서 접기</span></summary>
-    <svg viewBox="0 0 ${W} ${db + 22}" role="img" aria-label="5년 주가와 고점 대비 하락률">${g}</svg>
-    <div class="src"><span style="color:var(--ink)">━</span> 일봉 종가 · <span style="color:var(--bad)">━</span> 고점보다 20% 넘게 빠져 있던 날 · 아래 분홍 = 고점 대비 % · <span style="color:var(--bad)">┅</span> 지금 수준 · 빨간 숫자 = 하락 구간 바닥</div>
+  // 🗒 큰 하락·고점 때 무슨 일 (사용자 11/22 '엔비디아 4년 주기 하락' 그림: 바닥마다 연도 + 사건 · 고점 때 오른 이유는 아래 표에 링크) ← keychart.yaml ddev {코드: [{d, s 그림 글, t 표 글, hi: 1 = 고점, u}]}
+  const EV = (KEYC?.ddev?.[code] || []).map((v) => ({ ...v, k: String(v.d).slice(2) })), pkT = (x) => (/년 전$/.test(P[x.lo].mt) ? D.t[0] : P[x.lo].mt);
+  const days = (a, b) => Math.abs(new Date(`20${a}`) - new Date(`20${b}`)) / 864e5;
+  const loEv = (x) => EV.find((v) => !v.hi && v.k >= pkT(x) && v.k <= (x.back != null ? P[x.back].t : "99")), hiEv = (x) => EV.find((v) => v.hi && days(v.k, pkT(x)) <= 45);
+  const cl = [];
+  [...(live ? [live] : []), ...[...big].filter((x) => x !== live).sort((a, b) => P[a.lo].dd - P[b.lo].dd)].forEach((x) => {  // 지금 먼저, 그다음 깊은 순 · 옆 글과 92px 안이면 그림엔 빼고 표에만
+    const v = loEv(x), cx = Math.min(x1 - 56, Math.max(x0 + 56, X(x.lo)));  // 휴대폰에선 그림이 반쯤 줄어서 글씨를 크게 (19·14px ≈ 화면 10·8px)
+    if (!v?.s || cl.some((c) => Math.abs(c - cx) < 124)) return;
+    cl.push(cx);
+    // 위 주가 칸의 빈자리에 (사용자 그림처럼): 그때 주가가 칸 아래쪽이면 선 위로, 위쪽이면 선 아래로 — 아래 분홍 칸의 % 숫자와 안 겹치게
+    const ls = [`20${P[x.lo].t.slice(0, 2)}`, ...String(v.s).split(" · ").slice(0, 2)], bh = 19 + (ls.length - 1) * 16 + 4, py = Yp(P[x.lo].v);
+    const y0 = py > (pt + pb) / 2 ? Math.max(pt + 18, py - 14 - bh + 19) : Math.min(pb - bh + 19, py + 30);
+    g += ls.map((s, j) => `<text x="${cx}" y="${y0 + (j ? 4 + j * 16 : 0)}" text-anchor="middle" class="qv b" style="fill:var(--bad-ink);font-size:${j ? 14 : 19}px;paint-order:stroke;stroke:var(--surface);stroke-width:4px">${esc(s)}</text>`).join("");
+  });
+  const past = big.filter((x) => x !== live), deeper = past.filter((x) => P[x.lo].dd < L.dd), nm = DASH.stocks.find((x) => x.code === code)?.name || code;
+  // 🔎 그때 기사 (메모 없는 칸): 구글 뉴스 그 기간 검색 — 고점은 앞 30일, 바닥은 앞 30일 (사건은 그 전에 일어남)
+  const md = (t, dd) => { const x = new Date(new Date(`20${t}T12:00:00Z`).getTime() + dd * 864e5); return `${x.getUTCMonth() + 1}/${x.getUTCDate()}/${x.getUTCFullYear()}`; };
+  const news = (t) => `<a href="https://www.google.com/search?tbm=nws&q=${encodeURIComponent(nm + " 주가")}&tbs=cdr:1,cd_min:${md(t, -30)},cd_max:${md(t, 3)}" target="_blank" rel="noopener">🔎 그때 기사</a>`;
+  const why = (v, t) => (v ? `${esc(v.t || v.s)}${v.u ? ` <a href="${esc(v.u)}" target="_blank" rel="noopener">↗</a>` : ""} <span class="src">${news(t)}</span>` : `<span class="src">메모 없음 · ${news(t)}</span>`);
+  // 한 구간 = 두 줄: ① 고점 · 바닥 · 걸린 기간 · 회복 (숫자) ② 📈 오른 이유 · 📉 내린 이유 (글 + 링크) — 휴대폰에서 옆으로 안 밀어도 되게
+  const rows = [...big].reverse().map((x) => { const pt0 = pkT(x), old = /년 전$/.test(P[x.lo].mt);
+    return `<tr style="border-top:2px solid var(--grid)"><td>${old ? esc(P[x.lo].mt) : esc(pt0.replaceAll("-", "."))} <span class="src">${F(P[x.lo].mx)}</span></td>
+      <td>${esc(P[x.lo].t.replaceAll("-", "."))} <b style="color:var(--bad-ink)">${n(P[x.lo].dd, 0)}%</b></td><td>${old ? "-" : `${mon(pt0, P[x.lo].t)}개월`}</td><td>${x.back != null ? `${mon(P[x.lo].t, P[x.back].t)}개월` : "<b>진행 중</b>"}</td></tr>
+      <tr><td colspan="4" style="text-align:left;font-size:13px;padding-bottom:8px">${old ? "" : `📈 ${why(hiEv(x), pt0)}<br>`}📉 ${why(loEv(x), P[x.lo].t)}</td></tr>`; }).join("");
+  const li = [`지금 <b style="color:var(--bad-ink)">고점 대비 ${pct(L.dd, 1)}</b> · 고점 ${F(L.mx)} (${esc(L.mt)} 종가) → ${F(L.v)} (${esc(L.t)})${L.dd > -1 ? " — 거의 고점" : ""}${w2v.length && W2[N - 1] > 0 ? ` · 200주선 ${F(W2[N - 1])} 대비 <b>${pct((L.v / W2[N - 1] - 1) * 100, 1, true)}</b>` : ""}`,
+    past.length ? "" : `지난 ${yrs}년 20% 넘게 빠진 적 없음`,
+    live ? `이번 하락: ${/년 전$/.test(P[live.lo].mt) ? `${yrs}년보다 전 고점부터` : `${esc(P[live.lo].mt)} 고점 뒤 ${mon(P[live.lo].mt, L.t)}개월`} · 바닥 ${n(P[live.lo].dd, 1)}% (${esc(P[live.lo].t)})${past.length ? ` · 지금보다 깊었던 적 ${deeper.length ? deeper.map((x) => `${ym(P[x.lo].t)} ${n(P[x.lo].dd, 0)}%`).join(" · ") : `없음 (${yrs}년 중 가장 깊음)`}` : ""}` : ""].filter(Boolean);
+  return `<details class="fvt" open><summary class="chart-title"><b>📉 ${yrs}년 주가 & 고점 대비 하락률</b> <span class="src">지금 ${pct(L.dd, 1)} · 매일 자동 · 눌러서 접기</span></summary>
+    <svg viewBox="0 0 ${W} ${db + 22}" role="img" aria-label="${yrs}년 주가와 고점 대비 하락률">${g}</svg>
+    <div class="src"><span style="color:var(--ink)">━</span> 일봉 종가 · <span style="color:var(--bad)">━</span> 고점보다 20% 넘게 빠져 있던 날${w2v.length ? ' · <span style="color:#2f6db5">━</span> 200주선 (약 4년 평균 · 대형 우량주 침체 방어선)' : ""} · 아래 분홍 = 고점 대비 % · <span style="color:var(--bad)">┅</span> 지금 수준 · 빨간 숫자 = 하락 구간 바닥</div>
     <ul class="irl" style="margin-top:6px">${li.map((x) => `<li>${x}</li>`).join("")}</ul>
+    ${rows ? `<div class="chart-title" style="margin-top:8px"><b>🗒 20% 넘게 빠진 ${big.length}번 — 고점 때 왜 올랐고, 바닥까지 왜 내렸나</b> <span class="src">최신이 위 · 메모 = config/keychart.yaml ddev · 🔎 = 그 기간 구글 뉴스</span></div>
+    <div class="tbl-wrap"><table class="compact"><thead><tr><th>고점 (종가)</th><th>바닥 (고점 대비)</th><th>고점→바닥</th><th>고점 회복</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
     <div class="kidbox" style="margin-top:6px">🐣 그날까지 가장 비쌌던 값(고점)에서 얼마나 내려와 있는지예요. 아래 분홍이 깊을수록 많이 빠진 거예요. 많이 빠졌다고 반드시 오르는 건 아니고, 더 빠질 수도 있어요.</div>
-    <div class="note src">고점 = 그날까지 가장 높은 종가 (5년보다 전 고점 ${D.pk0 ? F(D.pk0) : "없음"} 포함, 장중 고가 아님) · ${cur === "USD" ? "야후 (분할만 반영)" : "네이버 수정주가"} · ${esc(OHLC[code].at || "")}</div></details>`;
+    <div class="note src">고점 = 그날까지 가장 높은 종가 (${yrs}년보다 전 고점 ${D.pk0 ? F(D.pk0) : "없음"} 포함, 장중 고가 아님) · ${cur === "USD" ? "야후 (분할만 반영)" : "네이버 수정주가"} · ${esc(OHLC[code].at || "")}</div></details>`;
 }
 // 🗓 주요 타임라인 (사용자 11/15 엔비디아 그림 오른쪽처럼 전 종목) — data/timeline.json ← collector/feed.py timeline() · 손으로 넣는 줄 = config/timeline.yaml
 let TL = null;
