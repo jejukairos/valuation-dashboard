@@ -2161,8 +2161,7 @@ function qtrHTML(d, mode = "q", inKq = false) {  // mode: q = 분기, y = 연간
       ${inKq ? "" : qPanel("매출 & 성장률 (1년 전 대비)", tRev, labels, rev, yoy.some((v) => v != null) ? yoy : null, usd, "var(--ink-2)")}
       ${inKq ? "" : qPanel("영업이익 & 영업이익률", tOp, labels, op, opm, usd, "var(--good)")}
       ${gpv.filter((v) => v != null).length >= 2 ? qPanel("매출총이익 & 매출총이익률", tG, labels, gpv, gpm, usd, "var(--s3)") : ""}
-      ${inKq ? "" : qPanel("잉여현금흐름 (FCF)", tF, labels, fcf, null, usd, "var(--good)")}
-      ${qPanel("설비투자 (CapEx)", tC, labels, capex, null, usd, "var(--warn)")}
+      ${yr ? qPanel("잉여현금흐름 (FCF)", tF, labels, fcf, null, usd, "var(--good)") + qPanel("설비투자 (CapEx)", tC, labels, capex, null, usd, "var(--warn)") : ""}
     </div>
     <div class="chart-title" style="margin-top:12px"><b>💸 ${esc(nm)} ${esc(fLab)} 얼마 벌어서 어디에 썼나</b> <span class="src">${segs ? "부문 → " : ""}매출 → 원가·비용 → 영업이익 → 순이익 (매출 대비 %, 1년 전 ${yr ? "" : "같은 분기 "}대비)</span></div>
     ${part ? `<div class="note src">⏳ ${esc(labels[L])} 는 잠정실적이라 매출·영업이익·순이익만 있어요 — 원가·비용 나눔은 분기보고서(분기 끝 45일 안)가 나오면 채워져서, 돈의 흐름은 ${esc(fLab)} 기준이에요.</div>` : ""}
@@ -2197,16 +2196,21 @@ function lineChart(o) {
     if (!vs.length) return null;
     let lo = Math.min(...vs), hi = Math.max(...vs);
     if (o.zero || ss.some((s) => s.bar)) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+    if (o.nice && !side && hi > lo) {  // 딱 떨어지는 눈금 (-50조 · 0 · 50조 · 100조): 칸 크기 = 1·2·2.5·5·10 × 10ⁿ 가운데 3칸 안에 드는 가장 작은 것
+      const st = [1, 2, 2.5, 5, 10].map((k) => k * 10 ** Math.floor(Math.log10((hi - lo) / 3))).find((x) => (hi - lo) / x <= 3);
+      return [Math.floor(lo / st) * st, Math.ceil(hi / st) * st, st];
+    }
     const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.1 || 1;
     return [lo < 0 || !(o.zero || ss.some((s) => s.bar)) ? lo - pad : lo, hi + pad];
   };
   const R = { false: rng(false), true: rng(true) }, Y = (side, v) => { const [lo, hi] = R[side] || R[!side]; return bot - ((v - lo) / (hi - lo)) * (bot - top); };
   const fl = o.fl || ((v) => n(v, 0)), fr = o.fr || fl;
   let g = "";
-  [0, 0.5, 1].forEach((t) => {  // 눈금 3줄 (아래·가운데·위)
+  const st = R.false?.[2], span = R.false ? R.false[1] - R.false[0] : 0;
+  (st ? Array.from({ length: Math.round(span / st) + 1 }, (_, j) => (j * st) / span) : [0, 0.5, 1]).forEach((t, j) => {  // 눈금 3줄 (아래·가운데·위) · nice 면 칸마다
     const y = bot - t * (bot - top);
     g += `<line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="var(--grid)"/>`;
-    if (R.false) g += `<text x="${x0 - 3}" y="${y + 3}" text-anchor="end" class="qx">${esc(fl(R.false[0] + t * (R.false[1] - R.false[0])))}</text>`;
+    if (R.false) g += `<text x="${x0 - 3}" y="${y + 3}" text-anchor="end" class="qx">${esc(fl(st ? R.false[0] + j * st : R.false[0] + t * span))}</text>`;
     if (hasR && R.true) g += `<text x="${x1 + 3}" y="${y + 3}" class="qx">${esc(fr(R.true[0] + t * (R.true[1] - R.true[0])))}</text>`;
   });
   [false, true].forEach((side) => { const r = R[side]; if (r && r[0] < 0 && r[1] > 0 && (!side || !R.false || R.false[0] >= 0)) g += `<line x1="${x0}" x2="${x1}" y1="${Y(side, 0)}" y2="${Y(side, 0)}" stroke="var(--axis)"/>`; });
@@ -2242,7 +2246,7 @@ function lineChart(o) {
   g += tipCols(X, (x1 - x0) / N, 0, 146, Lb.map((l, i) => [l, ...S.map((s) => (s.v[i] == null ? null : `${s.n}: ${(s.right ? fr : fl)(s.v[i])}`))].filter(Boolean).join("\n")));
   const lastQ = (i) => (i === N - 1 ? "" : ` <span style="opacity:.7">(${esc(/^\d\d\.\dQ$/.test(Lb[i]) ? `${Lb[i][3]}Q${Lb[i].slice(0, 2)}` : Lb[i])})</span>`);  // 다른 선보다 일찍 끝나면 그 분기
   const leg = `<div class="src" style="padding:0 4px 4px">${S.map((s) => `<span style="color:${s.col}">${s.bar ? "■" : "●"}</span> ${esc(s.n)}${hasR ? (s.right ? " (오른쪽)" : " (왼쪽)") : ""}${s.last ? ` <b style="color:${s.col};font-size:13px">${esc(s.last[0])}</b>${lastQ(s.last[1])}` : ""}`).join(" · ")}</div>`;
-  return `<div class="qp"><div class="qt"><b>${esc(o.t)}</b>${o.tag || ""}</div>${o.why ? `<div class="src">${esc(o.why)}</div>` : ""}<svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(o.t)}">${g}</svg>${leg}</div>`;
+  return `<div class="qp"><div class="qt"><b>${esc(o.t)}</b>${o.tag || ""}</div>${o.why ? `<div class="src">${esc(o.why)}</div>` : ""}<svg viewBox="0 0 ${W} 146" role="img" aria-label="${esc(o.t)}">${g}</svg>${leg}${o.kid ? `<div class="kidbox" style="margin:4px;font-size:13px">🐣 ${esc(o.kid)}</div>` : ""}</div>`;
 }
 const qAgo = (k) => `${String(+k.slice(0, 2) - 1).padStart(2, "0")}${k.slice(2)}`;  // '26.3Q' → '25.3Q'
 const usdB = (v) => (v == null ? "-" : `${v < 0 ? "-" : ""}$${n(Math.abs(v), Math.abs(v) >= 100 ? 0 : 1)}B`), fPct = (v) => `${n(v, 0)}%`;
@@ -3493,12 +3497,19 @@ function fcfBars(d, k) {  // 10년 분기 실적(longq ocf·capex: 한국 DART �
   const s = lq.length >= 2 ? [...lq, ...fcfSeries(d, k, 99).filter((x) => x.add && !lq.some((z) => z.q === x.q))].sort((a, b) => (a.q < b.q ? -1 : 1)).slice(-QN) : fcfSeries(d, k, QN);
   if (s.length < 2) return "";
   const [t, cls] = fcfTag(s.at(-2).fcf, s.at(-1).fcf), cx = s.filter((x) => x.capex != null).at(-1), add = s.filter((x) => x.add).map((x) => x.q);
-  const tag = `<span class="qtag ${cls}">${t}</span>`, cap = (x) => (x.capex == null ? null : -Math.abs(x.capex));  // 야후 capex 는 음수, DART 는 위에서 음수로 → 그림은 늘 0 아래 (사용자 엑셀 그림처럼)
-  // 사용자 11/21 엑셀 그림: 영업현금흐름(파랑) · 설비투자(주황, 0 아래) · FCF(회색) 선 3개, 📅 기간 버튼만큼
-  return lineChart({ t: "💸 현금흐름 (OCF · CAPEX · FCF)", tag, labels: s.map((x) => x.q), zero: true, fl: (v) => qMoney(v, usd),
+  const cap = (x) => (x.capex == null ? null : -Math.abs(x.capex));  // 야후 capex 는 음수, DART 는 위에서 음수로 → 그림은 늘 0 아래 (사용자 엑셀 그림처럼)
+  // 설비투자 꼬리표: 앞선 4분기 평균보다 1.5배 넘게 / 3분의 2 아래 (📚 과거 실적 CapEx 막대에 있던 것 — 11/22 막대는 겹쳐서 뺌)
+  const c5 = s.slice(-5).map(cap), pc = c5.slice(0, -1).filter((v) => v != null), ac = pc.length ? pc.reduce((a, b) => a + b, 0) / pc.length : 0;
+  const tag = `<span class="qtag ${cls}">${t}</span>` + qTag(c5.at(-1) != null && ac ? (c5.at(-1) < ac * 1.5 ? "CapEx 대폭 상향" : c5.at(-1) > ac * 0.67 ? "CapEx 줄어듦" : "") : "");
+  // 숫자 한 줄 (증권사 리포트처럼): 이번 분기 · 1년 전 · 최근 4분기 합 · 매출 대비
+  const M = (v) => (v === 0 ? "0" : qMoney(v, usd).replace(/\.0+(?=B|조)/, "")), E = s.at(-1), y1 = s.find((x) => x.q === agoQ(E.q)), t4 = s.length >= 4 ? s.slice(-4) : null;
+  const sum = (f) => t4.reduce((a, x) => a + f(x), 0), r4 = t4 && t4.every((x) => d.longq?.[x.q]?.rev > 0 && x.capex != null) ? sum((x) => d.longq[x.q].rev * m) : 0;
+  const why = `${E.q.replace(/^(\d\d)\.(\d)Q$/, "$2Q$1")} FCF ${M(E.fcf)}${y1 ? ` (1년 전 ${M(y1.fcf)})` : ""}${t4 ? ` · 최근 4분기 합 ${M(sum((x) => x.fcf))}` : ""}${r4 ? ` = 매출의 ${n((sum((x) => x.fcf) / r4) * 100, 0)}% · 설비투자는 매출의 ${n((-sum(cap) / r4) * 100, 0)}%` : ""}`;
+  // 사용자 11/21 엑셀 그림: 영업현금흐름(파랑) · 설비투자(주황, 0 아래) · FCF 선 3개, 📅 기간 버튼만큼 · 11/22 FCF 를 진한 색으로 (결론 숫자)
+  return lineChart({ t: "💸 현금흐름 (OCF · CAPEX · FCF)", tag, labels: s.map((x) => x.q), zero: true, nice: true, fl: M, why,
     s: [{ n: "영업현금흐름 OCF", v: s.map((x) => x.ocf ?? (x.capex != null && x.fcf != null ? x.fcf + Math.abs(x.capex) : null)), col: "#2f6db5", nolab: true },  // 끝 숫자 3개는 위에서 겹쳐 잘림 → FCF 만 (셋 다 아래 범례에)
-      { n: "설비투자 CAPEX", v: s.map(cap), col: "#e8873a", nolab: true }, { n: "FCF", v: s.map((x) => x.fcf), col: "var(--muted)" }],
-    why: `FCF = 영업현금흐름 − 설비투자 · 0 위면 현금이 남고, 아래면 모자라요${add.length ? ` · ${add.join("·")} 는 보도자료 숫자 (야후 반영 전, FCF 만)` : ""}` })
+      { n: "설비투자 CAPEX", v: s.map(cap), col: "#e8873a", nolab: true }, { n: "FCF", v: s.map((x) => x.fcf), col: "var(--ink)" }],
+    kid: `FCF = 영업현금흐름 − 설비투자예요. 진한 선이 0 위면 장사로 번 현금이 투자하고도 남았고, 0 아래면 모자랐다는 뜻이에요.${add.length ? ` ${add.join("·")} 는 보도자료 숫자라 FCF 만 있어요.` : ""}` })
     || kqBars("💸 현금흐름 (FCF)", s.map((x) => ({ q: x.q, fcf: usd ? x.fcf : x.fcf / 1e8 })), "fcf", null, "var(--s1)", usd ? "USD" : "KRW",  // 분기가 2개뿐이면 막대
       { tag, sub: `영업현금흐름 − 설비투자(CapEx)${cx ? ` · ${esc(cx.q)} CapEx ${qMoney(Math.abs(cx.capex), usd)}` : ""}` });
 }
@@ -3797,10 +3808,11 @@ async function kpiBlock(code, d) {
   const k = KPI[code] || KPI[KPI_ALIAS[code]] || { charts: [], auto: true };  // kpi.yaml 에 없는 종목도 자동 그림(손익·현금흐름·주식 수)은 보여 줌
   const cut = (c) => (QN === 11 || c.kind === "stack" ? c : { ...c, s: c.s.map((s) => ({ ...s, v: Object.fromEntries(Object.entries(s.v || {}).sort().slice(-QN)) })) });  // 기간 버튼: 손으로 넣은 그림은 있는 만큼만 (늘리진 못함)
   const ch = k.charts.filter((c) => !GROW_RE.test(c.t)).map((c) => kpiChart(cut(c)));  // 매출·지역 성장률은 ⭐ 성장률 한눈에 로
-  ch.unshift(Object.values(d.longq || {}).filter((q) => q.rev != null && q.op != null).length >= 4 ? "" : comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률 — 맨 위 📊 실적 4칸에 같은 그림이 있으면 뺌 (11/15 중복)
-  ch.splice(2, 0, fcfBars(d, k), intHTML(d), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 그다음 (영업이익 성장률은 11/16 ⭐ 성장률 한눈에로) · 현금흐름 · 영업이익 vs 이자 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
+  const f4 = Object.values(d.longq || {}).filter((q) => q.rev != null && q.op != null).length >= 4;  // 맨 위 📊 실적 칸이 나오는 종목
+  ch.unshift(f4 ? "" : comboHTML(d));  // 맨 앞: 분기 매출·영업이익·영업이익률 — 맨 위 📊 실적 4칸에 같은 그림이 있으면 뺌 (11/15 중복)
+  ch.splice(2, 0, f4 ? "" : fcfBars(d, k), intHTML(d), dilHTML(d), empHTML(d), annualOpmHTML(d));  // 현금흐름은 맨 위 📊 칸(손익·재무상태 옆)에 있으면 뺌 (11/22) · 그다음 (영업이익 성장률은 11/16 ⭐ 성장률 한눈에로) · 현금흐름 · 영업이익 vs 이자 · 주식 수 증가율 · 직원 수 · 연간 매출 & 영업이익률
   if (!ch.some(Boolean)) return "";
-  return `<div class="kpiw" data-code="${esc(code)}"><h3>🔑 핵심 지표 <span class="src">${k.auto ? "자동 계산 — 분기 실적·현금흐름·주식 수 (사업부별 숫자는 아직 안 넣음)" : `${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김`}</span></h3>${qnChips(d)}<div class="card kpi">
+  return `<div class="kpiw" data-code="${esc(code)}"><h3>🔑 핵심 지표 <span class="src">${k.auto ? `자동 계산 — 분기 실적·${f4 ? "" : "현금흐름·"}주식 수 (사업부별 숫자는 아직 안 넣음)` : `${esc(k.latest || "")}까지 · 실적발표·컨퍼런스콜·전자공시에서 옮김`}</span></h3>${qnChips(d)}<div class="card kpi">
     ${k.key ? `<div class="note" style="margin-top:0"><b>주가를 움직이는 열쇠:</b> ${esc(k.key)}</div>` : ""}
     ${(k.patterns || []).map(patternHTML).join("")}
     <div class="qgrid" style="margin-top:8px">${ch.join("")}</div>
@@ -7136,7 +7148,7 @@ function fin4HTML(d) {
       `${cols.map(([e], j) => sw([F4C.g, F4C.a, F4C.b][j + 3 - cols.length], lab(e))).join(" · ")} · <span class="src">야후 분기 재무상태표 · 현금 = 현금성 + 단기 투자 · 차입금 = 총 차입 − 리스</span>`);
   }
   const hA = `${esc(nm)} ${L[i]}: 매출 ${T(R[i])} (YoY ${yoy(R[i], at(k4, "rev"))}), 영업이익 ${T(O[i])} (OPM ${n(OPM[i], 1)}%)${p3 ? `, 해외 비중 ${n((GE[ge].x / GE[ge].t) * 100, 0)}%` : ""}`;
-  let h = `<details class="card" open style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>📊 ${hA}</b></summary>${qnChips(d)}<div class="qgrid" style="margin-top:6px">${p1}${p2}${p3}${p4}</div>
+  let h = `<details class="card" open style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>📊 ${hA}</b></summary>${qnChips(d)}<div class="qgrid" style="margin-top:6px">${p1}${p2}${p3}${p4}${fcfBars(d, KPI?.[d.code] || KPI?.[KPI_ALIAS[d.code]])}</div>
     <div class="note src">${esc(d.sources?.history || "")} · ${us ? "SEC·야후 분기 (백만 달러 → 억 달러)" : "DART 분기·반기·사업보고서 (보고서 전 최신 분기는 잠정)"} · 분기 이름 = 달력 분기 · 비율은 직접 계산</div></details>`;
   // 증분 이익률 = 영업이익 YoY 증감 ÷ 매출 YoY 증감 (매출 증감이 그 분기 매출의 3% 미만이면 빈칸) — 매출총이익이 없어도 그림
   const INC = Q.map((k, x) => { const r0 = at(ago(k), "rev"), o0 = at(ago(k), "op"); if (r0 == null || o0 == null) return null; const dR = R[x] - r0; return Math.abs(dR) < Math.abs(R[x]) * 0.03 ? null : ((O[x] - o0) / dR) * 100; });
