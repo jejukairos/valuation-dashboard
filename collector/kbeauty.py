@@ -128,6 +128,11 @@ def build(cache, cfg):
                 if kb.get(nm(b)) == sum(new) != sum(row):
                     fix.append(f"{nm(b)} {sum(row)}→{sum(new)}")
                     counts[nm(b)] = new
+        if how.startswith("추정") and km:  # 추정한 날은 한투가 직접 센 5개국 숫자를 먼저 (11/23 메디큐브 프랑스 추정 9 vs 한투 12) · 이탈리아는 한투에 없어 그대로
+            for b, m in km["brands"].items():
+                row = counts.get(nm(b), [0] * 6)
+                counts[nm(b)] = [row[i] if c == "이탈리아" else m.get(c, 0) for i, c in enumerate(C6)]
+            how += " · 한투 글에 있는 브랜드는 한투 5개국 숫자"
         counts = {b: v for b, v in counts.items() if any(v)}
         moves = man.get("moves") or [{**m, "b": nm(m["b"])} for m in dl.get("moves") or []]
         days[d] = {"counts": counts, "how": how, "moves": moves, "derived": man.get("derived"), **({"fix": fix} if fix else {}),
@@ -158,10 +163,34 @@ def collect():
     else:
         REPORT.success("아마존 K-뷰티 (텔레그램)")
     return {**{k: v for k, v in cfg.items() if k not in ("days", "aliases")}, "countries": C6, "days": build(cache, cfg),
-            "channels": {k: f"https://t.me/{ch}" for k, (ch, _) in SRC.items()}}
+            "channels": {k: f"https://t.me/{ch}" for k, (ch, _) in SRC.items()}, "kmj": kmj_series(cache["kmj"], cfg.get("aliases") or {})}
 
 
-if __name__ == "__main__":  # 혼자 돌려 보기: python collector/kbeauty.py
-    from common import DATA
-    write_json(DATA / "amazon_kbeauty.json", collect())
-    print(REPORT.failures or "ok")
+def kmj_series(km, alias, rank_days=2):
+    """🧴 종목 상세 '아마존 뷰티 Top100 우리 브랜드' 칸 (사용자 11/23 한투 김명주 그림 '에이피알 제품 수'): 한투 글 날짜마다 브랜드별 5개국 개수
+    + 마지막 rank_days 날의 제품별 순위 (어제보다 ▲▼). 이름은 aliases 로 (에이피알 → 메디큐브)."""
+    nm = lambda b: alias.get(b, b)  # noqa: E731
+    ds = sorted(km)
+    return {d: {"b": {nm(b): v for b, v in km[d]["brands"].items()}, "u": km[d].get("url"),
+                **({"r": {nm(b): v for b, v in km[d]["ranks"].items()}} if d in ds[-rank_days:] else {})} for d in ds}
+
+
+def _test():
+    cfg = {"aliases": {"에이피알": "메디큐브"}}
+    cache = {"daol": {"2026-11-22": {"counts": {c: {"메디큐브": 5} for c in C6}}, "2026-11-23": {"moves": []}}, "kyobo": {},
+             "kmj": {"2026-11-23": {"brands": {"에이피알": {"미국": 14, "프랑스": 12}}, "ranks": {"에이피알": {"제로모공패드": {"미국": 1}}}, "url": "u"}}}
+    d = build(cache, cfg)["2026-11-23"]
+    assert d["counts"]["메디큐브"] == [14, 0, 0, 12, 0, 5] and "한투" in d["how"], d  # 추정한 날 → 한투 5개국, 이탈리아는 전날 그대로
+    s = kmj_series(cache["kmj"], cfg["aliases"])
+    assert s["2026-11-23"]["b"]["메디큐브"]["미국"] == 14 and s["2026-11-23"]["r"]["메디큐브"]["제로모공패드"]["미국"] == 1, s
+    print("ok")
+
+
+if __name__ == "__main__":  # 혼자 돌려 보기: python collector/kbeauty.py [--test]
+    import sys
+    if "--test" in sys.argv:
+        _test()
+    else:
+        from common import DATA
+        write_json(DATA / "amazon_kbeauty.json", collect())
+        print(REPORT.failures or "ok")

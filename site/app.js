@@ -5054,7 +5054,8 @@ async function openStock(code) {
     if (!TL) { try { TL = await (await fetch(`data/timeline.json?t=${Date.now()}`, { cache: "no-store" })).json(); } catch (_) { TL = {}; } }  // 🗓 주요 타임라인
     const issueHtml = (await filingsBlock(code)) + (await repBlock(code)) + estHTML(d) + cycHTML(code) + patHTML(d), keyHtml = await keyBlock(code, d);  // 📰 핵심 이슈 칸은 뺌 (사용자 11/5)
     const capexHtml = (await cloudBlock(code)) + (await capexBlock(code));
-    const liHtml = LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : DR_CODES.includes(code) ? (await drGet(), drHTML(code)) : "";  // 🪨 셀 회사는 맨 위에 탄산리튬 · 💾 메모리 회사는 D램 값
+    const liHtml = (LI_CODES.includes(code) ? (await liGet(), liHTML(code)) : DR_CODES.includes(code) ? (await drGet(), drHTML(code)) : "")  // 🪨 셀 회사는 맨 위에 탄산리튬 · 💾 메모리 회사는 D램 값
+      + (c?.industry === "화장품" ? (await amzGet(), amzStockHTML(code)) : "");  // 💄 아마존 Top100 안 우리 브랜드 (에이피알·달바, 11/23)
     await consGet();
     const consG = consFor(code), consHtml = consG ? consHTML(consG, false) : "";  // 📈 그 종목 업종 컨센서스 (닫아 둠)
     try { await gpeGet(); } catch (_) { /* 🌍 글로벌 비교 그림만 빠짐 */ }
@@ -6876,6 +6877,49 @@ function amzHTML() {
     ${amzCross(A.days[d], cur)}
     <div class="note src">출처: ${esc(A.source || "")}${A.channels ? ` (${Object.entries({ daol: "다올", kyobo: "교보", kmj: "한투" }).map(([k, l]) => `<a href="${esc(A.channels[k])}" target="_blank" rel="noopener">${l}</a>`).join(" · ")})` : ""} · 상장사 연결: 메디큐브 = 에이피알, 달바 = 달바글로벌, COSRX = 아모레퍼시픽 자회사${ds.some((x) => A.days[x].derived) ? ` · ${ds.filter((x) => A.days[x].derived).map((x) => x.slice(5).replace("-", "/")).join(", ")}은 다음 날 표의 ▲▼로 거꾸로 계산` : ""}</div>
   </div>`;
+}
+// 💄 종목 상세 맨 위: 아마존 뷰티 Top100 안 우리 브랜드 제품 수 (사용자 11/23 한투 김명주 그림 '주요 국가 아마존 뷰티 Top100 내 랭크된 에이피알 제품 수'를 보기 편하게)
+//   ← amazon_kbeauty.json kmj (한투 글 날짜마다 5개국 개수 + 마지막 2일 제품별 순위) · 숫자 → 그림 → 제품 순위 → 🐣
+const AMZ_C5 = [["미국", "🇺🇸", "var(--s1)"], ["영국", "🇬🇧", "var(--s2)"], ["독일", "🇩🇪", "var(--s3)"], ["프랑스", "🇫🇷", "var(--s4)"], ["스페인", "🇪🇸", "var(--muted)"]];
+const amzGet = async () => { if (!AMZ) { try { AMZ = await (await fetch("data/amazon_kbeauty.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { /* 이 칸만 빠짐 (산업 탭은 따로 다시 시도) */ } } return AMZ; };
+function amzStockHTML(code) {
+  const K = AMZ?.kmj || {}, b = Object.keys(AMZ?.brands || {}).find((x) => AMZ.brands[x].stock === code), ds = Object.keys(K).sort();
+  if (!b || ds.length < 2) return "";
+  const v = (d) => AMZ_C5.map(([c]) => K[d]?.b?.[b]?.[c] || 0), T = ds.map((d) => amzSum(v(d))), N = ds.length, L = N - 1, md = (d) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  const avg = T.reduce((a, x) => a + x, 0) / N, wk = ds.findIndex((d) => d >= new Date(new Date(ds[L]).getTime() - 7 * 864e5).toISOString().slice(0, 10));
+  const imx = T.indexOf(Math.max(...T)), imn = T.lastIndexOf(Math.min(...T)), co = AMZ.brands[b].company;
+  const dt = (a, p) => (p == null ? "" : ` <span style="color:var(${a > p ? "--good-ink" : a < p ? "--bad-ink" : "--muted"});font-weight:700">${a > p ? "▲" : a < p ? "▼" : "→"}${a === p ? "" : Math.abs(a - p)}</span>`);
+  // 그림: 날마다 5개국 쌓은 막대 + 점선 = 기간 평균 · 마지막·최고 막대 위 합계
+  const W = 340, H = 172, x0 = 24, x1 = W - 6, top = 20, bot = 140, bw = (x1 - x0) / N, mx = Math.max(...T, 10), st = mx > 60 ? 20 : 10, hi = Math.ceil((mx * 1.1) / st) * st, Y = (y) => bot - (y / hi) * (bot - top), X = (i) => x0 + bw * (i + 0.5);
+  let g = "";
+  for (let y = 0; y <= hi; y += st) g += `<line x1="${x0}" x2="${x1}" y1="${Y(y)}" y2="${Y(y)}" stroke="var(--grid)"/><text x="${x0 - 3}" y="${Y(y) + 3}" text-anchor="end" class="qx">${y}</text>`;
+  ds.forEach((d, i) => {
+    let acc = 0;
+    v(d).forEach((x, j) => { if (x) { g += `<rect x="${(X(i) - bw * 0.36).toFixed(1)}" y="${Y(acc + x).toFixed(1)}" width="${(bw * 0.72).toFixed(1)}" height="${(Y(acc) - Y(acc + x)).toFixed(1)}" fill="${AMZ_C5[j][2]}"/>`; acc += x; } });
+    if (i === L || i === imx) g += `<text x="${X(i)}" y="${Y(T[i]) - 4}" text-anchor="${i === L ? "end" : "middle"}" class="qv b"${i === L ? ' style="fill:var(--bad-ink);font-size:12px"' : ""}>${T[i]}</text>`;
+    if ((i % Math.ceil(N / 6) === 0 && L - i >= Math.ceil(N / 12)) || i === L) g += `<text x="${X(i)}" y="${bot + 13}" text-anchor="${i === L ? "end" : "middle"}" class="qx">${md(d)}</text>`;  // 마지막 날 글자와 안 겹치게
+  });
+  g += `<line x1="${x0}" x2="${x1}" y1="${Y(avg)}" y2="${Y(avg)}" stroke="var(--ink-2)" stroke-dasharray="4 3"/><text x="${x0 + 2}" y="${Y(avg) - 3}" class="qx">평균 ${n(avg, 0)}개</text>`;
+  g += tipCols(X, bw, 0, H, ds.map((d, i) => [md(d), ...AMZ_C5.map(([c], j) => `${c} ${v(d)[j]}개`), `합계 ${T[i]}개`].join("\n")));
+  // 제품별 순위 (마지막 날) · 어제보다 ▲▼ · 🆕 = 어제 Top100 밖
+  const R = K[ds[L]].r?.[b] || {}, P0 = K[ds[L - 1]]?.r?.[b], best = (r) => Math.min(...Object.values(r));
+  const rk = (r, p) => (r == null ? '<span class="src">–</span>' : `${r <= 10 ? `<b style="color:var(--good-ink)">${r}</b>` : r}${p == null ? (P0 ? ' <span class="src">🆕</span>' : "") : p !== r ? `<span class="src" style="color:var(${p > r ? "--good-ink" : "--bad-ink"})">${p > r ? "▲" : "▼"}${Math.abs(p - r)}</span>` : ""}`);
+  const prods = Object.entries(R).sort(([, a], [, c]) => best(a) - best(c)), t10 = prods.filter(([, r]) => best(r) <= 10).length;
+  const fx = "table-layout:fixed;width:100%;min-width:360px", cg = `<colgroup><col style="width:35%">${AMZ_C5.map(() => '<col style="width:13%">').join("")}</colgroup>`;  // 위 10개 표와 '나머지' 표 칸 너비를 같게
+  const prow = ([p, r]) => `<tr><td style="text-align:left">${esc(p)}</td>${AMZ_C5.map(([c]) => `<td>${rk(r[c], P0?.[p]?.[c])}</td>`).join("")}</tr>`;
+  const ptbl = prods.length ? `<div class="chart-title" style="margin-top:10px"><b>제품별 순위 · ${md(ds[L])}</b> <span class="src">${prods.length}개 제품 · 어느 나라든 10위 안 ${t10}개 (초록) · 작은 ▲▼ = 어제보다 · 🆕 = 어제는 100위 밖</span></div>
+    <div class="tbl-wrap"><table class="compact" style="${fx}">${cg}<thead><tr><th style="text-align:left">제품</th>${AMZ_C5.map(([c, f]) => `<th>${f} ${c}</th>`).join("")}</tr></thead><tbody>
+    ${prods.slice(0, 10).map(prow).join("")}</tbody></table></div>
+    ${prods.length > 10 ? `<details><summary class="src">나머지 ${prods.length - 10}개 제품 더 보기</summary><div class="tbl-wrap"><table class="compact" style="${fx}">${cg}<tbody>${prods.slice(10).map(prow).join("")}</tbody></table></div></details>` : ""}` : "";
+  const now = v(ds[L]), w0 = wk >= 0 && wk < L ? v(ds[wk]) : null;
+  return `<details class="fvt" open><summary class="chart-title"><b>💄 아마존 뷰티 Top100 안 ${esc(b)}(${esc(co)}) 제품 수 — ${md(ds[L])} ${T[L]}개</b> <span class="src">5개국 합계 · 매일 자동 (한투 김명주 텔레그램)</span></summary>
+    <div style="margin:4px 0 2px;font-size:14px">어제(${md(ds[L - 1])}) ${T[L - 1]}개${dt(T[L], T[L - 1])}${w0 ? ` · 1주 전(${md(ds[wk])}) ${T[wk]}개${dt(T[L], T[wk])}` : ""} · ${N}일 평균 ${n(avg, 0)}개 · 최고 ${T[imx]}개 (${md(ds[imx])}) · 최저 ${T[imn]}개 (${md(ds[imn])})</div>
+    <div class="src" style="font-size:13px">${AMZ_C5.map(([c, f], j) => `${f} ${c} <b style="color:var(--ink)">${now[j]}</b>${w0 ? dt(now[j], w0[j]) : ""}`).join(" · ")}${w0 ? " <span class=\"src\">(▲▼ = 1주 전보다)</span>" : ""}</div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="아마존 Top100 안 ${esc(b)} 제품 수">${g}</svg>
+    <div class="src">${AMZ_C5.map(([c, f, col]) => `<span style="color:${col}">■</span> ${c}`).join(" · ")} · 점선 = ${N}일 평균</div>
+    ${ptbl}
+    <div class="kidbox" style="margin-top:6px">🐣 미국·영국·독일·프랑스·스페인 아마존의 '뷰티 베스트셀러 100위' 안에 ${esc(b)} 제품이 몇 개 있는지예요. 많을수록 잘 팔린다는 뜻이에요. 블랙프라이데이(11/19~) 같은 할인 행사 때는 크게 늘어요.</div>
+    <div class="note src">출처: <a href="${esc(K[ds[L]].u || AMZ.channels?.kmj || "")}" target="_blank" rel="noopener">한투 김명주 텔레그램 '주요 국가 아마존 뷰티 Top 100 내 브랜드별 제품 수'</a> (각국 Best Sellers in Beauty Top100) · 한투 의견(11/23): 오프라인·틱톡샵으로 판매 채널이 넓어져서 아마존 순위와 실적의 연관성은 예전보다 약해졌어요 · 브랜드 전체·이탈리아는 🏭 산업 탭 💄 화장품</div></details>`;
 }
 // 세 채널(다올·교보·한투)은 같은 아마존 순위를 세는 거라 표는 위 하나만 (사용자 11/5 '3개 채널 동일한 거 1개만, 중복 빼고')
 //   → 다른 채널과 몇 칸 다른지 한 줄 + 우리 종목 브랜드(메디큐브·달바) 제품별 순위만 접어서 (한투)
