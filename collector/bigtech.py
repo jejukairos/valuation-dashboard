@@ -16,16 +16,25 @@ AI = [("MU", "마이크론", "메모리"), ("SNDK", "샌디스크", "메모리")
       ("MRVL", "마벨", "맞춤/광통신"), ("LITE", "루멘텀", "광통신"), ("GLW", "코닝", "광통신")]
 
 
-def rsi(c, n=14):
-    """RSI(14) — 와일더 방식 (오른 날 평균 ÷ 내린 날 평균을 1/14 씩 이어서 평균, 증권사 차트와 같은 계산). 30 아래 = 과매도 · 70 위 = 과매수."""
-    d = c.diff().dropna().to_numpy(dtype=float)
+def rsi_s(c, n=14):
+    """RSI(14) 줄 (c 와 같은 길이, 앞 n 칸은 None) — 와일더 방식 (오른 날 평균 ÷ 내린 날 평균을 1/14 씩 이어서 평균, 증권사 차트와 같은 계산).
+    30 아래 = 과매도 · 70 위 = 과매수. ohlc.py 주봉 RSI(200주선 + 과매도 신호)도 이걸 씀."""
+    d = c.to_numpy(dtype=float)[1:] - c.to_numpy(dtype=float)[:-1]
+    out = [None] * len(c)
     if len(d) < n:
-        return None
+        return out
     g, l = d.clip(min=0), -d.clip(max=0)
     ag, al = g[:n].mean(), l[:n].mean()  # 처음 14일은 그냥 평균, 그 뒤로 (앞 평균 × 13 + 오늘) ÷ 14
-    for x, y in zip(g[n:], l[n:]):
-        ag, al = (ag * (n - 1) + x) / n, (al * (n - 1) + y) / n
-    return 100.0 if al == 0 else float(100 - 100 / (1 + ag / al))
+    out[n] = 100.0 if al == 0 else float(100 - 100 / (1 + ag / al))
+    for i in range(n, len(d)):
+        ag, al = (ag * (n - 1) + g[i]) / n, (al * (n - 1) + l[i]) / n
+        out[i + 1] = 100.0 if al == 0 else float(100 - 100 / (1 + ag / al))
+    return out
+
+
+def rsi(c, n=14):
+    """마지막 날 RSI(14) (자료가 15칸 안 되면 None)."""
+    return rsi_s(c.dropna(), n)[-1]
 
 
 def calc(df):

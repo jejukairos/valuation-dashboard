@@ -28,9 +28,31 @@ def dd5(df, dg, years=10):
     cut = c.index[-1] - pd.DateOffset(years=years)
     pre, win = c[c.index < cut], c[c.index >= cut]
     r = (lambda x: round(float(x), dg)) if dg else (lambda x: int(round(float(x))))  # noqa: E731
-    w = c.resample("W-FRI").last().rolling(200).mean().reindex(win.index, method="ffill")
+    wk = c.resample("W-FRI").last().dropna()
+    ma = wk.rolling(200).mean()
+    w = ma.reindex(win.index, method="ffill")
     return {"pk0": r(pre.max()) if len(pre) else None, "t": [d.strftime("%y-%m-%d") for d in win.index], "c": [r(x) for x in win],
-            "w200": [r(x) if x == x else None for x in w]}
+            "w200": [r(x) if x == x else None for x in w], **w200_rsi(wk, ma, cut)}
+
+
+def w200_rsi(wk, ma, cut, near=10, lo=35, gap_w=12):
+    """🛡 200주선 + 주봉 RSI 과매도 신호 (사용자 11/23 엔비디아 '과거 주요 지지 구간' 그림: 18년·22년·26년 동그라미) — 주봉 종가가 200주선 ±near% 안
+    + 주봉 RSI(14) lo 이하인 주. gap_w 주 넘게 떨어지면 다른 신호. 신호마다 그 뒤 52주 안 가장 낮은 종가(더 빠진 폭)·26주·52주 뒤 수익률 → 화면 표.
+    엔비디아 18/12/21 (+9.8%, RSI 28.6) · 22/9/2 (+8.4%, 34.8) · 26/11/20 (+1.1%, 25.0)."""
+    from bigtech import rsi_s
+    rs = rsi_s(wk)
+    on = [i for i in range(len(wk)) if ma.iloc[i] == ma.iloc[i] and rs[i] is not None and abs(wk.iloc[i] / ma.iloc[i] - 1) * 100 <= near and rs[i] <= lo]
+    eps = []
+    for i in on:
+        if eps and i - eps[-1][-1] <= gap_w:
+            eps[-1].append(i)
+        else:
+            eps.append([i])
+    p = lambda a, b: round(float(a / b - 1) * 100, 1)  # noqa: E731
+    sig = [{"t": wk.index[e[0]].strftime("%y-%m-%d"), "n": len(e), "gap": p(wk.iloc[e[0]], ma.iloc[e[0]]), "rsi": round(rs[e[0]], 1),
+            "low": p(wk.iloc[e[0]:e[0] + 53].min(), wk.iloc[e[0]]), **{f"r{k}": p(wk.iloc[e[0] + k], wk.iloc[e[0]]) for k in (26, 52) if e[0] + k < len(wk)}}
+           for e in eps if wk.index[e[0]] >= cut]
+    return {"sig": sig, "wrsi": None if rs[-1] is None else round(rs[-1], 1)}
 
 
 def one(df, us):
@@ -63,4 +85,12 @@ def collect(codes=None):
 
 
 if __name__ == "__main__":
-    collect(sys.argv[1:] or None)
+    if sys.argv[1:] == ["--test"]:
+        ix = pd.date_range("2020-01-03", periods=260, freq="W-FRI")
+        v = [100 + i for i in range(230)] + [330 - 8 * i for i in range(1, 16)] + [210 + 5 * i for i in range(15)]  # 오르다 급락해 200주선 근처 → 다시 오름
+        wk = pd.Series(v, index=ix, dtype=float)
+        s = w200_rsi(wk, wk.rolling(200).mean(), ix[0])
+        assert len(s["sig"]) == 1 and s["sig"][0]["rsi"] <= 35 and abs(s["sig"][0]["gap"]) <= 10 and s["sig"][0]["low"] <= 0, s
+        print("ok", s["sig"])
+    else:
+        collect(sys.argv[1:] or None)
