@@ -239,6 +239,8 @@ watchlist:
   - {name: 오리온, market: KR, code: "271560", industry: 음식료, methods: [PER], sector: 음식료}
   # 📡 방산·통신용 GaN 전력증폭기 + 광통신(자회사 RF머트리얼즈 → 루멘텀) — 2026-11-24 사용자: "관심종목에 넣어줘" (IR노트 전달: 26년 영업이익 가이던스 600억으로 올림, 27년 매출 3,500억+) · 코스닥
   - {name: RFHIC, market: KR, code: "218410", industry: 방산, methods: [PER], sector: 방산}
+  # 🌬 풍력 타워 세계 1위 (미국·베트남·포르투갈 등 생산 법인 6곳, 미국 타워 점유율 약 60%) — 2026-11-25 사용자: "씨에스윈드 관심종목 추가하고 컨콜내용 넣어줘" (노다지 IR노트 11/24) · 미국 AMPC 는 27년 말 끝남
+  - {name: 씨에스윈드, market: KR, code: "112610", industry: 풍력, methods: [PER]}
   # M7 빅테크 — 보유·공동자산에 있는 종목은 한 번만 계산하고 ⭐ 관심 탭에도 같이 보여요
   - {name: 애플, market: US, code: AAPL, industry: 하드웨어, methods: [PER]}
   - {name: 마이크로소프트, market: US, code: MSFT, industry: 소프트웨어, methods: [PER]}
