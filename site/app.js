@@ -1596,6 +1596,17 @@ function irCards(e, k) {
   a = (head ? `<div class="irc-box irc-head">${esc(head)}</div>` : "") + a + (pos.length || neg.length ? `<div class="irc-box irc-2"><div><b class="irU" style="font-size:17px">긍정</b>${ul(pos)}</div><div><b class="irD" style="font-size:17px">우려</b>${ul(neg)}</div></div>` : "") + (nx.length ? `<div class="irc-box"><div class="irc-l c">다음 실적에서 볼 것</div>${ul(nx)}</div>` : "");
   return { s: s && `<div class="irc">${s}</div>`, a: a && `<div class="irc">${a}</div>`, shown: [one, head, ...pos, ...neg, ...nx].filter(Boolean) };  // shown = 카드에 이미 보인 줄 (아래 목록에서 뺌)
 }
+// 📄 받아 적은 원문 (사용자 11/25 "노다지 링크 대신 내가 보낸 캡처를 텍스트로, 원문은 닫아서") — 저장소가 공개라
+// 암호 파일만 올리고(tools/irnote_seal.mjs) 로그인한 사이트의 /irnote/<이름> 이 풀어 줌 · 처음 열 때만 불러옴
+const rawHTML = (name, t = "📄 원문 (보내 준 캡처를 받아 적은 글)") => (name ? `<details class="fvt" data-raw="${esc(name)}"><summary class="chart-title"><b>${esc(t)}</b> <span class="src">눌러서 열기</span></summary><pre style="white-space:pre-wrap;word-break:break-word;font:inherit;font-size:14px;line-height:1.6;margin:8px 0">불러오는 중…</pre></details>` : "");
+document.addEventListener("toggle", (ev) => {  // toggle 은 위로 안 올라가서 capture 로 받음
+  const d = ev.target, pre = d.querySelector?.(":scope > pre");
+  if (!d.open || !d.dataset?.raw || d.dataset.done || !pre) return;
+  d.dataset.done = "1";
+  fetch(`/irnote/${encodeURIComponent(d.dataset.raw)}`, { credentials: "same-origin", cache: "no-store" })
+    .then((r) => r.text().then((t) => { pre.textContent = r.ok ? t : `⚠ ${t}`; if (!r.ok) delete d.dataset.done; }))
+    .catch(() => { pre.textContent = "⚠ 원문을 못 불러왔어요 (인터넷 확인)"; delete d.dataset.done; });
+}, true);
 function irBriefHTML(code, name, k) {
   let e = (IRB[code] || IRB[PREF_COMMON[code]] || [])[0];  // 우선주는 보통주 실적 그대로
   const qk = (q) => String(q || "").replace(/^(\d)Q(\d\d)$/, "$2.$1Q");  // '3Q26' → '26.3Q'
@@ -1619,7 +1630,7 @@ function irBriefHTML(code, name, k) {
   const src = e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.src || "회사 IR 자료")}</a>` : esc(e.src || "");
   // 📌 사용자가 보낸 IR노트 (11/17 삼양) — 제목·날짜만 보이고 내용은 닫힘, IR 칸 맨 위
   const nt = e.note?.s?.length ? box(`${e.note.t || "📌 IR노트"} (${String(e.note.d || "").slice(5).replace("-", "/")})`, e.note.s, e.note.src ? `<div class="src" style="margin-top:6px">${tag(e.note.src)}</div>` : "") : "";
-  return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${nt}${raw}${story}${box("IR 요약", e.sum, cd.s)}${box("IR 분석", e.ana, cd.a)}${e.qa?.length ? box("🎤 어닝콜 질의응답", e.qa) : ""}
+  return `<div class="card irbox" style="margin-top:8px;background:var(--surface-2)">${nt}${raw}${rawHTML(e.raw, "📄 IR노트 원문 (받아 적은 글)")}${story}${box("IR 요약", e.sum, cd.s)}${box("IR 분석", e.ana, cd.a)}${e.qa?.length ? box("🎤 어닝콜 질의응답", e.qa) : ""}
     ${e.bear?.length ? box("⚖️ 반대 의견 · 리스크", e.bear) : ""}${e.pts?.length && !(EARNINGS[code] || []).find((x) => x.quarter === e.quarter)?.easy?.length ? box("⭐ 핵심 포인트", [{ l: e.pts }]) : ""}
     <div class="src" style="margin-top:6px">📋 ${esc(e.date || "")} · ${src} · ${e.auto ? "회사 설명·해석은 발표가 끝나면 예약 작업이 바꿔 넣어요" : "증감률·이익률은 발표 숫자로 계산한 값"} · 분석은 해석이고 매매 추천이 아니에요</div></div>`;
 }
@@ -2777,7 +2788,7 @@ function callDiffHTML(e, prevQ) {
     ${e.qa.map((x, i) => `<div style="margin-top:6px"><b>Q${i + 1}. ${esc(x.q)}</b>${x.f ? ` <span class="src">(${esc(x.f)})</span>` : ""} ${voiceTag(x.v)}<div style="margin-left:18px">→ ${esc(x.a)}</div></div>`).join("")}</div>`);
   if ((e.miss || []).length) out.push(`<div class="warnbox" style="margin-top:8px"><b>🙊 이번 콜에서 안 나온 것</b> <span class="src">질문도 회사 설명도 없었던 것 — 빠진 말도 신호예요</span><ul class="irl">${e.miss.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`);
   if ((e.ndr || []).length) out.push(`<div class="card" style="margin-top:8px;border:1px dashed var(--axis)"><b>📞 비공개 행사 (NDR·그룹콜)</b> <span class="src">원문이 공개되지 않아 기사·리포트로 알려진 것만</span>
-    ${e.ndr.map((x) => `<div style="margin-top:6px"><span class="qtag">${esc(x.d || "")}</span> <b>${esc(x.t)}</b>${(x.lines || []).map((l) => `<div class="src" style="margin-left:18px">· ${esc(l)}</div>`).join("")}${x.after ? `<div style="margin-left:18px">📉 그 뒤 주가: ${esc(x.after)}</div>` : ""}${(x.u || []).length ? `<div class="src" style="margin-left:18px">출처: ${x.u.map((s) => `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>`).join(" · ")}</div>` : ""}</div>`).join("")}</div>`);
+    ${e.ndr.map((x) => `<div style="margin-top:6px"><span class="qtag">${esc(x.d || "")}</span> <b>${esc(x.t)}</b>${(x.lines || []).map((l) => `<div class="src" style="margin-left:18px">· ${esc(l)}</div>`).join("")}${x.after ? `<div style="margin-left:18px">📉 그 뒤 주가: ${esc(x.after)}</div>` : ""}${x.raw ? `<div style="margin-left:18px">${rawHTML(x.raw)}</div>` : ""}${(x.u || []).length ? `<div class="src" style="margin-left:18px">출처: ${x.u.map((s) => `<a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.t)}</a>`).join(" · ")}</div>` : ""}</div>`).join("")}</div>`);
   return out.join("");
 }
 // 🌡 시장 기대감 (자동 · 참고용): 기대가 높으면 좋은 실적에도 '기대 미달'로 빠질 수 있어요 (예: 아마존 3Q26)

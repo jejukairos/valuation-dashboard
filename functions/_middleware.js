@@ -40,6 +40,25 @@ async function serveSite(ctx) {
   return r;
 }
 
+// 📄 받아 적은 원문: 저장소엔 암호 파일(site/data/irnote/<이름>.bin, tools/irnote_seal.mjs)만 있고,
+// 로그인한 사람만 /irnote/<이름> 으로 풀어 본다. 열쇠는 Cloudflare 환경 변수 IRNOTE_KEY (코드·저장소에 없음).
+async function irnote(ctx, name) {
+  const H = { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" };
+  const k = ctx.env.IRNOTE_KEY;
+  if (!k) return new Response("원문 열쇠(IRNOTE_KEY)가 Cloudflare 에 아직 없어요.", { status: 503, headers: H });
+  if (!/^[\w-]+$/.test(name)) return new Response("잘못된 이름이에요.", { status: 400, headers: H });
+  const u = new URL(`/data/irnote/${name}.bin`, ctx.request.url);
+  const r = await serveSite({ ...ctx, request: new Request(u), next: (req) => ctx.next(req || new Request(u)) });
+  if (!r.ok) return new Response("원문 파일이 없어요.", { status: 404, headers: H });
+  const b = new Uint8Array(await r.arrayBuffer());
+  try {
+    const key = await crypto.subtle.importKey("raw", Uint8Array.from(atob(k.trim()), (c) => c.charCodeAt(0)), "AES-GCM", false, ["decrypt"]);
+    return new Response(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b.slice(0, 12) }, key, b.slice(12)), { headers: H });
+  } catch {
+    return new Response("원문을 풀지 못했어요 (열쇠가 달라요).", { status: 500, headers: H });
+  }
+}
+
 export async function onRequest(ctx) {
   // 접속 점검용 (보유종목 정보 없음): 휴대폰이 서버에 닿는지 확인
   if (new URL(ctx.request.url).pathname === "/check") {
@@ -79,6 +98,8 @@ s+='쿠키 사용: '+navigator.cookieEnabled+'\\n';o.textContent=s;})();</script
   const good = await token(pw);
   const cookie = ctx.request.headers.get("cookie") || "";
   if (cookie.split(/;\s*/).includes(`${COOKIE}=${good}`)) {
+    const path = new URL(ctx.request.url).pathname;
+    if (path.startsWith("/irnote/")) return irnote(ctx, path.slice(8));
     const res = await serveSite(ctx);
     const out = new Response(res.body, res);
     out.headers.set("cache-control", "private, no-cache");
