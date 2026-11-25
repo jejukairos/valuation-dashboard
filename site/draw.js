@@ -13,7 +13,7 @@ const DW_ICON = {
   p: '<path d="M9 17l9-9 3 3-9 9H9v-3zM6 23h16"/>',
 };
 const DW_TOOL = [["t", "추세선: 두 번 누르거나 끌어서 긋기"], ["r", "가격 범위: 두 점 사이가 몇 % 인지"], ["h", "가로줄: 한 번 누르면 그 가격에 줄"], ["p", "형광펜: 손가락으로 끌어서 칠하기"]];
-const DW = { code: "", name: "", dec: 0, tf: "w", tool: "", sel: -1, pend: null, cross: null, end: 0, bw: 8, fix: null, pr: [0, 1], grp: "보유", src: {}, B: null, dr: [], extra: [], def: {}, raf: 0, head: "" };
+const DW = { code: "", name: "", dec: 0, tf: "w", tool: "", sel: -1, pend: null, cross: null, end: 0, bw: 8, fix: null, pr: [0, 1], grp: "보유", src: {}, B: null, dr: [], hist: [], snap: "[]", extra: [], def: {}, raf: 0, head: "" };
 // 새 선의 색·굵기: 처음엔 파랑 1px (형광펜은 연한 주황 4) → 선의 색·굵기를 바꾸면 그 도구의 기본값으로 기억 (localStorage "draw:def", 사용자 11/25)
 const dwDef = (k) => ({ c: k === "p" ? DW_PEN : "#2962ff", w: k === "p" ? 4 : 1, ...DW.def[k] });
 const DWG = { W: 0, H: 0, pw: 0, ph: 0, ax: 60, bx: 24 };
@@ -70,7 +70,9 @@ function dwPos(x, y, magnet = true) {
 }
 const dwPt = (pos) => [DW.B.T[pos.i], pos.p];
 const dwPx = (pt) => [dwX(dwIdx(pt[0])), dwY(pt[1])];
-const dwSave = () => { dwSet("draw:" + DW.code, DW.dr); };
+// 저장할 때마다 바로 앞 모습을 쌓아 둠 → '↶ 이전' 단추 (긋기·옮기기·색·지우기·전부 지우기 모두 되돌림, 화면을 열어 둔 동안만)
+const dwSave = () => { const s = JSON.stringify(DW.dr); if (s !== DW.snap) { DW.hist.push(DW.snap); if (DW.hist.length > 50) DW.hist.shift(); DW.snap = s; } dwSet("draw:" + DW.code, DW.dr); };
+function dwUndo() { if (!DW.hist.length) return; DW.snap = DW.hist.pop(); DW.dr = JSON.parse(DW.snap); DW.sel = DW.pal = -1; DW.pend = null; dwSet("draw:" + DW.code, DW.dr); dwPickDraw(); }
 const dwAsk = () => { if (!DW.raf) DW.raf = requestAnimationFrame(dwRender); };
 
 function dwFit(maxK = Infinity) {  // 처음 화면: 최근 봉들 + 오른쪽 16% 는 미래 빈칸 (maxK = 작은 캔들은 봉을 덜 넣음)
@@ -269,7 +271,7 @@ function dwUi() {
   const full = $("#dwBox").classList.contains("full");
   $("#dwFs").innerHTML = `<svg viewBox="0 0 28 28" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">${DW_FS[+full]}</svg>`;
   $("#dwFs").title = full ? "전체 화면 끄기" : "전체 화면";
-  $("#dwBtns").innerHTML = `${full ? DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("") : ""}<button data-inv="1" class="${DW.inv ? "on" : ""}" title="가격 눈금 뒤집기: 싼 가격이 위로">⇅ 거꾸로</button>${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
+  $("#dwBtns").innerHTML = `${full ? DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("") : ""}<button data-inv="1" class="${DW.inv ? "on" : ""}" title="가격 눈금 뒤집기: 싼 가격이 위로">⇅ 거꾸로</button>${DW.hist.length ? `<button data-undo="1" title="방금 한 것 되돌리기">↶ 이전</button>` : ""}${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
   dwAsk();
 }
 function dwToolPos() {  // 저장해 둔 자리 (차트 밖으로 못 나가게)
@@ -320,7 +322,7 @@ async function dwOpen(code, full) {
   if (code !== DW.code || !DW.B) {
     DW.code = code; DW.name = (o || ex).name; DW.dec = o ? (o.currency === "USD" ? 2 : 0) : ex.idx ? 2 : 0;
     DW.grp = !o ? "검색" : DASH.stocks.some((x) => x.code === code && (x.group || "보유") === DW.grp) ? DW.grp : o.group || "보유";  // 보유·공동 둘 다 있는 종목은 보던 묶음 그대로
-    DW.dr = dwGet("draw:" + code, []) || []; DW.inv = !!(dwGet("draw:inv", null) || {})[code]; DW.sel = -1; DW.pend = null; DW.cross = null; DW.tool = ""; DW.B = null; DW.head = "";
+    DW.dr = dwGet("draw:" + code, []) || []; DW.hist = []; DW.snap = JSON.stringify(DW.dr); DW.inv = !!(dwGet("draw:inv", null) || {})[code]; DW.sel = -1; DW.pend = null; DW.cross = null; DW.tool = ""; DW.B = null; DW.head = "";
     dwPickDraw(); dwUi();
     $("#dwHead").innerHTML = `<b>${esc(DW.name)}</b><br><span class="src">불러오는 중…</span>`;
     const s = await dwLoad(code, o?.market === "US");
@@ -435,6 +437,7 @@ function dwInit() {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.tf) return dwTf(b.dataset.tf);  // 전체 화면일 때만 나오는 일·주·월·연
     if (b.dataset.inv) { DW.inv = !DW.inv; const m = dwGet("draw:inv", null) || {}; if (DW.inv) m[DW.code] = 1; else delete m[DW.code]; dwSet("draw:inv", m); }  // 종목마다 기억
+    else if (b.dataset.undo) dwUndo();
     else if (b.dataset.auto) DW.fix = null;
     else if (b.dataset.fit) dwFit();
     else if (!DW.arm) { DW.arm = true; setTimeout(() => { DW.arm = false; dwUi(); }, 3000); }  // 실수로 전부 지우지 않게 두 번 누르기
