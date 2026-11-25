@@ -5,6 +5,7 @@
 // app.js 의 $, esc, n, css, DASH, OHLC 를 그대로 씀 (app.js 다음에 불러옴)
 const DW_TF = [["d", "일"], ["w", "주"], ["m", "월"], ["y", "연"]];
 const DW_COL = ["ink", "#e0453a", "#f29d38", "#e8c520", "#4caf50", "#26a69a", "#42bcd4", "#2962ff", "#673ab7", "#e91e63"];
+const DW_PEN = "#e6aa6e";  // 형광펜 기본색: 사용자 스탁이지 캡처의 줄 색 (250,238,226) 을 흰 바탕·투명도 0.2 로 거꾸로 계산
 const DW_ICON = {
   t: '<path d="M8 20L20 8"/><circle cx="6.5" cy="21.5" r="2"/><circle cx="21.5" cy="6.5" r="2"/>',
   r: '<path d="M5 6h14M9 22h14M14 22V9M11 12l3-3 3 3"/><circle cx="21" cy="6" r="2"/><circle cx="7" cy="22" r="2"/>',
@@ -149,9 +150,12 @@ function dwRender() {
   const shape = (d, sel) => {
     const cl = col(d.c);
     c.strokeStyle = cl; c.lineWidth = d.w || 1;
-    if (d.k === "p") {  // 형광펜: 굵고 비치는 손 그림 (고르면 가운데 점선)
-      c.beginPath(); d.pts.forEach((q, j) => { const x = dwX(dwIdxF(q[0])), y = dwY(q[1]); if (j) c.lineTo(x, y); else c.moveTo(x, y); });
-      c.globalAlpha = 0.3; c.lineWidth = 6 * (d.w || 2) + 4; c.lineCap = c.lineJoin = "round"; c.stroke(); c.globalAlpha = 1; c.lineCap = "butt";
+    if (d.k === "p") {  // 형광펜: 굵고 비치는 손 그림 (고르면 가운데 점선) — 스탁이지 기본값 그대로 (사용자 11/25): 굵기 5 × 4 = 20px · 투명도 0.2 · 둥근 끝 · 부드러운 곡선
+      const P = d.pts.map((q) => [dwX(dwIdxF(q[0])), dwY(q[1])]);
+      c.beginPath(); c.moveTo(P[0][0], P[0][1]);
+      for (let j = 1; j < P.length - 1; j++) c.quadraticCurveTo(P[j][0], P[j][1], (P[j][0] + P[j + 1][0]) / 2, (P[j][1] + P[j + 1][1]) / 2);
+      c.lineTo(P.at(-1)[0], P.at(-1)[1]);
+      c.globalAlpha = 0.2; c.lineWidth = 5 * (d.w || 4); c.lineCap = c.lineJoin = "round"; c.stroke(); c.globalAlpha = 1; c.lineCap = "butt";
       if (sel) { c.lineWidth = 1.5; c.setLineDash([4, 3]); c.stroke(); c.setLineDash([]); }
       return;
     }
@@ -170,7 +174,7 @@ function dwRender() {
     if (sel) { dot(xa, ya, cl); dot(xb, yb, cl); }
   };
   DW.dr.forEach((d, k) => shape(d, k === DW.sel));
-  if (DW.ink) shape({ k: "p", pts: DW.ink, c: "#f29d38", w: 2 });
+  if (DW.ink) shape({ k: "p", pts: DW.ink, c: DW_PEN, w: 4 });
   if (DW.pend) { const a = dwPt(DW.pend.a); if (DW.pend.b) shape({ k: DW.tool, a, b: dwPt(DW.pend.b), c: DW.tool === "t" ? "ink" : "#2962ff", w: 1 }, true); else dot(...dwPx(a), "#2962ff"); }
   c.restore();
   tags.forEach(([y, t, cl]) => { if (y > 8 && y < ph - 8) tag(y, t, cl); });
@@ -341,7 +345,7 @@ function dwInit() {
     if (pz) { if (PT.size < 2) pz = null; g0 = null; return; }
     const g = g0; g0 = null;
     if (!g || !DW.B) return;
-    if (g.mode === "pen") { const pts = DW.ink; DW.ink = null; if (pts && pts.length > 2) return dwAdd({ k: "p", pts: pts.map(([d, v]) => [Math.round(d * 100) / 100, dwTick(v)]), c: "#f29d38", w: 2 }); return dwAsk(); }
+    if (g.mode === "pen") { const pts = DW.ink; DW.ink = null; if (pts && pts.length > 2) return dwAdd({ k: "p", pts: pts.map(([d, v]) => [Math.round(d * 100) / 100, dwTick(v)]), c: DW_PEN, w: 4 }); return dwAsk(); }
     if (g.mode === "draw") {
       const q = dwPos(p.x, p.y), a = DW.pend.a;
       if (!g.moved && DW.pend.fresh) { DW.pend.fresh = false; return dwAsk(); }  // 첫 점만 찍음 → 두 번째 누름을 기다림
