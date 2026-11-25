@@ -212,11 +212,11 @@ function dwHit(d, x, y) {
 const dwFind = (x, y) => { for (let k = DW.dr.length - 1; k >= 0; k--) if (dwHit(DW.dr[k], x, y)) return k; return -1; };
 function dwAdd(d) { DW.dr.push(d); DW.sel = -1; DW.tool = ""; DW.pend = null; dwSave(); dwUi(); dwPickDraw(); }  // 긋고 나면 색 막대는 안 뜸 — 선을 눌러야 나옴 (사용자 11/25)
 const DW_FS = ['<path d="M4 10V4h6M18 4h6v6M24 18v6h-6M10 24H4v-6"/>', '<path d="M10 4v6H4M24 10h-6V4M18 24v-6h6M4 18h6v6"/>'];  // 전체 화면 켜기 · 끄기
-// 전체 화면: 차트 칸을 화면에 꽉 채움 + 브라우저 주소 줄도 숨김 (안 되는 브라우저는 꽉 채우기만)
+// 전체 화면: 차트 칸을 화면 안에 꽉 채우기만 함. 브라우저의 진짜 전체 화면(주소 줄 숨김)은 "종료하려면 드래그…" 안내가 떠서 뺌 (사용자 11/25)
 function dwFull(on) {
-  const box = $("#dwBox");
-  box.classList.toggle("full", on);
-  try { if (on) box.requestFullscreen().catch(() => {}); else if (document.fullscreenElement) document.exitFullscreen(); } catch (_) { /* 꽉 채우기만 */ }
+  $("#dwBox").classList.toggle("full", on);
+  if (on) history.pushState({ dwFull: 1 }, "");  // 폰 뒤로 가기 = 전체 화면 끄기 (popstate)
+  else if (history.state?.dwFull) history.back();
   dwUi();
 }
 
@@ -225,7 +225,9 @@ function dwUi() {
   $("#dwTools").innerHTML = `<span class="dwgrip" title="잡고 옮기기">⋮⋮</span>` + DW_TOOL.map(([k, t]) => `<button data-tool="${k}" class="${DW.tool === k ? "on" : ""}" title="${t}" aria-label="${t}"><svg viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6">${DW_ICON[k]}</svg></button>`).join("");
   const d = DW.dr[DW.sel], e = $("#dwEdit");
   e.hidden = !d;
-  if (d) e.innerHTML = DW_COL.map((v) => `<button data-c="${v}" class="dwsw${d.c === v ? " on" : ""}" style="background:${v === "ink" ? "var(--ink)" : v}" aria-label="색"></button>`).join("")
+  // 선을 고르면 작은 단추 둘(🎨·🗑)만 — 색·굵기 막대는 🎨 를 눌러야 펼쳐짐 (사용자 11/25: 막대가 차트를 가림)
+  if (d && DW.pal !== DW.sel) e.innerHTML = `<button data-pal="1" title="색·굵기 바꾸기" aria-label="색·굵기 바꾸기">🎨</button><button data-del="1" title="이 선 지우기" aria-label="이 선 지우기">🗑</button>`;
+  else if (d) e.innerHTML = DW_COL.map((v) => `<button data-c="${v}" class="dwsw${d.c === v ? " on" : ""}" style="background:${v === "ink" ? "var(--ink)" : v}" aria-label="색"></button>`).join("")
     + [1, 2, 3, 4].map((w) => `<button data-w="${w}" class="${(d.w || 1) === w ? "on" : ""}" aria-label="굵기 ${w}"><i style="border-top-width:${w}px"></i>${w}px</button>`).join("") + `<button data-del="1" title="이 선 지우기">🗑</button><button data-x="1" title="이 막대 닫기" aria-label="닫기">✕</button>`;
   const full = $("#dwBox").classList.contains("full");
   $("#dwFs").innerHTML = `<svg viewBox="0 0 28 28" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">${DW_FS[+full]}</svg>`;
@@ -369,7 +371,7 @@ function dwInit() {
     if (p.y > DWG.ph) return;
     if (g.mode === "tap") { const q = dwPos(p.x, p.y); return dwAdd({ k: "h", a: dwPt(q), c: "#2962ff", w: 1 }); }
     const k = dwFind(p.x, p.y);
-    if (k >= 0) { DW.sel = k; DW.cross = null; }
+    if (k >= 0) { DW.sel = k; DW.pal = -1; DW.cross = null; }
     else { const q = dwPos(p.x, p.y, false), X = DW.cross; DW.sel = -1; DW.cross = X && Math.hypot(dwX(X.i) - p.x, dwY(X.p) - p.y) < 14 ? null : q; }  // 십자선 자리를 다시 누르면 숨김
     dwUi();
   };
@@ -384,8 +386,9 @@ function dwInit() {
   $("#dwTools").addEventListener("pointerup", () => { tb = null; });
   $("#dwEdit").addEventListener("click", (e) => {
     const b = e.target.closest("button"), d = DW.dr[DW.sel]; if (!b || !d) return;
-    if (b.dataset.x) { DW.sel = -1; return dwUi(); }  // ✕ = 막대만 닫기
-    if (b.dataset.c) d.c = b.dataset.c; else if (b.dataset.w) d.w = +b.dataset.w; else { DW.dr.splice(DW.sel, 1); DW.sel = -1; }
+    if (b.dataset.pal) { DW.pal = DW.sel; return dwUi(); }  // 🎨 = 색·굵기 펼치기
+    if (b.dataset.x) { DW.pal = -1; return dwUi(); }  // ✕ = 다시 작은 단추로
+    if (b.dataset.c) d.c = b.dataset.c; else if (b.dataset.w) d.w = +b.dataset.w; else { DW.dr.splice(DW.sel, 1); DW.sel = DW.pal = -1; }
     dwSave(); dwUi(); if (b.dataset.del) dwPickDraw();
   });
   $("#dwBtns").addEventListener("click", (e) => {
@@ -409,7 +412,7 @@ function dwInit() {
     else if (s.rm) { DW.extra = DW.extra.filter((c) => c.code !== s.rm); dwSet("draw:extra", DW.extra); location.hash = "#draw/KOSPI"; }
   });
   $("#dwFs").addEventListener("click", () => dwFull(!box.classList.contains("full")));
-  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && box.classList.contains("full")) dwFull(false); });  // 뒤로 가기·Esc 로 나왔을 때
+  window.addEventListener("popstate", () => { if (box.classList.contains("full")) dwFull(false); });  // 폰 뒤로 가기
   $("#dwPick").addEventListener("input", (e) => { if (e.target.id !== "dwQ") return; clearTimeout(dwQT); const q = e.target.value; dwQT = setTimeout(() => dwSearch(q), 300); });
   document.addEventListener("keydown", (e) => {
     if ($("#drawView").hidden || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
