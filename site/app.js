@@ -1681,12 +1681,14 @@ const PX_TABS = [[1, "1개월"], [3, "3개월"], [6, "6개월"], [12, "1년"], [
 const PX_LONG = {};  // 코드 → 주봉 종가 (밴드 계산에 쓰는 가격)
 function priceBox(c, m = 6, tag = "button") {  // 종목 카드는 카드 자체가 <button> 이라 탭을 span 으로 (button 안 button 은 HTML 이 깨짐)
   if (!c.chart?.dates?.length) return "";
-  return `<div class="pbox" data-code="${esc(c.code)}"${tag === "span" ? ' data-btn="1"' : ""}><div class="seg pseg" style="margin-top:8px">${PX_TABS.map(([mm, l]) => `<${tag} data-m="${mm}" class="${mm === m ? "on" : ""}">${l}</${tag}>`).join("")}<${tag} data-m="0" data-dw="${esc(c.code)}" style="color:var(--s1);font-weight:700" title="✏️ 내 차트: 캔들 크게 보고 선 긋기">⤢ 크게·선 긋기</${tag}></div>
-    <div class="pbox-in">${priceSpark(c, m, tag === "span")}</div></div>`;
+  // 기본 = ✏️ 내 차트와 같은 캔들 (일·주·월 · 내가 그은 선 · ⤢ 전체 화면, draw.js dwmDraw) — 예전 선 그림은 지우지 않고 닫아 둠 (사용자 11/25, 스탁이지 요약 차트 모양)
+  return `<div class="dwm" data-code="${esc(c.code)}" data-tf="d"><div class="seg pseg" style="margin-top:8px">${[["d", "일"], ["w", "주"], ["m", "월"]].map(([k, l]) => `<${tag} data-m="${k}" class="${k === "d" ? "on" : ""}">${l}</${tag}>`).join("")}<${tag} data-m="fs" style="color:var(--s1);font-weight:700;margin-left:auto" title="✏️ 내 차트 전체 화면: 선 긋기">⤢ 전체 화면·선 긋기</${tag}></div><div class="dwmc"><canvas></canvas></div></div>
+    <details class="pold"><summary class="chart-title" style="margin-top:8px">📈 예전 주가 선 그림 <span class="src">200일선 · 1개월~MAX · 눌러서 열기</span></summary>
+    <div class="pbox" data-code="${esc(c.code)}"${tag === "span" ? ' data-btn="1"' : ""}><div class="seg pseg" style="margin-top:8px">${PX_TABS.map(([mm, l]) => `<${tag} data-m="${mm}" class="${mm === m ? "on" : ""}">${l}</${tag}>`).join("")}</div>
+    <div class="pbox-in">${priceSpark(c, m, tag === "span")}</div></div></details>`;
 }
 document.addEventListener("click", async (e) => {
   const b = e.target.closest(".pbox .pseg [data-m]"); if (!b) return;
-  if (b.dataset.dw) { location.hash = "#draw/" + b.dataset.dw; return; }  // ⤢ 크게·선 긋기 → ✏️ 내 차트 (draw.js, 사용자 11/25)
   const box = b.closest(".pbox"), c = DASH.stocks.find((x) => x.code === box.dataset.code), m = +b.dataset.m, el = box.querySelector(".pbox-in");
   box.querySelectorAll(".pseg [data-m]").forEach((x) => x.classList.toggle("on", x === b));
   if (m > 12 && !PX_LONG[c.code]) {
@@ -5787,13 +5789,13 @@ function renderCheck() {
 }
 function showView() {
   const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
-  const dc = location.hash.match(/^#draw(?:\/([\w.]+))?$/);  // ✏️ 내 차트 (#draw/코드 = 그 종목, draw.js)
+  const dc = location.hash.match(/^#draw(?:\/([\w.]+?))?(\/full)?$/);  // ✏️ 내 차트 (#draw/코드 = 그 종목 · 끝에 /full = 전체 화면으로, draw.js)
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)
   const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#pattern": "pattern", "#check": "check", "#exports": "exports", "#feed": "feed", "#all": "all", "#draw": "draw" }[nc ? "#news" : rc ? "#reports" : dc ? "#draw" : location.hash] || "main";
   $("#drawView").hidden = view !== "draw";
-  if (view === "draw") dwOpen(dc[1]);
+  if (view === "draw") dwOpen(dc[1], !!dc[2]);
   const eg = { earn: "보유", earnw: "관심", earnj: "공동" }[view];  // 🧾 실적 보유 · 관심 · 공동 (같은 화면, 종목 묶음만 바꿈)
   $("#earnView").hidden = !eg;
   if (eg) { EARN_GRP = eg; renderEarn(); }  // 보유·관심·공동을 바꿔도 전체/한국/미국 고른 건 그대로
@@ -7907,7 +7909,7 @@ async function load() {
 }
 
 for (const id of ["#stockCards", "#watchFull", "#jointCards"]) $(id).addEventListener("click", (e) => {
-  const b = e.target.closest(".stock"); if (!b || e.target.closest(".pseg, .scenseg")) return;  // 주가 기간·강세장 탭은 상세로 넘어가지 않음
+  const b = e.target.closest(".stock"); if (!b || e.target.closest(".pseg, .scenseg, .dwm, .pold > summary")) return;  // 주가 기간·강세장 탭·작은 캔들·예전 그림 열기는 상세로 넘어가지 않음
   GOTO = e.target.closest("[data-go]")?.dataset.go || null;  // ‼️ 수출 꼬리표 → 상세 '📦 수출·입국' 칸으로
   location.hash = `#stock/${b.dataset.code}`;
 });

@@ -171,6 +171,9 @@ table.flow tr.now td { background: var(--surface-2); }
 .dwedit .dwsw.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
 .dwbox.full { position: fixed; inset: 0; z-index: 1000; height: auto; border: 0; border-radius: 0; }  /* 전체 화면 (사용자 11/25) */
 .dwfs { position: absolute; top: 6px; width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
+.dwmc { position: relative; height: 250px; margin-top: 6px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }  /* 종목 카드의 작은 캔들 */
+.dwmc canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }  /* 캔버스 픽셀 수가 카드 폭을 밀지 않게 띄워 둠 */
+.pold > summary { cursor: pointer; }
 .dwbtns button.on { background: var(--s1); color: #fff; }
 .dwbtns { left: 8px; bottom: 30px; gap: 6px; }
 .dwbtns button { background: var(--surface-2); font-size: 12px; padding: 6px 9px; box-shadow: 0 0 0 1px var(--border); }
