@@ -105,7 +105,11 @@ s+='쿠키 사용: '+navigator.cookieEnabled+'\\n';o.textContent=s;})();</script
   if (new URL(ctx.request.url).pathname === "/ping-files") {
     // 공개돼도 괜찮은 파일(아이콘·화면 틀)이 실제로 올라가 있는지만 확인
     const out = [];
-    for (const p of ["/", "/icon.svg", "/style.css", "/app.js"]) {  // app.js 는 글자 수만 (배포가 됐는지 Claude 가 로그인 없이 확인)
+    // ✏️ 내 차트: 이 서버에서 네이버가 열리는지 (공개 시세의 개수만 — 로그인 없이 확인하려고)
+    for (const [label, f] of [["/px 한국 일봉", () => px("005930")], ["/px 해외 일봉", () => px("NVDA.O")], ["/pxq 검색", () => pxq("삼성전자")]]) {
+      try { const r = await f(), d = await r.json(); out.push(`${label} → ${r.status} (${d.t ? d.t.length + "봉" : Array.isArray(d) ? d.length + "개" : d.err})`); } catch (_) { out.push(`${label} → 네이버 응답 없음`); }
+    }
+    for (const p of ["/", "/icon.svg", "/style.css", "/app.js", "/draw.js"]) {  // app.js 는 글자 수만 (배포가 됐는지 Claude 가 로그인 없이 확인)
       const fake = { ...ctx, request: new Request(new URL(p, ctx.request.url), { method: "GET" }),
         next: (req) => ctx.next(req || new Request(new URL(p, ctx.request.url))) };
       const r = await serveSite(fake);

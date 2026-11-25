@@ -13,7 +13,9 @@ const DW_ICON = {
   p: '<path d="M9 17l9-9 3 3-9 9H9v-3zM6 23h16"/>',
 };
 const DW_TOOL = [["t", "추세선: 두 번 누르거나 끌어서 긋기"], ["r", "가격 범위: 두 점 사이가 몇 % 인지"], ["h", "가로줄: 한 번 누르면 그 가격에 줄"], ["p", "형광펜: 손가락으로 끌어서 칠하기"]];
-const DW = { code: "", name: "", dec: 0, tf: "w", tool: "", sel: -1, pend: null, cross: null, end: 0, bw: 8, fix: null, pr: [0, 1], grp: "보유", src: {}, B: null, dr: [], extra: [], raf: 0, head: "" };
+const DW = { code: "", name: "", dec: 0, tf: "w", tool: "", sel: -1, pend: null, cross: null, end: 0, bw: 8, fix: null, pr: [0, 1], grp: "보유", src: {}, B: null, dr: [], extra: [], def: {}, raf: 0, head: "" };
+// 새 선의 색·굵기: 처음엔 파랑 1px (형광펜은 연한 주황 4) → 선의 색·굵기를 바꾸면 그 도구의 기본값으로 기억 (localStorage "draw:def", 사용자 11/25)
+const dwDef = (k) => ({ c: k === "p" ? DW_PEN : "#2962ff", w: k === "p" ? 4 : 1, ...DW.def[k] });
 const DWG = { W: 0, H: 0, pw: 0, ph: 0, ax: 60, bx: 24 };
 const dwGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (_) { return d; } };
 const dwSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* 사생활 보호 창이면 화면에만 */ } };
@@ -174,8 +176,8 @@ function dwRender() {
     if (sel) { dot(xa, ya, cl); dot(xb, yb, cl); }
   };
   DW.dr.forEach((d, k) => shape(d, k === DW.sel));
-  if (DW.ink) shape({ k: "p", pts: DW.ink, c: DW_PEN, w: 4 });
-  if (DW.pend) { const a = dwPt(DW.pend.a); if (DW.pend.b) shape({ k: DW.tool, a, b: dwPt(DW.pend.b), c: DW.tool === "t" ? "ink" : "#2962ff", w: 1 }, true); else dot(...dwPx(a), "#2962ff"); }
+  if (DW.ink) shape({ k: "p", pts: DW.ink, ...dwDef("p") });
+  if (DW.pend) { const a = dwPt(DW.pend.a); if (DW.pend.b) shape({ k: DW.tool, a, b: dwPt(DW.pend.b), ...dwDef(DW.tool) }, true); else dot(...dwPx(a), "#2962ff"); }
   c.restore();
   tags.forEach(([y, t, cl]) => { if (y > 8 && y < ph - 8) tag(y, t, cl); });
   if (yl > 0 && yl < ph) tag(yl, dwFmt(last), nowCol);
@@ -303,6 +305,7 @@ function dwInit() {
   DW.init = true;
   const last = dwGet("draw:last", {});
   DW.tf = DW_TF.some(([k]) => k === last.tf) ? last.tf : "w";
+  DW.def = dwGet("draw:def", null) || {};
   DW.extra = dwGet("draw:extra", null) || [{ code: "KOSPI", name: "코스피", idx: 1, keep: 1 }, { code: "KOSDAQ", name: "코스닥", idx: 1, keep: 1 }];
   const cv = $("#dwCv"), box = $("#dwBox"), PT = new Map();
   let g0 = null, pz = null, tapAt = 0;
@@ -359,17 +362,17 @@ function dwInit() {
     if (pz) { if (PT.size < 2) pz = null; g0 = null; return; }
     const g = g0; g0 = null;
     if (!g || !DW.B) return;
-    if (g.mode === "pen") { const pts = DW.ink; DW.ink = null; if (pts && pts.length > 2) return dwAdd({ k: "p", pts: pts.map(([d, v]) => [Math.round(d * 100) / 100, dwTick(v)]), c: DW_PEN, w: 4 }); return dwAsk(); }
+    if (g.mode === "pen") { const pts = DW.ink; DW.ink = null; if (pts && pts.length > 2) return dwAdd({ k: "p", pts: pts.map(([d, v]) => [Math.round(d * 100) / 100, dwTick(v)]), ...dwDef("p") }); return dwAsk(); }
     if (g.mode === "draw") {
       const q = dwPos(p.x, p.y), a = DW.pend.a;
       if (!g.moved && DW.pend.fresh) { DW.pend.fresh = false; return dwAsk(); }  // 첫 점만 찍음 → 두 번째 누름을 기다림
       if (q.i === a.i && q.p === a.p) return dwAsk();
-      return dwAdd({ k: DW.tool, a: dwPt(a), b: dwPt(q), c: DW.tool === "t" ? "ink" : "#2962ff", w: 1 });
+      return dwAdd({ k: DW.tool, a: dwPt(a), b: dwPt(q), ...dwDef(DW.tool) });
     }
     if (g.moved) { if (g.mode === "edit") dwSave(); return dwAsk(); }
     if (g.mode === "axis") { const now = Date.now(); if (now - tapAt < 400) { DW.fix = null; dwUi(); } tapAt = now; return; }  // 눈금을 두 번 누르면 자동으로
     if (p.y > DWG.ph) return;
-    if (g.mode === "tap") { const q = dwPos(p.x, p.y); return dwAdd({ k: "h", a: dwPt(q), c: "#2962ff", w: 1 }); }
+    if (g.mode === "tap") { const q = dwPos(p.x, p.y); return dwAdd({ k: "h", a: dwPt(q), ...dwDef("h") }); }
     const k = dwFind(p.x, p.y);
     if (k >= 0) { DW.sel = k; DW.pal = -1; DW.cross = null; }
     else { const q = dwPos(p.x, p.y, false), X = DW.cross; DW.sel = -1; DW.cross = X && Math.hypot(dwX(X.i) - p.x, dwY(X.p) - p.y) < 14 ? null : q; }  // 십자선 자리를 다시 누르면 숨김
@@ -389,6 +392,7 @@ function dwInit() {
     if (b.dataset.pal) { DW.pal = DW.sel; return dwUi(); }  // 🎨 = 색·굵기 펼치기
     if (b.dataset.x) { DW.pal = -1; return dwUi(); }  // ✕ = 다시 작은 단추로
     if (b.dataset.c) d.c = b.dataset.c; else if (b.dataset.w) d.w = +b.dataset.w; else { DW.dr.splice(DW.sel, 1); DW.sel = DW.pal = -1; }
+    if (!b.dataset.del) { DW.def[d.k] = { c: d.c, w: d.w || dwDef(d.k).w }; dwSet("draw:def", DW.def); }  // 다음에 긋는 같은 도구의 선도 이 색·굵기로
     dwSave(); dwUi(); if (b.dataset.del) dwPickDraw();
   });
   $("#dwBtns").addEventListener("click", (e) => {
