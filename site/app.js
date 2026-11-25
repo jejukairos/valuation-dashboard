@@ -632,15 +632,21 @@ function stockCard(c) {
 }
 // ⭐ 앞으로 일정 (사용자 11/25 "에이피알 하이푸 출시를 알고도 까먹음 → 카드 맨 아래·상세에 형광펜으로, 날짜는 '쯤'이어도 됨")
 // = timeline.json 의 앞으로 줄 (손으로 = config/timeline.yaml, k '⭐ 재료'·'⚠ 위험'·'🗓 일정' · 실적 발표 = ir_calendar 자동)
-const UP_HL = "background:#fff3a3;color:#3a2f00;border-radius:4px;padding:0 3px";  // 노란 형광펜 (어두운 화면에서도 글자색 고정)
+// 사용자 11/26 "날짜가 정확한 것과 아닌 것 구분" → dl(기간 글)이 있으면 ⏳ 예상(연한 형광펜·점선), 없으면 📌 확정(진한 형광펜)
+const UP_HL = "background:#ffe45c;color:#3a2f00;border-radius:4px;padding:0 3px";  // 📌 확정 = 진한 노란 형광펜 (어두운 화면에서도 글자색 고정)
+const UP_HL2 = "background:#fff6c4;color:#3a2f00;border-radius:4px;padding:0 3px;border-bottom:1.5px dashed #b39500";  // ⏳ 예상 = 연한 형광펜 + 점선
+const upHl = (r) => (r.dl ? UP_HL2 : UP_HL), upFix = (r) => (r.dl ? "⏳" : "📌");
+const upImp = (r) => /^[⭐⚠]/.test(r.k || "");  // ★ 재료·⚠ 위험 = 중요
 const upMark = (r) => (/^⭐/.test(r.k || "") ? '<b style="color:#d03b3b">★</b>' : /^⚠/.test(r.k || "") ? "⚠" : "🗓");
 function upHTML(code, max = 99) {
   const U = (TL?.stocks?.[code] || []).filter((r) => r.up);
   if (!U.length) return "";
+  // 카드(max 4)는 ★·⚠ 를 먼저 고르고 남는 자리에 🗓 — 보이는 순서는 날짜순
+  const pick = U.length > max ? [...U].sort((a, b) => upImp(b) - upImp(a) || a.d.localeCompare(b.d)).slice(0, max).sort((a, b) => a.d.localeCompare(b.d)) : U;
   const Y = String(new Date().getFullYear()), md = (d) => `${d.slice(0, 4) === Y ? "" : `${d.slice(2, 4)}년 `}${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
-  const li = (r) => `<li>${upMark(r)} <span style="${UP_HL}"><b>${esc(r.dl || md(r.d))}</b> ${esc(r.t)}</span>${r.src ? ` <span class="src">(${esc(r.src)})</span>` : ""}</li>`;
-  return `<div style="margin-top:8px;text-align:left"><b>⭐ 앞으로 일정</b> <span class="src">${U.length > max ? `가까운 ${max}개 / ${U.length}개 · 나머지는 종목 상세` : `${U.length}개`} · <b style="color:#d03b3b">★</b> = 주가를 움직일 만한 재료 · '쯤'은 회사·보도 예상이라 늦어지면 실망, 빨라지면 깜짝</span>
-    <ul class="irl" style="margin-top:4px">${U.slice(0, max).map(li).join("")}</ul></div>`;
+  const li = (r) => `<li>${upMark(r)} <span style="${upHl(r)}">${upFix(r)} <b>${esc(r.dl || md(r.d))}</b> ${esc(r.t)}</span>${r.src ? ` <span class="src">(${esc(r.src)})</span>` : ""}</li>`;
+  return `<div style="margin-top:8px;text-align:left"><b>⭐ 앞으로 일정</b> <span class="src">${U.length > max ? `중요한 ${max}개 / ${U.length}개 · 나머지는 종목 상세` : `${U.length}개`} · <b style="color:#d03b3b">★</b> 주가를 움직일 만한 재료 · <span style="${UP_HL}">📌 날짜 확정</span> · <span style="${UP_HL2}">⏳ 예상(쯤)</span> — 늦어지면 실망, 빨라지면 깜짝</span>
+    <ul class="irl" style="margin-top:4px">${pick.map(li).join("")}</ul></div>`;
 }
 async function upFill() {
   if (!TL) { try { TL = await (await fetch(`data/timeline.json?t=${Date.now()}`, { cache: "no-store" })).json(); } catch (_) { TL = {}; } }
@@ -7366,9 +7372,9 @@ function tlHTML(code) {
   const md = (d) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`, wd = (d) => "일월화수목금토"[new Date(`${d}T12:00:00Z`).getUTCDay()];
   const tone = (r) => r.up || r.good ? "good" : r.bad ? "bad" : "";
   const row = (r) => {
-    const tn = tone(r), hl = r.up ? ` style="${UP_HL}"` : tn ? ` style="background:color-mix(in srgb, var(--${tn}) 13%, transparent);color:var(--${tn}-ink);border-radius:4px;padding:0 3px"` : "";  // 앞으로 = 노란 형광펜
+    const tn = tone(r), hl = r.up ? ` style="${upHl(r)}"` : tn ? ` style="background:color-mix(in srgb, var(--${tn}) 13%, transparent);color:var(--${tn}-ink);border-radius:4px;padding:0 3px"` : "";  // 앞으로 = 노란 형광펜
     const sub = [...(r.h ? [`그날 기사: ${r.h}`] : []), ...(r.x || [])], link = r.u ? ` <a href="${esc(r.u)}" target="_blank" rel="noopener">↗</a>` : "";
-    const line = `${r.up ? `${upMark(r)} ` : ""}<span style="display:inline-block;min-width:${r.up ? 64 : 40}px;color:var(--ink-2)">${r.dl ? esc(r.dl) : md(r.d) + (r.up ? `(${wd(r.d)})` : "")}</span> <span class="src">${esc(r.k.replace(/^📢 /, ""))}</span> <span${hl}>${esc(r.t)}</span>${link}${r.src ? ` <span class="src">(${esc(r.src)})</span>` : ""}`;
+    const line = `${r.up ? `${upMark(r)} ${upFix(r)} ` : ""}<span style="display:inline-block;min-width:${r.up ? 64 : 40}px;color:var(--ink-2)">${r.dl ? esc(r.dl) : md(r.d) + (r.up ? `(${wd(r.d)})` : "")}</span> <span class="src">${esc(r.k.replace(/^📢 /, ""))}</span> <span${hl}>${esc(r.t)}</span>${link}${r.src ? ` <span class="src">(${esc(r.src)})</span>` : ""}`;
     return `<li>${sub.length ? `<details><summary>${line}</summary><div class="src" style="margin-left:44px">${sub.map(esc).join("<br>")}</div></details>` : line}</li>`;
   };
   const past = R.filter((r) => !r.up), up = R.filter((r) => r.up), old = past.slice(0, -15), rec = past.slice(-15);
@@ -7376,7 +7382,7 @@ function tlHTML(code) {
     ${old.length ? `<details><summary class="src">그 전 ${old.length}개 더 보기</summary><ul class="irl">${old.map(row).join("")}</ul></details>` : ""}
     <ul class="irl">${rec.map(row).join("")}</ul>
     ${up.length ? `<div class="src" style="border-top:1px dashed var(--ink-2);margin:6px 0 2px;padding-top:4px">앞으로</div><ul class="irl">${up.map(row).join("")}</ul>` : ""}
-    <div class="kidbox" style="margin-top:6px">🐣 이 회사에 최근 무슨 일이 있었는지 날짜 순서예요. <b style="color:var(--bad-ink)">빨강</b> = 안 좋은 쪽 (임원 매도·목표가 하향·하루 큰 하락), <b style="color:var(--good-ink)">초록</b> = 좋은 쪽, <span style="${UP_HL}">노란 형광펜</span> = 다가올 일정 (<b style="color:#d03b3b">★</b> = 주가를 움직일 만한 재료). 줄을 누르면 자세한 내용이 나와요.</div>
+    <div class="kidbox" style="margin-top:6px">🐣 이 회사에 최근 무슨 일이 있었는지 날짜 순서예요. <b style="color:var(--bad-ink)">빨강</b> = 안 좋은 쪽 (임원 매도·목표가 하향·하루 큰 하락), <b style="color:var(--good-ink)">초록</b> = 좋은 쪽, <span style="${UP_HL}">📌 진한 형광펜</span> = 날짜가 정해진 다가올 일정, <span style="${UP_HL2}">⏳ 연한 형광펜</span> = '쯤'으로 예상된 일정 (<b style="color:#d03b3b">★</b> = 주가를 움직일 만한 재료). 줄을 누르면 자세한 내용이 나와요.</div>
     <div class="note src">공시 = DART (국민연금 같은 기관의 매일 매매는 뺌) · 목표가 = 한경 리포트 (그대로인 날은 뺌) · 수출 = 증권사 텔레그램 · 하루 큰 주가 변동 = 지난 1년 하루 변동폭의 2.5배 넘고 4% 넘게 움직인 날 · 그날 기사 = 그날 가장 많이 쓰인 기사 제목 (주가가 움직인 원인이라고 확정한 건 아님) · 출처가 붙은 줄 = 손으로 넣은 줄 · ${esc(TL.updated_at || "")}</div></details>`;
 }
 function patHTML(d) {  // 종목 상세: 차트 + 조건 설명
