@@ -54,7 +54,9 @@ const dwIdx = (day) => { const T = DW.B.T; let a = 0, z = T.length - 1; while (a
 const dwIdxF = (day) => { const T = DW.B.T, a = dwIdx(day); return a === 0 || T[a] <= day ? a : a - 1 + (day - T[a - 1]) / (T[a] - T[a - 1]); };
 const dwDayF = (f) => { const T = DW.B.T, g = dwClamp(f, 0, T.length - 1), i = Math.min(T.length - 2, Math.floor(g)); return T[i] + (g - i) * (T[i + 1] - T[i]); };
 const dwX = (i) => DWG.pw - (DW.end - i) * DW.bw, dwI = (x) => DW.end - (DWG.pw - x) / DW.bw;
-const dwY = (p) => ((DW.pr[1] - p) / (DW.pr[1] - DW.pr[0])) * DWG.ph, dwP = (y) => DW.pr[1] - (y / DWG.ph) * (DW.pr[1] - DW.pr[0]);
+// 가격 ↔ 화면 높이. DW.inv = 거꾸로 보기 (트레이딩뷰 '인버트 스케일', 사용자 11/25): 싼 가격이 위, 비싼 가격이 아래
+const dwY = (p) => { const f = (DW.pr[1] - p) / (DW.pr[1] - DW.pr[0]); return (DW.inv ? 1 - f : f) * DWG.ph; };
+const dwP = (y) => { const f = y / DWG.ph; return DW.pr[1] - (DW.inv ? 1 - f : f) * (DW.pr[1] - DW.pr[0]); };
 const dwFmt = (v) => n(v, DW.dec);
 // 호가 단위로 맞춤 (한국 주식) · 달러·지수는 소수 둘째 자리
 const dwTick = (p) => { if (DW.dec) return Math.round(p * 100) / 100; const u = p < 2000 ? 1 : p < 5000 ? 5 : p < 20000 ? 10 : p < 50000 ? 50 : p < 200000 ? 100 : p < 500000 ? 500 : 1000; return Math.round(p / u) * u; };
@@ -108,7 +110,7 @@ function dwRender(mini) {  // mini = 종목 카드의 작은 캔들 캔버스 (d
   let lo = Infinity, hi = -Infinity, vmax = 1;
   for (let i = i0; i <= i1; i++) { lo = Math.min(lo, b.l[i]); hi = Math.max(hi, b.h[i]); vmax = Math.max(vmax, b.v[i]); }
   if (!(hi > lo)) { const p = b.c[b.N - 1]; lo = p * 0.95; hi = p * 1.05; }
-  DW.pr = DW.fix || [lo - (hi - lo) * 0.28, hi + (hi - lo) * 0.08];
+  DW.pr = DW.fix || [lo - (hi - lo) * (DW.inv ? 0.08 : 0.28), hi + (hi - lo) * (DW.inv ? 0.28 : 0.08)];  // 거꾸로면 거래량 자리(화면 아래)가 비싼 쪽
   const line = (x1, y1, x2, y2) => { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
   const tag = (y, t, bg) => { c.fillStyle = bg; c.fillRect(pw, y - 10, W - pw, 20); c.fillStyle = "#fff"; c.textAlign = "left"; c.fillText(t, pw + 6, y + 0.5); };
   // 눈금 선 (점선) + 숫자
@@ -134,7 +136,7 @@ function dwRender(mini) {  // mini = 종목 카드의 작은 캔들 캔버스 (d
     c.fillStyle = c.strokeStyle = up ? K.up : K.dn;
     c.globalAlpha = 0.3; c.fillRect(x - bwid / 2, ph - (b.v[i] / vmax) * vh, bwid, (b.v[i] / vmax) * vh); c.globalAlpha = 1;
     c.lineWidth = 1; line(Math.round(x) + 0.5, dwY(b.h[i]), Math.round(x) + 0.5, dwY(b.l[i]));
-    if (bwid >= 2) { const y1 = dwY(Math.max(b.o[i], b.c[i])), y2 = dwY(Math.min(b.o[i], b.c[i])); c.fillRect(x - bwid / 2, y1, bwid, Math.max(1, y2 - y1)); }
+    if (bwid >= 2) { const y1 = dwY(b.o[i]), y2 = dwY(b.c[i]); c.fillRect(x - bwid / 2, Math.min(y1, y2), bwid, Math.max(1, Math.abs(y2 - y1))); }
   }
   // 보이는 구간 최고가·최저가 숫자 (스탁이지처럼, 사용자 11/25)
   if (i1 > i0) {
@@ -196,7 +198,7 @@ function dwRender(mini) {  // mini = 종목 카드의 작은 캔들 캔버스 (d
   if (mini) return;
   // 왼쪽 위 글: 이름 · 봉 종류 / 지금 주가·등락 / 십자선이 봉 위면 그 봉 시·고·저·종·거래량
   const ch = last - prev, i = X && X.i < b.N ? X.i : -1;
-  const head = `<b>${esc(DW.name)}</b> · 1${{ d: "일", w: "주", m: "달", y: "년" }[b.tf]}<br><span style="color:${nowCol}">${dwFmt(last)} ${ch >= 0 ? "+" : "−"}${dwFmt(Math.abs(ch))} (${ch >= 0 ? "+" : "−"}${n(Math.abs(ch / prev) * 100, 2)}%)</span>`
+  const head = `<b>${esc(DW.name)}</b> · 1${{ d: "일", w: "주", m: "달", y: "년" }[b.tf]}${DW.inv ? ' · <b style="color:var(--s1)">⇅ 거꾸로 보는 중</b>' : ""}<br><span style="color:${nowCol}">${dwFmt(last)} ${ch >= 0 ? "+" : "−"}${dwFmt(Math.abs(ch))} (${ch >= 0 ? "+" : "−"}${n(Math.abs(ch / prev) * 100, 2)}%)</span>`
     + (i >= 0 ? `<br><span class="src">${dwDateLab(b.T[i], b.tf)} · 시 ${dwFmt(b.o[i])} · 고 ${dwFmt(b.h[i])} · 저 ${dwFmt(b.l[i])} · 종 ${dwFmt(b.c[i])} · 거래량 ${n(b.v[i])}</span>` : "");
   if (head !== DW.head) $("#dwHead").innerHTML = DW.head = head;
 }
@@ -236,7 +238,7 @@ async function dwmDraw(el) {
   if (!r.width) return;
   const keep = { ...DW }, keepG = { ...DWG }, dpr = window.devicePixelRatio || 1;
   try {
-    Object.assign(DW, { code, B, dec: DASH.stocks.find((x) => x.code === code)?.currency === "USD" ? 2 : 0, dr: dwGet("draw:" + code, []) || [], sel: -1, pend: null, cross: null, ink: null });
+    Object.assign(DW, { code, B, dec: DASH.stocks.find((x) => x.code === code)?.currency === "USD" ? 2 : 0, dr: dwGet("draw:" + code, []) || [], inv: false, sel: -1, pend: null, cross: null, ink: null });  // 카드는 늘 바로 선 그림
     cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
     const c = cv.getContext("2d"); c.font = "12px system-ui, sans-serif";
     DWG.W = r.width; DWG.H = r.height; DWG.ax = Math.ceil(c.measureText(dwFmt(B.hi * 1.3)).width) + 16; DWG.pw = DWG.W - DWG.ax; DWG.ph = DWG.H - DWG.bx;
@@ -267,7 +269,7 @@ function dwUi() {
   const full = $("#dwBox").classList.contains("full");
   $("#dwFs").innerHTML = `<svg viewBox="0 0 28 28" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">${DW_FS[+full]}</svg>`;
   $("#dwFs").title = full ? "전체 화면 끄기" : "전체 화면";
-  $("#dwBtns").innerHTML = `${full ? DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("") : ""}${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
+  $("#dwBtns").innerHTML = `${full ? DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("") : ""}<button data-inv="1" class="${DW.inv ? "on" : ""}" title="가격 눈금 뒤집기: 싼 가격이 위로">⇅ 거꾸로</button>${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
   dwAsk();
 }
 function dwToolPos() {  // 저장해 둔 자리 (차트 밖으로 못 나가게)
@@ -318,7 +320,7 @@ async function dwOpen(code, full) {
   if (code !== DW.code || !DW.B) {
     DW.code = code; DW.name = (o || ex).name; DW.dec = o ? (o.currency === "USD" ? 2 : 0) : ex.idx ? 2 : 0;
     DW.grp = !o ? "검색" : DASH.stocks.some((x) => x.code === code && (x.group || "보유") === DW.grp) ? DW.grp : o.group || "보유";  // 보유·공동 둘 다 있는 종목은 보던 묶음 그대로
-    DW.dr = dwGet("draw:" + code, []) || []; DW.sel = -1; DW.pend = null; DW.cross = null; DW.tool = ""; DW.B = null; DW.head = "";
+    DW.dr = dwGet("draw:" + code, []) || []; DW.inv = !!(dwGet("draw:inv", null) || {})[code]; DW.sel = -1; DW.pend = null; DW.cross = null; DW.tool = ""; DW.B = null; DW.head = "";
     dwPickDraw(); dwUi();
     $("#dwHead").innerHTML = `<b>${esc(DW.name)}</b><br><span class="src">불러오는 중…</span>`;
     const s = await dwLoad(code, o?.market === "US");
@@ -378,7 +380,7 @@ function dwInit() {
     if (!g0.moved && Math.hypot(dx, dy) < 8) return;
     g0.moved = true;
     if (g0.mode === "axis") { const f = Math.exp(dy * 0.006), m = (g0.fix[0] + g0.fix[1]) / 2, h = ((g0.fix[1] - g0.fix[0]) / 2) * f; if (!DW.fix) dwUiSoon(); DW.fix = [m - h, m + h]; }
-    else if (g0.mode === "pan") { DW.end = g0.end - dx / DW.bw; dwLim(); if (DW.fix) { const s = (dy / DWG.ph) * (g0.fix[1] - g0.fix[0]); DW.fix = [g0.fix[0] + s, g0.fix[1] + s]; } }
+    else if (g0.mode === "pan") { DW.end = g0.end - dx / DW.bw; dwLim(); if (DW.fix) { const s = ((DW.inv ? -dy : dy) / DWG.ph) * (g0.fix[1] - g0.fix[0]); DW.fix = [g0.fix[0] + s, g0.fix[1] + s]; } }
     else if (g0.mode === "draw") DW.pend.b = dwPos(p.x, p.y);
     else if (g0.mode === "pen") DW.ink.push([dwDayF(dwI(p.x)), dwP(p.y)]);
     else if (g0.mode === "edit") {
@@ -432,7 +434,8 @@ function dwInit() {
   $("#dwBtns").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.tf) return dwTf(b.dataset.tf);  // 전체 화면일 때만 나오는 일·주·월·연
-    if (b.dataset.auto) DW.fix = null;
+    if (b.dataset.inv) { DW.inv = !DW.inv; const m = dwGet("draw:inv", null) || {}; if (DW.inv) m[DW.code] = 1; else delete m[DW.code]; dwSet("draw:inv", m); }  // 종목마다 기억
+    else if (b.dataset.auto) DW.fix = null;
     else if (b.dataset.fit) dwFit();
     else if (!DW.arm) { DW.arm = true; setTimeout(() => { DW.arm = false; dwUi(); }, 3000); }  // 실수로 전부 지우지 않게 두 번 누르기
     else { DW.arm = false; DW.dr = []; DW.sel = -1; dwSave(); dwPickDraw(); }
