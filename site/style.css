@@ -149,6 +149,29 @@ table.flow { width: 100%; border-collapse: collapse; table-layout: fixed; font-s
 table.flow th, table.flow td { padding: 5px 4px; border-bottom: 1px solid var(--grid); text-align: center; vertical-align: middle; }
 table.flow th:first-child, table.flow td:first-child { text-align: left; width: 31%; }
 table.flow tr.now td { background: var(--surface-2); }
+/* ✏️ 내 차트 (draw.js): 캔버스 위에 이름·도구 막대·색 막대를 얹음 */
+.dwbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 6px; }
+.dwlist { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: thin; }
+.dwlist .chip { white-space: nowrap; flex: none; }
+.dwq { margin-bottom: 4px; } .dwq input { width: min(100%, 360px); margin-bottom: 6px; }
+.dwbox { position: relative; height: min(76vh, 780px); min-height: 340px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.dwbox canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.dwhead { position: absolute; left: 10px; top: 6px; font-size: 14px; line-height: 1.45; pointer-events: none; max-width: calc(100% - 90px); }
+.dwtools, .dwedit, .dwbtns { position: absolute; display: flex; align-items: center; gap: 2px; }
+.dwtools, .dwedit { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); padding: 3px; }
+.dwtools button, .dwedit button, .dwbtns button { border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; border-radius: 8px; }
+.dwtools button { width: 40px; height: 40px; display: grid; place-items: center; }
+.dwtools button.on { background: var(--s1); color: #fff; }
+.dwgrip { cursor: grab; touch-action: none; padding: 10px 6px; color: var(--muted); letter-spacing: -3px; font-size: 15px; user-select: none; }
+.dwedit { left: 8px; bottom: 66px; flex-wrap: wrap; max-width: calc(100% - 90px); }  /* 아래쪽: 종목 이름·도구 막대를 안 가리게 */
+.dwedit button { min-width: 30px; height: 30px; font-size: 12px; padding: 0 5px; }
+.dwedit button.on { background: var(--surface-2); box-shadow: 0 0 0 1px var(--axis); }
+.dwedit button i { display: inline-block; width: 14px; border-top: 1px solid var(--ink); vertical-align: middle; margin-right: 3px; }
+.dwedit .dwsw { min-width: 22px; width: 22px; height: 22px; border-radius: 50%; margin: 3px; padding: 0; }
+.dwedit .dwsw.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+.dwbtns { left: 8px; bottom: 30px; gap: 6px; }
+.dwbtns button { background: var(--surface-2); font-size: 12px; padding: 6px 9px; box-shadow: 0 0 0 1px var(--border); }
+@media (max-width: 900px) { #drawView { padding-left: 6px; padding-right: 6px; } }
 /* 📋 날짜별 투자자 매매 (flowDayHTML): 위 칸 고정 · 한국식 빨강 = +, 파랑 = − */
 .fd-wrap { max-height: 520px; overflow: auto; }
 table.fd th { position: sticky; top: 0; z-index: 2; cursor: default; }

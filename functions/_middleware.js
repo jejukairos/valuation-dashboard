@@ -40,6 +40,29 @@ async function serveSite(ctx) {
   return r;
 }
 
+// ✏️ 내 차트 (site/draw.js): 한국 종목·코스피·코스닥 일봉 13년을 네이버 차트 자료에서 대신 받아 줌 (로그인한 사람만) — /px/<코드>
+// 거래 정지 날은 시가·고가·저가가 0 이라 종가로 채움. 수정주가 · KRX 만 (넥스트레이드 뺌)
+const NV = { headers: { "user-agent": "Mozilla/5.0" } };
+const J = (v, status = 200, age = 0) => new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": age ? `private, max-age=${age}` : "no-store" } });
+async function px(code) {
+  if (!/^[A-Z0-9]{2,12}$/.test(code)) return J({ err: "잘못된 코드" }, 400);
+  const now = new Date(Date.now() + 9 * 36e5), ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, "");
+  const r = await fetch(`https://api.finance.naver.com/siseJson.naver?symbol=${code}&requestType=1&startTime=${ymd(new Date(now - 13 * 365.25 * 864e5))}&endTime=${ymd(now)}&timeframe=day`, NV);
+  const o = { t: [], o: [], h: [], l: [], c: [], v: [] };
+  for (const m of (await r.text()).matchAll(/\["(\d{8})",\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/g)) {
+    const c = +m[5]; if (!(c > 0)) continue;
+    o.t.push(`${m[1].slice(2, 4)}-${m[1].slice(4, 6)}-${m[1].slice(6)}`); o.o.push(+m[2] || c); o.h.push(+m[3] || c); o.l.push(+m[4] || c); o.c.push(c); o.v.push(+m[6]);
+  }
+  return o.t.length ? J(o, 200, 300) : J({ err: "가격 없음" }, 404);
+}
+// 종목 찾기 — /pxq?q=이름 (네이버 자동 완성, 한국 주식·국내 지수만)
+async function pxq(q) {
+  if (!q.trim()) return J([]);
+  const r = await fetch(`https://ac.stock.naver.com/ac?q=${encodeURIComponent(q.trim().slice(0, 30))}&target=stock,index`, NV);
+  const L = ((await r.json()).items || []).filter((x) => x.nationCode === "KOR" || (x.category === "index" && /^\/domestic\//.test(x.url || "")));
+  return J(L.slice(0, 12).map((x) => ({ code: x.code, name: x.name, type: x.typeName, idx: x.category === "index" })), 200, 60);
+}
+
 // 📄 받아 적은 원문: 저장소엔 암호 파일(site/data/irnote/<이름>.bin, tools/irnote_seal.mjs)만 있고,
 // 로그인한 사람만 /irnote/<이름> 으로 풀어 본다. 열쇠는 Cloudflare 환경 변수 IRNOTE_KEY (코드·저장소에 없음).
 async function irnote(ctx, name) {
@@ -100,6 +123,10 @@ s+='쿠키 사용: '+navigator.cookieEnabled+'\\n';o.textContent=s;})();</script
   if (cookie.split(/;\s*/).includes(`${COOKIE}=${good}`)) {
     const path = new URL(ctx.request.url).pathname;
     if (path.startsWith("/irnote/")) return irnote(ctx, path.slice(8));
+    try {
+      if (path.startsWith("/px/")) return await px(path.slice(4));
+      if (path === "/pxq") return await pxq(new URL(ctx.request.url).searchParams.get("q") || "");
+    } catch { return J({ err: "네이버 응답 없음" }, 502); }
     const res = await serveSite(ctx);
     const out = new Response(res.body, res);
     out.headers.set("cache-control", "private, no-cache");

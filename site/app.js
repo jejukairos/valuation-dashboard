@@ -1681,11 +1681,12 @@ const PX_TABS = [[1, "1개월"], [3, "3개월"], [6, "6개월"], [12, "1년"], [
 const PX_LONG = {};  // 코드 → 주봉 종가 (밴드 계산에 쓰는 가격)
 function priceBox(c, m = 6, tag = "button") {  // 종목 카드는 카드 자체가 <button> 이라 탭을 span 으로 (button 안 button 은 HTML 이 깨짐)
   if (!c.chart?.dates?.length) return "";
-  return `<div class="pbox" data-code="${esc(c.code)}"${tag === "span" ? ' data-btn="1"' : ""}><div class="seg pseg" style="margin-top:8px">${PX_TABS.map(([mm, l]) => `<${tag} data-m="${mm}" class="${mm === m ? "on" : ""}">${l}</${tag}>`).join("")}</div>
+  return `<div class="pbox" data-code="${esc(c.code)}"${tag === "span" ? ' data-btn="1"' : ""}><div class="seg pseg" style="margin-top:8px">${PX_TABS.map(([mm, l]) => `<${tag} data-m="${mm}" class="${mm === m ? "on" : ""}">${l}</${tag}>`).join("")}<${tag} data-m="0" data-dw="${esc(c.code)}" style="color:var(--s1);font-weight:700" title="✏️ 내 차트: 캔들 크게 보고 선 긋기">⤢ 크게·선 긋기</${tag}></div>
     <div class="pbox-in">${priceSpark(c, m, tag === "span")}</div></div>`;
 }
 document.addEventListener("click", async (e) => {
   const b = e.target.closest(".pbox .pseg [data-m]"); if (!b) return;
+  if (b.dataset.dw) { location.hash = "#draw/" + b.dataset.dw; return; }  // ⤢ 크게·선 긋기 → ✏️ 내 차트 (draw.js, 사용자 11/25)
   const box = b.closest(".pbox"), c = DASH.stocks.find((x) => x.code === box.dataset.code), m = +b.dataset.m, el = box.querySelector(".pbox-in");
   box.querySelectorAll(".pseg [data-m]").forEach((x) => x.classList.toggle("on", x === b));
   if (m > 12 && !PX_LONG[c.code]) {
@@ -1899,7 +1900,7 @@ function trendLines(v, wk, c, X, Y, x1) {
   const sh = [trd && `${trd.slice(0, 2)} ${trd.split(" = ")[1]}`, kind && `${kind.split(" (")[0]}${up?.prev != null && Math.abs(up.s) < Math.abs(up.prev) * 0.6 ? " · 고점선 완만해짐" : ""}`, up && last > up.at(N - 1) * 1.01 && "🔔 고점선 돌파", dn && last < dn.at(N - 1) * 0.99 && "⚠ 저점선 이탈",
     res && `저항 ${fx(res.v)} (${pp(res.v)}, ${res.n}번)`, sup && `지지 ${fx(sup.v)} (${pp(sup.v)}, ${sup.n}번)`, fib && `50% ${fx(fib)} (${pp(fib)})`, run >= 5 && `🚫 ${n(run, 1)}배 급등`].filter(Boolean);
   return { svg, short: `<div class="src" style="padding:2px 4px 4px">📐 ${sh.join(" · ")} <span style="opacity:.7">— 회색 선 · 자세히는 종목 상세</span></div>`, note: `<details class="fvt" onclick="event.stopPropagation()"><summary class="chart-title">📐 선 읽기 <span class="src">일봉·주봉·월봉 캔들 + 거래량 · 채널 · 지지·저항 · 피보나치 · 박스 (자동 계산 · 추천 아님)</span></summary>
-    <div class="tabox" data-code="${esc(c.code)}" hidden><div class="seg taseg" style="margin-top:6px">${TA_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === "d" ? "on" : ""}" onclick="taTab(this)">${l}</button>`).join("")}</div><div class="tain"><div class="src">불러오는 중…</div></div></div>
+    <div class="tabox" data-code="${esc(c.code)}" hidden><div class="seg taseg" style="margin-top:6px">${TA_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === "d" ? "on" : ""}" onclick="taTab(this)">${l}</button>`).join("")}</div> <a class="src" href="#draw/${esc(c.code)}">✏️ 내 차트에서 직접 선 긋기 →</a><div class="tain"><div class="src">불러오는 중…</div></div></div>
     <div class="tlold"><ul class="irl">${li.map((x) => `<li>${x}</li>`).join("")}</ul></div>
     <div class="note src">원칙 전체는 📈 차트 탭 맨 위 '📚 차트 원칙'. 선은 같은 규칙으로 자동으로 그어서 사람이 긋는 선과 다를 수 있어요.</div></details>` };
 }
@@ -5786,10 +5787,13 @@ function renderCheck() {
 }
 function showView() {
   const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
+  const dc = location.hash.match(/^#draw(?:\/(\w+))?$/);  // ✏️ 내 차트 (#draw/코드 = 그 종목, draw.js)
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)
-  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#pattern": "pattern", "#check": "check", "#exports": "exports", "#feed": "feed", "#all": "all" }[nc ? "#news" : rc ? "#reports" : location.hash] || "main";
+  const view = { "": "earn", "#": "earn", "#kr": "main", "#pbr": "pbr", "#signal": "pbr", "#watch": "watch", "#uswatch": "uswatch", "#joint": "joint", "#market": "market", "#us": "us", "#earn": "earn", "#earnw": "earnw", "#earnj": "earnj", "#score": "score", "#news": "news", "#reports": "reports", "#industry": "industry", "#chart": "chart", "#compare": "compare", "#policy": "policy", "#pattern": "pattern", "#check": "check", "#exports": "exports", "#feed": "feed", "#all": "all", "#draw": "draw" }[nc ? "#news" : rc ? "#reports" : dc ? "#draw" : location.hash] || "main";
+  $("#drawView").hidden = view !== "draw";
+  if (view === "draw") dwOpen(dc[1]);
   const eg = { earn: "보유", earnw: "관심", earnj: "공동" }[view];  // 🧾 실적 보유 · 관심 · 공동 (같은 화면, 종목 묶음만 바꿈)
   $("#earnView").hidden = !eg;
   if (eg) { EARN_GRP = eg; renderEarn(); }  // 보유·관심·공동을 바꿔도 전체/한국/미국 고른 건 그대로
