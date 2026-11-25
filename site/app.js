@@ -627,7 +627,24 @@ function stockCard(c) {
     ${bandPosHTML(c, pos)}
     ${mine}
     <div class="pills">${pills.join("")}</div>
+    <div class="upnext" data-code="${esc(c.code)}"></div>
   </button>`;
+}
+// ⭐ 앞으로 일정 (사용자 11/25 "에이피알 하이푸 출시를 알고도 까먹음 → 카드 맨 아래·상세에 형광펜으로, 날짜는 '쯤'이어도 됨")
+// = timeline.json 의 앞으로 줄 (손으로 = config/timeline.yaml, k '⭐ 재료'·'⚠ 위험'·'🗓 일정' · 실적 발표 = ir_calendar 자동)
+const UP_HL = "background:#fff3a3;color:#3a2f00;border-radius:4px;padding:0 3px";  // 노란 형광펜 (어두운 화면에서도 글자색 고정)
+const upMark = (r) => (/^⭐/.test(r.k || "") ? '<b style="color:#d03b3b">★</b>' : /^⚠/.test(r.k || "") ? "⚠" : "🗓");
+function upHTML(code, max = 99) {
+  const U = (TL?.stocks?.[code] || []).filter((r) => r.up);
+  if (!U.length) return "";
+  const Y = String(new Date().getFullYear()), md = (d) => `${d.slice(0, 4) === Y ? "" : `${d.slice(2, 4)}년 `}${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  const li = (r) => `<li>${upMark(r)} <span style="${UP_HL}"><b>${esc(r.dl || md(r.d))}</b> ${esc(r.t)}</span>${r.src ? ` <span class="src">(${esc(r.src)})</span>` : ""}</li>`;
+  return `<div style="margin-top:8px;text-align:left"><b>⭐ 앞으로 일정</b> <span class="src">${U.length > max ? `가까운 ${max}개 / ${U.length}개 · 나머지는 종목 상세` : `${U.length}개`} · <b style="color:#d03b3b">★</b> = 주가를 움직일 만한 재료 · '쯤'은 회사·보도 예상이라 늦어지면 실망, 빨라지면 깜짝</span>
+    <ul class="irl" style="margin-top:4px">${U.slice(0, max).map(li).join("")}</ul></div>`;
+}
+async function upFill() {
+  if (!TL) { try { TL = await (await fetch(`data/timeline.json?t=${Date.now()}`, { cache: "no-store" })).json(); } catch (_) { TL = {}; } }
+  document.querySelectorAll(".upnext:not([data-done])").forEach((el) => { el.dataset.done = 1; el.innerHTML = upHTML(el.dataset.code, 4); });
 }
 // 🔀 우선주 괴리율 (사용자 11/6: 본주와의 괴리율로 바닥·과열 판단) = (보통주 − 우선주) ÷ 보통주 — 두 종목 주간 종가(배당 밴드와 같은 날짜, 2015년~)
 const PREF_COMMON = { "005935": "005930" };
@@ -885,6 +902,7 @@ function renderCards() {
   $("#stockCards").innerHTML = list.map(stockCard).join("") || `<div class="empty">종목 데이터가 아직 없어요.</div>`;
   drawGauges(list);
   prefFill();
+  upFill();
   jumpBar("#stockCards", "#cardJump");
   Promise.all([tgGet().catch(() => null), repGet().catch(() => null), dgGet()]).then(() => document.querySelectorAll("#stockCards .tgday").forEach((el) => { el.innerHTML = tgDayHTML(el.dataset.code); }));
 }
@@ -5089,7 +5107,8 @@ async function openStock(code) {
       ["peer", "🏁 동종업계 · 경쟁사 컨콜", peerHtml]].filter(([, , h]) => h && h.trim());
     const chips = `<div class="seg" style="display:flex;flex-wrap:wrap;margin-top:10px">${G.map(([id, t]) => `<a class="segl" href="#" data-jg="g-${id}" style="font-size:12px;padding:5px 9px;min-height:30px">${esc(t.split(" · ")[0].replace(/ \(.*/, ""))}</a>`).join("")}</div>`;
     const grp = ([id, t, h]) => `<details class="grp" id="g-${id}" style="margin-top:10px"><summary style="cursor:pointer;padding:12px 14px;border-radius:12px;background:var(--surface-2);font-weight:700;font-size:15px">${esc(t)} <span class="src">눌러서 보기</span></summary>${h}</details>`;
-    $("#sheetBody").innerHTML = headHtml + chips + fin4HTML(d) + topHtml + liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + ddHTML(code) + tlHTML(code) + growHtml + G.map(grp).join("");
+    const upBox = upHTML(code);  // ⭐ 앞으로 일정 — 상세 맨 위에도 (사용자 11/25 "구체적인 탭에서도 계속 언급")
+    $("#sheetBody").innerHTML = headHtml + (upBox ? `<div class="card" style="margin-top:8px">${upBox}</div>` : "") + chips + fin4HTML(d) + topHtml + liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + ddHTML(code) + tlHTML(code) + growHtml + G.map(grp).join("");
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
@@ -5817,6 +5836,7 @@ function renderGroup(g, el, mkt) {
   const ax = $({ "#watchFull": "#watchAccel", "#jointCards": "#jointAccel" }[el] || "#none");  // 📐 주봉 차트 모양 + 🚀 이익 증가율 가속 표 (보유 탭과 같은 칸, 11/5)
   if (ax) { ax.innerHTML = patAlertHTML(list) + accelHTML(list) + dotMapHTML(list, g, mkt); accSecFill(); }
   drawGauges(list);
+  upFill();
   liGet().then(() => { const s = liStat(LI); if (s) LI_CODES.forEach((c) => $(el).querySelector(`.card.stock[data-code="${c}"] .pills`)?.insertAdjacentHTML("afterbegin", liPill(s))); });  // 🪨 셀 회사 카드에 리튬 한 줄
 }
 
@@ -7346,9 +7366,9 @@ function tlHTML(code) {
   const md = (d) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`, wd = (d) => "일월화수목금토"[new Date(`${d}T12:00:00Z`).getUTCDay()];
   const tone = (r) => r.up || r.good ? "good" : r.bad ? "bad" : "";
   const row = (r) => {
-    const tn = tone(r), hl = tn ? ` style="background:color-mix(in srgb, var(--${tn}) 13%, transparent);color:var(--${tn}-ink);border-radius:4px;padding:0 3px"` : "";
+    const tn = tone(r), hl = r.up ? ` style="${UP_HL}"` : tn ? ` style="background:color-mix(in srgb, var(--${tn}) 13%, transparent);color:var(--${tn}-ink);border-radius:4px;padding:0 3px"` : "";  // 앞으로 = 노란 형광펜
     const sub = [...(r.h ? [`그날 기사: ${r.h}`] : []), ...(r.x || [])], link = r.u ? ` <a href="${esc(r.u)}" target="_blank" rel="noopener">↗</a>` : "";
-    const line = `<span style="display:inline-block;min-width:${r.up ? 64 : 40}px;color:var(--ink-2)">${r.dl ? esc(r.dl) : md(r.d) + (r.up ? `(${wd(r.d)})` : "")}</span> <span class="src">${esc(r.k.replace(/^📢 /, ""))}</span> <span${hl}>${esc(r.t)}</span>${link}${r.src ? ` <span class="src">(${esc(r.src)})</span>` : ""}`;
+    const line = `${r.up ? `${upMark(r)} ` : ""}<span style="display:inline-block;min-width:${r.up ? 64 : 40}px;color:var(--ink-2)">${r.dl ? esc(r.dl) : md(r.d) + (r.up ? `(${wd(r.d)})` : "")}</span> <span class="src">${esc(r.k.replace(/^📢 /, ""))}</span> <span${hl}>${esc(r.t)}</span>${link}${r.src ? ` <span class="src">(${esc(r.src)})</span>` : ""}`;
     return `<li>${sub.length ? `<details><summary>${line}</summary><div class="src" style="margin-left:44px">${sub.map(esc).join("<br>")}</div></details>` : line}</li>`;
   };
   const past = R.filter((r) => !r.up), up = R.filter((r) => r.up), old = past.slice(0, -15), rec = past.slice(-15);
@@ -7356,7 +7376,7 @@ function tlHTML(code) {
     ${old.length ? `<details><summary class="src">그 전 ${old.length}개 더 보기</summary><ul class="irl">${old.map(row).join("")}</ul></details>` : ""}
     <ul class="irl">${rec.map(row).join("")}</ul>
     ${up.length ? `<div class="src" style="border-top:1px dashed var(--ink-2);margin:6px 0 2px;padding-top:4px">앞으로</div><ul class="irl">${up.map(row).join("")}</ul>` : ""}
-    <div class="kidbox" style="margin-top:6px">🐣 이 회사에 최근 무슨 일이 있었는지 날짜 순서예요. <b style="color:var(--bad-ink)">빨강</b> = 안 좋은 쪽 (임원 매도·목표가 하향·하루 큰 하락), <b style="color:var(--good-ink)">초록</b> = 좋은 쪽이거나 다가올 일정. 줄을 누르면 자세한 내용이 나와요.</div>
+    <div class="kidbox" style="margin-top:6px">🐣 이 회사에 최근 무슨 일이 있었는지 날짜 순서예요. <b style="color:var(--bad-ink)">빨강</b> = 안 좋은 쪽 (임원 매도·목표가 하향·하루 큰 하락), <b style="color:var(--good-ink)">초록</b> = 좋은 쪽, <span style="${UP_HL}">노란 형광펜</span> = 다가올 일정 (<b style="color:#d03b3b">★</b> = 주가를 움직일 만한 재료). 줄을 누르면 자세한 내용이 나와요.</div>
     <div class="note src">공시 = DART (국민연금 같은 기관의 매일 매매는 뺌) · 목표가 = 한경 리포트 (그대로인 날은 뺌) · 수출 = 증권사 텔레그램 · 하루 큰 주가 변동 = 지난 1년 하루 변동폭의 2.5배 넘고 4% 넘게 움직인 날 · 그날 기사 = 그날 가장 많이 쓰인 기사 제목 (주가가 움직인 원인이라고 확정한 건 아님) · 출처가 붙은 줄 = 손으로 넣은 줄 · ${esc(TL.updated_at || "")}</div></details>`;
 }
 function patHTML(d) {  // 종목 상세: 차트 + 조건 설명
