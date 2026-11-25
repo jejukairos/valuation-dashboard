@@ -210,7 +210,15 @@ function dwHit(d, x, y) {
   return x >= Math.min(xa, xb) - 12 && x <= Math.max(xa, xb) + 12 && y >= Math.min(ya, yb) - 12 && y <= Math.max(ya, yb) + 12 ? "m" : null;
 }
 const dwFind = (x, y) => { for (let k = DW.dr.length - 1; k >= 0; k--) if (dwHit(DW.dr[k], x, y)) return k; return -1; };
-function dwAdd(d) { DW.dr.push(d); DW.sel = DW.dr.length - 1; DW.tool = ""; DW.pend = null; dwSave(); dwUi(); dwPickDraw(); }
+function dwAdd(d) { DW.dr.push(d); DW.sel = -1; DW.tool = ""; DW.pend = null; dwSave(); dwUi(); dwPickDraw(); }  // 긋고 나면 색 막대는 안 뜸 — 선을 눌러야 나옴 (사용자 11/25)
+const DW_FS = ['<path d="M4 10V4h6M18 4h6v6M24 18v6h-6M10 24H4v-6"/>', '<path d="M10 4v6H4M24 10h-6V4M18 24v-6h6M4 18h6v6"/>'];  // 전체 화면 켜기 · 끄기
+// 전체 화면: 차트 칸을 화면에 꽉 채움 + 브라우저 주소 줄도 숨김 (안 되는 브라우저는 꽉 채우기만)
+function dwFull(on) {
+  const box = $("#dwBox");
+  box.classList.toggle("full", on);
+  try { if (on) box.requestFullscreen().catch(() => {}); else if (document.fullscreenElement) document.exitFullscreen(); } catch (_) { /* 꽉 채우기만 */ }
+  dwUi();
+}
 
 // 도구 막대 (즐겨찾기 3개, 점 6개를 잡고 옮김) · 선을 고르면 색·굵기·지우기 막대
 function dwUi() {
@@ -218,22 +226,26 @@ function dwUi() {
   const d = DW.dr[DW.sel], e = $("#dwEdit");
   e.hidden = !d;
   if (d) e.innerHTML = DW_COL.map((v) => `<button data-c="${v}" class="dwsw${d.c === v ? " on" : ""}" style="background:${v === "ink" ? "var(--ink)" : v}" aria-label="색"></button>`).join("")
-    + [1, 2, 3, 4].map((w) => `<button data-w="${w}" class="${(d.w || 1) === w ? "on" : ""}" aria-label="굵기 ${w}"><i style="border-top-width:${w}px"></i>${w}px</button>`).join("") + `<button data-del="1" title="이 선 지우기">🗑</button>`;
-  $("#dwBtns").innerHTML = `${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
+    + [1, 2, 3, 4].map((w) => `<button data-w="${w}" class="${(d.w || 1) === w ? "on" : ""}" aria-label="굵기 ${w}"><i style="border-top-width:${w}px"></i>${w}px</button>`).join("") + `<button data-del="1" title="이 선 지우기">🗑</button><button data-x="1" title="이 막대 닫기" aria-label="닫기">✕</button>`;
+  const full = $("#dwBox").classList.contains("full");
+  $("#dwFs").innerHTML = `<svg viewBox="0 0 28 28" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">${DW_FS[+full]}</svg>`;
+  $("#dwFs").title = full ? "전체 화면 끄기" : "전체 화면";
+  $("#dwBtns").innerHTML = `${full ? DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("") : ""}${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
   dwAsk();
 }
 function dwToolPos() {  // 저장해 둔 자리 (차트 밖으로 못 나가게)
   const t = $("#dwTools"), p = dwGet("draw:tb", null) || { x: 10, y: 66 };
   t.style.left = dwClamp(p.x, 0, Math.max(0, DWG.pw - 150)) + "px"; t.style.top = dwClamp(p.y, 0, Math.max(0, DWG.ph - 50)) + "px";
+  $("#dwFs").style.right = DWG.ax + 6 + "px";  // 오른쪽 가격 눈금 바로 왼쪽
 }
 
 // 종목 고르기: 보유 · 관심 · 공동 · 🔎 지수·검색 (찾은 한국 종목은 이 기기에 남음) + 일·주·월·연
 function dwPickDraw() {
   const list = DW.grp === "검색" ? DW.extra : DASH.stocks.filter((c) => (c.group || "보유") === DW.grp);
   const has = (code) => (dwGet("draw:" + code, []) || []).length;
-  $("#dwPick").innerHTML = `<div class="dwbar"><div class="seg">${["보유", "관심", "공동", "검색"].map((g) => `<button data-g="${g}" class="${g === DW.grp ? "on" : ""}">${g === "검색" ? "🔎 지수·검색" : g}</button>`).join("")}</div>
+  $("#dwPick").innerHTML = `<div class="dwbar"><div class="seg">${["보유", "관심", "공동", "검색"].map((g) => `<button data-g="${g}" class="${g === DW.grp ? "on" : ""}">${g === "검색" ? "🔎 종목 검색" : g}</button>`).join("")}</div>
     <div class="seg">${DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("")}</div></div>
-    ${DW.grp === "검색" ? `<div class="dwq"><input id="dwQ" class="sel" type="search" placeholder="한국 종목 이름·코드 찾기 (예: 하나머티)" autocomplete="off"><div class="dwlist" id="dwQr"></div></div>` : ""}
+    ${DW.grp === "검색" ? `<div class="dwq"><input id="dwQ" class="sel" type="search" placeholder="종목 이름·코드 (한국·미국, 예: 하나머티, 엔비디아)" autocomplete="off"><div class="dwlist" id="dwQr"></div></div>` : ""}
     <div class="dwlist">${list.map((c) => `<button class="chip${c.code === DW.code ? " on" : ""}" data-code="${esc(c.code)}">${has(c.code) ? "✏️ " : ""}${esc(c.name)}</button>`).join("")}
     ${DW.grp === "검색" && DW.extra.some((c) => c.code === DW.code && !c.keep) ? `<button class="chip" data-rm="${esc(DW.code)}">− 목록에서 빼기</button>` : ""}</div>`;
 }
@@ -244,7 +256,7 @@ async function dwSearch(q) {
   try {
     const r = await fetch("/pxq?q=" + encodeURIComponent(q.trim())), L = r.ok ? await r.json() : null;
     if ($("#dwQ")?.value !== q) return;  // 그 사이 글자가 바뀜
-    box.innerHTML = L ? (L.length ? L.map((x) => `<button class="chip" data-add="${esc(x.code)}" data-nm="${esc(x.name)}" data-idx="${x.idx ? 1 : ""}">＋ ${esc(x.name)} <span class="src">${esc(x.type || "")}</span></button>`).join("") : `<span class="src">못 찾았어요 (한국 주식·지수만)</span>`)
+    box.innerHTML = L ? (L.length ? L.map((x) => `<button class="chip" data-add="${esc(x.code)}" data-tk="${esc(x.tk || "")}" data-nm="${esc(x.name)}" data-idx="${x.idx ? 1 : ""}">＋ ${esc(x.name)} <span class="src">${esc(x.type || "")}</span></button>`).join("") : `<span class="src">못 찾았어요</span>`)
       : `<span class="src">검색이 안 돼요 (서버 응답 ${r.status})</span>`;
   } catch (_) { box.innerHTML = `<span class="src">검색이 안 돼요 (인터넷 확인)</span>`; }
 }
@@ -372,11 +384,13 @@ function dwInit() {
   $("#dwTools").addEventListener("pointerup", () => { tb = null; });
   $("#dwEdit").addEventListener("click", (e) => {
     const b = e.target.closest("button"), d = DW.dr[DW.sel]; if (!b || !d) return;
+    if (b.dataset.x) { DW.sel = -1; return dwUi(); }  // ✕ = 막대만 닫기
     if (b.dataset.c) d.c = b.dataset.c; else if (b.dataset.w) d.w = +b.dataset.w; else { DW.dr.splice(DW.sel, 1); DW.sel = -1; }
     dwSave(); dwUi(); if (b.dataset.del) dwPickDraw();
   });
   $("#dwBtns").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.tf) return dwTf(b.dataset.tf);  // 전체 화면일 때만 나오는 일·주·월·연
     if (b.dataset.auto) DW.fix = null;
     else if (b.dataset.fit) dwFit();
     else if (!DW.arm) { DW.arm = true; setTimeout(() => { DW.arm = false; dwUi(); }, 3000); }  // 실수로 전부 지우지 않게 두 번 누르기
@@ -386,12 +400,16 @@ function dwInit() {
   $("#dwPick").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     const s = b.dataset;
-    if (s.g) { DW.grp = s.g; dwPickDraw(); }
+    if (s.g) { DW.grp = s.g; dwPickDraw(); $("#dwQ")?.focus(); }
     else if (s.tf) dwTf(s.tf);
     else if (s.code) location.hash = "#draw/" + s.code;
-    else if (s.add) { if (!DASH.stocks.some((c) => c.code === s.add) && !DW.extra.some((c) => c.code === s.add)) { DW.extra.push({ code: s.add, name: s.nm, idx: s.idx ? 1 : 0 }); dwSet("draw:extra", DW.extra); } location.hash = "#draw/" + s.add; }
+    else if (s.add) { const mine = DASH.stocks.find((c) => c.code === s.tk);  // 미국 종목이 이미 내 종목이면 그 차트로 (선이 두 군데로 갈리지 않게)
+      if (mine) return void (location.hash = "#draw/" + mine.code);
+      if (!DASH.stocks.some((c) => c.code === s.add) && !DW.extra.some((c) => c.code === s.add)) { DW.extra.push({ code: s.add, name: s.nm, idx: s.idx ? 1 : 0 }); dwSet("draw:extra", DW.extra); } location.hash = "#draw/" + s.add; }
     else if (s.rm) { DW.extra = DW.extra.filter((c) => c.code !== s.rm); dwSet("draw:extra", DW.extra); location.hash = "#draw/KOSPI"; }
   });
+  $("#dwFs").addEventListener("click", () => dwFull(!box.classList.contains("full")));
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && box.classList.contains("full")) dwFull(false); });  // 뒤로 가기·Esc 로 나왔을 때
   $("#dwPick").addEventListener("input", (e) => { if (e.target.id !== "dwQ") return; clearTimeout(dwQT); const q = e.target.value; dwQT = setTimeout(() => dwSearch(q), 300); });
   document.addEventListener("keydown", (e) => {
     if ($("#drawView").hidden || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;

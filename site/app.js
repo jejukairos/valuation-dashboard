@@ -5787,7 +5787,7 @@ function renderCheck() {
 }
 function showView() {
   const nc = location.hash.match(/^#news\/(\w+)/), rc = location.hash.match(/^#reports\/(\w+)/);  // 종목 상세에서 들어오면 그 종목만
-  const dc = location.hash.match(/^#draw(?:\/(\w+))?$/);  // ✏️ 내 차트 (#draw/코드 = 그 종목, draw.js)
+  const dc = location.hash.match(/^#draw(?:\/([\w.]+))?$/);  // ✏️ 내 차트 (#draw/코드 = 그 종목, draw.js)
   NEWS_CODE = nc ? nc[1] : "";
   REP_CODE = rc ? rc[1] : "";
   // 처음 열면 🧾 실적 보유 탭 (사용자 11/5) — 🇰🇷 보유는 #kr · 🧾 실적 관심은 #earnw (11/8, 같은 화면을 관심 종목으로)

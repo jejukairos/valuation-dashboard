@@ -45,22 +45,28 @@ async function serveSite(ctx) {
 const NV = { headers: { "user-agent": "Mozilla/5.0" } };
 const J = (v, status = 200, age = 0) => new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": age ? `private, max-age=${age}` : "no-store" } });
 async function px(code) {
-  if (!/^[A-Z0-9]{2,12}$/.test(code)) return J({ err: "잘못된 코드" }, 400);
-  const now = new Date(Date.now() + 9 * 36e5), ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, "");
-  const r = await fetch(`https://api.finance.naver.com/siseJson.naver?symbol=${code}&requestType=1&startTime=${ymd(new Date(now - 13 * 365.25 * 864e5))}&endTime=${ymd(now)}&timeframe=day`, NV);
+  const fx = /^[A-Za-z0-9]{1,10}\.[A-Za-z]{0,3}$/.test(code);  // 해외 종목 = 네이버 해외 코드에 점 (NVDA.O · 점 없는 뉴욕 종목은 끝에 점: KO.) — 사용자 11/25 '검색하면 다 보이게'
+  if (!fx && !/^[A-Z0-9]{2,12}$/.test(code)) return J({ err: "잘못된 코드" }, 400);
+  const now = new Date(Date.now() + 9 * 36e5), ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, ""), from = ymd(new Date(now - 13 * 365.25 * 864e5));
   const o = { t: [], o: [], h: [], l: [], c: [], v: [] };
-  for (const m of (await r.text()).matchAll(/\["(\d{8})",\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/g)) {
-    const c = +m[5]; if (!(c > 0)) continue;
-    o.t.push(`${m[1].slice(2, 4)}-${m[1].slice(4, 6)}-${m[1].slice(6)}`); o.o.push(+m[2] || c); o.h.push(+m[3] || c); o.l.push(+m[4] || c); o.c.push(c); o.v.push(+m[6]);
+  const add = (d8, op, hi, lo, cl, v) => { const c = +cl; if (!(c > 0)) return; o.t.push(`${d8.slice(2, 4)}-${d8.slice(4, 6)}-${d8.slice(6)}`); o.o.push(+op || c); o.h.push(+hi || c); o.l.push(+lo || c); o.c.push(c); o.v.push(+v || 0); };
+  if (fx) {
+    const r = await fetch(`https://api.stock.naver.com/chart/foreign/item/${code.replace(/\.$/, "")}/day?startDateTime=${from}0000&endDateTime=${ymd(now)}0000`, NV);
+    if (!r.ok) return J({ err: "가격 없음" }, 404);
+    for (const x of await r.json()) add(String(x.localDate), x.openPrice, x.highPrice, x.lowPrice, x.closePrice, x.accumulatedTradingVolume);
+  } else {
+    const r = await fetch(`https://api.finance.naver.com/siseJson.naver?symbol=${code}&requestType=1&startTime=${from}&endTime=${ymd(now)}&timeframe=day`, NV);
+    for (const m of (await r.text()).matchAll(/\["(\d{8})",\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/g)) add(m[1], m[2], m[3], m[4], m[5], m[6]);
   }
   return o.t.length ? J(o, 200, 300) : J({ err: "가격 없음" }, 404);
 }
-// 종목 찾기 — /pxq?q=이름 (네이버 자동 완성, 한국 주식·국내 지수만)
+// 종목 찾기 — /pxq?q=이름 (네이버 자동 완성: 한국 주식·국내 지수 + 해외 주식). 해외는 code = 네이버 해외 코드, tk = 티커, idx = 가격에 소수점
 async function pxq(q) {
   if (!q.trim()) return J([]);
   const r = await fetch(`https://ac.stock.naver.com/ac?q=${encodeURIComponent(q.trim().slice(0, 30))}&target=stock,index`, NV);
-  const L = ((await r.json()).items || []).filter((x) => x.nationCode === "KOR" || (x.category === "index" && /^\/domestic\//.test(x.url || "")));
-  return J(L.slice(0, 12).map((x) => ({ code: x.code, name: x.name, type: x.typeName, idx: x.category === "index" })), 200, 60);
+  const kr = (x) => x.nationCode === "KOR" || (x.category === "index" && /^\/domestic\//.test(x.url || ""));
+  const L = ((await r.json()).items || []).filter((x) => kr(x) || (x.category === "stock" && x.reutersCode));
+  return J(L.slice(0, 12).map((x) => ({ code: kr(x) ? x.code : x.reutersCode.includes(".") ? x.reutersCode : x.reutersCode + ".", tk: x.code, name: x.name, type: x.typeName, idx: x.category === "index" || !kr(x) })), 200, 60);
 }
 
 // 📄 받아 적은 원문: 저장소엔 암호 파일(site/data/irnote/<이름>.bin, tools/irnote_seal.mjs)만 있고,
