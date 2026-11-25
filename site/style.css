@@ -149,6 +149,12 @@ table.flow { width: 100%; border-collapse: collapse; table-layout: fixed; font-s
 table.flow th, table.flow td { padding: 5px 4px; border-bottom: 1px solid var(--grid); text-align: center; vertical-align: middle; }
 table.flow th:first-child, table.flow td:first-child { text-align: left; width: 31%; }
 table.flow tr.now td { background: var(--surface-2); }
+/* 📋 날짜별 투자자 매매 (flowDayHTML): 위 칸 고정 · 한국식 빨강 = +, 파랑 = − */
+.fd-wrap { max-height: 520px; overflow: auto; }
+table.fd th { position: sticky; top: 0; z-index: 2; cursor: default; }
+table.fd th:first-child { z-index: 3; }
+table.fd tbody tr { cursor: default; }
+.kp { color: var(--bad-ink); } .km { color: var(--s1); }
 .fz { position: relative; height: 10px; margin-bottom: 2px; background: linear-gradient(var(--axis), var(--axis)) center / 1px 100% no-repeat; }
 .fz i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
 .chart-box { position: relative; height: 170px; margin-top: 10px; }

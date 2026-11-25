@@ -30,17 +30,37 @@ def zones(net, close, n=ZONES):
     return {"zones": zs, "groups": groups}
 
 
+# 📋 날짜별 표 (사용자 11/25 "증권사 화면처럼, 1년치") — 키움 0796 열 순서, KRX 상세 이름 (국가·지자체는 KRX 가 '연기금 등'에 넣음)
+INST = ["금융투자", "보험", "투신", "사모", "은행", "기타금융", "연기금"]
+DAY_COLS = ["개인", "외국인", "기관합계", "금융투자", "보험", "투신", "기타금융", "은행", "연기금", "사모", "기타법인", "기타외국인"]
+
+
+def daily(df):
+    """KRX 상세 표(원) → 기관합계·외국인합계 열을 더하고, 날짜별 줄(백만원, 최신이 위)."""
+    df = df.copy()
+    df["기관합계"] = df[INST].sum(axis=1)
+    df["외국인합계"] = df["외국인"] + df["기타외국인"]
+    rows = [[d.strftime("%y-%m-%d"), *[round(v / 1e6) for v in r]] for d, r in zip(df.index[::-1], df[DAY_COLS].values[::-1].tolist())]
+    return df, {"cols": DAY_COLS, "rows": rows}
+
+
 def collect(code, close):
     from pykrx import stock
     end = now_kst()
     start = end - pd.DateOffset(years=1)
-    df = stock.get_market_trading_value_by_date(start.strftime("%Y%m%d"), end.strftime("%Y%m%d"), code)
+    a, b = start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
+    df = stock.get_market_trading_value_by_date(a, b, code, detail=True)
+    if df is None or df.empty or "외국인" not in df:  # 상세가 안 되면 예전 합계 표로 (가격대 칸은 지킴)
+        df = stock.get_market_trading_value_by_date(a, b, code)
     if df is None or df.empty:  # pykrx 는 실패해도 오류 대신 빈 표를 줘요
         raise RuntimeError("KRX 응답 없음 (로그인 계정이 없거나 접속 실패)")
     df.index = pd.to_datetime(df.index)
+    day = None
+    if "외국인" in df:
+        df, day = daily(df)
     close = close[close.index >= df.index[0]]
     return {"from": df.index[0].strftime("%Y-%m-%d"), "to": df.index[-1].strftime("%Y-%m-%d"),
-            "src": "KRX 투자자별 거래실적 (순매수 거래대금, 일별)", **zones(df[list(GROUPS.values())], close)}
+            "src": "KRX 투자자별 거래실적 (순매수 거래대금, 일별)", "day": day, **zones(df[list(GROUPS.values())], close)}
 
 
 if __name__ == "__main__":  # 자체 점검: 싼 구간에서 외국인, 비싼 구간에서 개인이 산 가짜 자료
@@ -56,4 +76,9 @@ if __name__ == "__main__":  # 자체 점검: 싼 구간에서 외국인, 비싼 
     assert 100 <= g["외국인"]["avg_buy"] <= 145, g["외국인"]  # 처음 10일(100~145원)에만 순매수
     assert g["외국인"]["sum"] == 400 and g["외국인"]["m1"] == -400, g["외국인"]  # 1000억 − 600억, 최근 20일 −400억
     assert sum(z["days"] for z in o["zones"]) == 40 and o["zones"][-1]["hi"] == 295
+    det = pd.DataFrame({c: [1e9, 2e9] for c in INST + ["기타법인", "개인", "외국인", "기타외국인", "전체"]}, index=ix[:2])
+    det["개인"] = [-5e9, 3_456_789_000.0]
+    full, day = daily(det)
+    assert full["기관합계"].tolist() == [7e9, 14e9] and full["외국인합계"].tolist() == [2e9, 4e9]
+    assert day["rows"][0][0] == "26-01-02" and day["rows"][0][1] == 3457 and day["rows"][1][3] == 7000, day["rows"]  # 최신이 위, 백만원
     print("ok", g)

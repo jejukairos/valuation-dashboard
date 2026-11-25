@@ -4726,6 +4726,27 @@ function flowHTML(d) {
       '평균'은 순매수한 날의 종가를 주식 수로 평균한 값이라 실제 체결가와는 조금 달라요. 출처: ${esc(f.src)}</div>
   </div>`;
 }
+// 📋 날짜별 투자자 매매 (사용자 11/25 "키움 0796 화면처럼, 1년치까지") — flows.py day (KRX, 백만원, 최신이 위) + 종가·대비·거래량 = data/ohlc
+const FD_LAB = { 기관합계: "기관계", 연기금: "연기금 등", 사모: "사모펀드" };
+function flowDayHTML(d) {
+  const D = d.flow?.day;
+  if (!D?.rows?.length) return "";
+  const O = OHLC[d.code]?.d || {}, ix = {};
+  (O.t || []).forEach((t, i) => (ix[t] = i));
+  const cls = (v) => (v > 0 ? "kp" : v < 0 ? "km" : "");
+  const sg = (v) => `<td class="${cls(v)}">${v > 0 ? "+" : ""}${n(v)}</td>`;
+  const sum = (k) => D.cols.map((_, j) => D.rows.slice(0, k).reduce((s, r) => s + (r[j + 1] || 0), 0));
+  const cum = [[5, "1주"], [20, "1개월"], [60, "3개월"], [D.rows.length, "1년"]].map(([k, lab]) => `<tr class="grp"><td>누적 ${lab}</td><td></td><td></td><td></td>${sum(k).map(sg).join("")}</tr>`).join("");
+  const rows = D.rows.map((r) => {
+    const i = ix[r[0]], c = O.c?.[i], p = i > 0 ? O.c[i - 1] : null, ch = c != null && p != null ? c - p : null;
+    return `<tr><td>${r[0].replace(/-/g, "/")}</td><td>${c != null ? n(c) : ""}</td><td class="${cls(ch)}">${ch == null ? "" : (ch > 0 ? "▲" : ch < 0 ? "▼" : "") + n(Math.abs(ch))}</td><td>${O.v?.[i] != null ? n(O.v[i]) : ""}</td>${r.slice(1).map(sg).join("")}</tr>`;
+  }).join("");
+  return `<h3>📋 날짜별 투자자 매매 <span class="src">증권사 '종목별 투자자' 화면처럼 · 최근 1년 · 단위 백만원</span></h3><div class="card">
+    <div class="cmp-wrap fd-wrap"><table class="cmp fd"><thead><tr><th>일자</th><th>종가</th><th>대비</th><th>거래량</th>${D.cols.map((c) => `<th>${esc(FD_LAB[c] || c)}</th>`).join("")}</tr></thead><tbody>${cum}${rows}</tbody></table></div>
+    <div class="note src">순매수 = 산 돈 − 판 돈 · <span class="kp">빨강 +</span> 순매수, <span class="km">파랑 −</span> 순매도 · 옆으로 밀면 금융투자~기타외국인, 아래로 내리면 1년 전까지 · 기타외국인 = 증권사 화면의 '내외국인' · 국가·지자체는 KRX 가 '연기금 등'에 넣어요 · 장중 줄은 없어요 (장 끝난 뒤 하루치) · 증권사 '통합' 화면은 넥스트레이드(NXT) 거래까지 더해서 숫자가 조금 다를 수 있어요 (여기는 KRX 만).
+      출처: ${esc(d.flow.src)} · 종가·거래량 = 네이버 수정주가</div>
+  </div>`;
+}
 async function tourBlock(code) {
   if (!TOUR) { try { TOUR = await (await fetch("data/tourism.json?t=" + Date.now(), { cache: "no-store" })).json() || {}; } catch (_) { TOUR = {}; } }
   if (!(TOUR.codes || []).includes(code) || !TOUR.months) return "";
@@ -5109,7 +5130,7 @@ async function openStock(code) {
       ["biz", "🧩 사업부문 · 수출 · 핵심 지표", segcHTML(d) + segBlock(d) + capexHtml + expwHTML(code) + expLink + divHTML(d) + kpiHtml],
       ["val", "💰 밸류에이션 (밴드 · 적정주가 표)", globalPeHTML(d) + bandChartsHTML(d, "", "button", pbrFirstOf(d.card)) + perValHTML(d) + longCagrHTML(d) + tailHtml],
       ["past", "📚 과거 실적 · IR 자료 · 점검표", (d.kq ? "" : (d.longq ? `<div class="card">${longHTML(d)}</div>` : "") + qtrHTML(d)) + profileHTML(code) + precheckHTML(d)],
-      ["flow", "👥 수급 · 내부자 · 수주", brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + tourHtml],
+      ["flow", "👥 수급 · 내부자 · 수주", flowDayHTML(d) + brokerHtml + usedCar + orderHtml + holderHtml + flowHTML(d) + tourHtml],
       ["peer", "🏁 동종업계 · 경쟁사 컨콜", peerHtml]].filter(([, , h]) => h && h.trim());
     const chips = `<div class="seg" style="display:flex;flex-wrap:wrap;margin-top:10px">${G.map(([id, t]) => `<a class="segl" href="#" data-jg="g-${id}" style="font-size:12px;padding:5px 9px;min-height:30px">${esc(t.split(" · ")[0].replace(/ \(.*/, ""))}</a>`).join("")}</div>`;
     const grp = ([id, t, h]) => `<details class="grp" id="g-${id}" style="margin-top:10px"><summary style="cursor:pointer;padding:12px 14px;border-radius:12px;background:var(--surface-2);font-weight:700;font-size:15px">${esc(t)} <span class="src">눌러서 보기</span></summary>${h}</details>`;
