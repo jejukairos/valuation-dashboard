@@ -396,6 +396,8 @@ def q_from_reports(cache):
             prv = ((cache.get(f"{year}_{pk}") or {}).get(k) or {}).get("ytd") if pk else 0
             if cur is not None and prv is not None:
                 row[k] = cur - prv
+        if v.get("inv") is not None:  # 재고자산 = 분기 말 잔액 그대로 (📦 재고 vs 매출 증가율 그림)
+            row["inv"] = v["inv"]
         out[f"{year}{QREP[rc]}"] = row
     return dict(sorted(out.items()))
 
@@ -415,6 +417,14 @@ def _cf_ytd(rows, k):
     return abs(v) if v is not None and k == "capex" else v
 
 
+def _bs_inv(rows):
+    """재무상태표(BS) 재고자산 — 그 보고서 기간 말 잔액 (원). 재고가 없는 회사(인터넷·증권 등)는 None."""
+    bs = [r for r in rows if r.get("sj_div") == "BS"]
+    r = (next((r for r in bs if r.get("account_id", "").split("_", 1)[-1] in ("Inventories", "CurrentInventories")), None)
+         or next((r for r in bs if r.get("account_nm", "").replace(" ", "") in ("재고자산", "유동재고자산")), None))
+    return _amt((r or {}).get("thstrm_amount"))
+
+
 def dart_quarters(stock_code, limit=None):
     """2015년~ 정기보고서(1분기·반기·3분기·사업보고서)의 분기 3개월 매출·영업이익·매출총이익과 1년 전 같은 분기 (원).
     한 번 낸 보고서는 바뀌지 않으니 캐시 (cache/dartq_{코드}.json) — 영업이익 성장률·📈 10년 실적 그래프용.
@@ -426,12 +436,12 @@ def dart_quarters(stock_code, limit=None):
     y = now.year
     limit = SETTINGS_LIMIT if limit is None else limit
     todo = [(yy, rc) for yy in range(y, 2014, -1) for rc in ("11014", "11012", "11013", "11011")
-            if f"{yy}_{rc}" not in cache or (cache[f"{yy}_{rc}"] and not {"gp", "ocf"} <= cache[f"{yy}_{rc}"].keys())]  # 11/15 현금흐름(ocf·capex) 추가 → 예전 보고서도 다시 받음
+            if f"{yy}_{rc}" not in cache or (cache[f"{yy}_{rc}"] and not {"gp", "ocf", "inv"} <= cache[f"{yy}_{rc}"].keys())]  # 11/15 현금흐름(ocf·capex) · 11/26 재고자산(inv) 추가 → 예전 보고서도 다시 받음
     for year, rc in todo[:limit]:
         rows = _dart_fin(cc, year) if rc == "11011" else _dart_fin_q(cc, year, rc)
         if rows:
             cache[f"{year}_{rc}"] = {**{k: {f: _amt((_acct_row(rows, k) or {}).get(f)) for f in QF} for k in ("sales", "op", "gp")},
-                                     **{k: {"ytd": _cf_ytd(rows, k)} for k in ("ocf", "capex")}}
+                                     **{k: {"ytd": _cf_ytd(rows, k)} for k in ("ocf", "capex")}, "inv": _bs_inv(rows)}
         elif year < y - 1:  # 2년 넘게 지난 보고서가 없으면 상장 전 → 빈 칸으로 기억 (다시 안 받음). 최근 것은 아직 안 냈을 수 있어 그냥 둠
             cache[f"{year}_{rc}"] = {}
     write_json(path, cache)

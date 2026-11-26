@@ -22,6 +22,7 @@ TAGS = {  # 앞에 있는 이름을 먼저 쓰고, 없는 분기만 뒤 이름�
     "ocf": ["NetCashProvidedByUsedInOperatingActivities"],
     "capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
     "rpo": ["RevenueRemainingPerformanceObligation"],
+    "inv": ["InventoryNet"],  # 분기 말 재고자산 (📦 재고 vs 매출 증가율 그림, 11/26)
 }
 
 
@@ -88,7 +89,7 @@ def pull(facts, splits=()):
         vals = {}
         for nm in names:
             rows = ((g.get(nm) or {}).get("units") or {}).get("USD") or []
-            for e, v in (instants(rows) if k == "rpo" else quarters(rows)).items():
+            for e, v in (instants(rows) if k in ("rpo", "inv") else quarters(rows)).items():
                 vals.setdefault(e, v)
         got[k] = vals
     out = {}
@@ -101,6 +102,8 @@ def pull(facts, splits=()):
         rp = next((v for d, v in got["rpo"].items() if abs(time.mktime(time.strptime(d, "%Y-%m-%d")) - time.mktime(time.strptime(e, "%Y-%m-%d"))) < 20 * 86400), None)
         if rp is not None:
             row["rpo"] = round(rp / 1e6)
+        if e in got["inv"]:
+            row["inv"] = round(got["inv"][e] / 1e6)
         if e in dil:
             row["dil"] = round(dil[e] / 1e6, 1)  # 희석 주식 수 (백만 주)
         if row:

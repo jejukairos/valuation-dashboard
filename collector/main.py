@@ -751,7 +751,7 @@ def long_q(mkt, dq, kqd, qtrs, sec=None):
     if mkt == "KR":
         for k, r in (dq or {}).items():
             if r.get("sales") is not None:
-                out[kq.label(k)] = {f: rnd(r[s] / 1e8) for f, s in (("rev", "sales"), ("op", "op"), ("gp", "gp"), ("ocf", "ocf"), ("capex", "capex")) if r.get(s) is not None}
+                out[kq.label(k)] = {f: rnd(r[s] / 1e8) for f, s in (("rev", "sales"), ("op", "op"), ("gp", "gp"), ("ocf", "ocf"), ("capex", "capex"), ("inv", "inv")) if r.get(s) is not None}
         for q in (kqd or {}).get("quarters") or []:
             if q.get("sales") is not None and q["q"] not in out:
                 out[q["q"]] = {"rev": q["sales"], **({"op": q["op"]} if q.get("op") is not None else {})}
@@ -766,7 +766,7 @@ def long_q(mkt, dq, kqd, qtrs, sec=None):
             out[_klabel(e)] = dict(v)
         for e, v in (qtrs or {}).items():
             row = out.setdefault(_klabel(e), {})
-            row.update({f: rnd(v[f] / 1e6) for f in ("rev", "op", "gp") if v.get(f) is not None})
+            row.update({f: rnd(v[f] / 1e6) for f in ("rev", "op", "gp", "inv") if v.get(f) is not None})  # inv = 분기 말 재고자산 (SEC 백필에 없으면 야후 최근 분기만)
             if v.get("capex") is not None:
                 row["capex"] = rnd(abs(v["capex"]) / 1e6)
                 if v.get("fcf") is not None:

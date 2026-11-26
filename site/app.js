@@ -5620,7 +5620,7 @@ function trendRows() {
   const es = (k, t, r) => ({ k, t, u: "GWh", d: 1, M: essM(r), sec: "🔋 2차전지·ESS", rel: /2차전지|ESS/, day: ESS?.rep?.d || "", src: "하나증권 ESS 월간 (원자료 Benchmark)", go: ["#industry", "ess"] });
   // ✈️ 외국인·중국인 입국 (사용자 11/26 "인바운드·중국인 입국자 트래킹") — data/tour_nat.json 매일 확인, 숫자는 다음 달 하순에 한 번 · 자세한 그림 = 롯데쇼핑 상세 📦 칸
   const tn = (k, t, key) => { const M = Object.fromEntries(Object.entries(TN?.nat?.[key] || {}).map(([m, v]) => [m, v / 1e4])), d = TN?.seen?.[Object.keys(M).sort().at(-1)];
-    return { k, t, u: "만 명", M, sec: "🏬 백화점", codes: Object.keys(EXPW).filter((c) => EXPW[c].includes("tour")), day: d > "2001" ? d : "", src: "관광지식정보시스템 국적별 입국 (원자료 법무부)", go: ["#stock/023530", "expw"] }; };
+    return { k, t, u: "만 명", M, sec: "🏬 백화점", codes: Object.keys(EXPW).filter((c) => EXPW[c].includes("tour")), day: d > "2001" ? d : "", src: "관광지식정보시스템 국적별 입국 (원자료 법무부)", go: ["#stock/023530", "expw"], long: 1 }; };
   return [es("ess", "세계 ESS 새 설치량", "글로벌"), es("ess-na", "북미 ESS 새 설치량", "북미"), tn("in", "외국인 입국 (인바운드)", "전체"), tn("in-cn", "중국인 입국", "중국"),
     E("mem", "메모리 반도체 수출", "tech", "메모리", "💾 반도체", /반도체/, ["#industry", "exp-tech"]),
     E("ramen", "라면 수출", "ramen", "전체", "🍜 라면·음식료", /음식료/, ["#exports", "xp-ramen"]),
@@ -5640,13 +5640,19 @@ function trendChart(r, bars) {
   return keyChart({ t: `${r.t} — 최근 13개월`, q: ms.map((m) => `${m.slice(2, 4)}.${+m.slice(5)}`), bars: bars ? bars(ms) : [{ n: r.t, v }], u: r.u, d: r.d ?? trDec(Math.max(...v.map((x) => x || 0))), every: 3,
     col: ["var(--s1)", "var(--s3)"], pct: { n: "최근 3개월 합의 전년 대비", v: ms.map((m) => r.s.g3s(m)) } });
 }
+// 긴 흐름 선 (사용자 11/26 '한국 인바운드 추이' 선 그림 "이렇게 선으로 봐도 좋네"): 자료가 있는 첫 달부터 달마다 — long 을 준 줄만 (✈️ 입국)
+function trendLong(r) {
+  const ms = []; for (let m = Object.keys(r.M).sort()[0]; m <= r.s.L; m = ymAdd(m, 1)) ms.push(m);
+  return `<div style="max-width:680px;margin-top:6px">${lineChart({ t: `${r.t} — ${ms[0].slice(0, 4)}년부터 달마다 (${r.u})`, labels: ms, zero: true, tick: (i) => (ms[i].endsWith("-01") && +ms[i].slice(0, 4) % 2 === 0 ? `'${ms[i].slice(2, 4)}` : ""),
+    fl: (v) => n(v, r.d ?? trDec(r.s.v)), s: [{ n: r.t, v: ms.map((m) => r.M[m] ?? null), col: "var(--s1)" }] })}</div>`;
+}
 function trendRow(r, isNew) {
   const s = r.s, [ic, lab] = TR_L[s.k], ms = Array.from({ length: 12 }, (_, i) => s.yoys(ymAdd(s.L, i - 11))), mx = Math.max(10, ...ms.map((x) => Math.abs(x || 0)));
   const spark = `<svg viewBox="0 0 120 24" style="width:96px;height:20px;float:right" role="img" aria-label="최근 12개월 전년 대비"><line x1="0" x2="120" y1="12" y2="12" stroke="var(--axis)"/>${ms.map((x, i) => (x == null ? ""
     : `<rect class="${kcol(x)}" fill="currentColor" x="${i * 10 + 1}" y="${x >= 0 ? 12 - (x / mx) * 11 : 12}" width="8" height="${Math.max(1, (Math.abs(x) / mx) * 11)}"/>`)).join("")}</svg>`;
   return `<details class="fvt" style="border-top:1px solid var(--border);padding:8px 0"><summary style="cursor:pointer">${spark}<b>${ic} ${esc(r.t)}</b>${r.g ? ` <span class="src">${FG[r.g]}</span>` : ""}${isNew ? ` <span class="pill red">🆕 ${+r.day.slice(5, 7)}/${+r.day.slice(8)} 나옴</span>` : ""}
     <div class="src" style="margin-top:2px">${s.L.slice(2, 4)}년 ${+s.L.slice(5)}월 <b>${n(s.v, r.d ?? trDec(s.v))}${esc(r.u)}</b> · 1년 전보다 <b class="${kcol(s.yoy)}">${sg(s.yoy)}</b> · 최근 3개월 <b class="${kcol(s.g3)}">${sg(s.g3)}</b>${s.g3p != null ? ` (그 앞 3개월 ${sg(s.g3p)})` : ""} → <b>${lab}</b></div></summary>
-    ${trendChart(r)}<div class="note src">출처: ${esc(r.src)}${r.day ? ` · ${esc(r.day)} 나옴` : ""} · <a href="${r.go[0]}" ${r.go[1] === "expw" ? `onclick="GOTO='expw'"` : `data-kc="${esc(r.go[1])}"`}>자세한 그림 →</a></div></details>`;
+    ${trendChart(r)}${r.long ? trendLong(r) : ""}<div class="note src">출처: ${esc(r.src)}${r.day ? ` · ${esc(r.day)} 나옴` : ""} · <a href="${r.go[0]}" ${r.go[1] === "expw" ? `onclick="GOTO='expw'"` : `data-kc="${esc(r.go[1])}"`}>자세한 그림 →</a></div></details>`;
 }
 async function trendBoardHTML(onlyNew = false) {  // (trendHTML 은 종목 상세의 다른 함수 — 이름 겹치지 않게) · onlyNew = 🌐 전체 탭: 최근 7일 새 숫자 줄만
   await essGet();
@@ -7306,7 +7312,26 @@ function fin4HTML(d) {
     h += `<details class="card" style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>💸 ${esc(nm)} 비용 구조: ${L[j]} 매출원가율 ${n(COGS[j], 1)}%, 판관비율 ${n(SGR[j], 1)}%, 판관비 ${T(S[j])}</b></summary><div class="qgrid" style="margin-top:6px">${b1}${b2}${b3}${b4}</div>
       <div class="note src">판관비 = 매출총이익 − 영업이익 (계산 · 기타 영업 손익이 영업이익에 들어가는 회사는 조금 다를 수 있음) · 매출원가율 = 100 − GPM</div></details>`;
   }
-  return `<div class="f4w">${h}</div>`;
+  return `<div class="f4w">${h}${invHTML(d)}</div>`;
+}
+// 📦 재고자산 vs 매출 증가율 (사용자 11/26 코스맥스 그림: "재고자산만 한 분기 뒤로 민 게 센스 있다 · 제조업은 재고가 중요, 매출이 같이 느는지 → 모든 종목")
+//   재고 선은 한 분기 뒤 자리에 그림 = '지난 분기 말 재고 증가율' 과 '이번 분기 매출 증가율' 이 같은 자리 → 재고 선의 맨 끝 점은 다음 분기 자리 (매출은 아직 없음)
+//   longq.inv = 분기 말 재고자산 (한국 DART 재무상태표 · 미국 SEC InventoryNet + 야후). 재고가 없는 회사(인터넷·증권 등)는 안 나옴
+function invHTML(d) {
+  const lq = d.longq || {}, Q = Object.keys(lq).sort(), sh = (k, a) => { const t = +k.slice(0, 2) * 4 + +k[3] - 1 + a; return `${String(Math.floor(t / 4)).padStart(2, "0")}.${(t % 4) + 1}Q`; };
+  const yo = (k, f) => { const a = lq[k]?.[f], b = lq[sh(k, -4)]?.[f]; return a != null && b > 0 ? (a / b - 1) * 100 : null; };
+  const iv = Q.filter((k) => yo(k, "inv") != null), rv = Q.filter((k) => yo(k, "rev") != null);
+  if (iv.length < 3 || !rv.length) return "";
+  const li = iv.at(-1), ri = rv.at(-1), lab = [];
+  for (let k = sh(iv[0], 1), end = sh(li, 1) > ri ? sh(li, 1) : ri; k <= end; k = sh(k, 1)) lab.push(k);
+  const cl = (v) => (v == null ? null : Math.min(300, v)), a = yo(li, "inv"), b = yo(ri, "rev"), us = d.currency === "USD";
+  const T = us ? (v) => `${n(v / 100, Math.abs(v) >= 1e4 ? 0 : 1)}억$` : (v) => (Math.abs(v) >= 1e4 ? `${n(v / 1e4, 2)}조` : `${n(v, 0)}억`);
+  const msg = a - b > 10 ? "재고가 매출보다 빨리 늘고 있어요" : a - b < -10 ? "매출이 재고보다 빨리 늘고 있어요" : "재고와 매출이 비슷하게 움직여요";
+  return `<details class="card" style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>📦 ${esc(d.name || d.code)} 재고 vs 매출: ${li} 말 재고 ${sg(a)}, ${ri} 매출 ${sg(b)}</b> <span class="src">1년 전 같은 분기 대비 · ${msg}</span></summary>
+    <div style="max-width:680px;margin-top:6px">${lineChart({ t: "재고자산·매출 증가율 (1년 전 같은 분기 대비)", labels: lab, zero: true, fl: (v) => `${n(v, 0)}%`,
+      s: [{ n: "재고자산 (한 분기 뒤로 밀어 그림)", v: lab.map((k) => cl(yo(sh(k, -1), "inv"))), col: "var(--bad)" }, { n: "매출", v: lab.map((k) => cl(yo(k, "rev"))), col: "var(--ink)", lab: "below" }] })}</div>
+    <div class="kidbox" style="margin-top:6px">🐣 빨간 선(재고)은 일부러 한 분기 뒤로 밀어 그렸어요. 그래서 <b>지난 분기 말에 쌓은 재고</b>와 <b>이번 분기 매출</b>이 같은 자리에 와요. 빨간 선이 먼저 오르고 검은 선(매출)이 따라 오르면 "팔 물건을 미리 쌓았고 실제로 팔렸다"는 뜻이에요. 빨간 선만 오르고 검은 선이 안 따라오면 안 팔린 물건이 쌓이는 것일 수 있어요. 빨간 선의 맨 끝 점은 다음 분기 자리예요 (매출은 아직 안 나옴).</div>
+    <div class="note src">재고자산 ${li} 말 ${T(lq[li].inv)} (1년 전 ${T(lq[sh(li, -4)].inv)}) · ${us ? "SEC·야후 분기 재무상태표" : "DART 분기·반기·사업보고서 재무상태표 (연결)"} · 증가율 300% 넘는 칸은 300% 로 자름 · 주문받아 만드는 회사(ODM·수주업)는 재고가 수주를 먼저 보여 주고, 만들어 두고 파는 회사(반도체 등)는 재고가 늘면 부담일 수 있어요 · 매수·매도 추천 아님</div></details>`;
 }
 // 📉 5년 주가 & 고점 대비 하락률 (사용자 11/13 '엔비디아, 고점 대비 -30% 하락' 그림처럼 전 종목 상세 · 매일 자동) — data/ohlc/{코드}.json dd ← collector/ohlc.py dd5
 // 위 = 일봉 종가 (고점보다 20% 넘게 빠진 날은 빨강) · 아래 = 고점 대비 % (분홍) · 빨간 점선 = 지금 수준 · 고점 = 그날까지 가장 높은 종가 (5년 전 고점 pk0 포함)
