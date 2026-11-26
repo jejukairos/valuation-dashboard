@@ -7745,7 +7745,7 @@ const newsGet = async () => { if (!NEWS) NEWS = await (await fetch("data/news.js
 let FILINGS = null;
 async function filingsBlock(code) {
   if (FILINGS === null) { try { FILINGS = await (await fetch("data/filings.json?t=" + encodeURIComponent(DASH.updated_at))).json(); } catch (_) { FILINGS = {}; } }
-  const rows = FILINGS.companies?.[code] || [];
+  const rows = (FILINGS.companies?.[code] || []).slice(0, 20);  // 자료는 60건까지 (차트 📢 표시용) · 이 칸은 최근 20건만
   if (!rows.length) return "";
   const cap = DASH.stocks.find((x) => x.code === code)?.market_cap;
   return `<h3>📢 중요 공시 <span class="src">${esc(FILINGS.rule || "")} · ${esc(FILINGS.updated_at || "")}</span></h3><div class="card">

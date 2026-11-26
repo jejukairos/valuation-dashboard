@@ -118,7 +118,7 @@ def collect(hd=None):
                              "t": f"{r.get('name', '')} ({r.get('pos', '')})", "x": f"{_eok(r['amt'])} · 주당 {r.get('price') or 0:,.0f}원"
                              + (f" · {r['kind']} 후 지분 {r['ratio']:.2f}%{' (보고서 기준)' if r.get('ratio_rep') else ''}" if r.get("ratio") else ""),
                              "why": "대주주·임원이 판 뒤엔 주가가 더 빠지는 경우가 많았어요" if sell else "회사를 잘 아는 사람이 자기 돈으로 샀어요", "u": r.get("url")})
-        out[code] = sorted(rows, key=lambda x: x["d"], reverse=True)[:20]
+        out[code] = sorted(rows, key=lambda x: x["d"], reverse=True)[:60]  # 차트 📢 표시가 1년을 덮게 (상세 화면 칸은 app.js 가 20건만 보여 줌)
     REPORT.success("중요 공시")
     return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "companies": out,
             "rule": "최근 1년 · 공급계약은 매출 대비 10% 이상 또는 글로벌·대기업 상대만 · 임원·대주주 장내 매매는 최근 3개월 1억 원 이상",

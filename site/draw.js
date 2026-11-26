@@ -13,12 +13,22 @@ const DW_ICON = {
   p: '<path d="M9 17l9-9 3 3-9 9H9v-3zM6 23h16"/>',
 };
 const DW_TOOL = [["t", "추세선: 두 번 누르거나 끌어서 긋기"], ["r", "가격 범위: 두 점 사이가 몇 % 인지"], ["h", "가로줄: 한 번 누르면 그 가격에 줄"], ["p", "형광펜: 손가락으로 끌어서 칠하기"]];
-const DW = { code: "", name: "", dec: 0, tf: "w", tool: "", sel: -1, pend: null, cross: null, end: 0, bw: 8, fix: null, pr: [0, 1], grp: "보유", src: {}, B: null, dr: [], hist: [], snap: "[]", extra: [], def: {}, raf: 0, head: "" };
+const DW = { code: "", name: "", dec: 0, tf: "w", tool: "", sel: -1, pend: null, cross: null, end: 0, bw: 8, fix: null, pr: [0, 1], grp: "보유", src: {}, B: null, dr: [], hist: [], snap: "[]", fl: [], fm: [], fsel: null, extra: [], def: {}, raf: 0, head: "" };
 // 새 선의 색·굵기: 처음엔 파랑 1px (형광펜은 연한 주황 4) → 선의 색·굵기를 바꾸면 그 도구의 기본값으로 기억 (localStorage "draw:def", 사용자 11/25)
 const dwDef = (k) => ({ c: k === "p" ? DW_PEN : "#2962ff", w: k === "p" ? 4 : 1, ...DW.def[k] });
 const DWG = { W: 0, H: 0, pw: 0, ph: 0, ax: 60, bx: 24 };
 const dwGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (_) { return d; } };
 const dwSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* 사생활 보호 창이면 화면에만 */ } };
+// 📢 중요 공시 표시 (사용자 11/26): data/filings.json (한국 보유·관심·공동, 최근 1년 — 자사주·소각·임원/대주주 매매·공급계약 …) 을 그 날짜 봉 위에 동그라미로
+// '📢 공시' 단추로 켜고 끔 (이 기기에 기억, 작은 캔들에도 같이). 국민연금의 매일 사고팖은 뺌 (타임라인과 같게). FILINGS = app.js 가 상세 화면에서 쓰는 그 자료
+DW.fil = dwGet("draw:fil", true);
+async function dwFilLoad() { if (FILINGS === null) { try { FILINGS = await (await fetch("data/filings.json?t=" + encodeURIComponent(DASH.updated_at))).json(); } catch (_) { FILINGS = {}; } } }
+const dwFilRows = (code) => (FILINGS?.companies?.[code] || []).filter((r) => r.d && !/국민연금/.test(r.t || "")).map((r) => ({ ...r, day: Date.parse(r.d) / 864e5 }));
+function dwInfo(rs) {  // 동그라미를 누르면 나오는 공시 내용 칸 (rs 없으면 닫기)
+  DW.fsel = rs ? rs[0] : null;
+  const e = $("#dwInfo"); e.hidden = !rs;
+  if (rs) e.innerHTML = `<button class="dwix" data-x="1" aria-label="닫기">✕</button>` + rs.map((r) => `<p><span class="src">${esc(r.d)}</span> <span class="qtag${r.lv === "bad" ? " bad" : r.lv === "good" ? "" : " muted"}">${esc(r.k)}</span><br>${esc(r.t)}${r.x ? ` — <b>${esc(r.x)}</b>` : ""}${r.why ? `<br><span class="src">${esc(r.why)}</span>` : ""}${r.u ? ` <a href="${esc(r.u)}" target="_blank" rel="noopener">공시 원문 ↗</a>` : ""}</p>`).join("");
+}
 const dwClamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // 날짜 ↔ 날 번호 (1970-01-01 = 0). shortcut: 두 자리 연도 70~99 = 19xx, 2070년 넘으면 네 자리로
 const dwDay = (t) => { const [y, m, d] = t.split("-").map(Number); return Date.UTC((y >= 70 ? 1900 : 2000) + y, m - 1, d) / 864e5; };
@@ -102,7 +112,7 @@ function dwRender(mini) {  // mini = 종목 카드의 작은 캔들 캔버스 (d
   const b = DW.B, cv = mini || $("#dwCv");
   if (!b || !DWG.W || (!mini && $("#drawView").hidden)) return;
   const c = cv.getContext("2d"), { W, H, pw, ph } = DWG, dpr = window.devicePixelRatio || 1;
-  const K = { bg: css("--surface"), ink: css("--ink"), ink2: css("--ink-2"), grid: css("--grid"), up: css("--bad"), dn: css("--s1"), mut: css("--muted") };
+  const K = { bg: css("--surface"), ink: css("--ink"), ink2: css("--ink-2"), grid: css("--grid"), up: css("--bad"), dn: css("--s1"), good: css("--good"), mut: css("--muted") };
   const col = (v) => (v === "ink" ? K.ink : v);
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.fillStyle = K.bg; c.fillRect(0, 0, W, H);
@@ -182,6 +192,21 @@ function dwRender(mini) {  // mini = 종목 카드의 작은 캔들 캔버스 (d
   DW.dr.forEach((d, k) => shape(d, k === DW.sel));
   if (DW.ink) shape({ k: "p", pts: DW.ink, ...dwDef("p") });
   if (DW.pend) { const a = dwPt(DW.pend.a); if (DW.pend.b) shape({ k: DW.tool, a, b: dwPt(DW.pend.b), ...dwDef(DW.tool) }, true); else dot(...dwPx(a), "#2962ff"); }
+  // 📢 공시 동그라미: 봉 위에 (초록 = 좋은 쪽 · 빨강 = 조심 · 회색 = 보통), 가까운 봉끼리는 하나로 묶어 개수만
+  const fm = [];
+  if (DW.fil && DW.fl.length) {
+    const R = mini ? 8 : 10, per = Math.ceil((R * 2 + 2) / DW.bw), by = new Map();
+    for (const r of DW.fl) { if (r.day < b.T[0] - 31) continue; const i = Math.min(b.N - 1, dwIdx(r.day)), k = Math.floor(i / per); if (i >= i0 && i <= i1) (by.get(k) || by.set(k, { i, rs: [] }).get(k)).rs.push(r); }  // DW.fl 은 최신이 먼저 → 묶음 자리 = 가장 최근 공시의 봉
+    c.textAlign = "center"; c.font = `${R + 1}px system-ui, sans-serif`;
+    for (const { i, rs } of by.values()) {
+      const x = dwX(i), y = Math.max(R + 2, Math.min(dwY(b.h[i]), dwY(b.l[i])) - R - 6), cl = rs.some((r) => r.lv === "bad") ? K.up : rs.some((r) => r.lv === "good") ? K.good : K.mut;
+      c.beginPath(); c.arc(x, y, R, 0, 7); c.fillStyle = K.bg; c.fill(); c.strokeStyle = cl; c.lineWidth = !mini && DW.fsel === rs[0] ? 3 : 1.5; c.stroke();
+      c.fillStyle = cl; c.fillText(rs.length > 1 ? rs.length : [...rs[0].k][0], x, y + 1);
+      fm.push({ x, y, rs });
+    }
+    c.font = "12px system-ui, sans-serif";
+  }
+  if (!mini) DW.fm = fm;
   c.restore();
   tags.forEach(([y, t, cl]) => { if (y > 8 && y < ph - 8) tag(y, t, cl); });
   if (yl > 0 && yl < ph) tag(yl, dwFmt(last), nowCol);
@@ -235,12 +260,13 @@ async function dwmDraw(el) {
   const code = el.dataset.code, cv = el.querySelector("canvas");
   let s = null;
   try { s = OHLC[code] = OHLC[code] || await (await fetch(`data/ohlc/${code}.json?v=${encodeURIComponent(DASH.updated_at)}`)).json(); } catch (_) { /* 아래에서 예전 그림을 엶 */ }
+  await dwFilLoad();
   const B = s && (dwBars(s, el.dataset.tf) || dwBars(s, "d")), r = cv.getBoundingClientRect();
   if (!B) { el.hidden = true; if (el.nextElementSibling?.tagName === "DETAILS") el.nextElementSibling.open = true; return; }  // 캔들 자료가 없는 종목은 예전 선 그림으로
   if (!r.width) return;
   const keep = { ...DW }, keepG = { ...DWG }, dpr = window.devicePixelRatio || 1;
   try {
-    Object.assign(DW, { code, B, dec: DASH.stocks.find((x) => x.code === code)?.currency === "USD" ? 2 : 0, dr: dwGet("draw:" + code, []) || [], inv: false, sel: -1, pend: null, cross: null, ink: null });  // 카드는 늘 바로 선 그림
+    Object.assign(DW, { code, B, dec: DASH.stocks.find((x) => x.code === code)?.currency === "USD" ? 2 : 0, dr: dwGet("draw:" + code, []) || [], fl: dwFilRows(code), inv: false, sel: -1, pend: null, cross: null, ink: null });  // 카드는 늘 바로 선 그림
     cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
     const c = cv.getContext("2d"); c.font = "12px system-ui, sans-serif";
     DWG.W = r.width; DWG.H = r.height; DWG.ax = Math.ceil(c.measureText(dwFmt(B.hi * 1.3)).width) + 16; DWG.pw = DWG.W - DWG.ax; DWG.ph = DWG.H - DWG.bx;
@@ -271,7 +297,7 @@ function dwUi() {
   const full = $("#dwBox").classList.contains("full");
   $("#dwFs").innerHTML = `<svg viewBox="0 0 28 28" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">${DW_FS[+full]}</svg>`;
   $("#dwFs").title = full ? "전체 화면 끄기" : "전체 화면";
-  $("#dwBtns").innerHTML = `${full ? DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("") : ""}<button data-inv="1" class="${DW.inv ? "on" : ""}" title="가격 눈금 뒤집기: 싼 가격이 위로">⇅ 거꾸로</button>${DW.hist.length ? `<button data-undo="1" title="방금 한 것 되돌리기">↶ 이전</button>` : ""}${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
+  $("#dwBtns").innerHTML = `${full ? DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("") : ""}<button data-inv="1" class="${DW.inv ? "on" : ""}" title="가격 눈금 뒤집기: 싼 가격이 위로">⇅ 거꾸로</button>${DW.fl.length ? `<button data-fil="1" class="${DW.fil ? "on" : ""}" title="중요 공시 표시 켜기·끄기">📢 공시</button>` : ""}${DW.hist.length ? `<button data-undo="1" title="방금 한 것 되돌리기">↶ 이전</button>` : ""}${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
   dwAsk();
 }
 function dwToolPos() {  // 저장해 둔 자리 (차트 밖으로 못 나가게)
@@ -322,8 +348,9 @@ async function dwOpen(code, full) {
   if (code !== DW.code || !DW.B) {
     DW.code = code; DW.name = (o || ex).name; DW.dec = o ? (o.currency === "USD" ? 2 : 0) : ex.idx ? 2 : 0;
     DW.grp = !o ? "검색" : DASH.stocks.some((x) => x.code === code && (x.group || "보유") === DW.grp) ? DW.grp : o.group || "보유";  // 보유·공동 둘 다 있는 종목은 보던 묶음 그대로
-    DW.dr = dwGet("draw:" + code, []) || []; DW.hist = []; DW.snap = JSON.stringify(DW.dr); DW.inv = !!(dwGet("draw:inv", null) || {})[code]; DW.sel = -1; DW.pend = null; DW.cross = null; DW.tool = ""; DW.B = null; DW.head = "";
+    DW.dr = dwGet("draw:" + code, []) || []; DW.hist = []; DW.snap = JSON.stringify(DW.dr); DW.inv = !!(dwGet("draw:inv", null) || {})[code]; DW.sel = -1; DW.pend = null; DW.cross = null; DW.tool = ""; DW.B = null; DW.head = ""; DW.fl = []; DW.fm = []; dwInfo(null);
     dwPickDraw(); dwUi();
+    dwFilLoad().then(() => { if (DW.code === code) { DW.fl = dwFilRows(code); dwUi(); } });
     $("#dwHead").innerHTML = `<b>${esc(DW.name)}</b><br><span class="src">불러오는 중…</span>`;
     const s = await dwLoad(code, o?.market === "US");
     if (DW.code !== code) return;  // 그 사이 다른 종목을 누름
@@ -334,7 +361,7 @@ async function dwOpen(code, full) {
 }
 function dwTf(tf) {
   const s = DW.src[DW.code]; if (!s) return;
-  DW.tf = tf; DW.B = dwBars(s, tf) || dwBars(s, "d"); DW.cross = null; DW.pend = null; DW.refit = true; DW.head = "";
+  DW.tf = tf; DW.B = dwBars(s, tf) || dwBars(s, "d"); DW.cross = null; DW.pend = null; DW.refit = true; DW.head = ""; dwInfo(null);
   dwSet("draw:last", { code: DW.code, tf });
   dwPickDraw(); dwUi(); dwSize();
 }
@@ -411,6 +438,9 @@ function dwInit() {
     if (g.mode === "axis") { const now = Date.now(); if (now - tapAt < 400) { DW.fix = null; dwUi(); } tapAt = now; return; }  // 눈금을 두 번 누르면 자동으로
     if (p.y > DWG.ph) return;
     if (g.mode === "tap") { const q = dwPos(p.x, p.y); return dwAdd({ k: "h", a: dwPt(q), ...dwDef("h") }); }
+    const f = DW.fil && DW.fm.find((m) => Math.hypot(m.x - p.x, m.y - p.y) <= 18);  // 공시 동그라미를 누름 → 내용 칸
+    dwInfo(f ? f.rs : null);
+    if (f) { DW.sel = -1; DW.cross = null; return dwUi(); }
     const k = dwFind(p.x, p.y);
     if (k >= 0) { DW.sel = k; DW.pal = -1; DW.cross = null; }
     else { const q = dwPos(p.x, p.y, false), X = DW.cross; DW.sel = -1; DW.cross = X && Math.hypot(dwX(X.i) - p.x, dwY(X.p) - p.y) < 14 ? null : q; }  // 십자선 자리를 다시 누르면 숨김
@@ -419,7 +449,7 @@ function dwInit() {
   cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
   cv.addEventListener("wheel", (e) => { if (!DW.B) return; e.preventDefault(); dwZoom(Math.exp(-e.deltaY * 0.0015), at(e).x); dwAsk(); }, { passive: false });
   cv.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse" && !g0 && DW.cross) { DW.cross = null; dwAsk(); } });
-  $("#dwTools").addEventListener("click", (e) => { const b = e.target.closest("[data-tool]"); if (!b) return; DW.tool = DW.tool === b.dataset.tool ? "" : b.dataset.tool; DW.pend = null; DW.sel = -1; DW.cross = null; dwUi(); });
+  $("#dwTools").addEventListener("click", (e) => { const b = e.target.closest("[data-tool]"); if (!b) return; DW.tool = DW.tool === b.dataset.tool ? "" : b.dataset.tool; DW.pend = null; DW.sel = -1; DW.cross = null; dwInfo(null); dwUi(); });
   // 점 6개를 잡고 도구 막대 옮기기
   let tb = null;
   $("#dwTools").addEventListener("pointerdown", (e) => { if (!e.target.closest(".dwgrip")) return; const t = $("#dwTools"); t.setPointerCapture(e.pointerId); tb = { x: e.clientX - t.offsetLeft, y: e.clientY - t.offsetTop }; });
@@ -437,6 +467,7 @@ function dwInit() {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.tf) return dwTf(b.dataset.tf);  // 전체 화면일 때만 나오는 일·주·월·연
     if (b.dataset.inv) { DW.inv = !DW.inv; const m = dwGet("draw:inv", null) || {}; if (DW.inv) m[DW.code] = 1; else delete m[DW.code]; dwSet("draw:inv", m); }  // 종목마다 기억
+    else if (b.dataset.fil) { DW.fil = !DW.fil; dwSet("draw:fil", DW.fil); dwInfo(null); }
     else if (b.dataset.undo) dwUndo();
     else if (b.dataset.auto) DW.fix = null;
     else if (b.dataset.fit) dwFit();
@@ -455,6 +486,7 @@ function dwInit() {
       if (!DASH.stocks.some((c) => c.code === s.add) && !DW.extra.some((c) => c.code === s.add)) { DW.extra.push({ code: s.add, name: s.nm, idx: s.idx ? 1 : 0 }); dwSet("draw:extra", DW.extra); } location.hash = "#draw/" + s.add; }
     else if (s.rm) { DW.extra = DW.extra.filter((c) => c.code !== s.rm); dwSet("draw:extra", DW.extra); location.hash = "#draw/KOSPI"; }
   });
+  $("#dwInfo").addEventListener("click", (e) => { if (e.target.closest("[data-x]")) { dwInfo(null); dwAsk(); } });
   $("#dwFs").addEventListener("click", () => dwFull(!box.classList.contains("full")));
   window.addEventListener("popstate", () => {  // 폰 뒤로 가기 (전체 화면 끄기 단추도 이리로 옴)
     const y = DW.back; DW.back = null;

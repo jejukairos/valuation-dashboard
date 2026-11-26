@@ -164,6 +164,9 @@ table.flow tr.now td { background: var(--surface-2); }
 .dwtools button.on { background: var(--s1); color: #fff; }
 .dwgrip { cursor: grab; touch-action: none; padding: 10px 6px; color: var(--muted); letter-spacing: -3px; font-size: 15px; user-select: none; }
 .dwedit { left: 8px; bottom: 104px; flex-wrap: wrap; max-width: calc(100% - 90px); }  /* 아래쪽: 종목 이름·도구 막대를 안 가리게 */
+.dwinfo { position: absolute; left: 8px; bottom: 104px; width: min(340px, calc(100% - 90px)); max-height: 46%; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); padding: 8px 34px 8px 10px; font-size: 13px; line-height: 1.5; }  /* 📢 공시 동그라미를 누르면 나오는 내용 칸 */
+.dwinfo p { margin: 0 0 8px; } .dwinfo p:last-child { margin: 0; }
+.dwix { position: absolute; right: 2px; top: 2px; width: 32px; height: 32px; border: 0; background: none; color: var(--ink); cursor: pointer; font-size: 14px; }
 .dwedit button { min-width: 30px; height: 30px; font-size: 12px; padding: 0 5px; }
 .dwedit button.on { background: var(--surface-2); box-shadow: 0 0 0 1px var(--axis); }
 .dwedit button i { display: inline-block; width: 14px; border-top: 1px solid var(--ink); vertical-align: middle; margin-right: 3px; }
