@@ -5138,7 +5138,8 @@ async function openStock(code) {
     const chips = `<div class="seg" style="display:flex;flex-wrap:wrap;margin-top:10px">${G.map(([id, t]) => `<a class="segl" href="#" data-jg="g-${id}" style="font-size:12px;padding:5px 9px;min-height:30px">${esc(t.split(" · ")[0].replace(/ \(.*/, ""))}</a>`).join("")}</div>`;
     const grp = ([id, t, h]) => `<details class="grp" id="g-${id}" style="margin-top:10px"><summary style="cursor:pointer;padding:12px 14px;border-radius:12px;background:var(--surface-2);font-weight:700;font-size:15px">${esc(t)} <span class="src">눌러서 보기</span></summary>${h}</details>`;
     const upBox = upHTML(code);  // ⭐ 앞으로 일정 — 상세 맨 위에도 (사용자 11/25 "구체적인 탭에서도 계속 언급")
-    $("#sheetBody").innerHTML = headHtml + (upBox ? `<div class="card" style="margin-top:8px">${upBox}</div>` : "") + chips + fin4HTML(d) + topHtml + liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + ddHTML(code) + tlHTML(code) + growHtml + G.map(grp).join("");
+    const memHtml = await memHTML(d);  // 🧭 메모리 공부 순서 (삼성전자·SK하이닉스·마이크론만)
+    $("#sheetBody").innerHTML = headHtml + (upBox ? `<div class="card" style="margin-top:8px">${upBox}</div>` : "") + chips + fin4HTML(d) + memHtml + topHtml + liHtml + (PREF_COMMON[code] ? `<div class="card">${prefBox({ code })}</div>` : "") + kqHTML(d) + (!d.kq && (IRB[code] || IRB[PREF_COMMON[code]]) ? `<h3>📋 IR 요약 · IR 분석 <span class="src">회사 발표 → 해석 · 숫자·그래프는 바로 위, 심층 요약은 아래</span></h3>${irBriefHTML(code, d.card?.name)}` : "") + ddHTML(code) + tlHTML(code) + growHtml + G.map(grp).join("");
     drawDetailCharts(d);
     prefFill();
     wireBandCharts(d, "");
@@ -6329,7 +6330,7 @@ async function loadIndustry() {
   const xpL = (k, t) => `<div class="note" style="margin-top:8px"><a href="#exports" data-kc="xp-${k}">📦 ${t} (1~10일 잠정 · 월별 · 나라별, 1개월~전체) → 수출입 탭</a></div>`;  // 11/11 수출입 탭으로 옮김
   const secs = [["📈 업종 컨센서스 한눈에", consIndHTML], ["💄 화장품", () => key("화장품") + consSec(["화장품"]) + xpL("cosmetics", "화장품 수출") + gpeCard("화장품") + amzHTML()],
     ["🍜 라면·음식료", () => key("음식료") + consSec(["음식료"]) + xpL("ramen", "라면 수출") + expHTML("food")],
-    ["💾 반도체", () => drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["🔧 전공정", () => febHTML() + key("전공정")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => essHTML() + liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
+    ["💾 반도체", () => memIndHTML() + drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["🔧 전공정", () => febHTML() + key("전공정")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => essHTML() + liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => gpeCard("M7") + key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🎤 엔터", () => key("엔터")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
     .map(([t, f]) => [t, f()]);
@@ -7314,6 +7315,106 @@ function fin4HTML(d) {
   }
   return `<div class="f4w">${h}${invHTML(d)}</div>`;
 }
+/* ---------- 🧭 메모리 공부 순서 6가지 (사용자 11/26 스탁이지 노트: "먼저 오는 숫자 = 주가 → 메모리 값 → 이익률 → 맨 끝이 재고·리포트 내림 · 분기마다 이 순서로 한 장")
+   삼성전자·SK하이닉스·마이크론 상세 (📊 실적 카드 바로 아래) + 🏭 산업 탭 💾 반도체 맨 위 (①② · ③~⑥ 은 종목으로 가는 링크)
+   ① 점유율·바뀐 점 · ⑤ 투자 끝나는 날 = keychart.yaml mem (사업보고서·공시 원문을 읽고 손으로) · ② 값 속도 ③ 재고 ④ 이익률 ⑤ 투자÷영업현금 ⑥ 목표가 내림 = 자동 계산 ---------- */
+const memRow = (no, t, one, body) => `<details class="fvt" style="border-top:1px solid var(--border);padding:8px 0"><summary style="cursor:pointer"><b>${no} ${t}</b><div class="src" style="margin-top:2px;line-height:1.5">${one}</div></summary>${body}</details>`;
+const memKid = (t) => `<div class="kidbox" style="margin-top:6px">🐣 ${t}</div>`;
+const memBox = (svg) => (svg ? `<div style="max-width:680px;margin-top:6px">${svg}</div>` : "");
+// ① 사업보고서 점유율 (codes 여럿이면 D램만 나란히)
+function memShare(codes) {
+  const S = KEYC?.mem?.share || {}, has = codes.filter((c) => S[c]?.dram), nm = (c) => DASH.stocks.find((s) => s.code === c)?.name || c;
+  if (!has.length) return memRow("①", "사업보고서 점유율", esc(S[codes[0]]?.none || "자료 없음"), "");
+  const one = has.map((c) => { const s = S[c], L = s.dram.length - 1; return `${codes.length > 1 ? `${esc(nm(c))} ` : ""}D램 ${s.q[L - 2]}년 ${n(s.dram[L - 2], 1)}% → ${s.q[L - 1]}년 ${n(s.dram[L - 1], 1)}% → ${s.q[L]} <b>${n(s.dram[L], 1)}%</b>`; }).join(" · ");
+  const q = S[has[0]].q, col = ["var(--s1)", "var(--s2)", "var(--s3)"];
+  const lines = has.length > 1 ? has.map((c, i) => ({ n: `${nm(c)} D램`, v: S[c].dram, col: col[i], lab: i ? "below" : "above" }))
+    : [{ n: "D램", v: S[has[0]].dram, col: col[0] }, ...(S[has[0]].nand ? [{ n: "낸드", v: S[has[0]].nand, col: col[1], lab: "below" }] : [])];
+  const words = (c) => { const w = S[c].words; return w ? `<div class="note" style="margin-top:6px"><b>보고서 글에 나온 횟수</b>${has.length > 1 ? ` (${esc(nm(c))})` : ""}: HBM ${w.q.map((y, i) => `${y}년 ${w.HBM[i]}`).join(" → ")} · AI ${w.q.map((y, i) => `${y}년 ${w.AI[i]}`).join(" → ")}${S[c].wnote ? `<br>👉 ${esc(S[c].wnote)}` : ""}</div>` : ""; };
+  return memRow("①", "사업보고서 점유율 — 해마다 나란히", one,
+    memBox(lineChart({ t: `D램${has.length > 1 ? "" : "·낸드"} 세계 점유율 (회사가 보고서에 적은 숫자, %)`, labels: q, tick: (i) => (i % 2 === 0 || i === q.length - 1 ? q[i].replace(" 상반기", "상") : ""), fl: (v) => `${n(v, 0)}%`, s: lines }))
+    + has.map((c) => `<ul class="irl" style="margin-top:6px">${(S[c].note || []).map((x) => `<li>${has.length > 1 ? `<b>${esc(nm(c))}</b> ` : ""}${esc(x)}</li>`).join("")}</ul>${words(c)}`).join("")
+    + memKid("한 해 보고서만 읽으면 자랑 글처럼 보여요. 그런데 해마다 같은 표를 나란히 놓으면 <b>몇 년째 제자리던 숫자가 움직인 해</b>가 눈에 띄어요. 그게 회사 사정이 진짜 바뀐 때예요. 마지막 칸(올해 숫자)은 아직 한 해가 다 안 끝난 숫자라 다음 보고서에서 다시 확인해요.")
+    + `<div class="note src">${has.map((c) => esc(S[c].src)).join(" · ")} · ${esc(KEYC.mem.read || "")} 에 원문을 읽고 적음 · 회사마다 조사기관이 달라 두 회사 숫자를 그대로 더하거나 빼면 안 돼요 (방향만 봄)</div>`);
+}
+// ② D램 값이 오르는 속도 = 관세청 D램 수출 단가의 1년 전 대비 (달마다)
+function memPrice() {
+  const M = EXP?.tech?.["D램 단가 (천$/kg)"] || {}, L = Object.keys(M).filter((k) => M[k] != null).sort().at(-1);
+  if (!L) return "";
+  const yo = (m) => (M[m] != null && M[ymAdd(m, -12)] > 0 ? (M[m] / M[ymAdd(m, -12)] - 1) * 100 : null);
+  const ms = Array.from({ length: 24 }, (_, i) => ymAdd(L, i - 23)), v = ms.map(yo), ok = v.filter((x) => x != null);
+  if (ok.length < 6) return "";
+  const pk = v.indexOf(Math.max(...ok)), mo = (m) => `${+m.slice(5)}월`;
+  const st = pk === 23 ? "아직 더 빨라지는 중 (이번 달이 가장 빠름)" : v[23] < v[22] ? `<b>${mo(ms[pk])} ${sg(v[pk])} 가 꼭대기 → 느려지는 중</b>` : `${mo(ms[pk])} ${sg(v[pk])} 가 꼭대기 · 이번 달은 다시 조금 빨라짐`;
+  return memRow("②", "메모리 값 — 오르는 '속도'", `D램 수출 단가 1년 전 대비: ${ms.slice(-3).map((m, i) => `${mo(m)} ${sg(v[21 + i])}`).join(" → ")} · ${st}`,
+    memBox(lineChart({ t: "D램 수출 단가 — 1년 전 같은 달보다 몇 % (달마다)", labels: ms, zero: true, tick: (i) => (i % 3 === 2 ? `${ms[i].slice(2, 4)}.${+ms[i].slice(5)}` : ""), fl: (v2) => `${n(v2, 0)}%`, s: [{ n: "1년 전 대비", v, col: "var(--s1)" }] }))
+    + memKid("값이 '오른다'는 건 다 아는 늦은 소식이에요 (주가가 두세 달 먼저 움직여요). 그래서 <b>얼마나 빨리 오르는지</b>를 봐요. 자전거가 여전히 앞으로 가도 페달을 덜 밟기 시작하면 곧 느려지는 것처럼, 오르는 폭이 줄어드는 달이 이어지면 속도가 꺾인 거예요.")
+    + `<div class="note src">관세청 D램 수출 금액 ÷ 무게 (HS 8542.32.1010, 천$/kg · 달마다 15일쯤) · 노트의 숫자(8월 +249% · 9월 +248% · 10월 +219%)는 다른 가격표라 수준은 달라도 방향을 같이 봐요 · 매일 현물 가격은 💾 반도체 칸의 D램 현물 가격</div>`);
+}
+const memQ = (k, a) => { const t = +k.slice(0, 2) * 4 + +k[3] - 1 + a; return `${String(Math.floor(t / 4)).padStart(2, "0")}.${(t % 4) + 1}Q`; };
+// ③ 재고 ÷ 한 달 매출 (몇 달 치) + 재고·매출 증가율
+function memInv(d) {
+  const lq = d.longq || {}, Q = Object.keys(lq).sort().filter((k) => lq[k].inv > 0 && lq[k].rev > 0), mon = (k) => lq[k].inv / (lq[k].rev / 3);
+  const kid = memKid("<b>재고 ÷ 한 달 매출</b> = 창고에 쌓인 물건이 '몇 달 치 장사'만큼인지예요. 분기 매출은 석 달 치라서 3으로 나눠 한 달 매출을 만들어요. 예: 창고에 30억 원어치, 한 달에 10억 원어치 팔면 → <b>3달 치</b>. 숫자가 <b>커지면</b> 안 팔려서 쌓이는 중, <b>작아지면</b> 물건이 모자랄 만큼 잘 팔리는 중이에요. 재고는 가장 늦게 움직이는 숫자라서 꼭대기를 맞히는 데는 못 써요. 대신 재고가 가장 많이 쌓였다가 줄기 시작하면 '불황 바닥을 지났구나' 하고 <b>바닥 확인용</b>으로 써요.");
+  if (Q.length < 2) return memRow("③", "재고 — 직접 나누기 (몇 달 치)", "재고 숫자를 받는 중이에요 (한국 = 서버 갱신이 몇 번 돌면 2015년부터 · 미국 = SEC 자료를 받은 뒤)", kid);
+  const L = Q.at(-1), yo = (k, f) => (lq[memQ(k, -4)]?.[f] > 0 && lq[k]?.[f] != null ? (lq[k][f] / lq[memQ(k, -4)][f] - 1) * 100 : null), v = Q.map(mon), mx = Q[v.indexOf(Math.max(...v))];
+  return memRow("③", "재고 — 직접 나누기 (몇 달 치)", `${Q.slice(-3).map((k) => `${k} ${n(mon(k), 1)}달`).join(" → ")}${yo(L, "inv") != null ? ` · 재고 ${sg(yo(L, "inv"))} · 매출 ${sg(yo(L, "rev"))} (1년 전 대비)` : ""} · 가장 많이 쌓인 때 ${mx} ${n(Math.max(...v), 1)}달`,
+    memBox(lineChart({ t: "재고 ÷ 한 달 매출 (몇 달 치)", labels: Q, zero: true, fl: (x) => `${n(x, 1)}달`, s: [{ n: "재고 몇 달 치", v, col: "var(--bad)" }] })) + kid
+    + `<div class="note src">분기 말 재고자산 ÷ (분기 매출 ÷ 3) · 재고는 만든 값(원가), 매출은 판 값이라 진짜 달수와는 조금 달라요 — 늘어나는지 줄어드는지 방향만 봐요 · 증가율 그림은 아래 📦 재고 vs 매출 칸</div>`);
+}
+// ④ 이익률이 전 분기보다 얼마나 덜(더) 오르나
+function memOpm(d) {
+  const lq = d.longq || {}, Q = Object.keys(lq).sort().filter((k) => lq[k].rev > 0 && lq[k].op != null).slice(-13);
+  if (Q.length < 4) return "";
+  const o = Q.map((k) => (lq[k].op / lq[k].rev) * 100), dl = o.map((x, i) => (i ? x - o[i - 1] : null)), a = dl.at(-1), b = dl.at(-2);
+  const st = a < 0 ? "이익률이 전 분기보다 내려갔어요" : a < b - 0.5 ? "오르긴 하는데 <b>덜 올라요</b> (속도가 줄어듦)" : a > b + 0.5 ? "전 분기보다 <b>더 빨리</b> 올라요" : "비슷한 속도로 올라요";
+  return memRow("④", "이익률 — 전 분기보다 얼마나 덜 오르나", `영업이익률 ${Q.slice(-3).map((k, i) => `${k} ${n(o[o.length - 3 + i], 1)}%`).join(" → ")} · 오른 폭 ${sg(b, 1, "%p")} → <b>${sg(a, 1, "%p")}</b> · ${st}`,
+    memBox(lineChart({ t: "영업이익률 (선) · 전 분기 대비 변화 (막대)", labels: Q.slice(1), fl: (x) => `${n(x, 0)}%`, fr: (x) => sg(x, 0, "%p"),
+      s: [{ n: "전 분기 대비 %p", v: dl.slice(1), col: "var(--s4)", bar: true, right: true }, { n: "영업이익률", v: o.slice(1), col: "var(--ink)" }] }))
+    + memKid("이익률 = 100원어치 팔아서 몇 원 남겼나 (분기 영업이익 ÷ 분기 매출). '사상 최대'라는 말은 꼭대기 직전까지 계속 나와요. 그래서 높이보다 <b>오르는 폭</b>을 봐요. 지난 분기에 +10%p 오르다가 이번에 +3%p 만 오르면, 아직 오르고 있어도 힘이 빠지는 중이에요. 막대가 점점 낮아지는지 보세요.")
+    + `<div class="note src">분기 영업이익 ÷ 분기 매출 (직접 계산 · ${d.currency === "USD" ? "SEC·야후" : "DART 분기보고서"}) · 막대 = 그 분기 이익률 − 앞 분기 이익률</div>`);
+}
+// ⑤ 공장: 번 현금 대비 공장에 쓴 돈 (해마다) + 투자 끝나는 날
+function memFab(d) {
+  const lq = d.longq || {}, Y = {}, F = KEYC?.mem?.fab?.[d.code], us = d.currency === "USD";
+  Object.keys(lq).forEach((k) => { const r = lq[k]; if (r.ocf == null || r.capex == null) return; const y = (Y[k.slice(0, 2)] = Y[k.slice(0, 2)] || { o: 0, c: 0, n: 0 }); y.o += r.ocf; y.c += Math.abs(r.capex); y.n++; });
+  const ys = Object.keys(Y).sort().filter((y) => Y[y].n === 4 || y === Object.keys(Y).sort().at(-1)), rt = (y) => (Y[y].o > 0 ? (Y[y].c / Y[y].o) * 100 : null), lab = (y) => `${y}년${Y[y].n < 4 ? ` (${Y[y].n}개 분기)` : ""}`;
+  const over = ys.filter((y) => Y[y].o <= 0 || rt(y) > 100), fab = Array.isArray(F) ? [...F].sort((a, b) => (a.e < b.e ? -1 : 1)) : [];
+  const one = (ys.length ? `${ys.slice(-3).map((y) => `${lab(y)} ${rt(y) == null ? "영업현금 적자" : `${n(rt(y), 0)}%`}`).join(" → ")} · 100% 넘은 해: ${over.length ? over.map((y) => `${y}년`).join("·") : "없음"}` : "현금흐름 숫자가 아직 없어요")
+    + (fab.length ? ` · 공시된 공장 ${fab.length}곳 끝나는 날 <b>${fab.map((f) => f.e.slice(0, 7)).join(" · ")}</b>` : "");
+  return memRow("⑤", "공장 — 번 돈보다 많이 쓰나 · 투자 끝나는 날", one,
+    (ys.length >= 3 ? memBox(lineChart({ t: "유형자산 취득 ÷ 영업현금 (해마다, %)", labels: ys, zero: true, tick: (i) => `'${ys[i]}`, fl: (x) => `${n(x, 0)}%`,
+      s: [{ n: "공장·설비에 쓴 돈 ÷ 장사로 번 현금", v: ys.map(rt), col: "var(--s1)", bar: true }, { n: "100% = 번 만큼 다 씀", v: ys.map(() => 100), col: "var(--bad)", nolab: true }] })) : "")
+    + (fab.length ? `<ul class="irl" style="margin-top:6px">${fab.map((f) => `<li><b>${esc(f.t)}</b> ${esc(f.amt)} · ${esc(f.s)} ~ <b>${esc(f.e)}</b> (끝나는 날) <span class="src">${esc(f.d)} 공시</span> <a href="${esc(f.u)}" target="_blank" rel="noopener">원문</a></li>`).join("")}</ul>` : F?.none ? `<div class="note" style="margin-top:6px">${esc(F.none)}</div>` : "")
+    + memKid("<b>유형자산 취득 ÷ 영업현금</b> = 장사해서 번 현금 100원 가운데 공장·기계에 몇 원을 썼나예요. 100% 를 넘으면 <b>번 돈보다 더 많이 쓴 해</b>라서 빚을 내거나 모아 둔 돈을 헐어야 해요. 메모리 회사는 그런 해가 대개 불황이었어요. <b>투자 끝나는 날</b>은 새 공장이 다 지어지는 날이에요. 그날부터 물건이 훨씬 많이 나와요. 식당이 2호점·3호점을 한꺼번에 열면 손님 수는 그대로인데 자리만 늘어 값을 내려야 하는 것처럼, 공장이 끝나는 때가 몰리면 물건이 넘쳐 값이 떨어지기 쉬워요. 그래서 그 날짜를 달력에 미리 적어 둬요.")
+    + `<div class="note src">현금흐름표 유형자산 취득 ÷ 영업활동 현금흐름 (${us ? "SEC·야후" : "DART"} 분기 합) · 투자 기간 = 신규시설투자 공시 '4. 투자기간' (예정일이라 바뀔 수 있음) · 끝나는 날은 건물 기준이라 실제로 물건이 나오는 때와는 차이가 있어요</div>`);
+}
+// ⑥ 리포트: 목표가 내림이 몰렸나 (같은 증권사의 앞 리포트 목표가와 비교)
+async function memRep(d) {
+  const R = ((await repAllGet()).rows || []).filter((r) => r[1] === d.code && r[4] > 0).sort((a, b) => (a[0] < b[0] ? -1 : 1)), last = {}, by = {};
+  for (const r of R) { const p = last[r[6]]; last[r[6]] = r[4]; if (p == null) continue; const b = (by[r[0].slice(0, 7)] = by[r[0].slice(0, 7)] || [0, 0, 0]); b[r[4] > p ? 0 : r[4] < p ? 1 : 2]++; }
+  const ms = Object.keys(by).sort().slice(-6), tot = (m) => by[m][0] + by[m][1] + by[m][2], dn = (m) => (by[m][1] / tot(m)) * 100;
+  const kid = memKid("목표가를 올리는 리포트는 주가가 오른 <b>뒤에</b> 따라 나와요. 그래서 '올림이 많다'는 건 새 소식이 아니에요. 반대로 한 달에 나온 리포트 10개 가운데 3개 넘게 목표가를 <b>내리면</b>, 그때부터 바닥 쪽 숫자(재고가 꼭대기인지 · 이익률이 바닥인지)를 같이 보기 시작해요.");
+  if (!ms.length) return memRow("⑥", "리포트 — 목표가 내림이 몰렸나", d.currency === "USD" ? "한경 리포트는 한국 종목만 있어요 → 미국 종목은 아직 세지 못해요" : "목표가를 앞 리포트와 비교할 수 있는 리포트가 아직 없어요", kid);
+  const hot = ms.filter((m) => tot(m) >= 5 && dn(m) >= 30);
+  return memRow("⑥", "리포트 — 목표가 내림이 몰렸나", `${ms.slice(-3).map((m) => `${+m.slice(5)}월 내림 ${by[m][1]}/${tot(m)}개 (${n(dn(m), 0)}%)`).join(" → ")} · ${hot.length ? `<b style="color:var(--warn-ink)">⚠ 내림 30% 넘은 달: ${hot.map((m) => `${+m.slice(5)}월`).join("·")}</b>` : ms.slice(-3).every((m) => tot(m) < 5) ? "한 달에 비교할 리포트가 5개도 안 돼서 아직 판단하기 어려워요 (공개 리포트만 셈)" : "내림이 30% 넘게 몰린 달 없음"}`,
+    `<table class="tbl" style="margin-top:6px"><tr><th style="text-align:left">달</th><th>올림</th><th>내림</th><th>그대로</th><th>내림 비율</th></tr>${ms.map((m) => `<tr><td style="text-align:left">${m.slice(2, 4)}.${+m.slice(5)}</td><td>${by[m][0]}</td><td>${by[m][1]}</td><td>${by[m][2]}</td><td><b>${n(dn(m), 0)}%</b></td></tr>`).join("")}</table>` + kid
+    + `<div class="note src">한경 컨센서스 공개 기업 리포트 최근 6개월 · 같은 증권사의 바로 앞 리포트 목표가와 비교 (그 증권사의 첫 리포트는 셈에서 뺌) · 리포트 5개 미만인 달은 ⚠ 를 안 붙임</div>`);
+}
+async function memHTML(d) {
+  await keyLoad();
+  if (!(KEYC?.mem?.codes || []).includes(d.code)) return "";
+  return `<details class="card" open style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>🧭 ${esc(d.name || d.code)} 메모리 공부 순서 6가지</b> <span class="src">먼저 움직이는 숫자부터: 주가 → 메모리 값 → 이익률 → 재고·리포트 내림 · 줄을 누르면 그림과 쉬운 설명</span></summary>
+    ${memShare([d.code])}${memPrice()}${memInv(d)}${memOpm(d)}${memFab(d)}${await memRep(d)}
+    <div class="note src">순서는 스탁이지 커뮤니티 노트 '메모리 공부하는 순서' (사용자 전달 11/26) · 번호는 노트 순서 그대로 · 숫자 확인용이고 매수·매도 추천이 아니에요</div></details>`;
+}
+// 🏭 산업 탭 💾 반도체 맨 위: ①(두 회사 나란히) ② + 종목별 ③~⑥ 으로 가는 링크
+function memIndHTML() {
+  const C = KEYC?.mem?.codes || [];
+  if (!C.length) return "";
+  return `<div class="card" id="kc-mem"><div class="chart-title" style="margin-top:0"><b>🧭 메모리 공부 순서 6가지</b> <span class="src">먼저 움직이는 숫자부터: 주가 → 메모리 값 → 이익률 → 재고·리포트 내림</span></div>
+    ${memShare(C)}${memPrice()}
+    <div class="note" style="margin-top:8px">③ 재고 몇 달 치 · ④ 이익률 속도 · ⑤ 공장 투자 · ⑥ 목표가 내림은 종목마다 달라요 → ${C.map((c) => `<a href="#stock/${esc(c)}">${esc(DASH.stocks.find((s) => s.code === c)?.name || c)}</a>`).join(" · ")} 상세 맨 위 🧭 칸</div></div>`;
+}
 // 📦 재고자산 vs 매출 증가율 (사용자 11/26 코스맥스 그림: "재고자산만 한 분기 뒤로 민 게 센스 있다 · 제조업은 재고가 중요, 매출이 같이 느는지 → 모든 종목")
 //   재고 선은 한 분기 뒤 자리에 그림 = '지난 분기 말 재고 증가율' 과 '이번 분기 매출 증가율' 이 같은 자리 → 재고 선의 맨 끝 점은 다음 분기 자리 (매출은 아직 없음)
 //   longq.inv = 분기 말 재고자산 (한국 DART 재무상태표 · 미국 SEC InventoryNet + 야후). 재고가 없는 회사(인터넷·증권 등)는 안 나옴
@@ -7329,7 +7430,8 @@ function invHTML(d) {
   const msg = a - b > 10 ? "재고가 매출보다 빨리 늘고 있어요" : a - b < -10 ? "매출이 재고보다 빨리 늘고 있어요" : "재고와 매출이 비슷하게 움직여요";
   return `<details class="card" style="margin-top:8px"><summary class="chart-title" style="margin-top:0"><b>📦 ${esc(d.name || d.code)} 재고 vs 매출: ${li} 말 재고 ${sg(a)}, ${ri} 매출 ${sg(b)}</b> <span class="src">1년 전 같은 분기 대비 · ${msg}</span></summary>
     <div style="max-width:680px;margin-top:6px">${lineChart({ t: "재고자산·매출 증가율 (1년 전 같은 분기 대비)", labels: lab, zero: true, fl: (v) => `${n(v, 0)}%`,
-      s: [{ n: "재고자산 (한 분기 뒤로 밀어 그림)", v: lab.map((k) => cl(yo(sh(k, -1), "inv"))), col: "var(--bad)" }, { n: "매출", v: lab.map((k) => cl(yo(k, "rev"))), col: "var(--ink)", lab: "below" }] })}</div>
+      s: [{ n: "재고자산 (한 분기 뒤로 밀어 그림)", v: lab.map((k) => cl(yo(sh(k, -1), "inv"))), col: "var(--bad)" }, { n: "매출", v: lab.map((k) => cl(yo(k, "rev"))), col: "var(--ink)", lab: "below" }] })}
+      ${(() => { const mq = Q.filter((k) => lq[k].inv > 0 && lq[k].rev > 0); return mq.length >= 3 ? lineChart({ t: "재고 ÷ 한 달 매출 (재고가 몇 달 치 매출만큼인지)", labels: mq, zero: true, fl: (v) => `${n(v, 1)}달`, s: [{ n: "재고 몇 달 치", v: mq.map((k) => lq[k].inv / (lq[k].rev / 3)), col: "var(--s2)" }], kid: "창고에 쌓인 물건 ÷ 한 달에 파는 금액이에요. 숫자가 커지면 안 팔려 쌓이는 중, 작아지면 잘 팔려 줄어드는 중이에요." }) : ""; })()}</div>
     <div class="kidbox" style="margin-top:6px">🐣 빨간 선(재고)은 일부러 한 분기 뒤로 밀어 그렸어요. 그래서 <b>지난 분기 말에 쌓은 재고</b>와 <b>이번 분기 매출</b>이 같은 자리에 와요. 빨간 선이 먼저 오르고 검은 선(매출)이 따라 오르면 "팔 물건을 미리 쌓았고 실제로 팔렸다"는 뜻이에요. 빨간 선만 오르고 검은 선이 안 따라오면 안 팔린 물건이 쌓이는 것일 수 있어요. 빨간 선의 맨 끝 점은 다음 분기 자리예요 (매출은 아직 안 나옴).</div>
     <div class="note src">재고자산 ${li} 말 ${T(lq[li].inv)} (1년 전 ${T(lq[sh(li, -4)].inv)}) · ${us ? "SEC·야후 분기 재무상태표" : "DART 분기·반기·사업보고서 재무상태표 (연결)"} · 증가율 300% 넘는 칸은 300% 로 자름 · 주문받아 만드는 회사(ODM·수주업)는 재고가 수주를 먼저 보여 주고, 만들어 두고 파는 회사(반도체 등)는 재고가 늘면 부담일 수 있어요 · 매수·매도 추천 아님</div></details>`;
 }
