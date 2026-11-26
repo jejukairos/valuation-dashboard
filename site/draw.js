@@ -153,10 +153,11 @@ function dwRender(mini) {  // mini = 종목 카드의 작은 캔들 캔버스 (d
   // 보이는 구간 최고가·최저가 숫자 (스탁이지처럼, 사용자 11/25)
   if (i1 > i0) {
     const mark = (i, v, t = dwFmt(v)) => { const x = dwX(i), y = dwY(v), left = x + 10 + c.measureText(t).width > pw; c.strokeStyle = c.fillStyle = K.ink2; c.lineWidth = 1; line(x, y, x + (left ? -8 : 8), y); c.textAlign = left ? "right" : "left"; c.fillText(t, x + (left ? -10 : 10), y); };
-    let hI = i0, lI = i0;
-    for (let i = i0; i <= i1; i++) { if (b.h[i] > b.h[hI]) hI = i; if (b.l[i] < b.l[lI]) lI = i; }
-    const dd = (b.c[b.N - 1] / b.h[hI] - 1) * 100;  // 지금 주가가 보이는 구간 최고가보다 몇 % 아래인지 (사용자 11/27)
-    mark(hI, b.h[hI], dwFmt(b.h[hI]) + (dd <= -0.05 ? ` (${dd.toFixed(Math.abs(dd) < 10 ? 1 : 0)}%)` : ""));
+    let hI = 0, lI = i0;
+    for (let i = 0; i < b.N; i++) if (b.h[i] > b.h[hI]) hI = i;  // 최고가 = 받은 자료 전체에서 가장 높은 봉, 화면에 보일 때만 (확대한 구간 최고가는 안 적음 · 사용자 11/27)
+    for (let i = i0; i <= i1; i++) if (b.l[i] < b.l[lI]) lI = i;
+    const dd = (b.c[b.N - 1] / b.h[hI] - 1) * 100;  // 지금 주가가 최고가보다 몇 % 아래인지
+    if (hI >= i0 && hI <= i1) mark(hI, b.h[hI], dwFmt(b.h[hI]) + (dd <= -0.05 ? ` (${dd.toFixed(Math.abs(dd) < 10 ? 1 : 0)}%)` : ""));
     mark(lI, b.l[lI]);
   }
   // 지금 주가: 점선 (그 봉 종류의 앞 봉 종가보다 오르면 빨강)
