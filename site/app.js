@@ -5618,7 +5618,10 @@ function trendRows() {
     return { k, t, u: "억$", M, sec, rel, day: d > "2001" ? d : "", src: "관세청 수출 (달마다)", go };
   };
   const es = (k, t, r) => ({ k, t, u: "GWh", d: 1, M: essM(r), sec: "🔋 2차전지·ESS", rel: /2차전지|ESS/, day: ESS?.rep?.d || "", src: "하나증권 ESS 월간 (원자료 Benchmark)", go: ["#industry", "ess"] });
-  return [es("ess", "세계 ESS 새 설치량", "글로벌"), es("ess-na", "북미 ESS 새 설치량", "북미"),
+  // ✈️ 외국인·중국인 입국 (사용자 11/26 "인바운드·중국인 입국자 트래킹") — data/tour_nat.json 매일 확인, 숫자는 다음 달 하순에 한 번 · 자세한 그림 = 롯데쇼핑 상세 📦 칸
+  const tn = (k, t, key) => { const M = Object.fromEntries(Object.entries(TN?.nat?.[key] || {}).map(([m, v]) => [m, v / 1e4])), d = TN?.seen?.[Object.keys(M).sort().at(-1)];
+    return { k, t, u: "만 명", M, sec: "🏬 백화점", codes: Object.keys(EXPW).filter((c) => EXPW[c].includes("tour")), day: d > "2001" ? d : "", src: "관광지식정보시스템 국적별 입국 (원자료 법무부)", go: ["#stock/023530", "expw"] }; };
+  return [es("ess", "세계 ESS 새 설치량", "글로벌"), es("ess-na", "북미 ESS 새 설치량", "북미"), tn("in", "외국인 입국 (인바운드)", "전체"), tn("in-cn", "중국인 입국", "중국"),
     E("mem", "메모리 반도체 수출", "tech", "메모리", "💾 반도체", /반도체/, ["#industry", "exp-tech"]),
     E("ramen", "라면 수출", "ramen", "전체", "🍜 라면·음식료", /음식료/, ["#exports", "xp-ramen"]),
     E("cos", "화장품 수출", "cosmetics", "전체", "💄 화장품", /화장품/, ["#exports", "xp-cosmetics"]),
@@ -5643,7 +5646,7 @@ function trendRow(r, isNew) {
     : `<rect class="${kcol(x)}" fill="currentColor" x="${i * 10 + 1}" y="${x >= 0 ? 12 - (x / mx) * 11 : 12}" width="8" height="${Math.max(1, (Math.abs(x) / mx) * 11)}"/>`)).join("")}</svg>`;
   return `<details class="fvt" style="border-top:1px solid var(--border);padding:8px 0"><summary style="cursor:pointer">${spark}<b>${ic} ${esc(r.t)}</b>${r.g ? ` <span class="src">${FG[r.g]}</span>` : ""}${isNew ? ` <span class="pill red">🆕 ${+r.day.slice(5, 7)}/${+r.day.slice(8)} 나옴</span>` : ""}
     <div class="src" style="margin-top:2px">${s.L.slice(2, 4)}년 ${+s.L.slice(5)}월 <b>${n(s.v, r.d ?? trDec(s.v))}${esc(r.u)}</b> · 1년 전보다 <b class="${kcol(s.yoy)}">${sg(s.yoy)}</b> · 최근 3개월 <b class="${kcol(s.g3)}">${sg(s.g3)}</b>${s.g3p != null ? ` (그 앞 3개월 ${sg(s.g3p)})` : ""} → <b>${lab}</b></div></summary>
-    ${trendChart(r)}<div class="note src">출처: ${esc(r.src)}${r.day ? ` · ${esc(r.day)} 나옴` : ""} · <a href="${r.go[0]}" data-kc="${esc(r.go[1])}">자세한 그림 →</a></div></details>`;
+    ${trendChart(r)}<div class="note src">출처: ${esc(r.src)}${r.day ? ` · ${esc(r.day)} 나옴` : ""} · <a href="${r.go[0]}" ${r.go[1] === "expw" ? `onclick="GOTO='expw'"` : `data-kc="${esc(r.go[1])}"`}>자세한 그림 →</a></div></details>`;
 }
 async function trendBoardHTML(onlyNew = false) {  // (trendHTML 은 종목 상세의 다른 함수 — 이름 겹치지 않게) · onlyNew = 🌐 전체 탭: 최근 7일 새 숫자 줄만
   await essGet();
