@@ -4313,9 +4313,31 @@ function expwOne(k, isNew) {
     best ? `${K.sub.length < 2 ? "나눠 보면" : best.yoy > 0 ? "가장 빨리 느는 곳" : "가장 덜 줄어든 곳"}: ${best.n} ${sg(best.yoy)} (${+tm.slice(5)}월)` : "", part != null ? `${cq[3]}분기 지금까지 (${cn}개월) 1년 전 같은 기간보다 ${sg(part)}` : ""].filter(Boolean);
   return `<div class="card" style="margin-top:8px"><div class="chart-title"><b>${K.t}</b> ${isNew ? `<span class="pill red">‼️ 새로 나옴</span> ` : ""}<span class="src">${esc(K.hs)} · ${last}까지</span></div>
     <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 ${kid.map(esc).join("<br>")}</div>
-    <div class="qgrid">${c1}${c2}</div>${c4}<div class="qgrid">${c3}${c3b}</div>
+    ${k === "tour" ? tourDash() : ""}<div class="qgrid">${c1}${c2}</div>${c4}<div class="qgrid">${c3}${c3b}</div>
     ${k === "ramen" || k === "cosmetics" ? `<div class="note src">2026년 1~8월 나라별 칸은 비어 있어요 — 관세청 '품목별 국가별 수출입실적' API 를 신청하면 자동으로 채워져요 (9·10월은 글로 받은 숫자)</div>` : ""}
     ${k === "tech" ? `<div class="note src">💾 D램 현물 가격(매일)은 이 화면 맨 위 칸에 있어요 · 산업 탭 💾 반도체 칸에 품목 전체</div>` : ""}</div>`;
+}
+// ✈️ 방한 외래관광객 월별 대시보드 (사용자 11/27 다올 박종현 '월별 추이 대시보드' 그림 "인바운드 종목에 이렇게 + 매월 알아서 트래킹")
+//   막대 = 올해 달마다 · 검은 선 = 작년 · 회색 점선 = 2019년 (코로나 전) · 위 띠 = 1년 전 같은 달보다 % · data/tour_nat.json (매일 확인, 새 달은 다음 달 하순에 자동)
+function tourDash() {
+  const N = TN?.nat || {}, A = N.전체 || {}, L = Object.keys(A).sort().at(-1);
+  if (!L) return "";
+  const Y = +L.slice(0, 4), mL = +L.slice(5), ym = (y, m) => `${y}-${String(m).padStart(2, "0")}`, ms = Array.from({ length: 12 }, (_, i) => i + 1);
+  const v = (y, m, k = "전체") => N[k]?.[ym(y, m)] ?? null, ch = (a, b) => (a != null && b ? (a / b - 1) * 100 : null), man = (x) => (x == null ? null : x / 1e4);
+  const cum = (y, k = "전체") => { let s = 0; for (let m = 1; m <= mL; m++) { const x = v(y, m, k); if (x == null) return null; s += x; } return s; };
+  const c = keyChart({ t: `방한 외래관광객 월별 — ${Y}년 1~${mL}월`, u: "만 명", every: 1, q: ms.map((m) => `${m}월`), bars: [{ n: `${Y}년`, v: ms.map((m) => (m <= mL ? man(v(Y, m)) : null)) }], col: ["#a8835f"],
+    lines: [{ n: `${Y - 1}년`, v: ms.map((m) => man(v(Y - 1, m))), col: "var(--ink)" }, { n: "2019년 (코로나 전)", v: ms.map((m) => man(v(2019, m))), col: "var(--muted)", dash: 1 }],
+    pct: { n: `${Y - 1}년 같은 달보다`, col: "#c0392b", v: ms.map((m) => (m <= mL ? ch(v(Y, m), v(Y - 1, m)) : null)) } });
+  const nat = Object.keys(N).filter((k) => k !== "전체" && v(Y, mL, k) != null).sort((a, b) => v(Y, mL, b) - v(Y, mL, a));
+  const f = (x) => `${n(x / 1e4, 1)}만 명`, cy = cum(Y), cp = cum(Y - 1), c19 = cum(2019);
+  return `<div class="card" style="margin-top:8px" id="tour-dash"><div class="chart-title"><b>✈️ 방한 외래관광객 — ${Y}년 ${mL}월</b> <span class="src">매월 자동 · 관광지식정보시스템 (한국관광공사·법무부 자료)</span></div>
+    <table class="compact" style="width:100%;margin:4px 0"><tbody>
+    <tr><td style="text-align:left"><b>${mL}월</b></td><td><b>${f(v(Y, mL))}</b></td><td>${Y - 1}년보다 <b class="${kcol(ch(v(Y, mL), v(Y - 1, mL)))}">${sg(ch(v(Y, mL), v(Y - 1, mL)), 1)}</b></td><td>2019년보다 <b class="${kcol(ch(v(Y, mL), v(2019, mL)))}">${sg(ch(v(Y, mL), v(2019, mL)), 1)}</b></td></tr>
+    ${cy != null ? `<tr><td style="text-align:left"><b>1~${mL}월</b></td><td><b>${f(cy)}</b></td><td>${Y - 1}년보다 <b class="${kcol(ch(cy, cp))}">${sg(ch(cy, cp), 1)}</b></td><td>2019년보다 <b class="${kcol(ch(cy, c19))}">${sg(ch(cy, c19), 1)}</b></td></tr>` : ""}</tbody></table>
+    <div class="qgrid">${c}</div>
+    ${nat.length ? `<div class="src" style="margin-top:4px"><b>국적 (${mL}월 · ${Y - 1}년 같은 달보다)</b> — ${nat.map((k) => `${esc(k)} ${f(v(Y, mL, k))} (<span class="${kcol(ch(v(Y, mL, k), v(Y - 1, mL, k)))}">${sg(ch(v(Y, mL, k), v(Y - 1, mL, k)), 1)}</span>)`).join(" · ")}</div>` : ""}
+    <div class="kidbox" style="margin-top:6px;font-size:13px">🐣 갈색 막대가 올해, 검은 선이 작년, 회색 점선이 코로나 전 2019년이에요. 막대가 두 선보다 높으면 외국인 손님이 작년보다도, 코로나 전보다도 많다는 뜻이에요. 위 숫자는 작년 같은 달보다 몇 % 늘었는지예요.</div>
+    <div class="note src">새 달 숫자는 다음 달 하순에 나오면 다음 갱신 때 자동으로 한 칸 늘어요 (따로 할 일 없음) · 국적은 우리 자료에 있는 나라만 (필리핀 등은 '동남아 6국' 안) · 매수·매도 추천 아님</div></div>`;
 }
 // 🍜 삼양식품 추정 수출 (사용자 11/17 한화 그림 "키팩터 — 삼양 상세 📦 + 수출입 탭 라면, 추정 방법 짧게") ← exports.yaml samyang_est (그림 값) + exp_ten.json sy (한화 채널 글, 자동)
 //   막대 = 삼양 추정 수출 (백만$) · 선 = 라면 전체 대비 비중 = 삼양 ÷ 우리 관세청 라면 전체 (한화 그림과 ±0.3%p)
@@ -5684,7 +5706,7 @@ function trendRow(r, isNew) {
     : `<rect class="${kcol(x)}" fill="currentColor" x="${i * 10 + 1}" y="${x >= 0 ? 12 - (x / mx) * 11 : 12}" width="8" height="${Math.max(1, (Math.abs(x) / mx) * 11)}"/>`)).join("")}</svg>`;
   return `<details class="fvt" style="border-top:1px solid var(--border);padding:8px 0"><summary style="cursor:pointer">${spark}<b>${ic} ${esc(r.t)}</b>${r.g ? ` <span class="src">${FG[r.g]}</span>` : ""}${isNew ? ` <span class="pill red">🆕 ${+r.day.slice(5, 7)}/${+r.day.slice(8)} 나옴</span>` : ""}
     <div class="src" style="margin-top:2px">${s.L.slice(2, 4)}년 ${+s.L.slice(5)}월 <b>${n(s.v, r.d ?? trDec(s.v))}${esc(r.u)}</b> · 1년 전보다 <b class="${kcol(s.yoy)}">${sg(s.yoy)}</b> · 최근 3개월 <b class="${kcol(s.g3)}">${sg(s.g3)}</b>${s.g3p != null ? ` (그 앞 3개월 ${sg(s.g3p)})` : ""} → <b>${lab}</b></div></summary>
-    ${trendChart(r)}${r.long ? trendLong(r) : ""}<div class="note src">출처: ${esc(r.src)}${r.day ? ` · ${esc(r.day)} 나옴` : ""} · <a href="${r.go[0]}" ${r.go[1] === "expw" ? `onclick="GOTO='expw'"` : `data-kc="${esc(r.go[1])}"`}>자세한 그림 →</a></div></details>`;
+    ${r.k === "in" ? tourDash() : ""}${trendChart(r)}${r.long ? trendLong(r) : ""}<div class="note src">출처: ${esc(r.src)}${r.day ? ` · ${esc(r.day)} 나옴` : ""} · <a href="${r.go[0]}" ${r.go[1] === "expw" ? `onclick="GOTO='expw'"` : `data-kc="${esc(r.go[1])}"`}>자세한 그림 →</a></div></details>`;
 }
 async function trendBoardHTML(onlyNew = false) {  // (trendHTML 은 종목 상세의 다른 함수 — 이름 겹치지 않게) · onlyNew = 🌐 전체 탭: 최근 7일 새 숫자 줄만
   await essGet();
@@ -6573,12 +6595,12 @@ function keyChart(ch) {
     let acc = 0;
     const end = ch.endOnly && i === N - 1;  // endOnly = 마지막 칸만 빨강 + 숫자 (칸이 많아 숫자가 겹칠 때, 나머지는 눌러서 보기 — 11/20 전공정 수주잔고)
     bars.forEach((s, si) => { const v = s.v[i]; if (!v) return; g += `<rect x="${X(i) - bw * 0.32}" y="${Y(acc + v)}" width="${bw * 0.64}" height="${Math.max(1, Y(acc) - Y(acc + v))}" ${fill(end ? "var(--bad)" : BC[si % BC.length])}/>`; acc += v; });
-    if (!ch.endOnly || end) g += `<text x="${X(i)}" y="${Y(tot[i]) - 4}" text-anchor="middle" class="qv${i === N - 1 || isG ? " b" : ""}"${end ? ' style="fill:var(--bad-ink)"' : ""}>${V(tot[i])}</text>`;
+    if ((!ch.endOnly || end) && bars.some((s) => s.v[i] != null)) g += `<text x="${X(i)}" y="${Y(tot[i]) - 4}" text-anchor="middle" class="qv${i === N - 1 || isG ? " b" : ""}"${end ? ' style="fill:var(--bad-ink)"' : ""}>${V(tot[i])}</text>`;
   });
   const ends = [];  // 선은 끝 숫자만 (겹치면 아래로 밀기)
   lines.forEach((s, si) => {
-    const col = KPI_COL[si % 4], pts = s.v.map((v, i) => [i, v]).filter(([, v]) => v != null);
-    g += `<path d="${pts.map(([i, v], j) => `${j ? "L" : "M"}${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round"/>`
+    const col = s.col || KPI_COL[si % 4], pts = s.v.map((v, i) => [i, v]).filter(([, v]) => v != null);  // s.col · s.dash = 점선 (11/27 입국 2019년 선)
+    g += `<path d="${pts.map(([i, v], j) => `${j ? "L" : "M"}${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round"${s.dash ? ' stroke-dasharray="5 4"' : ""}/>`
       + pts.map(([i, v]) => `<circle cx="${X(i)}" cy="${Y(v)}" r="3" fill="var(--surface)" stroke="${col}" stroke-width="2"/>`).join("");
     const xy = pts.map(([i, v]) => [X(i), Y(v)]);
     ends.push([xy.at(-1)[0], clearY(xy, xy.length - 1, 16), pts.at(-1)[1], col]);
@@ -6588,12 +6610,13 @@ function keyChart(ch) {
   if (ch.pct) {  // % 선은 막대 위쪽 띠에 따로 (숫자는 칸마다)
     const pv = ch.pct.v, lv = pv.filter((v) => v != null), lh = Math.max(...lv), ll = Math.min(...lv), PY = (v) => 56 - ((v - ll) / ((lh - ll) || 1)) * 34;
     const pp = pv.map((v, i) => (v == null ? null : [X(i), PY(v)]));
-    g += `<polyline points="${pv.map((v, i) => (v == null ? "" : `${X(i)},${PY(v)}`)).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`
-      + pv.map((v, i) => (v == null ? "" : `<circle cx="${X(i)}" cy="${PY(v)}" r="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${X(i)}" y="${clearY(pp, i)}" text-anchor="middle" class="qv${i === pv.length - 1 ? " b" : ""}"${v < 0 || v < lh / 4 ? ' style="fill:var(--bad-ink)"' : ""}>${n(v, ch.pct.d ?? 0)}%</text>`)).join("");  // pct.d = 소수 자리 (11/27 닥터멜락신 1.6% 처럼 작은 이익률)
+    const pc = ch.pct.col || "var(--ink)";  // pct.col = 선·숫자 색 (11/27 입국: 작년 검은 선과 헷갈리지 않게 빨강)
+    g += `<polyline points="${pv.map((v, i) => (v == null ? "" : `${X(i)},${PY(v)}`)).join(" ")}" fill="none" stroke="${pc}" stroke-width="2"/>`
+      + pv.map((v, i) => (v == null ? "" : `<circle cx="${X(i)}" cy="${PY(v)}" r="3" fill="var(--surface)" stroke="${pc}" stroke-width="2"/><text x="${X(i)}" y="${clearY(pp, i)}" text-anchor="middle" class="qv${i === pv.length - 1 ? " b" : ""}"${v < 0 || v < lh / 4 ? ' style="fill:var(--bad-ink)"' : ch.pct.col ? ` style="fill:${pc}"` : ""}>${n(v, ch.pct.d ?? 0)}%</text>`)).join("");  // pct.d = 소수 자리 (11/27 닥터멜락신 1.6% 처럼 작은 이익률)
   }
   g += tipCols(X, bw, 0, 166, L.map((q, i) => [q, ...[...bars, ...lines].map((s) => (s.v[i] == null ? null : `${s.n}: ${V(s.v[i])}${un && un !== "%" ? " " + un : un}`)), ch.pct?.v[i] != null ? `${ch.pct.n}: ${n(ch.pct.v[i], 1)}%` : null].filter(Boolean).join("\n")));
-  const leg = [...bars.map((s, si) => `<span style="color:${BC[si % BC.length]}">■</span> ${esc(s.n)}`), ...lines.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`),
-    ...(ch.pct ? [`● ${esc(ch.pct.n)}`] : [])].join(" · ");
+  const leg = [...bars.map((s, si) => `<span style="color:${BC[si % BC.length]}">■</span> ${esc(s.n)}`), ...lines.map((s, si) => `<span style="color:${s.col || KPI_COL[si % 4]}">${s.dash ? "┄" : "●"}</span> ${esc(s.n)}`),
+    ...(ch.pct ? [`<span style="color:${ch.pct.col || "inherit"}">●</span> ${esc(ch.pct.n)}`] : [])].join(" · ");
   // tbl: true → 그림 위에 모든 칸 숫자 표 (수치 먼저 → 그림 → 🐣 kid)
   const tb = ch.tbl ? `<div style="overflow-x:auto"><table class="compact" style="width:100%;font-size:11px"><tr><th></th>${L.map((q) => `<th>${esc(q)}</th>`).join("")}</tr>
     ${[...bars, ...lines].map((s) => `<tr><td style="text-align:left">${esc(s.n)}</td>${L.map((_, i) => `<td>${s.v[i] == null ? "-" : i === N - 1 ? `<b>${V(s.v[i])}</b>` : V(s.v[i])}</td>`).join("")}</tr>`).join("")}</table></div>` : "";
