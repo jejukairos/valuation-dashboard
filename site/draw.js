@@ -28,6 +28,12 @@ function dwInfo(rs) {  // 동그라미를 누르면 나오는 공시 내용 칸 
   DW.fsel = rs ? rs[0] : null;
   const e = $("#dwInfo"); e.hidden = !rs;
   if (rs) e.innerHTML = `<button class="dwix" data-x="1" aria-label="닫기">✕</button>` + rs.map((r) => `<p><span class="src">${esc(r.d)}</span> <span class="qtag${r.lv === "bad" ? " bad" : r.lv === "good" ? "" : " muted"}">${esc(r.k)}</span><br>${esc(r.t)}${r.x ? ` — <b>${esc(r.x)}</b>` : ""}${r.why ? `<br><span class="src">${esc(r.why)}</span>` : ""}${r.u ? ` <a href="${esc(r.u)}" target="_blank" rel="noopener">공시 원문 ↗</a>` : ""}</p>`).join("");
+  dwInfoPos();
+}
+function dwInfoPos() {  // 칸 자리: 캔들·동그라미 줄을 안 가리게 거래량 자리(동그라미 줄과 아래 단추 사이)에, 여러 건이면 칸 안에서 밀어 봄 · 그 틈이 좁은 화면만 동그라미 줄 위 (사용자 11/27)
+  const e = $("#dwInfo"); if (e.hidden) return;
+  const vt = DWG.ph * 0.82, room = $("#dwBtns").offsetTop - vt - 4, fits = room >= 60;
+  e.style.top = fits ? vt + 2 + "px" : "auto"; e.style.bottom = fits ? "auto" : DWG.H - vt + 30 + "px"; e.style.maxHeight = fits ? room + "px" : "";
 }
 const dwClamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // 날짜 ↔ 날 번호 (1970-01-01 = 0). shortcut: 두 자리 연도 70~99 = 19xx, 2070년 넘으면 네 자리로
@@ -103,7 +109,7 @@ function dwSize() {
   DWG.ax = Math.ceil(c.measureText(dwFmt(DW.B.hi * 1.3)).width) + 16;
   DWG.pw = DWG.W - DWG.ax; DWG.ph = DWG.H - DWG.bx;
   if (first || DW.refit) { dwFit(); DW.refit = false; }  // 폭만 바뀌면 오른쪽 끝 봉은 그대로
-  dwToolPos();
+  dwToolPos(); dwInfoPos();  // 화면 크기가 바뀌면 (전체 화면·돌리기) 공시 칸도 다시 자리 잡기
   dwAsk();
 }
 
@@ -195,14 +201,14 @@ function dwRender(mini) {  // mini = 종목 카드의 작은 캔들 캔버스 (d
   DW.dr.forEach((d, k) => shape(d, k === DW.sel));
   if (DW.ink) shape({ k: "p", pts: DW.ink, ...dwDef("p") });
   if (DW.pend) { const a = dwPt(DW.pend.a); if (DW.pend.b) shape({ k: DW.tool, a, b: dwPt(DW.pend.b), ...dwDef(DW.tool) }, true); else dot(...dwPx(a), "#2962ff"); }
-  // 📢 공시 동그라미: 봉 위에 (초록 = 좋은 쪽 · 빨강 = 조심 · 회색 = 보통), 가까운 봉끼리는 하나로 묶어 개수만
+  // 📢 공시 동그라미: 거래량 바로 위 한 줄에 (봉 위에 두면 차트를 가림 · 사용자 11/27) — 초록 = 좋은 쪽 · 빨강 = 조심 · 회색 = 보통, 가까운 봉끼리는 하나로 묶어 개수만
   const fm = [];
   if (DW.fil && DW.fl.length) {
     const R = mini ? 8 : 10, per = Math.ceil((R * 2 + 2) / DW.bw), by = new Map();
     for (const r of DW.fl) { if (r.day < b.T[0] - 31) continue; const i = Math.min(b.N - 1, dwIdx(r.day)), k = Math.floor(i / per); if (i >= i0 && i <= i1) (by.get(k) || by.set(k, { i, rs: [] }).get(k)).rs.push(r); }  // DW.fl 은 최신이 먼저 → 묶음 자리 = 가장 최근 공시의 봉
     c.textAlign = "center"; c.font = `${R + 1}px system-ui, sans-serif`;
     for (const { i, rs } of by.values()) {
-      const x = dwX(i), y = Math.max(R + 2, Math.min(dwY(b.h[i]), dwY(b.l[i])) - R - 6), cl = rs.some((r) => r.lv === "bad") ? K.up : rs.some((r) => r.lv === "good") ? K.good : K.mut;
+      const x = dwX(i), y = ph - vh - R - 3, cl = rs.some((r) => r.lv === "bad") ? K.up : rs.some((r) => r.lv === "good") ? K.good : K.mut;
       c.beginPath(); c.arc(x, y, R, 0, 7); c.fillStyle = K.bg; c.fill(); c.strokeStyle = cl; c.lineWidth = !mini && DW.fsel === rs[0] ? 3 : 1.5; c.stroke();
       c.fillStyle = cl; c.fillText(rs.length > 1 ? rs.length : [...rs[0].k][0], x, y + 1);
       fm.push({ x, y, rs });
