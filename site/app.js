@@ -6555,7 +6555,7 @@ function keyChart(ch) {
     const pv = ch.pct.v, lv = pv.filter((v) => v != null), lh = Math.max(...lv), ll = Math.min(...lv), PY = (v) => 56 - ((v - ll) / ((lh - ll) || 1)) * 34;
     const pp = pv.map((v, i) => (v == null ? null : [X(i), PY(v)]));
     g += `<polyline points="${pv.map((v, i) => (v == null ? "" : `${X(i)},${PY(v)}`)).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`
-      + pv.map((v, i) => (v == null ? "" : `<circle cx="${X(i)}" cy="${PY(v)}" r="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${X(i)}" y="${clearY(pp, i)}" text-anchor="middle" class="qv${i === pv.length - 1 ? " b" : ""}"${v < 0 || v < lh / 4 ? ' style="fill:var(--bad-ink)"' : ""}>${n(v, 0)}%</text>`)).join("");
+      + pv.map((v, i) => (v == null ? "" : `<circle cx="${X(i)}" cy="${PY(v)}" r="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${X(i)}" y="${clearY(pp, i)}" text-anchor="middle" class="qv${i === pv.length - 1 ? " b" : ""}"${v < 0 || v < lh / 4 ? ' style="fill:var(--bad-ink)"' : ""}>${n(v, ch.pct.d ?? 0)}%</text>`)).join("");  // pct.d = 소수 자리 (11/27 닥터멜락신 1.6% 처럼 작은 이익률)
   }
   g += tipCols(X, bw, 0, 166, L.map((q, i) => [q, ...[...bars, ...lines].map((s) => (s.v[i] == null ? null : `${s.n}: ${V(s.v[i])}${un && un !== "%" ? " " + un : un}`)), ch.pct?.v[i] != null ? `${ch.pct.n}: ${n(ch.pct.v[i], 1)}%` : null].filter(Boolean).join("\n")));
   const leg = [...bars.map((s, si) => `<span style="color:${BC[si % BC.length]}">■</span> ${esc(s.n)}`), ...lines.map((s, si) => `<span style="color:${KPI_COL[si % 4]}">●</span> ${esc(s.n)}`),
