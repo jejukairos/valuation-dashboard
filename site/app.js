@@ -5573,6 +5573,37 @@ document.addEventListener("click", (e) => {
 // ⭐ 관심 밖 종목 (사용자 11/17, 리처드 번스타인 『소음과 투자』 "모두가 떠들 때가 아니라 아무 말도 없을 때가 기회") → 📡 신호 탭 맨 위 · 보유 → 관심 → 공동
 //   한국 = 한경 공개 기업 리포트 6개월 개수 (rep_all.json, 매일) · 미국 = 야후 컨센서스 애널리스트 수 (n_anal) · 우선주는 보통주와 같아서 뺌
 //   ⭐⭐ = 6개월 0개 (미국 5명 이하) · ⭐ = 3개 이하 또는 마지막 리포트 90일 넘음 (미국 10명 이하) · 🆕 = ⭐ 종목에 7일 안 새 리포트 (다시 관심 받기 시작)
+/* ---------- 🏁 업종 시총 순위 (사용자 11/27, BRILLER '화장품 시총 변화' 글 + 구릴라님 관점: 업종 안 1등이 바뀌거나 밑에서 치고 올라오면 신호 · 시총이 업종보다 많이 빠지면 위험)
+   data/sector_rank.json ← collector/sector_rank.py (차트 스캔, 평일 06:40·16:10) · 묶음 = config/sector_rank.yaml · 📡 신호 탭 카드 + 산업 탭 업종 칸 맨 위 + 🔔 새 소식 ---------- */
+let SR = null;
+async function srGet() { if (!SR) { try { SR = await (await fetch("data/sector_rank.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SR = {}; } } return SR; }
+const SR_I = { up: "🟢", down: "🔴", king: "👑" }, srCap = (v) => (v >= 1e4 ? `${(v / 1e4).toFixed(1)}조` : `${Math.round(v).toLocaleString()}억`);
+const srLi = (e, cut) => `<li${e.typ === "down" ? ' style="color:var(--bad-ink)"' : ""}>${SR_I[e.typ] || ""} ${esc(cut ? e.t.replace(new RegExp(`^${cut.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:? `), "") : e.t)}</li>`;
+function srCard(s, open) {
+  const mine = new Map(DASH.stocks.map((c) => [c.code, c.group || "보유"]));
+  const dr = (r, h) => { const a = r[`r${h}`]; if (a == null) return "-"; const d = a - r.r0; return d > 0 ? `<b style="color:var(--good-ink)">▲${d}</b>` : d < 0 ? `<b style="color:var(--bad-ink)">▼${-d}</b>` : "–"; };
+  const pp = (v) => (v == null ? "" : ` <span class="src">${v > 0 ? "+" : ""}${Math.round(v)}%</span>`);
+  const [a, b] = s.rows, dn = s.ev.some((e) => e.typ === "down");
+  return `<details class="card fvt" style="margin-top:8px"${open ? " open" : ""}><summary class="chart-title"><b>🏁 ${esc(s.n)} 시총 순위</b> <span class="src">1,000억 이상 ${s.n_all}곳 · ${esc(SR.date || "")}</span>${s.ev.length ? ` <span class="pill ${dn ? "red" : "green"}">바뀐 것 ${s.ev.length}</span>` : ""}</summary>
+    ${s.ev.length ? `<ul class="irl">${s.ev.map((e) => srLi(e, s.n)).join("")}</ul>` : `<div class="note">1주·1개월 동안 10등 안 순서 변화 없음</div>`}
+    <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th>순위</th><th style="text-align:left">회사</th><th>시총</th><th>1주</th><th>1개월</th><th>3개월</th></tr></thead><tbody>
+    ${s.rows.map((r) => `<tr${mine.has(r.code) ? ' style="background:var(--warn-bg)"' : ""}><td><b>${r.r0}</b></td><td style="text-align:left;white-space:nowrap">${mine.has(r.code) ? `<a href="#stock/${esc(r.code)}"><b>${esc(r.name)}</b></a> <span class="src">${esc(mine.get(r.code))}</span>` : esc(r.name)}</td><td>${srCap(r.cap)}</td>${[5, 20, 60].map((h) => `<td style="white-space:nowrap">${dr(r, h)}${pp(r[`p${h}`])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="note src">${a && b ? `1등 ${esc(a.name)} − 2등 ${esc(b.name)} = ${srCap(a.cap - b.cap)} 차이 · ` : ""}▲▼ = 그때보다 순위가 몇 칸 올랐나·내렸나 · 작은 % = 그 사이 시총 변화 · 그때 시총 = 지금 시총 × 그때 종가 ÷ 지금 종가 (그 사이 주식 수가 바뀌면 조금 달라요) · 노란 줄 = 우리 종목 · 네이버 증권 업종 기준 (묶음은 손으로 조정) · 신호일 뿐 사고팔 판단이 아니에요</div></details>`;
+}
+async function srSigHTML() {
+  const R = await srGet(), S = R.sec || [];
+  if (!S.length) return "";
+  const mine = new Set(DASH.stocks.map((c) => c.code)), all = S.flatMap((s) => s.ev.map((e) => ({ ...e, sec: s.n })));
+  const ours = all.filter((e) => mine.has(e.code)), today = (R.log || []).filter((e) => e.d === R.date && !e.seed);
+  const cnt = (t) => all.filter((e) => e.typ === t).length;
+  return `<div class="card" style="margin-bottom:10px"><div class="chart-title"><b>🏁 업종 시총 순위 변화 — 1주·1개월</b> <span class="src">${S.length}개 업종 · 1,000억 이상 · ${esc(R.date || "")} · 평일 아침·장 마감 뒤</span></div>
+    <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 같은 업종 안에서 회사 몸값(시가총액) 순서가 바뀌면, 돈이 그 회사 쪽으로 옮겨 간다는 신호예요. <b>👑 1등이 바뀜</b>·<b>🟢 밑에서 치고 올라옴</b>(10등 안)은 눈여겨보고, <b>🔴 업종보다 많이 빠짐</b>(5% 넘게, 업종 가운데보다 1주 10%p·1개월 15%p 더)은 무슨 일인지 꼭 확인해요.</div>
+    <div class="note">👑 ${cnt("king")} · 🟢 ${cnt("up")} · 🔴 ${cnt("down")}${today.length ? ` · 오늘 새로 ${today.length}건` : ""}</div>
+    ${ours.length ? `<div style="margin-top:6px"><b>⭐ 우리 종목</b><ul class="irl">${ours.map((e) => srLi(e)).join("")}</ul></div>` : ""}
+    <details class="fvt"${ours.length ? "" : " open"}><summary class="chart-title">업종마다 바뀐 것 (${all.length}건)</summary>${S.filter((s) => s.ev.length).map((s) => `<div style="margin-top:6px"><b>${esc(s.n)}</b><ul class="irl">${s.ev.map((e) => srLi(e, s.n)).join("")}</ul></div>`).join("")}</details>
+    <details class="fvt"><summary class="chart-title">업종별 순위표 (${S.length}개) — 눌러서 보기</summary>${S.map((s) => srCard(s, false)).join("")}</details>
+    <div class="note src">산업 탭 업종 칸 맨 위에도 같은 표 · 새로 바뀐 것은 🔔 새 소식에도 올라가요 · 묶음 = config/sector_rank.yaml (네이버 증권 업종 + 손으로 더하고 뺌)</div></div>`;
+}
 async function quietHTML() {
   const R = (await repAllGet()).rows || [], today = kstToday(), cnt = {}, lastD = {}, G = { 보유: 0, 관심: 1, 공동: 2 };
   for (const [d, code] of R) { cnt[code] = (cnt[code] || 0) + 1; if (!lastD[code] || d > lastD[code]) lastD[code] = d; }
@@ -5701,6 +5732,7 @@ async function loadPBR() {
   }
   signalHTML().then((h) => { $("#signalBody").innerHTML = h; }).catch(() => { $("#signalBody").innerHTML = `<div class="empty">신호 표를 못 그렸어요.</div>`; });
   quietHTML().then((h) => { $("#sigQuiet").innerHTML = h; }).catch(() => {});
+  srSigHTML().then((h) => { $("#sigRank").innerHTML = h; }).catch(() => {});
   etfHTML().then((h) => { $("#sigEtf").innerHTML = h; });
   const base = PBR.base_year;
   $("#pbrIntro").innerHTML = `연도별 추정 BPS(주당순자산) × PBR 배수로 가격을 계산해요. <b>${esc(base)}</b> 열이 기준 연도예요. 갱신 ${esc(PBR.updated_at)}`;
@@ -6325,6 +6357,7 @@ async function loadIndustry() {
   await consGet();
   await essGet();
   if (!FEB) { try { FEB = await (await fetch("data/fe_backlog.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { FEB = {}; } }
+  await srGet();
   // 업종별로 한 칸씩 (2026-11-01 사용자 요청) — 맨 위 이름 목록을 누르면 그 업종 칸으로 · 🗺 시장 그룹판·🔭 차트 스캔은 📈 차트 탭
   const K = KEYC?.industry || {}, used = new Set(), key = (k) => { if (!K[k]) return ""; used.add(k); return keyGroup(k, K[k]); };
   const xpL = (k, t) => `<div class="note" style="margin-top:8px"><a href="#exports" data-kc="xp-${k}">📦 ${t} (1~10일 잠정 · 월별 · 나라별, 1개월~전체) → 수출입 탭</a></div>`;  // 11/11 수출입 탭으로 옮김
@@ -6333,7 +6366,8 @@ async function loadIndustry() {
     ["💾 반도체", () => memIndHTML() + drHTML() + `<div class="card" style="margin-top:8px">${cycHTML("005930")}${cycHTML("000660")}</div>` + consSec(["반도체"]) + expHTML("tech") + key("반도체")], ["🔧 전공정", () => febHTML() + key("전공정")], ["⚡ 전력기기", () => consSec(["전력기기"]) + expHTML("power")], ["🔋 2차전지·ESS", () => essHTML() + liHTML() + consSec(["2차전지", "ESS"]) + key("2차전지")], ["🧱 기판·CCL", () => cmp3HTML() + consSec(["기판"]) + key("기판") + gpeCard("CCL·기판")],
     ["🛡 방산", () => consSec(["방산"]) + key("방산") + gpeCard("방산") + defenseHTML()], ["🤖 AI·빅테크", () => gpeCard("M7") + key("AI 자금줄") + capexHTML()],
     ["🏬 백화점", () => consSec(["유통"]) + gpeCard("백화점")], ["🎤 엔터", () => key("엔터")], ["🚗 자동차", () => autosalesHTML() + consSec(["자동차"]) + key("자동차") + expHTML("car") + gpeCard("자동차")], ["🦾 로봇", () => gpeCard("로봇")]]
-    .map(([t, f]) => [t, f()]);
+    .map(([t, f]) => [t, (SR.sec || []).filter((s) => s.ind && t.includes(s.ind)).map((s) => srCard(s, false)).join("") + f()]);  // 🏁 시총 순위 = 업종 칸 맨 위 (sector_rank.yaml ind)
+  if ((SR.sec || []).length) secs.push(["🏁 업종 시총 순위 (전 업종)", `<div class="kidbox">🐣 업종 안 회사 몸값 순서가 바뀌는지 — 👑 1등 바뀜 · 🟢 10등 안 치고 올라옴 · 🔴 업종보다 많이 빠짐 (📡 신호 탭에 모아 보기)</div>` + SR.sec.map((s) => srCard(s, false)).join("")]);
   secs.push(["🔑 그 밖의 업종", Object.keys(K).filter((k) => !used.has(k)).map((k) => keyGroup(k, K[k])).join("")], ["⚖️ 고정비·변동비 (전 업종)", costIndHTML()]);
   // 업종 칸은 모두 접어 둠 (사용자 11/18 "산업 탭이 너무 방대해") — 이름 아래 신호등 = 📡 신호 탭 추세판과 같은 숫자 · 바로가기(kcGo·jumpBar)는 openUp 으로 엶
   const TR = trendRows(), light = (t) => TR.filter((r) => r.sec === t).map((r) => `${TR_L[r.s.k][0]} ${esc(r.t)}`).join(" · ");

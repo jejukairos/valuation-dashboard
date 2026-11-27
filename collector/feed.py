@@ -121,6 +121,13 @@ def build(today=None, days=DAYS, git=True):
         ks = [k for k, s in seen.items() if d in s.values() and k in SN]  # 기초·색조는 화장품 안이라 뺌
         ym = max(m for k in ks for m, v in seen[k].items() if v == d)
         add(d, "", "📦 수출", f"관세청 {int(ym[5:])}월 확정치 들어옴 — " + "·".join(SN[k] for k in ks), go="#exports", g=best(ks), cs=xcs(ks))
+    # 🏁 업종 시총 순위 변화 (sector_rank.py log = 처음 본 날만 · 첫날 한꺼번에 잡힌 seed 는 뺌) — 사용자 11/27 "밑에 있던 게 위로 올라오면 무조건 말해줘 · 빠지는 건 위험으로"
+    for e in _j("sector_rank").get("log") or []:
+        if (e.get("d") or "") >= cut and not e.get("seed"):
+            code = e.get("code", "")
+            items.append({"d": e["d"], "hm": "", "code": code if code in S else "", "name": S.get(code, ("", ""))[0], "g": S[code][1] if code in S else "공통",
+                          "k": {"up": "🏁 시총 순위 ↑", "down": "🏁 시총 빠짐", "king": "🏁 업종 1등 바뀜"}.get(e.get("typ"), "🏁 시총 순위"), "t": e.get("t", ""),
+                          "go": "#signal", **({"bad": 1} if e.get("typ") == "down" else {})})
     # 📌 큰 사건 (events.json) · 📈 이익 추정치 1주 변화 (3% 넘게)
     for ev in _j("events") if isinstance(_j("events"), list) else []:
         if (ev.get("date") or "") >= cut and str(ev.get("code")) in S:

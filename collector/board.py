@@ -831,6 +831,11 @@ def main():
             print(f"■ 주봉 정배열 {a['date']}: {a['universe']}종목 중 통과 {len(a['pass'])} (신규 {len(a['new'])} / 이탈 {len(a['out'])})")
         except Exception as e:  # noqa: BLE001
             print("■ 주봉 정배열 실패:", str(e)[:200])
+        try:  # 🏁 업종 시총 순위 (사용자 11/27) — 네이버 업종·일봉, KRX 로그인 필요 없음
+            import sector_rank
+            sector_rank.main()
+        except Exception as e:  # noqa: BLE001
+            print("■ 🏁 업종 시총 순위 실패:", str(e)[:200])
     if "--board" not in sys.argv and "--align" not in sys.argv:
         s = scan()
         write_json(DATA / "scan.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), **s})
