@@ -274,6 +274,31 @@ def commits(cut):
     return rows
 
 
+ARCH_DAYS, ARCH_FIRST = 400, 200
+
+
+def archive(items):
+    """🔎 지난 소식 쌓기 (사용자 11/27 "7일 지나면 날아가는 게 아쉽다 — 종목을 검색하면 옛날 것까지 타임라인으로") → site/data/feed_all.json.
+    7일 치 새 소식을 올 때마다 합침 (같은 날·종목·종류·글은 한 번, 추정치는 종목마다 하루 한 줄). 🛠·🤖 커밋 줄은 뺌 (git 에 있음).
+    처음엔 지금 자료에 날짜가 남아 있는 만큼(리포트 6개월·공시 1년)을 한 번에 채움."""
+    path = DATA / "feed_all.json"
+    try:
+        old = json.loads(path.read_text(encoding="utf-8")).get("items") or []
+    except (OSError, ValueError):
+        old = []
+    if not old:
+        items = build(days=ARCH_FIRST, git=False)["items"]
+    key = lambda x: (x["d"], x.get("code", ""), x["k"]) + (() if x["k"] == "📈 추정치" else (x["t"],))  # noqa: E731
+    cut, seen, out = (now_kst().date() - timedelta(days=ARCH_DAYS)).isoformat(), set(), []
+    for x in [*items, *old]:
+        if x["k"].startswith(("🛠", "🤖")) or x["d"] < cut or key(x) in seen:
+            continue
+        seen.add(key(x))
+        out.append({k: x[k] for k in ("d", "code", "name", "g", "k", "t", "u", "go", "bad") if x.get(k)})
+    out.sort(key=lambda x: x["d"], reverse=True)
+    return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "items": out}
+
+
 if __name__ == "__main__":
     if sys.argv[1:] == ["--test"]:
         assert _eok(1962) == "1,962억" and _eok(12345) == "1.2조" and _won(1800000) == "180만원" and _won(52000) == "52,000원"
@@ -284,6 +309,8 @@ if __name__ == "__main__":
         t = ["26-01-%02d" % (i % 28 + 1) for i in range(300)]
         c = [100 + (i % 2) for i in range(299)] + [120]
         assert big_moves(t, c, "2026-01-01") == [("2026-01-%02d" % (299 % 28 + 1), (120 / 100 - 1) * 100)], "큰 등락 = 마지막 +20% 하루만"
+        a = archive(f["items"])["items"]
+        assert not any(x["k"].startswith(("🛠", "🤖")) for x in a) and all(x["d"] >= y["d"] for x, y in zip(a, a[1:])), "지난 소식 = 커밋 줄 없이 최신 먼저"
         tl = timeline()
         assert all(r["d"] <= s[i + 1]["d"] or r.get("up") or s[i + 1].get("up") for s in tl["stocks"].values() for i, r in enumerate(s[:-1])), "타임라인 날짜순"
         print("ok", len(f["items"]), "· 타임라인", len(tl["stocks"]), "종목")
@@ -291,6 +318,9 @@ if __name__ == "__main__":
         f = build()
         write_json(DATA / "feed.json", f)
         print(f"■ 새 소식 {len(f['items'])}개 (7일)")
+        a = archive(f["items"])
+        write_json(DATA / "feed_all.json", a)
+        print(f"■ 지난 소식 쌓기 {len(a['items'])}개 ({a['items'][-1]['d'] if a['items'] else '-'} ~)")
         tl = timeline()
         write_json(DATA / "timeline.json", tl)
         print(f"■ 종목별 타임라인 {len(tl['stocks'])}종목 ({TL_DAYS}일 + 다가올 일정)")

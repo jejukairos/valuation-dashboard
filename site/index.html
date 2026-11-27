@@ -179,7 +179,9 @@
 </main>
 <main class="wrap" id="feedView" hidden>
   <h2>🔔 새 소식</h2>
-  <p class="sub">오늘·어제·이번 주(7일)에 바뀐 것만 모았어요 — 가장 최신이 위, 같은 날은 보유 → 관심 → 공동 순서. 실적·리포트·공시·수출 숫자와 사이트에 자동으로 반영한 것까지 · 매수·매도 추천 아님</p>
+  <p class="sub">오늘·어제·이번 주(7일)에 바뀐 것 — 가장 최신이 위, 같은 날은 보유 → 관심 → 공동 순서 · 지난 소식은 아래 칸에 종목 이름을 넣으면 날짜 순서로 나와요 · 매수·매도 추천 아님</p>
+  <input id="feedQ" class="sel" type="search" list="feedNames" placeholder="🔎 종목 이름으로 지난 소식 찾기 (예: 에이피알, 달바글로벌)" autocomplete="off" style="width:100%;max-width:520px;margin-bottom:10px"><datalist id="feedNames"></datalist>
+  <div id="feedHist"></div>
   <div id="feedBody"><div class="empty">불러오는 중…</div></div>
 </main>
 <main class="wrap" id="exportsView" hidden>
