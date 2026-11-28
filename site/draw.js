@@ -10,9 +10,10 @@ const DW_ICON = {
   t: '<path d="M8 20L20 8"/><circle cx="6.5" cy="21.5" r="2"/><circle cx="21.5" cy="6.5" r="2"/>',
   r: '<path d="M5 6h14M9 22h14M14 22V9M11 12l3-3 3 3"/><circle cx="21" cy="6" r="2"/><circle cx="7" cy="22" r="2"/>',
   h: '<path d="M3 14h8M17 14h8"/><circle cx="14" cy="14" r="2.5"/>',
+  f: '<path d="M4 5h20M4 23h20"/><path d="M4 14h20" stroke-dasharray="4 3" stroke-width="2.4"/><path d="M8 8v3M8 17v3" stroke-width="1"/>',
   p: '<path d="M9 17l9-9 3 3-9 9H9v-3zM6 23h16"/>',
 };
-const DW_TOOL = [["t", "추세선: 두 번 누르거나 끌어서 긋기"], ["r", "가격 범위: 두 점 사이가 몇 % 인지"], ["h", "가로줄: 한 번 누르면 그 가격에 줄"], ["p", "형광펜: 손가락으로 끌어서 칠하기"]];
+const DW_TOOL = [["t", "추세선: 두 번 누르거나 끌어서 긋기"], ["r", "가격 범위: 두 점 사이가 몇 % 인지"], ["h", "가로줄: 한 번 누르면 그 가격에 줄"], ["f", "반값(50%): 오른(내린) 구간의 시작과 끝을 누르면 딱 절반 가격에 줄"], ["p", "형광펜: 손가락으로 끌어서 칠하기"]];
 const DW = { code: "", name: "", dec: 0, tf: "w", tool: "", sel: -1, pend: null, cross: null, end: 0, bw: 8, fix: null, pr: [0, 1], grp: "보유", src: {}, B: null, dr: [], hist: [], snap: "[]", fl: [], fm: [], fsel: null, extra: [], def: {}, raf: 0, head: "" };
 // 새 선의 색·굵기: 처음엔 파랑 1px (형광펜은 연한 주황 4) → 선의 색·굵기를 바꾸면 그 도구의 기본값으로 기억 (localStorage "draw:def", 사용자 11/25)
 const dwDef = (k) => ({ c: k === "p" ? DW_PEN : "#2962ff", w: k === "p" ? 4 : 1, ...DW.def[k] });
@@ -222,6 +223,17 @@ function dwRender(mini) {  // mini = 종목 카드의 작은 캔들 캔버스 (d
     const [xa, ya] = dwPx(d.a), [xb, yb] = d.b ? dwPx(d.b) : [xa, ya];
     if (d.k === "h") { line(0, Math.round(ya) + 0.5, pw, Math.round(ya) + 0.5); tags.push([ya, dwFmt(d.a[1]), cl]); if (sel) dot(pw - 46, ya, cl); return; }
     if (d.k === "t") { line(xa, ya, xb, yb); if (sel) { dot(xa, ya, cl); dot(xb, yb, cl); } return; }
+    if (d.k === "f") {  // 반값(50%) — 사용자 11/28 "오른 구간의 딱 반 (피보나치 50%)": 구간의 두 끝 가격에 가는 줄 + 딱 절반 가격에 굵은 점선, 오른쪽 끝까지
+      const x0 = Math.min(xa, xb), mid = (d.a[1] + d.b[1]) / 2, ym = dwY(mid);
+      c.globalAlpha = 0.06; c.fillStyle = cl; c.fillRect(x0, Math.min(ya, yb), pw - x0, Math.abs(yb - ya)); c.globalAlpha = 1;
+      c.lineWidth = 1; line(x0, ya, pw, ya); line(x0, yb, pw, yb);
+      c.lineWidth = Math.max(2, d.w || 1); c.setLineDash([6, 4]); line(x0, ym, pw, ym); c.setLineDash([]);
+      c.fillStyle = cl; c.textAlign = "left"; c.font = "bold 13px system-ui, sans-serif"; c.fillText(`50% 반값 ${dwFmt(mid)}`, x0 + 6, ym - 9);
+      c.font = "12px system-ui, sans-serif"; c.fillText(`시작 ${dwFmt(d.a[1])}`, x0 + 6, ya + (ya > yb ? -8 : 12)); c.fillText(`끝 ${dwFmt(d.b[1])}`, x0 + 6, yb + (yb > ya ? -8 : 12));
+      tags.push([ym, dwFmt(mid), cl]);
+      if (sel) { dot(xa, ya, cl); dot(xb, yb, cl); }
+      return;
+    }
     // 가격 범위: 두 가격에 짧은 가로줄 + 가운데 화살표 + '차이 (몇 %)' 꼬리표
     const xm = (xa + xb) / 2, dir = yb < ya ? -1 : 1, dp = d.b[1] - d.a[1];
     c.globalAlpha = 0.08; c.fillStyle = cl; c.fillRect(Math.min(xa, xb), Math.min(ya, yb), Math.abs(xb - xa), Math.abs(yb - ya)); c.globalAlpha = 1;
@@ -283,6 +295,7 @@ function dwHit(d, x, y) {
   if (Math.hypot(x - xa, y - ya) <= 16) return "a";
   if (Math.hypot(x - xb, y - yb) <= 16) return "b";
   if (d.k === "t") return dwSegD(x, y, xa, ya, xb, yb) <= 12 ? "m" : null;
+  if (d.k === "f") return x >= Math.min(xa, xb) - 12 && [ya, yb, dwY((d.a[1] + d.b[1]) / 2)].some((v) => Math.abs(y - v) <= 12) ? "m" : null;  // 세 줄 가까이
   return x >= Math.min(xa, xb) - 12 && x <= Math.max(xa, xb) + 12 && y >= Math.min(ya, yb) - 12 && y <= Math.max(ya, yb) + 12 ? "m" : null;
 }
 const dwFind = (x, y) => { for (let k = DW.dr.length - 1; k >= 0; k--) if (dwHit(DW.dr[k], x, y)) return k; return -1; };
@@ -431,7 +444,7 @@ function dwInit() {
     let mode = "pan", hit = null;
     if (p.x > DWG.pw) mode = "axis";
     else if (p.y > DWG.ph) mode = "pan";
-    else if (DW.tool === "t" || DW.tool === "r") { mode = "draw"; if (!DW.pend) DW.pend = { a: dwPos(p.x, p.y), fresh: true }; }
+    else if (DW.tool === "t" || DW.tool === "r" || DW.tool === "f") { mode = "draw"; if (!DW.pend) DW.pend = { a: dwPos(p.x, p.y), fresh: true }; }
     else if (DW.tool === "h") mode = "tap";
     else if (DW.tool === "p") { mode = "pen"; DW.ink = [[dwDayF(dwI(p.x)), dwP(p.y)]]; }
     else if (sel && (hit = dwHit(sel, p.x, p.y))) mode = "edit";
