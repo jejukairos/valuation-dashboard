@@ -1003,7 +1003,7 @@ function cmpCols(mk = MKT) {
   const li = usd ? 0 : 1;  // ROE ÷ ROA = 자산이 자본의 몇 배인지 (1배에 가까울수록 빚이 적음) — 한국 = 올해 예상, 미국 = 확정 연간
   c.lev = { h: `ROE÷ROA<br>${ys[li]}`, v: (s) => { const a = s.tbl?.roe?.[li], b = s.tbl?.roa?.[li]; return a > 0 && b > 0 ? a / b : null; }, f: (v) => (v == null ? "-" : `<span class="${v >= 3 ? "neg" : ""}">${n(v, 1)}배</span>`) };
   // 엑셀 '간단 벨류' 지표 (야후 연간 실적: 최근 / 1년 전 / 2년 전) — GPM 은 증권사 예상치가 무료 자료에 없어 확정 실적만 (머리글에 그 연도, tbl.fy)
-  const fyL = usd ? [] : DASH.stocks.find((s) => s.market === "KR" && s.tbl?.fy?.length)?.tbl.fy || [], ago =  // 미국은 회사마다 회계연도가 달라(엔비디아 1월 결산) 연도를 안 붙임 ["최근 연간", "1년 전", "2년 전"].map((a, i) => (fyL[i] ? `${fyL[i]} 확정` : a));
+  const fyL = usd ? [] : DASH.stocks.find((s) => s.market === "KR" && s.tbl?.fy?.length)?.tbl.fy || [], ago = ["최근 연간", "1년 전", "2년 전"].map((a, i) => (fyL[i] ? `${fyL[i]} 확정` : a));  // 미국은 회사마다 회계연도가 달라(엔비디아 1월 결산) 연도를 안 붙임
   const money3 = (v, s) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${s.currency === "USD" ? "$" + n(v / 1e9, 1) + "B" : Math.abs(v) >= 1e12 ? n(v / 1e12, 1) + "조" : n(v / 1e8, 0) + "억"}</span>`);
   for (let i = 0; i < 3; i++) {
     c["gpm" + i] = { h: `GPM<br>${ago[i]}`, v: t("gpm", i), f: R(1) };
