@@ -354,7 +354,7 @@ function dwUi() {
   const full = $("#dwBox").classList.contains("full");
   $("#dwFs").innerHTML = `<svg viewBox="0 0 28 28" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">${DW_FS[+full]}</svg>`;
   $("#dwFs").title = full ? "전체 화면 끄기" : "전체 화면";
-  $("#dwBtns").innerHTML = `${full ? DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("") : ""}<button data-inv="1" class="${DW.inv ? "on" : ""}" title="가격 눈금 뒤집기: 싼 가격이 위로">⇅ 거꾸로</button>${DW.fl.length ? `<button data-fil="1" class="${DW.fil ? "on" : ""}" title="중요 공시 표시 켜기·끄기">📢 공시</button>` : ""}${DW.hist.length ? `<button data-undo="1" title="방금 한 것 되돌리기">↶ 이전</button>` : ""}${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
+  $("#dwBtns").innerHTML = `${full ? DW_TF.map(([k, l]) => `<button data-tf="${k}" class="${k === DW.tf ? "on" : ""}">${l}</button>`).join("") : ""}<button data-inv="1" class="${DW.inv ? "on" : ""}" title="가격 눈금 뒤집기: 싼 가격이 위로">⇅ 거꾸로</button>${DW.fl.length ? `<button data-fil="1" class="${DW.fil ? "on" : ""}" title="중요 공시 표시 켜기·끄기">📢 공시</button>` : ""}${DW.hist.length ? `<button data-undo="1" title="방금 한 것 되돌리기">↶ 이전</button>` : ""}${DW.fix ? `<button data-auto="1">↕ 눈금 자동</button>` : ""}<button data-fit="1">↺ 처음 화면</button>${DW.dr.some((d) => d.k === "p") ? `<button data-pen="1" title="형광펜으로 칠한 것만 지우기 (선은 그대로 · ↶ 이전으로 되돌릴 수 있어요)">🧽 형광펜 지우기</button>` : ""}${DW.dr.length ? `<button data-all="1">${DW.arm ? "한 번 더 누르면 전부 지움" : "🗑 선 전부"}</button>` : ""}`;
   dwAsk();
 }
 function dwToolPos() {  // 저장해 둔 자리 (차트 밖으로 못 나가게)
@@ -530,6 +530,7 @@ function dwInit() {
     else if (b.dataset.undo) dwUndo();
     else if (b.dataset.auto) DW.fix = null;
     else if (b.dataset.fit) dwFit();
+    else if (b.dataset.pen) { DW.dr = DW.dr.filter((d) => d.k !== "p"); DW.sel = DW.pal = -1; dwSave(); dwPickDraw(); }  // 형광펜만 지움 (사용자 11/28) — 선·가로줄·반값은 그대로, ↶ 이전으로 되돌림
     else if (!DW.arm) { DW.arm = true; setTimeout(() => { DW.arm = false; dwUi(); }, 3000); }  // 실수로 전부 지우지 않게 두 번 누르기
     else { DW.arm = false; DW.dr = []; DW.sel = -1; dwSave(); dwPickDraw(); }
     dwUi();
