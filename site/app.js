@@ -1952,6 +1952,7 @@ function dotMap(o) {  // o = {id, t, pts: [{x, y, n, own}], fx, fy, xt, yt}
   g += `<text x="${x1}" y="${bot + 24}" text-anchor="end" class="qx">${esc(o.xt)} →</text><text x="4" y="10" class="qx">↑ ${esc(o.yt)}</text>`;
   // 이름표: 점·다른 이름표와 안 겹치는 자리(오른쪽 → 왼쪽 → 위 → 아래)를 차례로 찾음
   const boxes = inn.map((p) => [X(p.x) - 3.5, Y(p.y) - 3.5, X(p.x) + 3.5, Y(p.y) + 3.5]);
+  let hits = "";
   [...inn].sort((p, q) => q.own - p.own || q.y - p.y).forEach((p) => {
     const cx = X(p.x), cy = Y(p.y), w = [...p.n].reduce((s, ch) => s + (ch.charCodeAt(0) > 255 ? 9.5 : 5.6), 0);
     const cand = [[5, 3.5, 0], [-5, 3.5, 1], [-w / 2, -6, 0], [-w / 2, 13, 0], [5, -6, 0], [5, 13, 0], [-5, -6, 1], [-5, 13, 1]];
@@ -1960,11 +1961,14 @@ function dotMap(o) {  // o = {id, t, pts: [{x, y, n, own}], fx, fy, xt, yt}
       const bx = c[2] ? cx + c[0] - w : cx + c[0], box = [bx, cy + c[1] - 8.5, bx + w, cy + c[1] + 1.5];
       if (box[0] >= 0 && box[2] <= W && box[1] >= 0 && !boxes.some((q) => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) { pick = c; boxes.push(box); break; }
     }
-    g += `<circle cx="${cx}" cy="${cy}" r="${p.own ? 4.2 : 3.4}" fill="${p.own ? "var(--s1)" : "var(--surface)"}" stroke="${p.own ? "var(--s1)" : "var(--muted)"}" stroke-width="1.6"><title>${esc(`${p.n}: ${o.xt} ${o.fx(p.x)} · ${o.yt} ${o.fy(p.y)}`)}</title></circle>`
+    // 점을 누르면(마우스를 올리면) 숫자 상자 (사용자 11/28 "점 클릭했을 때 12개월 선행 PER·다음 1년 EPS 증가율") — 손가락으로 누르기 쉽게 보이지 않는 큰 동그라미를 맨 위에
+    const f0 = fit(p.x);
+    hits += `<circle class="tiphit" cx="${cx}" cy="${cy}" r="11" data-tip="${esc(`${p.n}\n${o.yt} ${n(p.y, o.yd ?? 1)}배\n${o.xt} ${p.x > 0 ? "+" : ""}${n(p.x, 1)}%${f0 > 0 ? `\n점선(평균 관계)보다 ${p.y >= f0 ? "+" : ""}${n((p.y / f0 - 1) * 100, 0)}%` : ""}`)}"/>`;
+    g += `<circle cx="${cx}" cy="${cy}" r="${p.own ? 4.2 : 3.4}" fill="${p.own ? "var(--s1)" : "var(--surface)"}" stroke="${p.own ? "var(--s1)" : "var(--muted)"}" stroke-width="1.6"/>`
       + `<text x="${cx + pick[0]}" y="${cy + pick[1]}" text-anchor="${pick[2] ? "end" : "start"}" style="font-size:9.5px;fill:var(${p.own ? "--ink" : "--muted"});font-weight:${p.own ? 700 : 400}">${esc(p.n)}</text>`;
   });
   const gap = (p) => (p.y / fit(p.x) - 1) * 100, rk = inn.filter((p) => fit(p.x) > 0).sort((p, q) => gap(p) - gap(q));
-  return { svg: `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.t)}">${g}</svg>`, rk, gap, out, b };
+  return { svg: `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.t)}">${g}${hits}</svg>`, rk, gap, out, b };
 }
 function dotMapHTML(list, g, mk) {  // 사용자 11/6: 탭마다 그 탭 종목만 (보유 = 그 시장 보유 · 관심 = 그 시장 관심 · 공동 = 공동자산 전체)
   const S = (list || []).filter((c) => c.fwd_mult), key = ({ 보유: "own", 관심: "watch", 공동: "joint" }[g] || "all") + (mk || "");
@@ -1993,7 +1997,7 @@ function dotMapHTML(list, g, mk) {  // 사용자 11/6: 탭마다 그 탭 종목�
       <div class="kidbox" style="margin-top:6px">🐣 ${kid}${m.b < 0 ? ` <b>지금 이 종목들은 점선이 거꾸로(오른쪽 아래로) 기울어 있어요</b> — ${unit}이 높은 종목이 오히려 배수가 낮게 거래되는 중이에요.` : ""}</div><div class="note src">${src}</div></div>`;
   };
   const m1 = per.length >= 3 && dotMap({ id: `dmper${key}`, t: "", pts: per, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 0)}배`, xt: "다음 1년 EPS 증가율", yt: "12개월 선행 PER" });
-  const m2 = pbr.length >= 3 && dotMap({ id: `dmpbr${key}`, t: "", pts: pbr, cap: 3, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 1)}배`, xt: "ROE (12MF)", yt: "PBR (12MF)" });
+  const m2 = pbr.length >= 3 && dotMap({ id: `dmpbr${key}`, t: "", pts: pbr, cap: 3, yd: 2, fx: (v) => `${n(v, 0)}%`, fy: (v) => `${n(v, 1)}배`, xt: "ROE (12MF)", yt: "PBR (12MF)" });
   if (!m1 && !m2) return "";
   return `<details class="card" open style="margin-bottom:12px"><summary class="chart-title"><b>📍 ${g === "공동" ? "공동자산" : g} 종목 지도</b> <span class="src">${{ KR: "🇰🇷 ", US: "🇺🇸 " }[mk] || ""}이익 증가율 대비 PER · ROE 대비 PBR · 참고용 (매수·매도 추천 아님)</span></summary>
     <div class="qgrid">${card(m1, "다음 1년 EPS 증가율 × 12개월 선행 PER", "EPS 증가율",
