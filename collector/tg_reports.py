@@ -8,7 +8,7 @@ from html import unescape
 
 import pandas as pd
 
-from common import DATA, HTTP, load_yaml, now_kst, write_json
+from common import DATA, HTTP, load_yaml, now_kst, read_json, write_json
 from street import _text
 
 AICA = "aicorporateanalysisdeepdive"  # 기사 요약(원문 링크) + '종목 3Q26 증권사 리포트 종합'(몇 곳·목표가 상향/유지/하향) — 사용자 2026-11-03 크로스체크용
@@ -132,6 +132,39 @@ def revision(text, names):
     return None
 
 
+REV_OP = 30  # 우리 기준 (사용자 11/28 "채널 글은 복잡하다 · 더 깐깐하게 · 영업이익으로"): 올해 영업이익 예상이 1주 새 ±30% 넘게 바뀐 곳만 (채널 글은 EPS ±3% 전부)
+
+
+def rev_week(text):
+    """'주간 EPS 컨센서스 리비전' 글 전체 (시장 800종목) → {wk, n 종목 수, up_n·dn_n 채널 기준 상향·하향 수, th, rows}.
+    rows = 글에 이름이 나온 회사 (상향·하향 TOP 8 + 적자·저EPS 칸): {n, y1·y2 올해·내년 EPS %, op 올해 영업이익 %, px 주가 %, turn, e0→e1 EPS 원,
+    k = 우리 기준에 걸린 것: U 영업이익 +REV_OP% 이상 · D -REV_OP% 이하 · R 적자전환 · B 흑자전환}. '외 N종목'은 이름이 없어 못 씀."""
+    if "EPS 컨센서스 리비전" not in text.strip().split("\n", 1)[0]:
+        return None
+    wk, cnt, tot = re.search(r"(\d{1,2}/\d{1,2})\s*→\s*(\d{1,2}/\d{1,2})", text), re.search(r"상향\s*(\d+)\s*·\s*하향\s*(\d+)", text), re.search(r"([\d,]+)종목", text)
+    rows, sec = [], ""
+    for s in (x.strip() for x in text.split("\n")):
+        if s[:1] in ("▲", "▼", "▌"):
+            sec = s.lstrip("▲▼▌ ").strip()
+            continue
+        m = re.match(r"(.+?)\s+(?=[+-]\d|영익|흑자전환|적자전환)", s)  # 이름에 빈칸이 있는 회사도 (CJ ENM)
+        if not m or not sec or sec == "참고" or s.startswith(("└", "외 ")):
+            continue
+        r, rest = {"n": m[1].strip()}, s[m.end():]
+        if (e := re.match(rf"{NUM}(?:/{NUM})?", rest)):
+            r.update(y1=float(e[1]), **({"y2": float(e[2])} if e[2] else {}))
+        for k, w in (("op", "영익"), ("px", "주가")):
+            if (v := re.search(rf"{w}\s*{NUM}", rest)):
+                r[k] = float(v[1])
+        if (t := re.search(r"(흑자전환|적자전환)\s*\(EPS\s*(-?[\d,]+)\s*→\s*(-?[\d,]+)원", rest)):
+            r.update(turn=t[1], e0=int(t[2].replace(",", "")), e1=int(t[3].replace(",", "")), k="R" if t[1] == "적자전환" else "B")
+        elif abs(r.get("op") or 0) >= REV_OP:
+            r["k"] = "U" if r["op"] > 0 else "D"
+        rows.append(r)
+    return {"wk": f"{wk[1]}→{wk[2]}" if wk else "", "n": int(tot[1].replace(",", "")) if tot else None,
+            "up_n": int(cnt[1]) if cnt else None, "dn_n": int(cnt[2]) if cnt else None, "th": REV_OP, "rows": rows}
+
+
 def collect():
     sy = load_yaml("stocks.yaml")
     cut = (now_kst() - pd.Timedelta(days=DAYS)).strftime("%Y-%m-%d")
@@ -163,8 +196,15 @@ def collect():
             peers[code] = sorted([{"d": x["d"], "t": x["text"].split("\n", 1)[0][:120], "u": f"https://t.me/{x['id']}"} for x in hits.values()], key=lambda p: p["d"], reverse=True)[:5]
         except Exception as e:  # noqa: BLE001
             fails.append(f"{INSIDER} {q}: {str(e)[:50]}")
+    revw = []
+    try:  # 📊 주간 이익 추정치 — 시장 전체 글이라 종목 검색과 따로 (월요일 아침 07:47 에 올라옴), 최근 5주
+        hits = search("maddingStock", "EPS 컨센서스 리비전", (now_kst() - pd.Timedelta(days=40)).strftime("%Y-%m-%d"))
+        revw = sorted(({"d": x["d"], "u": f"https://t.me/{x['id']}", **r} for x in hits if (r := rev_week(x["text"]))), key=lambda p: p["d"], reverse=True)[:5]
+    except Exception as e:  # noqa: BLE001
+        fails.append(f"maddingStock 주간 리비전: {str(e)[:50]}")
+    revw = revw or (read_json(DATA / "tg_reports.json", {}) or {}).get("revw") or []  # 못 받으면 지난 것 그대로
     return {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "days": DAYS, "kr": KR_CH, "us": US_CH, "off": OFF,
-            "fails": fails[:30], "stocks": out, "peers": peers}
+            "fails": fails[:30], "stocks": out, "peers": peers, "revw": revw}
 
 
 def peer_hit(text, q):
@@ -191,6 +231,15 @@ if __name__ == "__main__":
         assert parse(rv, ["대한항공", "003490"])["rev"] == {"wk": "10/26→11/01", "sec": "상향 TOP", "y1": 21.5, "y2": 12.1, "op": -6.8, "px": 5.8}
         assert parse(rv, ["대한전선"])["rev"]["sec"] == "하향 TOP" and parse(rv, ["엘앤에프"])["rev"] == {"wk": "10/26→11/01", "sec": "적자·저EPS 종목의 영업이익 변화", "op": -3.7, "px": -1.4}
         assert parse(rv, ["디아이"])["rev"]["note"] == "목표주가 상향 디아이 +11.8%" and "rev" not in parse(rv, ["삼성전자"])
+        w = rev_week("주간 EPS 컨센서스 리비전\n11/16 → 11/22 · 연간 추정 · 794종목\n\n상향 33 · 하향 93 · 상향비율 26%\n인텍플러스 EPS 추정치 21.6% 상향 및 주가 19.8% 하락\n▲ 상향 TOP\n"
+                     "동국홀딩스 +307.1%/-2.6%  영익 +118.4%  주가 -4.9%\n└ 올해 예상EPS +307.1%, 내년 예상EPS -2.6%\nTYM +27.9%  영익 +30.7%  주가 +8.2%\nSK +31.7%/+23.0%  영익 +8.3%  주가 -2.8%\n외 25종목\n"
+                     "▼ 하향 TOP\n하이비젼시스템 -83.4%/-16.8%  주가 -17.7%\nCJ ENM -42.4%/-4.7%  영익 +2.7%  주가 -12.5%\n레이언스 -43.5%/-24.9%  영익 보합  주가 -1.9%\nDI동일 -71.6%/+0.0%  영익 -68.6%  주가 +0.0%\n"
+                     "▌ 적자·저EPS 종목의 영업이익 변화\nSBS  흑자전환 (EPS -43→280원)\n대주전자재료  적자전환 (EPS 1,728→-3원)\n케이카  영익 -75.1%  주가 +5.1%\n▌ 참고\n저PER 상향  SK 2.1배")
+        assert (w["wk"], w["n"], w["up_n"], w["dn_n"], len(w["rows"])) == ("11/16→11/22", 794, 33, 93, 10), w
+        assert [(r["n"], r.get("k")) for r in w["rows"]] == [("동국홀딩스", "U"), ("TYM", "U"), ("SK", None), ("하이비젼시스템", None), ("CJ ENM", None), ("레이언스", None),
+                                                             ("DI동일", "D"), ("SBS", "B"), ("대주전자재료", "R"), ("케이카", "D")], w["rows"]
+        assert w["rows"][1] == {"n": "TYM", "y1": 27.9, "op": 30.7, "px": 8.2, "k": "U"} and w["rows"][8]["e0"] == 1728 and w["rows"][8]["e1"] == -3 and "y1" not in w["rows"][9]
+        assert rev_week("삼성전자 리포트") is None
         p = parse("[✨ 리서치] 목표주가 상향/하향 보고서\n- 롯데쇼핑 | 120,000 | 하나증권\n- 롯데케미칼 | 60,000 | 하나증권", ["롯데쇼핑"])
         assert p["tp"] == 120000 and p["firm"] == "하나증권" and "dir" not in p, p
         assert "est_w" not in parse("[퀀트 시그널] 12M Fwd 영업이익 추정치 변화 | 1주간 변화\n1. 롯데에너지머티리얼즈 +3.1%", ["롯데쇼핑"])

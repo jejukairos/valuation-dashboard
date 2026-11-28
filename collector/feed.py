@@ -134,12 +134,26 @@ def build(today=None, days=DAYS, git=True):
         ym = max(m for k in ks for m, v in seen[k].items() if v == d)
         add(d, "", "📦 수출", f"관세청 {int(ym[5:])}월 확정치 들어옴 — " + "·".join(SN[k] for k in ks), go="#exports", g=best(ks), cs=xcs(ks))
     # 🏁 업종 시총 순위 변화 (sector_rank.py log = 처음 본 날만 · 첫날 한꺼번에 잡힌 seed 는 뺌) — 사용자 11/27 "밑에 있던 게 위로 올라오면 무조건 말해줘 · 빠지는 건 위험으로"
+    CAP = {r["code"]: r.get("cap") for s in _j("sector_rank").get("sec") or [] for r in s.get("rows") or []}  # 지금 시총 (억원) — 사용자 11/28 "시총이 얼마인지도"
     for e in _j("sector_rank").get("log") or []:
         if (e.get("d") or "") >= cut and not e.get("seed"):
             code = e.get("code", "")
             items.append({"d": e["d"], "hm": "", "code": code if code in S else "", "name": S.get(code, ("", ""))[0], "g": S[code][1] if code in S else "공통",
                           "k": {"up": "🏁 시총 순위 ↑", "down": "🏁 시총 빠짐", "king": "🏁 업종 1등 바뀜"}.get(e.get("typ"), "🏁 시총 순위"), "t": e.get("t", ""),
-                          "go": "#signal", **({"bad": 1} if e.get("typ") == "down" else {})})
+                          "go": "#signal", **({"bad": 1} if e.get("typ") == "down" else {}), **({"cap": CAP[code], "nm": e.get("name", "")} if CAP.get(code) else {})})
+    # 📊 주간 이익 추정치 (maddingStock 월요일 아침 글 → tg_reports.rev_week 가 우리 기준으로 고름: 올해 영업이익 예상 ±30% · 적자·흑자 전환) — 사용자 11/28
+    NG = {v[0]: v[1] for v in S.values()}
+    for w in _j("tg_reports").get("revw") or []:
+        if (w.get("d") or "") < cut:
+            continue
+        R = w.get("rows") or []
+        seg = lambda k, lab, f: (lambda L: f"{lab} {len(L)}곳 ({', '.join(f(r) for r in L)})" if L else "")([r for r in R if r.get("k") == k])  # noqa: E731
+        parts = [seg("U", "📈 크게 올림", lambda r: f"{r['n']} {r['op']:+.0f}%"), seg("D", "📉 크게 내림", lambda r: f"{r['n']} {r['op']:+.0f}%"),
+                 seg("R", "🔴 적자 전환", lambda r: r["n"]), seg("B", "🟢 흑자 전환", lambda r: r["n"])]
+        mine = [f"{NG[r['n']]} {r['n']}: " + (f"{r['turn']} (EPS {r['e0']:,}→{r['e1']:,}원)" if r.get("turn") else " · ".join(
+            f"{lab} {r[k]:+.1f}%" for k, lab in (("y1", "올해 EPS 예상"), ("op", "올해 영업이익 예상"), ("px", "주가")) if r.get(k) is not None)) for r in R if r["n"] in NG]
+        add(w["d"], "", "📊 주간 추정치", f"{w.get('wk', '')} 올해 영업이익 예상이 1주 새 {w.get('th', 30)}% 넘게 바뀐 회사 — " + (" · ".join(p for p in parts if p) or "없음"),
+            u=w.get("u", ""), go="#signal", g="공통", x=mine)
     # 📌 큰 사건 (events.json) · 📈 이익 추정치 1주 변화 (3% 넘게)
     for ev in _j("events") if isinstance(_j("events"), list) else []:
         if (ev.get("date") or "") >= cut and str(ev.get("code")) in S:

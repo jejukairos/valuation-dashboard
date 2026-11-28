@@ -4591,7 +4591,9 @@ function feedBadge() {  // 탭 이름 옆 = 오늘 새 소식 수 (사이트 반
   const n = (FEED?.items || []).filter((x) => x.d === kstToday() && !SITE_KS.has(x.k)).length, a = document.querySelector('#tabbar a[data-view="feed"]');
   if (a) a.innerHTML = `🔔 새 소식${n ? ` <b style="color:var(--bad-ink)">${n}</b>` : ""}`;
 }
-const feedRow = (x, noName) => `<div class="note" style="margin:6px 0;line-height:1.55${x.bad ? ";color:var(--bad-ink)" : ""}"><span class="pill">${esc(x.k)}</span> ${x.name && !noName ? `<a href="${esc(x.go || "#")}"><b>${esc(x.name)}</b></a> ` : ""}${esc(x.t)}${!x.name && x.go ? ` <a href="${esc(x.go)}">보기</a>` : ""}${x.u ? ` <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a>` : ""}${x.hm ? ` <span class="src">${esc(x.hm)}</span>` : ""}</div>`
+// 🏁 시총 순위 줄: 회사 이름 굵게 + 바로 옆에 작은 회색 '시총 ○조' (사용자 11/28 "시총이 얼마인지도 · 내용에 방해 안 되게")
+const feedT = (x) => (x.cap && x.nm && x.t.includes(x.nm) ? esc(x.t).replace(esc(x.nm), `<b>${esc(x.nm)}</b> <span class="src" style="white-space:nowrap">시총 ${srCap(x.cap)}</span>`) : esc(x.t));
+const feedRow = (x, noName) => `<div class="note" style="margin:6px 0;line-height:1.55${x.bad ? ";color:var(--bad-ink)" : ""}"><span class="pill">${esc(x.k)}</span> ${x.name && !noName ? `<a href="${esc(x.go || "#")}"><b>${esc(x.name)}</b></a> ` : ""}${feedT(x)}${!x.name && x.go ? ` <a href="${esc(x.go)}">보기</a>` : ""}${x.u ? ` <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a>` : ""}${x.hm ? ` <span class="src">${esc(x.hm)}</span>` : ""}</div>`
   + ((x.x || []).length ? `<ul class="irl" style="margin:-2px 0 8px">${x.x.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "");
 // 사용자 11/13 "상세 화면이 아니라 오늘 있었던 일 그대로 · 실적발표면 내용 모두" → 실적은 🧾 실적 탭 카드 그대로, 리포트는 리포트 탭 줄 그대로 펼쳐서
 const feedOpen = (h) => h.replace(/<details class="(fvt|rpd)"/g, '<details open class="$1"');
@@ -4659,6 +4661,7 @@ async function renderFeed() {
       <li><b>📢 중요 공시</b> — DART 공시 목록</li>
       <li><b>📦 수출</b> — 관세청 수출입 통계 + 1~10일·20일 잠정치는 교보·다올·TRASS 텔레그램 글</li>
       <li><b>🏁 시총 순위</b> — 네이버 증권 업종별 시가총액 (평일 하루 두 번)</li>
+      <li><b>📊 주간 추정치</b> — 텔레그램 maddingStock '주간 EPS 컨센서스 리비전' 글(월요일 아침)에서 올해 영업이익 예상이 30% 넘게 바뀐 회사·적자 전환만 고름</li>
       <li><b>📌 사건·🗓 일정</b> — 손으로 적어 둔 메모 (받은 글·공시)</li>
       <li><b>⏱ 리포트 전 1개월 주가</b> — 우리 주가 자료(한국 네이버·미국 야후 종가)로 계산</li>
       <li><b>🛠 사이트 반영</b> — 이 사이트를 고친 기록</li>
@@ -5850,6 +5853,7 @@ async function loadPBR() {
   signalHTML().then((h) => { $("#signalBody").innerHTML = h; }).catch(() => { $("#signalBody").innerHTML = `<div class="empty">신호 표를 못 그렸어요.</div>`; });
   quietHTML().then((h) => { $("#sigQuiet").innerHTML = h; }).catch(() => {});
   srSigHTML().then((h) => { $("#sigRank").innerHTML = h; }).catch(() => {});
+  revWkHTML().then((h) => { $("#sigRev").innerHTML = h; }).catch(() => {});
   etfHTML().then((h) => { $("#sigEtf").innerHTML = h; });
   const base = PBR.base_year;
   $("#pbrIntro").innerHTML = `연도별 추정 BPS(주당순자산) × PBR 배수로 가격을 계산해요. <b>${esc(base)}</b> 열이 기준 연도예요. 갱신 ${esc(PBR.updated_at)}`;
@@ -7921,6 +7925,37 @@ const revSec = (s) => (s.includes("상향 TOP") ? "▲ 상향 TOP 8" : s.include
 function revHTML(code) {
   const x = tgSort((TGR?.stocks?.[code] || []).filter((p) => p.rev && p.d >= kstDay(6)))[0];
   return x ? `<div class="note" style="margin-top:6px">📊 <b>주간 EPS 리비전</b> <span class="src">maddingStock ${esc(x.rev.wk)} · 전주 대비</span> <b>${esc(revSec(x.rev.sec))}</b> ${revTxt(x.rev)} · <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a></div>` : "";
+}
+// 📊 주간 이익 추정치 — 크게 바뀐 회사만 (사용자 11/28 "채널 글은 복잡 · 기준을 깐깐하게 · 영업이익으로 · 적자 전환도") → 📡 신호 탭 + 🔔 새 소식
+//   ← tg_reports.json revw (collector/tg_reports.py rev_week: 기준 REV_OP 는 거기 한 곳, 화면은 rows[].k 만 읽음)
+function revWkBody(w) {
+  const mine = new Map(DASH.stocks.map((c) => [c.name, c])), R = w.rows || [], K = (k) => R.filter((r) => r.k === k).sort((a, b) => Math.abs(b.op || 0) - Math.abs(a.op || 0));
+  const nm = (r) => { const c = mine.get(r.n); return c ? `${GTAG[grp(c)] || ""}<a href="#stock/${esc(c.code)}"><b>${esc(r.n)}</b></a>` : `<b>${esc(r.n)}</b>`; };
+  const box = (L, up, title, f) => (L.length ? `<div style="flex:1 1 250px;border-radius:10px;padding:8px 12px;background:var(--${up ? "good" : "bad"}-bg)"><b style="font-size:15px;color:var(--${up ? "good" : "bad"}-ink)">${title} ${L.length}곳</b>${L.map((r) => `<div style="margin-top:5px">${nm(r)} ${f(r)}</div>`).join("")}</div>` : "");
+  const opF = (r) => `<b style="color:var(--${r.op > 0 ? "good" : "bad"}-ink)">${sg(r.op, 0)}</b>${r.px != null ? ` <span class="src">· 그 주 주가 ${sg(r.px, 1)}</span>` : ""}`;
+  const epsF = (r) => `<span class="src">올해 예상 EPS ${n(r.e0)}원 → ${n(r.e1)}원</span>`;
+  const ours = R.filter((r) => mine.has(r.n)), tot = (w.up_n || 0) + (w.dn_n || 0), up = tot ? Math.round((w.up_n / tot) * 100) : null;
+  const any = ["U", "D", "R", "B"].some((k) => K(k).length);
+  return `${up != null ? `<div class="note" style="margin:6px 0">시장 분위기: 예상을 올린 회사 <b style="color:var(--good-ink)">${w.up_n}곳</b> · 내린 회사 <b style="color:var(--bad-ink)">${w.dn_n}곳</b> <span class="src">(채널 기준 = EPS 3% 넘게 · ${n(w.n)}종목 가운데)</span>
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:4px;max-width:420px"><span style="width:${up}%;background:var(--good-ink)"></span><span style="flex:1;background:var(--bad-ink)"></span></div></div>` : ""}
+    ${any ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0">${box(K("U"), true, `📈 영업이익 예상 ${w.th}%+ 올림`, opF)}${box(K("D"), false, `📉 영업이익 예상 ${w.th}%+ 내림`, opF)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0">${box(K("R"), false, "🔴 적자 전환 (흑자 예상 → 적자 예상)", epsF)}${box(K("B"), true, "🟢 흑자 전환 (적자 예상 → 흑자 예상)", epsF)}</div>` : `<div class="note">이번 주는 우리 기준에 걸린 회사가 없어요.</div>`}
+    <div class="note">⭐ <b>내 종목</b> ${ours.length ? ours.map((r) => `<div style="margin-top:3px">${nm(r)} ${r.turn ? `${esc(r.turn)} ${epsF(r)}` : `${r.y1 != null ? `올해 EPS 예상 ${estP(r.y1)}` : ""}${r.op != null ? ` · 영업이익 예상 ${estP(r.op)}` : ""}${r.px != null ? ` · 주가 ${sg(r.px, 1)}` : ""}`}${r.k ? "" : ' <span class="src">(우리 기준에는 안 걸림)</span>'}</div>`).join("") : '<span class="src">— 이번 글에 이름이 나온 내 종목 없음</span>'}</div>`;
+}
+async function revWkHTML() {
+  const W = (await tgGet().catch(() => null))?.revw || [];
+  if (!W.length) return "";
+  const w = W[0], hd = (x) => `${esc(x.wk)} <span class="src">${mdDay(x.d)} 글 · <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a></span>`;
+  return `<div class="card" style="margin-bottom:10px"><div class="chart-title"><b>📊 주간 이익 추정치 — 크게 바뀐 회사만</b> <span class="src">${hd(w)} · 매주 월요일 아침</span></div>
+    <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 증권사들이 보는 <b>'올해 영업이익' 예상(평균)</b>이 1주일 사이 <b>${w.th}% 넘게</b> 바뀐 회사만 골랐어요. 예상이 흑자에서 적자로 바뀐 회사도 따로 모았어요. 실적 발표가 아니라 '예상'이 바뀐 거예요.</div>
+    ${revWkBody(w)}
+    ${W.length > 1 ? `<details class="fvt"><summary class="chart-title">지난 주들 (${W.length - 1}주) — 눌러서 보기</summary>${W.slice(1).map((x) => `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)"><b>${hd(x)}</b>${revWkBody(x)}</div>`).join("")}</details>` : ""}
+    <details class="fvt"><summary class="chart-title">ⓘ 채널 글과 무엇이 다른가요</summary><ul class="irl">
+      <li><b>채널 글(maddingStock 주간 EPS 컨센서스 리비전)</b>: 증권사 예상 평균(컨센서스)의 올해 EPS가 지난주보다 <b>3%만</b> 바뀌어도 올려요. 그래서 매주 100곳 넘게 걸려요. 증권사 한 곳이 리포트에서 숫자를 바꿔도 평균이 움직여요.</li>
+      <li><b>우리 기준</b>: EPS 말고 <b>영업이익 예상이 ${w.th}% 넘게</b> 바뀐 회사만. EPS는 환율·일회성 손익·세금으로도 크게 바뀌는데, 영업이익은 본업이라 더 믿을 만해요.</li>
+      <li><b>적자·흑자 전환</b>: 올해 예상 EPS(주당순이익)의 부호가 바뀐 회사예요.</li>
+      <li>⚠ 채널 글에 <b>이름이 나온 회사</b>(올림 위 8곳·내림 위 8곳·적자 칸) 안에서만 골라요. '외 ○종목'은 이름이 없어서 볼 수 없어요. 영업이익 숫자가 없는 줄도 빠져요.</li>
+      <li>이익이 아주 작은 회사는 조금만 바뀌어도 %가 크게 나와요. 주가가 이미 움직였는지(그 주 주가)도 같이 봐요. 사고팔 판단이 아니라 살펴볼 목록이에요.</li></ul></details></div>`;
 }
 // 📄 오늘·어제 리포트 (보유 탭 카드, 소몽 체크리스트 위 — 사용자 2026-11-02·03): ① 이 종목 증권사 리포트 (한경 컨센서스 목록 + 텔레그램으로 온 것 + 사용자 전달 요약 reports.yaml)
 //   → ② 이 업종 산업 리포트 (reports.json industry) → ③ 둘 다 없을 때만 🌐 인터넷(텔레그램) 글 · 최대 10개 · 줄을 누르면 요약·목표가 계산 방식
