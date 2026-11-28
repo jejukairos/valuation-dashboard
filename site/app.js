@@ -614,6 +614,7 @@ function stockCard(c) {
       <div class="k">괴리율 <span class="src nowrap">현재가 ÷ 적정가 − 1</span></div><div class="v">${gap}</div>
     </div>`}
     ${divSaHTML(c)}
+    ${divPlanHTML(c)}
     ${pbrFloorBox(c)}
     ${prefBox(c)}
     <div class="tgday" data-code="${esc(c.code)}" onclick="event.stopPropagation()">${tgDayHTML(c.code)}</div>
@@ -651,6 +652,20 @@ function upHTML(code, max = 99) {
 async function upFill() {
   if (!TL) { try { TL = await (await fetch(`data/timeline.json?t=${Date.now()}`, { cache: "no-store" })).json(); } catch (_) { TL = {}; } }
   document.querySelectorAll(".upnext:not([data-done])").forEach((el) => { el.dataset.done = 1; el.innerHTML = upHTML(el.dataset.code, 4); });
+}
+// 💰 배당 메모 (사용자 11/28 "특별배당은 내년 것으로 계산 · 정책이 언제 끝나고 다음이 언제인지 다 적어 두기 — 삼성전자·삼성전자우·SK하이닉스") ← config/notes.yaml div
+//   맨 위 = 지금 주가로 본 배당률 (작년 확정 · 올해~28E 증권사 예상, 자동) · dps 를 적은 줄은 지금 주가로 배당률을 매일 다시 계산
+function divPlanHTML(c) {
+  const D = c.notes?.div;
+  if (!D?.length || !(c.price > 0)) return "";
+  const t = c.tbl || {}, ys = t.years || [], yl = (d) => `${n((d / c.price) * 100, 1)}%`;
+  const cells = [[`${ys[0] || "작년"} 확정`, t.dy_last], ...(t.dy || []).map((v, i) => [ys[i + 1] || "", v])].filter(([, v]) => v != null);
+  const li = (x) => (typeof x === "string" ? `<li>${esc(x)}</li>`
+    : `<li>${esc(x.t)}${x.dps != null ? ` → <b>주당 ${[].concat(x.dps).map((d) => n(d, 0)).join("~")}원 = 배당률 ${[].concat(x.dps).map(yl).join("~")}</b>` : ""}${x.src ? ` <span class="src">(${esc(x.src)})</span>` : ""}</li>`);
+  return `<div class="kidbox" style="margin-top:8px;text-align:left" onclick="event.stopPropagation()">💰 <b>배당 — 지금 주가(${money(c.price, c.currency)}) 기준 배당률</b>
+    ${cells.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0">${cells.map(([h, v]) => `<span style="white-space:nowrap"><span class="src">${esc(h)}</span> <b style="font-size:15px">${n(v, 1)}%</b> <span class="src">약 ${n((v * c.price) / 100, 0)}원</span></span>`).join("")}</div>
+      <div class="src">예상(E) 칸 = 증권사 예상 주당 배당 ÷ 지금 주가 — 특별배당·증액 기대가 이미 들어 있어요 · 확정 = 작년에 실제 준 배당</div>` : ""}
+    <ul class="irl" style="margin-top:4px">${D.map(li).join("")}</ul></div>`;
 }
 // 🔀 우선주 괴리율 (사용자 11/6: 본주와의 괴리율로 바닥·과열 판단) = (보통주 − 우선주) ÷ 보통주 — 두 종목 주간 종가(배당 밴드와 같은 날짜, 2015년~)
 const PREF_COMMON = { "005935": "005930" };
