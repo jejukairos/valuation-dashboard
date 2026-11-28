@@ -90,7 +90,7 @@ def main():
                     kst = dt.astimezone(timezone(timedelta(hours=9)))
                     p = {"d": kst.strftime("%Y-%m-%d"), "hm": kst.strftime("%H:%M"), "ch": ch,
                          "u": f"https://t.me/{ch}/{mid}", **({"pdf": True} if pdf else {}), **parse(text, names)}
-                    p.update(head(text) if pdf else {})
+                    p.update(head(text) if pdf and hit(text.split("\n", 1)[0], names, us) else {})  # 첫 줄 '[종목 / 업종]' 이 우리 종목일 때만 — 남의 리포트(엠로) 본문에 이름만 나온 글은 우리 종목 리포트가 아님
                     posts.append(p)
                     # 증권사 리포트 글(요약 + PDF)은 글 본문을 한 장 요약 재료로 남김 (사용자 11/28 "근거가 '아직 요약 전'이 말이 돼?") — transcripts/ 는 git 에 안 올라감, rep_digest.py todo 가 집어 감
                     f = TXT / f"tg_{ch}_{mid}.txt"
