@@ -43,6 +43,7 @@ async function dwPull() {  // 처음 열 때: 서버 것이 더 새것이면 받
   const lab = document.getElementById("dwSync");
   if (!S || S.off || S.err) { DWS.off = !!S?.off; return; }
   if (lab) lab.textContent = "☁ 서버에도 저장 (다른 기기·브라우저에서도 같은 선)";
+  DWS.on = true;
   const ts = dwGet("draw:ts", {}), keys = new Set(Object.keys(S));
   try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith("draw:") && !DW_LOCAL.test(k)) keys.add(k); } } catch (_) { /* 저장소를 못 읽으면 서버 것만 */ }
   for (const k of keys) {
@@ -54,6 +55,47 @@ async function dwPull() {  // 처음 열 때: 서버 것이 더 새것이면 받
   }
   DW.def = dwGet("draw:def", null) || DW.def; DW.extra = dwGet("draw:extra", null) || DW.extra;
   if (DW.code && !DW.pend) { const dr = dwGet("draw:" + DW.code, []) || []; if (JSON.stringify(dr) !== JSON.stringify(DW.dr)) { DW.dr = dr; DW.snap = JSON.stringify(dr); DW.sel = -1; } dwPickDraw(); dwUi(); if (DW.B) dwSize(); }
+  dwBakUi();
+}
+// 💾 선 백업 (사용자 11/28 "정말 열심히 그렸으니 다음엔 안 지워졌으면"): 차트 아래에 지금 저장된 선 개수를 늘 보여 주고, 파일로 받아 두기·불러오기
+//   불러오기는 합치기만 함 (같은 선은 한 번만, 지금 있는 선은 안 지움) — 브라우저 저장분이 통째로 비워져도 파일이 있으면 되살림
+const DW_META = /^draw:(extra|def|inv)$/, DW_KEY = /^draw:[\w.^=-]{1,24}$/;
+const dwKeys = () => { const ks = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (DW_KEY.test(k) && !DW_LOCAL.test(k)) ks.push(k); } } catch (_) { /* 저장소를 못 읽음 */ } return ks; };
+function dwBakUi(msg = "") {
+  const e = document.getElementById("dwBak"); if (!e) return;
+  const L = dwKeys().filter((k) => !DW_META.test(k)).map((k) => (dwGet(k, []) || []).length).filter(Boolean), bs = "font:inherit;font-size:13px;padding:6px 10px;margin:2px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);cursor:pointer";
+  e.innerHTML = `💾 지금 저장된 선: <b>${L.length}종목 ${L.reduce((a, b) => a + b, 0)}개</b> <span class="src">(${DWS.on ? "이 브라우저 + ☁ 서버" : "이 브라우저에만"} · 긋는 즉시 저절로 저장)</span>
+    <button data-bak="1" style="${bs}">💾 백업 파일 받기</button><button data-res="1" style="${bs}">📂 백업 불러오기</button><input type="file" accept=".json,application/json" hidden>${msg ? ` <b>${esc(msg)}</b>` : ""}`;
+}
+function dwMerge(data) {  // 백업 파일 → 지금 저장분에 합침 · 돌려주는 값 = 새로 들어온 선 개수
+  let add = 0;
+  for (const [k, v] of Object.entries(data || {})) {
+    if (!DW_KEY.test(k) || DW_LOCAL.test(k)) continue;
+    if (DW_META.test(k)) { if (dwGet(k, null) == null) dwSet(k, v); continue; }
+    if (!Array.isArray(v)) continue;
+    const cur = dwGet(k, []) || [], has = new Set(cur.map((d) => JSON.stringify(d))), nw = v.filter((d) => d && d.k && !has.has(JSON.stringify(d)));
+    if (nw.length) { dwSet(k, [...cur, ...nw]); add += nw.length; }
+  }
+  DW.def = dwGet("draw:def", null) || DW.def; DW.extra = dwGet("draw:extra", null) || DW.extra;
+  if (DW.code) { DW.dr = dwGet("draw:" + DW.code, []) || []; DW.snap = JSON.stringify(DW.dr); DW.sel = -1; dwPickDraw(); dwUi(); if (DW.B) dwSize(); }
+  return add;
+}
+function dwBakInit() {
+  const e = document.getElementById("dwBak"); if (!e) return;
+  e.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button"); if (!b) return;
+    if (b.dataset.res) return e.querySelector("input").click();
+    const data = Object.fromEntries(dwKeys().map((k) => [k, dwGet(k, null)])), a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: "valuation-draw", at: new Date().toISOString(), data })], { type: "application/json" }));
+    a.download = `내차트-선-백업-${new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    dwBakUi("백업 파일을 받았어요 (다운로드 폴더)");
+  });
+  e.addEventListener("change", async (ev) => {
+    const f = ev.target.files?.[0]; if (!f) return;
+    try { const j = JSON.parse(await f.text()); if (j.app !== "valuation-draw") throw 0; const nAdd = dwMerge(j.data); dwBakUi(nAdd ? `백업에서 선 ${nAdd}개를 되살렸어요` : "백업의 선이 이미 다 있어요"); }
+    catch (_) { dwBakUi("이 파일은 내 차트 백업 파일이 아니에요"); }
+  });
+  dwBakUi();
 }
 // 📢 중요 공시 표시 (사용자 11/26): data/filings.json (한국 보유·관심·공동, 최근 1년 — 자사주·소각·임원/대주주 매매·공급계약 …) 을 그 날짜 봉 위에 동그라미로
 // '📢 공시' 단추로 켜고 끔 (이 기기에 기억, 작은 캔들에도 같이). 국민연금의 매일 사고팖은 뺌 (타임라인과 같게). FILINGS = app.js 가 상세 화면에서 쓰는 그 자료
@@ -123,7 +165,7 @@ function dwPos(x, y, magnet = true) {
 const dwPt = (pos) => [DW.B.T[pos.i], pos.p];
 const dwPx = (pt) => [dwX(dwIdx(pt[0])), dwY(pt[1])];
 // 저장할 때마다 바로 앞 모습을 쌓아 둠 → '↶ 이전' 단추 (긋기·옮기기·색·지우기·전부 지우기 모두 되돌림, 화면을 열어 둔 동안만)
-const dwSave = () => { const s = JSON.stringify(DW.dr); if (s !== DW.snap) { DW.hist.push(DW.snap); if (DW.hist.length > 50) DW.hist.shift(); DW.snap = s; } dwSet("draw:" + DW.code, DW.dr); };
+const dwSave = () => { const s = JSON.stringify(DW.dr); if (s !== DW.snap) { DW.hist.push(DW.snap); if (DW.hist.length > 50) DW.hist.shift(); DW.snap = s; } dwSet("draw:" + DW.code, DW.dr); dwBakUi(); };
 function dwUndo() { if (!DW.hist.length) return; DW.snap = DW.hist.pop(); DW.dr = JSON.parse(DW.snap); DW.sel = DW.pal = -1; DW.pend = null; dwSet("draw:" + DW.code, DW.dr); dwPickDraw(); }
 const dwAsk = () => { if (!DW.raf) DW.raf = requestAnimationFrame(dwRender); };
 
@@ -430,6 +472,7 @@ function dwInit() {
   DW.def = dwGet("draw:def", null) || {};
   DW.extra = dwGet("draw:extra", null) || [{ code: "KOSPI", name: "코스피", idx: 1, keep: 1 }, { code: "KOSDAQ", name: "코스닥", idx: 1, keep: 1 }];
   try { navigator.storage?.persist?.(); } catch (_) { /* 브라우저가 저장 공간을 비울 때 선이 같이 지워지지 않게 부탁 (안 돼도 그대로) */ }
+  dwBakInit();
   dwPull();
   const cv = $("#dwCv"), box = $("#dwBox"), PT = new Map();
   let g0 = null, pz = null, tapAt = 0;
