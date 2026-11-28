@@ -35,8 +35,10 @@ def hit(text, names, us):
 
 def head(text):
     """DOC_POOL 글 머리의 '제목: …' · '작성자: 이름 (증권사)' → 진짜 리포트 제목·쓴 사람 (사용자 11/28: 제목과 누가 썼는지 꼭)."""
-    t, w = re.search(r"^제목:\s*(.+)$", text, re.M), re.search(r"^작성자:\s*([^(\n]+)", text, re.M)
-    return {**({"t": t.group(1).strip()} if t else {}), **({"who": w.group(1).strip()} if w and w.group(1).strip() else {})}
+    t, w = re.search(r"^제목:\s*(.+)$", text, re.M), re.search(r"^작성자:\s*([^(\n]*)(?:\(([^)\n]+)\))?", text, re.M)
+    r = re.search(r"^투자의견:\s*(\S.*)$", text, re.M)
+    return {**({"t": t.group(1).strip()} if t else {}), **({"who": w.group(1).strip()} if w and w.group(1).strip() else {}),
+            **({"firm": w.group(2).strip()} if w and w.group(2) else {}), **({"rating": r.group(1).strip()} if r else {})}  # 증권사 = 작성자 괄호 (목표가 없는 리포트는 parse 가 증권사를 못 읽어 줄에서 빠졌음)
 
 
 async def fetch(cut):
@@ -117,7 +119,7 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--test"]:
         assert hit("9. 두산(000150) 목표가 상향", ["두산", "000150"], False) and not hit("두산에너빌리티 수주", ["두산"], False)
         assert hit("NVDA beats, $MU next", ["엔비디아", "NVDA"], True) and not hit("NVDAX fund", ["NVDA"], True)
-        assert head("[에이피알 / 화장품]\n제목: 중요한 시기\n작성자: 한유정 (한화투자증권)\n") == {"t": "중요한 시기", "who": "한유정"} and head("그냥 글") == {}
+        assert head("[에이피알 / 화장품]\n제목: 중요한 시기\n작성자: 한유정 (한화투자증권)\n") == {"t": "중요한 시기", "who": "한유정", "firm": "한화투자증권"} and head("작성자: 리서치센터\n투자의견: NR") == {"who": "리서치센터", "rating": "NR"} and head("그냥 글") == {}
         print("ok")
     else:
         main()

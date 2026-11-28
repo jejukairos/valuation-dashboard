@@ -1,4 +1,4 @@
-﻿// ✏️ 내 차트 — 트레이딩뷰처럼 손으로 선 긋는 캔들 차트 (사용자 11/25: 즐겨찾기 3개 = 추세선·가격 범위·가로줄, 일·주·월·연봉,
+// ✏️ 내 차트 — 트레이딩뷰처럼 손으로 선 긋는 캔들 차트 (사용자 11/25: 즐겨찾기 3개 = 추세선·가격 범위·가로줄, 일·주·월·연봉,
 // 오른쪽 미래 빈칸, 누르면 점선 십자 + 그 날짜, 지금 주가 점선 + 오른쪽 눈금 꼬리표, 선 색·굵기 바꾸기, 도구 막대는 점 6개를 잡고 옮김)
 // 캔들: 한국 종목·코스피·코스닥 = /px/{코드} (functions/_middleware.js 가 네이버 일봉 13년을 대신 받아 줌) → 안 되면 data/ohlc/{코드}.json (우리 종목, 미국은 늘 이쪽)
 // 그은 선은 이 기기 브라우저에만 저장 (localStorage "draw:코드"). 점은 [날짜, 가격]이라 일·주·월·연봉 어디서나 같은 자리에 보임
@@ -21,7 +21,7 @@ const dwGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d;
 const dwSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* 사생활 보호 창이면 화면에만 */ } };
 // 📢 중요 공시 표시 (사용자 11/26): data/filings.json (한국 보유·관심·공동, 최근 1년 — 자사주·소각·임원/대주주 매매·공급계약 …) 을 그 날짜 봉 위에 동그라미로
 // '📢 공시' 단추로 켜고 끔 (이 기기에 기억, 작은 캔들에도 같이). 국민연금의 매일 사고팖은 뺌 (타임라인과 같게). FILINGS = app.js 가 상세 화면에서 쓰는 그 자료
-DW.fil = dwGet("draw:fil", true);
+DW.fil = dwGet("draw:fil2", false);  // 기본은 안 보임 (사용자 11/28 "차트 기본값은 공시 안 보이게") — 열쇠 이름을 바꿔 예전에 저장된 켜짐도 꺼짐으로
 async function dwFilLoad() { if (FILINGS === null) { try { FILINGS = await (await fetch("data/filings.json?t=" + encodeURIComponent(DASH.updated_at))).json(); } catch (_) { FILINGS = {}; } } }
 const dwFilRows = (code) => (FILINGS?.companies?.[code] || []).filter((r) => r.d && !/국민연금/.test(r.t || "")).map((r) => ({ ...r, day: Date.parse(r.d) / 864e5 }));
 function dwInfo(rs) {  // 동그라미를 누르면 나오는 공시 내용 칸 (rs 없으면 닫기)
@@ -476,7 +476,7 @@ function dwInit() {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.tf) return dwTf(b.dataset.tf);  // 전체 화면일 때만 나오는 일·주·월·연
     if (b.dataset.inv) { DW.inv = !DW.inv; const m = dwGet("draw:inv", null) || {}; if (DW.inv) m[DW.code] = 1; else delete m[DW.code]; dwSet("draw:inv", m); }  // 종목마다 기억
-    else if (b.dataset.fil) { DW.fil = !DW.fil; dwSet("draw:fil", DW.fil); dwInfo(null); }
+    else if (b.dataset.fil) { DW.fil = !DW.fil; dwSet("draw:fil2", DW.fil); dwInfo(null); }
     else if (b.dataset.undo) dwUndo();
     else if (b.dataset.auto) DW.fix = null;
     else if (b.dataset.fit) dwFit();

@@ -832,7 +832,8 @@ function hxCycleHTML(code, d, price) {
   const dot = (i, fill, st, lab, up) => `<circle cx="${X(i)}" cy="${Y(v[i])}" r="6.5" fill="${fill}" stroke="${st}" stroke-width="2"/>${lab ? `<text x="${X(i)}" y="${Y(v[i]) + (up ? -10 : 18)}" text-anchor="middle" class="qv b" style="font-size:10px">${lab}</text>` : ""}`;
   E.forEach((e) => { g += dot(e.i, "#fff27a", "#c8102e", v[e.i] <= hi ? n(v[e.i], 2) : "", true) + (e.c != null ? dot(e.c, "#8fa9bf", "#1f3f5f", n(v[e.c], 2), false) : ""); });
   g += `<circle cx="${X(N - 1)}" cy="${Y(now)}" r="4" fill="var(--ink)"/><text x="${X(N - 1) - 6}" y="${Y(now) - 8}" text-anchor="end" class="qv b">지금 ${n(now, 2)}</text>`;
-  const c1 = `<div class="qp" style="grid-column:1/-1"><div class="qt"><b>SK하이닉스 주가 고점 · 오더컷 · 하단 — 12MF PBR <span class="src">배</span></b></div><div class="src">선 = 우리 계산 (주간, 매일 자동) · 띠 = SK증권 숫자 · 🟡 = 그 사이클 주가 고점 주 · 🔵 = 13주(3개월) 뒤 오더컷 자리</div>
+  g += tipCols(X, (x1 - x0) / Math.max(1, N - 1), top, bot, P.map((p, i) => `${p[0]}\n12MF PBR ${n(v[i], 2)}배\n주가 ${n(p[1])}원`));  // 누르면 그 주 날짜·PBR·주가 (사용자 11/28)
+  const c1 = `<div class="qp" style="grid-column:1/-1"><div class="qt"><b>SK하이닉스 주가 고점 · 오더컷 · 하단 — 12MF PBR <span class="src">배</span></b></div><div class="src">👆 선을 누르면(마우스를 올리면) 그 주의 날짜·PBR·주가 · 선 = 우리 계산 (주간, 매일 자동) · 띠 = SK증권 숫자 · 🟡 = 그 사이클 주가 고점 주 · 🔵 = 13주(3개월) 뒤 오더컷 자리</div>
     <svg viewBox="0 0 ${W} ${bot + 20}" role="img" aria-label="SK하이닉스 12MF PBR 고점 오더컷">${g}</svg></div>`;
   // ② 분기 영업이익 (조원): 지난 사이클 / 이번 사이클 — 고점·오더컷 분기에 동그라미
   const LQ = d.longq || {}, qs = Object.keys(LQ).filter((q) => LQ[q]?.op != null).sort(), mk = {};
@@ -5469,10 +5470,10 @@ function sigTable(o) {  // o = {name, unit, L 지금 수준, date, m {pbf 12MF P
   lv.sort((a, b) => b - a);
   const K = ["pbf", "pbt", "pef", "pet"], d = o.dec || 0;
   const rows = lv.map((x) => { const now = x === o.L;
-    return `<tr${now ? ' style="background:var(--warn-bg);font-weight:700"' : ""}><td style="text-align:left;white-space:nowrap">${n(x, now ? d : 0)}${now ? " ◀ 지금" : ` <span class="src">${pct((x / o.L - 1) * 100, 0, true)}</span>`}</td>${K.map((k) => `<td>${o.m[k] > 0 ? n((o.m[k] * x) / o.L, 2) : "-"}</td>`).join("")}</tr>`; }).join("");
+    return `<tr${now ? ' style="background:var(--warn-bg);font-weight:700"' : ""}><td style="text-align:left;white-space:nowrap">${n(x, now ? d : 0)}${now ? " ◀ 지금" : ` <span class="src">${pct((x / o.L - 1) * 100, 0, true)}</span>`}</td>${K.map((k, i) => `<td${i % 2 ? "" : ' style="border-left:1px solid var(--border)"'}>${o.m[k] > 0 ? n((o.m[k] * x) / o.L, 2) : "-"}</td>`).join("")}</tr>`; }).join("");
   const mk = (o.marks || []).filter((m) => o.m[m.kind] > 0).map((m) => { const x = (o.L * m.v) / o.m[m.kind]; return `${esc(m.t)} = <b>${n(x, 0)}</b> (${pct((x / o.L - 1) * 100, 0, true)})`; });
   return `<div class="card" style="margin-bottom:10px"><div class="chart-title"><b>${esc(o.name)}</b> <span class="src">${esc(o.date || "")}</span></div>
-    <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th rowspan="2" style="text-align:left">${esc(o.unit)}</th><th colspan="2">PBR (배)</th><th colspan="2">PER (배)</th></tr><tr><th>12MF</th><th>TTM</th><th>12MF</th><th>TTM</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th rowspan="2" style="text-align:left">${esc(o.unit)}</th><th colspan="2" style="text-align:center;border-left:1px solid var(--border)">PBR (배) = 주가 ÷ 자산</th><th colspan="2" style="text-align:center;border-left:1px solid var(--border)">PER (배) = 주가 ÷ 이익</th></tr><tr>${["PBR", "PER"].map((k) => `<th style="text-align:right;border-left:1px solid var(--border)">${k} <b>예상</b><br><span class="src">앞으로 1년 (12MF)</span></th><th style="text-align:right">${k} <b>지난 실적</b><br><span class="src">지난 1년 (TTM)</span></th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
     ${o.pos ? `<div class="note">📍 ${o.pos}</div>` : ""}${mk.length ? `<div class="note">📏 ${mk.join(" · ")}</div>` : ""}<div class="note src">${o.src}</div>${o.extra || ""}</div>`;
 }
 // 📈 표 아래 밴드 차트 (사용자 11/6, 닫힘): 지수 = 시장 탭과 같은 함수(fwdBand·hBand)·같은 자료 · 종목 = 상세 화면과 같은 bandAllRender (한 번 갱신되면 같이 바뀜)
@@ -5649,15 +5650,28 @@ let SR = null;
 async function srGet() { if (!SR) { try { SR = await (await fetch("data/sector_rank.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { SR = {}; } } return SR; }
 const SR_I = { up: "🟢", down: "🔴", king: "👑" }, srCap = (v) => (v >= 1e4 ? `${(v / 1e4).toFixed(1)}조` : `${Math.round(v).toLocaleString()}억`);
 const srLi = (e, cut) => `<li${e.typ === "down" ? ' style="color:var(--bad-ink)"' : ""}>${SR_I[e.typ] || ""} ${esc(cut ? e.t.replace(new RegExp(`^${cut.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:? `), "") : e.t)}</li>`;
+// 눈에 들어오게 (사용자 11/28 "시총이 얼마인지도 · 더 시각적으로"): 꼬리표 + 회사 이름 크게 + 시총 + 순위 칸 + 막대 2개 (이 회사 시총 변화 vs 업종 가운데)
+const SR_P = { up: ["green", "🟢 치고 올라옴"], down: ["red", "🔴 업종보다 많이 빠짐"], king: ["yellow", "👑 1등 바뀜"] }, SR_H = { 5: "1주", 20: "1개월", 60: "3개월" };
+function srVis(e, sec) {
+  const r = (SR.sec || []).find((s) => s.n === sec)?.rows.find((x) => x.code === e.code), [pc, pl] = SR_P[e.typ] || ["", ""], mx = Math.max(Math.abs(e.p || 0), Math.abs(e.med || 0), 10);
+  const bar = (v, lab, bold) => (v == null ? "" : `<div style="display:flex;align-items:center;gap:6px"><span class="src" style="width:5.5em;text-align:right">${lab}</span><span class="${kcol(v)}" style="display:inline-block;height:${bold ? 10 : 6}px;width:${Math.max(2, Math.round((Math.abs(v) / mx) * 110))}px;background:currentColor;border-radius:2px;opacity:${bold ? 1 : 0.45}"></span><${bold ? "b" : "span"} class="${kcol(v)}"${bold ? "" : ' style="font-size:12px"'}>${sg(v)}</${bold ? "b" : "span"}></div>`);
+  const tail = e.typ === "down" ? (/·\s*([^·()]+에 밀림)\s*$/.exec(e.t) || [])[1] : (e.pass || []).length ? `${e.pass.join(", ")} 추월` : "";
+  return `<div style="display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;padding:7px 0;border-top:1px solid var(--border)">
+    <div style="flex:1 1 250px;min-width:0"><span class="pill ${pc}" style="font-size:12px">${pl}</span> <span class="src">${esc(sec)}</span><br>
+      <b style="font-size:16px">${DASH.stocks.some((c) => c.code === e.code) ? `<a href="#stock/${esc(e.code)}">${esc(e.name)}</a>` : esc(e.name)}</b>${r ? ` <span style="white-space:nowrap">시총 <b>${srCap(r.cap)}</b></span>` : ""}
+      <span style="white-space:nowrap;margin-left:4px">${e.rh !== e.r0 ? `<span class="src">${e.rh}위 →</span> ` : ""}<b style="font-size:15px">${e.r0}위</b>${e.rh > e.r0 ? ` <b style="color:var(--good-ink)">▲${e.rh - e.r0}</b>` : e.rh < e.r0 ? ` <b style="color:var(--bad-ink)">▼${e.r0 - e.rh}</b>` : ' <span class="src">(그대로)</span>'}</span>
+      ${tail ? `<div class="src">${esc(tail)}</div>` : ""}</div>
+    <div style="flex:0 1 250px">${bar(e.p, `${SR_H[e.h] || ""} 시총`, true)}${bar(e.med, "업종 가운데", false)}</div></div>`;
+}
 function srCard(s, open) {
   const mine = new Map(DASH.stocks.map((c) => [c.code, c.group || "보유"]));
   const dr = (r, h) => { const a = r[`r${h}`]; if (a == null) return "-"; const d = a - r.r0; return d > 0 ? `<b style="color:var(--good-ink)">▲${d}</b>` : d < 0 ? `<b style="color:var(--bad-ink)">▼${-d}</b>` : "–"; };
   const pp = (v) => (v == null ? "" : ` <span class="src">${v > 0 ? "+" : ""}${Math.round(v)}%</span>`);
   const [a, b] = s.rows, dn = s.ev.some((e) => e.typ === "down");
   return `<details class="card fvt" style="margin-top:8px"${open ? " open" : ""}><summary class="chart-title"><b>🏁 ${esc(s.n)} 시총 순위</b> <span class="src">1,000억 이상 ${s.n_all}곳 · ${esc(SR.date || "")}</span>${s.ev.length ? ` <span class="pill ${dn ? "red" : "green"}">바뀐 것 ${s.ev.length}</span>` : ""}</summary>
-    ${s.ev.length ? `<ul class="irl">${s.ev.map((e) => srLi(e, s.n)).join("")}</ul>` : `<div class="note">1주·1개월 동안 10등 안 순서 변화 없음</div>`}
+    ${s.ev.length ? s.ev.map((e) => srVis(e, s.n)).join("") : `<div class="note">1주·1개월 동안 10등 안 순서 변화 없음</div>`}
     <div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th>순위</th><th style="text-align:left">회사</th><th>시총</th><th>1주</th><th>1개월</th><th>3개월</th></tr></thead><tbody>
-    ${s.rows.map((r) => `<tr${mine.has(r.code) ? ' style="background:var(--warn-bg)"' : ""}><td><b>${r.r0}</b></td><td style="text-align:left;white-space:nowrap">${mine.has(r.code) ? `<a href="#stock/${esc(r.code)}"><b>${esc(r.name)}</b></a> <span class="src">${esc(mine.get(r.code))}</span>` : esc(r.name)}</td><td>${srCap(r.cap)}</td>${[5, 20, 60].map((h) => `<td style="white-space:nowrap">${dr(r, h)}${pp(r[`p${h}`])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    ${s.rows.map((r) => `<tr${mine.has(r.code) ? ' style="background:var(--warn-bg)"' : ""}><td><b>${r.r0}</b></td><td style="text-align:left;white-space:nowrap">${mine.has(r.code) ? `<a href="#stock/${esc(r.code)}"><b>${esc(r.name)}</b></a> <span class="src">${esc(mine.get(r.code))}</span>` : esc(r.name)}</td><td style="min-width:5.5em">${srCap(r.cap)}<div style="height:5px;margin-left:auto;width:${Math.max(3, Math.round((r.cap / s.rows[0].cap) * 100))}%;background:var(--s1);border-radius:2px" title="1등 시총을 100으로 본 크기"></div></td>${[5, 20, 60].map((h) => `<td style="white-space:nowrap">${dr(r, h)}${pp(r[`p${h}`])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
     <div class="note src">${a && b ? `1등 ${esc(a.name)} − 2등 ${esc(b.name)} = ${srCap(a.cap - b.cap)} 차이 · ` : ""}▲▼ = 그때보다 순위가 몇 칸 올랐나·내렸나 · 작은 % = 그 사이 시총 변화 · 그때 시총 = 지금 시총 × 그때 종가 ÷ 지금 종가 (그 사이 주식 수가 바뀌면 조금 달라요) · 노란 줄 = 우리 종목 · 네이버 증권 업종 기준 (묶음은 손으로 조정) · 신호일 뿐 사고팔 판단이 아니에요</div></details>`;
 }
 async function srSigHTML() {
@@ -5669,8 +5683,8 @@ async function srSigHTML() {
   return `<div class="card" style="margin-bottom:10px"><div class="chart-title"><b>🏁 업종 시총 순위 변화 — 1주·1개월</b> <span class="src">${S.length}개 업종 · 1,000억 이상 · ${esc(R.date || "")} · 평일 아침·장 마감 뒤</span></div>
     <div class="kidbox" style="margin:4px 0;font-size:13px">🐣 같은 업종 안에서 회사 몸값(시가총액) 순서가 바뀌면, 돈이 그 회사 쪽으로 옮겨 간다는 신호예요. <b>👑 1등이 바뀜</b>·<b>🟢 밑에서 치고 올라옴</b>(10등 안)은 눈여겨보고, <b>🔴 업종보다 많이 빠짐</b>(5% 넘게, 업종 가운데보다 1주 10%p·1개월 15%p 더)은 무슨 일인지 꼭 확인해요.</div>
     <div class="note">👑 ${cnt("king")} · 🟢 ${cnt("up")} · 🔴 ${cnt("down")}${today.length ? ` · 오늘 새로 ${today.length}건` : ""}</div>
-    ${ours.length ? `<div style="margin-top:6px"><b>⭐ 우리 종목</b><ul class="irl">${ours.map((e) => srLi(e)).join("")}</ul></div>` : ""}
-    <details class="fvt"${ours.length ? "" : " open"}><summary class="chart-title">업종마다 바뀐 것 (${all.length}건)</summary>${S.filter((s) => s.ev.length).map((s) => `<div style="margin-top:6px"><b>${esc(s.n)}</b><ul class="irl">${s.ev.map((e) => srLi(e, s.n)).join("")}</ul></div>`).join("")}</details>
+    ${ours.length ? `<div style="margin-top:6px"><b>⭐ 우리 종목</b> <span class="src">굵은 막대 = 이 회사 시총 변화 · 옅은 막대 = 같은 업종 가운데 회사</span>${ours.map((e) => srVis(e, e.sec)).join("")}</div>` : ""}
+    <details class="fvt"${ours.length ? "" : " open"}><summary class="chart-title">업종마다 바뀐 것 (${all.length}건)</summary>${S.filter((s) => s.ev.length).map((s) => `<div style="margin-top:10px"><b>${esc(s.n)}</b>${s.ev.map((e) => srVis(e, s.n)).join("")}</div>`).join("")}</details>
     <details class="fvt"><summary class="chart-title">업종별 순위표 (${S.length}개) — 눌러서 보기</summary>${S.map((s) => srCard(s, false)).join("")}</details>
     <div class="note src">산업 탭 업종 칸 맨 위에도 같은 표 · 새로 바뀐 것은 🔔 새 소식에도 올라가요 · 묶음 = config/sector_rank.yaml (네이버 증권 업종 + 손으로 더하고 뺌)</div></div>`;
 }
@@ -5727,7 +5741,7 @@ function trendRows() {
     E("mem", "메모리 반도체 수출", "tech", "메모리", "💾 반도체", /반도체/, ["#industry", "exp-tech"]),
     E("ramen", "라면 수출", "ramen", "전체", "🍜 라면·음식료", /음식료/, ["#exports", "xp-ramen"]),
     E("cos", "화장품 수출", "cosmetics", "전체", "💄 화장품", /화장품/, ["#exports", "xp-cosmetics"]),
-    E("car", "승용차 수출", "car", "승용차 (HS 8703)", "🚗 자동차", /자동차/, ["#industry", "exp-car"]),
+    // 승용차 수출은 뺌 (사용자 11/28 "빼도 될 것 같아") — 현대차·기아 세계 판매가 같은 이야기 · 산업 탭 🚗 그림은 그대로
     ...(AUTOS?.cars || []).map((c) => ({ k: `auto-${c.code}`, t: `${c.name} 세계 판매`, u: "만 대", M: Object.fromEntries(c.months.map((r) => [r[0], r[4] == null ? null : r[4] / 1e4])), sec: "🚗 자동차", codes: [c.code],
       day: c.last?.date || "", src: "DART 월 판매 공시", go: ["#industry", "exp-car"] })),
     E("tr", "초고압변압기 수출", "power", "초고압변압기", "⚡ 전력기기", /전력/, ["#industry", "exp-power"]),
@@ -5752,7 +5766,7 @@ function trendRow(r, isNew) {
   const s = r.s, [ic, lab] = TR_L[s.k], ms = Array.from({ length: 12 }, (_, i) => s.yoys(ymAdd(s.L, i - 11))), mx = Math.max(10, ...ms.map((x) => Math.abs(x || 0)));
   const spark = `<svg viewBox="0 0 120 24" style="width:96px;height:20px;float:right" role="img" aria-label="최근 12개월 전년 대비"><line x1="0" x2="120" y1="12" y2="12" stroke="var(--axis)"/>${ms.map((x, i) => (x == null ? ""
     : `<rect class="${kcol(x)}" fill="currentColor" x="${i * 10 + 1}" y="${x >= 0 ? 12 - (x / mx) * 11 : 12}" width="8" height="${Math.max(1, (Math.abs(x) / mx) * 11)}"/>`)).join("")}</svg>`;
-  return `<details class="fvt" style="border-top:1px solid var(--border);padding:8px 0"><summary style="cursor:pointer">${spark}<b>${ic} ${esc(r.t)}</b>${r.g ? ` <span class="src">${FG[r.g]}</span>` : ""}${isNew ? ` <span class="pill red">🆕 ${+r.day.slice(5, 7)}/${+r.day.slice(8)} 나옴</span>` : ""}
+  return `<details class="fvt" style="border-top:1px solid var(--border);padding:8px 0"><summary style="cursor:pointer">${spark}<b>${ic} ${esc(r.t)}</b>${r.g ? ` <span class="src">${FG[r.g]}</span>` : ""}${isNew ? ` <span class="pill red">🆕 ${+r.day.slice(5, 7)}/${+r.day.slice(8)} 나옴</span>` : r.day ? ` <span class="src">· ${+r.day.slice(5, 7)}/${+r.day.slice(8)} 나옴</span>` : ""}
     <div class="src" style="margin-top:2px">${s.L.slice(2, 4)}년 ${+s.L.slice(5)}월 <b>${n(s.v, r.d ?? trDec(s.v))}${esc(r.u)}</b> · 1년 전보다 <b class="${kcol(s.yoy)}">${sg(s.yoy)}</b> · 최근 3개월 <b class="${kcol(s.g3)}">${sg(s.g3)}</b>${s.g3p != null ? ` (그 앞 3개월 ${sg(s.g3p)})` : ""} → <b>${lab}</b></div></summary>
     ${r.k === "in" ? tourDash() : ""}${trendChart(r)}${r.long ? trendLong(r) : ""}<div class="note src">출처: ${esc(r.src)}${r.day ? ` · ${esc(r.day)} 나옴` : ""} · <a href="${r.go[0]}" ${r.go[1] === "expw" ? `onclick="GOTO='expw'"` : `data-kc="${esc(r.go[1])}"`}>자세한 그림 →</a></div></details>`;
 }
@@ -5761,15 +5775,16 @@ async function trendBoardHTML(onlyNew = false) {  // (trendHTML 은 종목 상�
   if (!EXP) { try { EXP = await (await fetch("data/exports.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { EXP = {}; } }
   if (!AUTOS) { try { AUTOS = await (await fetch("data/autosales.json?t=" + Date.now(), { cache: "no-store" })).json(); } catch (_) { AUTOS = {}; } }
   const today = kstToday(), isNew = (r) => !!r.day && (Date.parse(today) - Date.parse(r.day)) / 864e5 <= 7, GO = { 보유: 0, 관심: 1, 공동: 2, "": 3 };
-  const rows = trendRows().sort((a, b) => isNew(b) - isNew(a) || GO[a.g] - GO[b.g]), cnt = (k) => rows.filter((r) => r.s.k === k).length, nw = rows.filter(isNew);
+  const rows = trendRows().sort((a, b) => (b.day || "").localeCompare(a.day || "") || GO[a.g] - GO[b.g]), cnt = (k) => rows.filter((r) => r.s.k === k).length, nw = rows.filter(isNew);
   await keyLoad();
   if (onlyNew) return nw.length ? `<h3>📊 새로 나온 달별 숫자 <span class="src">최근 7일 · 📡 신호 탭 추세판에서 · 줄을 누르면 막대</span></h3><div class="card" style="margin-bottom:14px">${nw.map((r) => trendRow(r, true)).join("")}</div>` : "";
   if (!rows.length) return leadHTML(null, true);
   return `<h3 style="margin-top:0">📊 데이터 추세판 <span class="src">달마다 나오는 숫자 ${rows.length}개 — 추세가 살았나, 꺾였나</span></h3><div class="card" style="margin-bottom:14px">
-    <div class="kidbox" style="margin-top:0">🐣 🟢 살아있음 ${cnt("g")}개 · 🟡 완만해짐 ${cnt("y")}개 · 🔴 꺾임 ${cnt("r")}개 · ${nw.length ? `🆕 최근 7일에 새로 나온 숫자 ${nw.length}개가 맨 위 (${nw.map((r) => esc(r.t)).join(", ")})` : "최근 7일에 새로 나온 숫자는 없어요"}. 줄을 누르면 막대 그림이 열려요.</div>
+    <div class="kidbox" style="margin-top:0">🐣 🟢 살아있음 ${cnt("g")}개 · 🟡 완만해짐 ${cnt("y")}개 · 🔴 꺾임 ${cnt("r")}개 · ${nw.length ? `🆕 최근 7일에 새로 나온 숫자 ${nw.length}개가 맨 위 (${nw.map((r) => esc(r.t)).join(", ")})` : "최근 7일에 새로 나온 숫자는 없어요"}. <b>가장 최근에 나온 숫자가 맨 위</b>예요. 줄을 누르면 막대 그림이 열려요.</div>
+    <div class="src" style="text-align:right;margin:4px 0">오른쪽 작은 막대 = <b>최근 12개월, 달마다 1년 전 같은 달보다 얼마나 늘었나</b> · <b class="kup">위 빨강 = 늘음</b> · <b class="kdn">아래 파랑 = 줄음</b> · 맨 오른쪽이 가장 최근 달 · 막대가 점점 낮아지면 힘이 빠지는 중</div>
     ${rows.map((r) => trendRow(r, isNew(r))).join("")}
     <div class="note src">신호 규칙: 최근 3개월을 더한 값이 1년 전 같은 3개월보다 얼마나 늘었는지(A)와, 그 앞 3개월은 얼마나 늘었었는지(B)를 봐요. A 가 0 아래 = 🔴 꺾임 · A 가 B 보다 눈에 띄게 낮아짐(5%p 넘게, 그리고 B 의 20% 넘게) = 🟡 완만해짐 · 그 밖 = 🟢 살아있음.
-    순서: 🆕 최근 7일 → 💼 보유 → ⭐ 관심 → 🤝 공동 관련 숫자 · 오른쪽 작은 막대 = 최근 12개월의 전년 대비 (위 = 늘어남) · 한 달 숫자는 들쭉날쭉해서 3개월로 봄 · 매수·매도 추천 아님</div></div>${leadHTML(null, true)}`;
+    순서: 가장 최근에 나온 숫자가 위 → 같은 날이면 💼 보유 → ⭐ 관심 → 🤝 공동 관련 숫자 · 오른쪽 작은 막대 = 최근 12개월의 전년 대비 (위 = 늘어남) · 한 달 숫자는 들쭉날쭉해서 3개월로 봄 · 매수·매도 추천 아님</div></div>${leadHTML(null, true)}`;
 }
 // 🔋 글로벌 ESS 새 설치량 (하나증권 월간 — 지역별 표 + 달별 쌓은 막대) · 산업 탭 2차전지 칸 맨 위 (id kc-ess)
 function essHTML() {
@@ -5827,16 +5842,15 @@ function pbrCard(it, base, i) {
   const lo = Math.min(...pbrVals), hi = Math.max(...pbrVals);
   const pbrCell = (v) => (v == null ? "N/A" : `<span class="${v <= lo ? "pill green" : v >= hi ? "pill red" : ""}">${v.toFixed(2)}배</span>`);
   const b0 = it.bps[base];
-  const sum = [];
-  if (b0) {
-    sum.push(`지금 <b>${n(it.price)}원</b> = ${esc(base)} PBR <b>${(it.price / b0).toFixed(2)}배</b>`);
-    for (const r of [...it.rows].sort((a, b) => b.mult - a.mult)) {
-      const p = r.prices[base];
-      if (!p) continue;
-      const c = r.chg[base];
-      sum.push(`${esc(base)} PBR <b>${mfmt(r.mult)}배</b> = ${n(p)}원 <span class="${c < 0 ? "verdict red" : "verdict green"}" style="font-size:13px">(지금보다 ${pct(c, 0, true)})</span>`);
-    }
-  }
+  // 🪜 가격 사다리 (사용자 11/28 "너무 조잡해 — 더 직관적으로"): 기준 연도 BPS 로 PBR 몇 배면 얼마인지를 비싼 순서로, 지금 주가를 그 사이 제자리에 노란 줄로 · 연도별 표는 접어 둠
+  const ladF = () => {
+    const L = [...it.rows.filter((r) => r.prices[base]).map((r) => ({ m: r.mult, p: r.prices[base], c: r.chg[base] })), { now: 1, m: it.price / b0, p: it.price }].sort((a, b) => b.p - a.p), mxp = L[0].p;
+    const row = (x) => `<div style="display:grid;grid-template-columns:minmax(6.5em,9em) 1fr;gap:8px;align-items:center;padding:6px;border-top:1px solid var(--border)${x.now ? ";background:var(--warn-bg);border-radius:6px" : ""}">
+      <div>${x.now ? `<b>◀ 지금 ${x.m.toFixed(2)}배</b>` : `PBR <b>${mfmt(x.m)}배</b>${mk(x.m) ? `<div style="font-size:12px;font-weight:700;color:var(--ink-2)">${esc(mk(x.m))}</div>` : ""}`}</div>
+      <div><div style="height:${x.now ? 12 : 8}px;width:${Math.max(4, Math.round((x.p / mxp) * 100))}%;background:${x.now ? "var(--ink)" : x.p > it.price ? "var(--good)" : "var(--bad)"};border-radius:3px;opacity:${x.now ? 1 : 0.55}"></div>
+        <b style="font-size:${x.now ? 16 : 14}px">${n(x.p)}원</b>${x.now ? "" : ` <b style="color:var(${x.c < 0 ? "--bad-ink" : "--good-ink"})">${pct(x.c, 0, true)}</b> <span class="src">${x.c < 0 ? "여기까지 내려가면" : "여기까지 오르면"}</span>`}</div></div>`;
+    return `<div class="chart-title" style="margin-top:8px"><b>🪜 ${esc(base)} 기준 가격 사다리</b> <span class="src">PBR 몇 배면 주가가 얼마인지 · 위가 비쌈 · 노란 줄 = 지금</span></div>${L.map(row).join("")}`;
+  };
   const band = it.band10 ? `<div class="note">10년 PBR 밴드: ${it.band10.min != null ? `가장 낮았던 때 ${it.band10.min} · ` : ""}하단 ${it.band10.low} · 평균 ${it.band10.avg} · 상단 ${it.band10.high}${it.band10.max != null ? ` · 가장 높았던 때 ${it.band10.max}` : ""}배 · 지금 위치 <b>${n(it.band10.pos, 0)}%</b> <span class="src">(직전 연도 실적 기준)</span></div>` : "";
   // 📏 내 기준선 (사용자 11/5: 삼성전자 0.7배 = 저평가, 1배 = 매력적) — 연도마다 지금 PBR 이 어느 자리인지
   // + 11/5 증권사 시각 바닥 1.2배(삼성)·1.0배(하이닉스) — marks 세 번째 칸 = 누구 기준인지, 같은 배수는 이름을 합쳐 보여 줌
@@ -5851,17 +5865,19 @@ function pbrCard(it, base, i) {
   return `<div class="card">
     <div class="stock"><div class="row1"><span class="name">${esc(it.name)}</span><span class="price">${won(it.price)}</span></div></div>
     <div class="sub">${esc(it.date)} 기준 ${it.stale ? '<span class="stale">⚠ 직전 데이터</span>' : ""} · 최근 실적(${it.bps_last.year}) BPS ${n(it.bps_last.bps)} → PBR ${times(it.bps_last.pbr, 2)}</div>
+    ${b0 ? ladF() : ""}
+    <details class="fvt" style="margin-top:8px"><summary class="chart-title">📋 연도별 표 (${ys.map(esc).join(" · ")})${ms.length ? " · 📏 기준선" : ""} <span class="src">눌러서 보기</span></summary>
     <div class="tbl-wrap"><table><thead><tr><th>구분</th>${ys.map((y) => `<th class="${cls(y)}">${y}${y === "12MF" ? '<br><span class="src">앞 12개월</span>' : ""}</th>`).join("")}</tr></thead><tbody>
       <tr><td>BPS</td>${ys.map((y) => `<td class="${cls(y)}">${n(it.bps[y])}</td>`).join("")}</tr>
       <tr><td>현재 PBR</td>${ys.map((y) => `<td class="${cls(y)}">${pbrCell(it.pbr[y])}</td>`).join("")}</tr>
       ${it.rows.map((r) => `<tr><td>PBR ${mfmt(r.mult)}${mk(r.mult) ? `<br><b style="white-space:normal">${esc(mk(r.mult))}</b>` : ""}</td>${ys.map((y) => `<td class="${cls(y)} ${r.chg[y] != null && Math.abs(r.chg[y]) < 10 ? "hot" : ""}">${r.prices[y] == null ? "N/A" : n(r.prices[y])}<br><span class="src">${pct(r.chg[y], 0, true)}</span></td>`).join("")}</tr>`).join("")}
     </tbody></table></div>
     ${it.auto_multiples ? `<div class="note">배수는 10년 PBR 밴드의 하단·평균·상단을 자동으로 넣었어요.</div>` : ""}
-    ${sum.length ? `<ul class="summary">${sum.map((s) => `<li>${s}</li>`).join("")}</ul>` : ""}
+    ${marks}</details>
     ${it.alert ? (it.alert.hit
       ? `<div class="memo" style="background:var(--good-bg);color:var(--good-ink)">✅ 지금 ${esc(it.alert.year)} PBR <b>${it.alert.pbr}배</b> — ${it.alert.below}배 이하예요. <span class="src">(${esc(it.alert.text)})</span></div>`
       : `<div class="memo">🎯 ${esc(it.alert.year)} PBR ${it.alert.below}배 = <b>${n(it.alert.target_price)}원</b> (지금보다 ${pct(it.alert.gap, 1, true)}) · 지금 ${it.alert.pbr}배 <span class="src">(${esc(it.alert.text)})</span></div>`) : ""}
-    ${marks}${band}
+    ${band}
     <div class="calc"><input id="calc-${i}" inputmode="numeric" placeholder="가격을 넣어 보세요 (예: 200000)" aria-label="${esc(it.name)} 가격 입력"></div>
     <div class="calc-out" id="calc-out-${i}"></div>
     ${Array.isArray(it.memo) ? `<details class="fvt"><summary class="chart-title">📝 메모·전달받은 글 <span class="src">${it.memo.length}개 · 눌러서 보기</span></summary><ul class="irl">${it.memo.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : it.memo ? `<div class="memo">📝 ${esc(it.memo)}</div>` : ""}
@@ -6768,15 +6784,21 @@ function leadHTML(name, brief = false) {  // brief = 📡 신호 탭용 (사용�
     if (sig.startsWith("⚠")) warn.push(`${it.n}: ${ps !== s ? `${ps} → ${s}` : ""}${dl < 0 ? ` 리드타임 ${n(-dl, 0)}주 짧아짐` : ""}`);
     if (sig.startsWith("🔺")) up.push(`${esc(it.n.split(" (")[0])}${ps && ps !== s ? ` ${LT_KO[ps]} → ${LT_KO[s]}` : ""}${dl > 0 ? ` (${esc(plt)} → ${esc(lt)}주)` : ""}`);
     const col = LT_RK[s] >= 4 ? "var(--bad)" : LT_RK[s] === 3 ? "#e8564f" : LT_RK[s] === 2 ? "#e8902f" : "var(--good)";
-    return [sig.startsWith("↔") ? 1 : 0, `<tr><td style="text-align:left"><b>${esc(it.n)}</b><br><span class="src">${esc(it.who || "")}</span></td><td><span class="pill" style="background:${col};color:#fff">${esc(LT_KO[s] || s || "-")}</span></td>
-      <td><b>${esc(lt || "-")}주</b>${dl ? `<br><span style="color:var(${dl > 0 ? "--bad-ink" : "--good-ink"})">${dl > 0 ? "+" : ""}${n(dl, 0)}주</span>` : ""}</td><td>${esc(it.bal)}주<br><span class="src">${x ? `${n(x, 1)}배` : ""}</span></td><td style="white-space:nowrap">${sig}</td></tr>`];
+    // 줄을 누르면 주마다 추세 (사용자 11/28 "누르면 추세 · 리드타임이 꺾이는 때를 봐야 · 나오는 기간마다 느는지"): 표가 나온 주마다 막대 + 그 전 표보다 몇 주
+    const H = W.filter((w) => w.v[k]).map((w) => [w.d, ltMid(w.v[k][1]), w.v[k][1], w.v[k][0]]), mxw = Math.max(...H.map((h) => h[1] || 0), 1);
+    const hist = `<tr hidden><td colspan="5" style="text-align:left;background:var(--card-2, transparent)"><div class="src">${esc(it.n)} 리드타임 — 표가 나온 주마다 (막대가 길수록 물건이 모자람 · 막대가 짧아지기 시작하면 ⚠ 꺾임)</div>
+      ${H.map((h, i) => { const d0 = i ? h[1] - H[i - 1][1] : null; return `<div style="display:flex;align-items:center;gap:6px;margin-top:3px"><span class="src" style="width:3.2em">${esc(md(h[0]))}</span><span style="display:inline-block;height:12px;width:${Math.round((h[1] / mxw) * 55)}%;background:${d0 < 0 ? "var(--good)" : "var(--bad)"};border-radius:2px"></span><b>${esc(h[2])}주</b>
+        <span class="src">${esc(LT_KO[h[3]] || h[3] || "")}${d0 == null ? "" : d0 > 0 ? ` · <b style="color:var(--bad-ink)">+${n(d0, 0)}주 더 길어짐</b>` : d0 < 0 ? ` · <b style="color:var(--good-ink)">⚠ ${n(-d0, 0)}주 짧아짐 (꺾임)</b>` : " · 그대로"}</span></div>`; }).join("")}
+      <div class="src" style="margin-top:4px">${H.length > 1 ? `처음(${esc(md(H[0][0]))}) ${esc(H[0][2])}주 → 지금 ${esc(H.at(-1)[2])}주 · ` : ""}표가 ${H.length}번 쌓였어요 — 새 표를 받을 때마다 한 줄씩 늘어요</div></td></tr>`;
+    return [sig.startsWith("↔") ? 1 : 0, `<tr style="cursor:pointer" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden"><td style="text-align:left"><span class="src">▸</span> <b>${esc(it.n)}</b><br><span class="src">${esc(it.who || "")}</span></td><td><span class="pill" style="background:${col};color:#fff">${esc(LT_KO[s] || s || "-")}</span></td>
+      <td><b>${esc(lt || "-")}주</b>${dl ? `<br><span style="color:var(${dl > 0 ? "--bad-ink" : "--good-ink"})">${dl > 0 ? "+" : ""}${n(dl, 0)}주</span>` : ""}</td><td>${esc(it.bal)}주<br><span class="src">${x ? `${n(x, 1)}배` : ""}</span></td><td style="white-space:nowrap">${sig}</td></tr>${hist}`];
   });
   const rows = (brief ? rs.sort((a, b) => a[0] - b[0]) : rs).map((r) => r[1]).join("");  // 신호 탭은 바뀐 부품이 위
   const table = `<div class="tbl-wrap"><table class="compact" style="width:100%"><thead><tr><th style="text-align:left">부품</th><th>지금 상태</th><th>리드타임</th><th>정상 때<br><span class="src">지금은 몇 배</span></th><th>지난주보다</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   if (brief) {
     const fresh = (d) => (Date.parse(kstToday()) - Date.parse(d)) / 864e5 <= 7, news = (L.news || []).filter((x) => fresh(x.d)).sort((a, b) => (a.d < b.d ? 1 : -1));
     return `<h3>⏱ 부품 리드타임 · 트렌드포스 새 소식 <span class="src">${esc(md(cur.d))} 표${fresh(cur.d) ? " · 🆕 최근 7일" : ""} · 매주</span></h3><div class="card" style="margin-bottom:14px">
-      <div class="kidbox" style="margin-top:0">🐣 리드타임 = 주문하고 물건을 받기까지 걸리는 주 수예요 (길수록 물건이 모자람). ${up.length ? `이번 주 <b>더 부족해진</b> 부품: ${up.join(" · ")}` : "이번 주 더 부족해진 부품은 없어요"} · ${warn.length ? `⚠ <b>풀리기 시작</b>: ${warn.map(esc).join(" · ")}` : "풀리기 시작한 부품은 없어요"}.</div>
+      <div class="kidbox" style="margin-top:0">🐣 리드타임 = 주문하고 물건을 받기까지 걸리는 주 수예요 (길수록 물건이 모자람). ${up.length ? `이번 주 <b>더 부족해진</b> 부품: ${up.join(" · ")}` : "이번 주 더 부족해진 부품은 없어요"} · ${warn.length ? `⚠ <b>풀리기 시작</b>: ${warn.map(esc).join(" · ")}` : "풀리기 시작한 부품은 없어요"}. 리드타임이 <b>짧아지기 시작하면(꺾이면)</b> 물건이 풀린다는 뜻이라 조심 신호예요 — 그때 ⚠로 알려요. <b>부품 줄을 누르면 주마다 추세</b>가 열려요.</div>
       ${table}
       ${news.length ? `<div class="chart-title" style="margin-top:8px"><b>📰 트렌드포스 새 소식 (최근 7일)</b> <span class="src">우리 업종 글만 한 줄씩 · 최신이 위</span></div><ul class="irl">${news.map((x) => `<li><span class="src">${esc(md(x.d))}</span> <b>${esc(x.k)}</b> — ${esc(x.t)}${x.u ? ` <a href="${esc(x.u)}" target="_blank" rel="noopener">원문</a>` : ""}</li>`).join("")}</ul>` : ""}
       <div class="note src">${esc(L.src || "")} · 주마다 선 그림·MLCC 회사별 표: <a href="#industry" data-kc="lead-기판">🧱 기판 칸</a> · <a href="#industry" data-kc="lead-반도체">💾 반도체 칸</a> (삼성전기 같은 종목 상세의 🔑 키팩터 묶음에도 같은 표) · 상태가 한 단계라도 풀리면 ⚠ · 매수·매도 추천 아님</div></div>`;

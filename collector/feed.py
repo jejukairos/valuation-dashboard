@@ -74,11 +74,23 @@ def build(today=None, days=DAYS, git=True):
         t = f"{q} 실적{' (잠정)' if kd and kb.get('prelim') else ''}" + (f" — {num}" if num else "") + (f" · ✅ {' · '.join(done)}" if done else "")
         add(max(x for x in (kd, ir and ir.get("date"), er and er.get("date")) if x), code, "🧾 실적", t)
     # 📑 한경 리포트: 종목·날짜마다 한 줄 (몇 개 · 목표가 상향/하향/유지)
+    #   + 텔레그램 리포트 채널 (사용자 11/28 "리포트는 DOC_POOL 이 대부분 올림 · report_figure_by_offset · YoungTiger_stock 도 꼭 참고"): 한경에 없는 증권사 리포트도 그 날 줄에
+    fk = lambda f: re.sub(r"\s", "", (f or "").replace("한투", "한국"))[:2].upper()  # noqa: E731 - 증권사 앞 두 글자 (app.js fKey 와 같음)
+    BY = {str(st.get("code")): {} for st in _j("reports").get("stocks") or []}
     for st in _j("reports").get("stocks") or []:
-        code, by = str(st.get("code")), {}
         for r in st.get("list") or []:
-            if (r.get("d") or "") >= cut and code in S:
-                by.setdefault(r["d"], []).append(r)
+            if (r.get("d") or "") >= cut:
+                BY[str(st.get("code"))].setdefault(r["d"], []).append(r)
+    for nm in ("tg_api", "tg_reports"):
+        for code, L in (_j(nm).get("stocks") or {}).items():
+            for x in L:  # 증권사 이름이 있는 리포트 글만 (PDF 가 붙었거나 목표가가 있는 것) · 같은 날 같은 증권사는 하나
+                if x.get("firm") and (x.get("pdf") or x.get("tp")) and (x.get("d") or "") >= cut:
+                    rs = BY.setdefault(code, {}).setdefault(x["d"], [])
+                    if not any(fk(r.get("firm")) == fk(x["firm"]) for r in rs):
+                        rs.append({"d": x["d"], "firm": x["firm"], "tp": x.get("tp"), "tp_prev": x.get("tp_prev")})
+    for code, by in BY.items():
+        if code not in S:
+            continue
         for d, rs in by.items():
             up = sum(1 for r in rs if r.get("tp") and r.get("tp_prev") and r["tp"] > r["tp_prev"])
             dn = sum(1 for r in rs if r.get("tp") and r.get("tp_prev") and r["tp"] < r["tp_prev"])
