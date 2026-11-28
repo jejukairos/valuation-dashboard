@@ -411,13 +411,16 @@ def stock_detail(h, rates_now, fx):
             import yfinance as yf
             re_ = yf.Ticker(code).revenue_estimate
             psr = now.get("market_cap") / float(re_.loc["0y", "avg"]) if (now.get("market_cap") and re_ is not None and "0y" in re_.index) else None
+            if tbl is not None and psr:  # 올해·내년 (야후 매출 예상은 2년뿐 — 28E 는 빈칸)
+                p1 = now["market_cap"] / float(re_.loc["+1y", "avg"]) if "+1y" in re_.index and float(re_.loc["+1y", "avg"]) > 0 else None
+                tbl["psr_y"] = [rnd(psr, 2), rnd(p1, 2), None]
         except Exception:  # noqa: BLE001
             psr = None
     if tbl is not None:  # 엑셀 '간단 벨류'의 GPM·ROIC·FCF, PSR (한국·미국 공통)
         tbl.update(score.us_extra(fins, now.get("market_cap")))
         tbl["psr"] = rnd(psr, 2)
         # 예상 ROIC: 한국 = 와이즈리포트 예상 영업이익, 미국 = 예상 EPS × 주식 수(세후 순이익으로 NOPAT 대신)
-        e_ys = [yy for yy in (y0, y0 + 1) if yy in hist]  # 칸을 26E·27E 로 맞춤 (6월 결산 MS 처럼 이미 확정된 해면 그 실적)
+        e_ys = [yy for yy in (y0, y0 + 1, y0 + 2) if yy in hist]  # 칸을 26E·27E·28E 로 맞춤 (28E = 사용자 11/28) (6월 결산 MS 처럼 이미 확정된 해면 그 실적)
         shares = (now.get("market_cap") / price) if (mkt == "US" and now.get("market_cap") and price) else None
         fwd = [(C.ylabel(yy), ((wise or {}).get(yy) or {}).get("op") * 1e8 if mkt == "KR" and ((wise or {}).get(yy) or {}).get("op") is not None else None,
                 hist[yy]["eps"] * shares if shares and hist[yy].get("eps") is not None else None) for yy in e_ys]

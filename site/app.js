@@ -545,7 +545,7 @@ function pegHow(c) {
       <tr><td class="src">PEG</td>${rows.map((r) => `<td>${r[2] == null ? '<span class="src">-</span>' : r[0] === h.by ? `<b>${n(r[2], 2)}</b>` : n(r[2], 2)}</td>`).join("")}</tr></table>`;
   } else {
     if ((h.flags || []).includes("gap")) warn.unshift(`영업이익 ${G(h.op)} 와 EPS ${G(h.eps)} 가 10%p 넘게 달라요 — 환율·일회성 같은 영업 밖 손익이 섞였을 수 있어 낮은 쪽을 썼어요`);
-    body = `<div class="src">연평균 영업이익 ${G(h.op)} · EPS ${G(h.eps)} 중 낮은 쪽${h.jump ? " · 첫해가 크게 뛰어서(또는 작년 적자) 올해부터 계산" : ""}${h.alt && (h.flags || []).includes("gap") ? ` · ${esc(h.alt.by)} 기준이면 ${n(h.alt.peg, 2)}` : ""}${p == null ? " · 이익이 줄어드는 예상이라 PEG 없음" : ""}</div>${peg4(c, true)}`;
+    body = `<div class="src">연평균 영업이익 ${G(h.op)} · EPS ${G(h.eps)} 중 낮은 쪽${h.jump ? " · 첫해가 크게 뛰어서(또는 작년 적자) 올해부터 계산" : ""}${h.alt && (h.flags || []).includes("gap") ? ` · ${esc(h.alt.by)} 기준이면 ${n(h.alt.peg, 2)}` : ""}${p == null ? " · 이익이 줄어드는 예상이라 PEG 없음" : ""}</div>`;  // '해마다 따로 보면' 4칸 표(peg4)는 뺌 (사용자 11/28 "이해가 안 가 — 모든 종목 다 빼 줘")
   }
   return `📐 PEG <b>${p == null ? "-" : n(p, 2)}</b> <span class="src">= ${esc(h.per_y)} 예상 PER ${n(h.per, 1)} ÷ ${esc(h.by)} ${us ? "3~5년 성장률" : "연평균"} ${G(h.g)}${h.win ? ` (${esc(h.win)})` : ""}</span>${body}
     ${warn.map((w) => `<div class="src" style="color:var(--warn-ink)">⚠ ${w}</div>`).join("")}`;
@@ -599,7 +599,7 @@ function stockCard(c) {
   // 📐 PEG 4개 (사용자 11/12) 를 현재가 바로 아래에 — 위 한 줄짜리 PEG(보정값·Finviz·시킹알파)는 '참고' 한 줄로 줄임 (같은 이름 두 번 안 나오게)
   const seen = [c.fwd_per > 0 && gA ? `${gL} 성장률 ${n(gA, 1)}% → ${n(c.fwd_per / gA, 2)}` : "", fvp != null ? `Finviz ${n(fvp, 2)}` : "", sp ? `시킹알파 ${[sp.ngaap != null ? `${n(sp.ngaap, 2)} (Non-GAAP 예상)` : "", sp.gaap != null ? `${n(sp.gaap, 2)} (GAAP 지난 1년)` : ""].filter(Boolean).join(" · ")}${sp.date ? ` ${esc(String(sp.date).slice(5).replace("-", "/"))}` : ""}` : ""].filter(Boolean);
   const ph = pegHow(c);  // 새 PEG 근거가 있으면 그 한 칸만 (예전 '참고 PEG' 줄은 출처별 표로 들어감 — 같은 숫자 두 번 안 나오게)
-  const pg = ph || peg4(c) || (c.currency === "USD" ? `📐 PEG <b>-</b> <span class="src">앞으로 12개월 EPS 가 적자라 계산 안 됨</span>` : "");
+  const pg = ph || (c.tbl?.peg != null ? `📐 PEG <b>${n(c.tbl.peg, 2)}</b> <span class="src">= 예상 PER ÷ 이익 성장률</span>` : "") || (c.currency === "USD" ? `📐 PEG <b>-</b> <span class="src">앞으로 12개월 EPS 가 적자라 계산 안 됨</span>` : "");
   if (pg || seen.length) pe.unshift(`${pg}${seen.length && !ph ? `<div class="src">참고 PEG: ${seen.join(" · ")}</div>` : ""}${ph && sp ? `<div class="src">시킹알파 화면 PEG: ${[sp.ngaap != null ? `${n(sp.ngaap, 2)} (Non-GAAP 예상)` : "", sp.gaap != null ? `${n(sp.gaap, 2)} (GAAP 지난 1년)` : ""].filter(Boolean).join(" · ")}</div>` : ""}`);
   if (c.naver_per > 0) pe.push(`<span class="src">참고: 네이버 추정 PER (올해 ${String(new Date().getFullYear()).slice(2)}E 기준) ${n(c.naver_per, 2)}배</span>`);
   return `<button class="card stock" data-code="${esc(c.code)}" data-jump="${esc(c.code)}" data-jname="${esc(c.name)}">
@@ -985,18 +985,25 @@ function cmpCols(mk = MKT) {
     c["og" + i] = { h: `영업이익<br>${arrow(i)}`, v: t("op_g", i), f: G };
     // 해마다 EPS 증가율 (사용자 11/18) · shortcut: tbl.eps_g 가 들어오기 전(다음 데이터 갱신)엔 26E→27E 만 PER 두 칸으로 역산 (둘 다 지금 주가 ÷ EPS)
     c["eg" + i] = { h: `EPS<br>${arrow(i)}`, v: (s) => s.tbl?.eps_g?.[i] ?? (i === 1 && s.tbl?.per?.[1] > 0 && s.tbl?.per?.[2] > 0 ? (s.tbl.per[1] / s.tbl.per[2] - 1) * 100 : null), f: G };
-    c["per" + i] = { h: `PER<br>${ys[i]}`, v: t("per", i), f: P(1) };
-    c["pbr" + i] = { h: usd && !i ? "PBR<br>지금" : `PBR<br>${ys[i]}`, v: t("pbr", i), f: P(2) };  // 미국 첫 칸 = 야후 지금 PBR (예상 BPS 는 무료 자료 없음)
-    c["roe" + i] = { h: `ROE<br>${ys[i]}`, v: t("roe", i), f: R(0) };
   }
+  // 사용자 11/28 "밸류·재무도 28E 까지 다 나열 (모든 것에)": PER·PBR·ROE 4칸 (25·26E·27E·28E) · 배당·PSR·예상 FCF·예상 ROIC 3칸 (26E·27E·28E)
+  //   28E 는 다음 자료 갱신부터 채워짐 — 그 전엔 PER·PBR 만 12MF 계산에 쓰던 값(fwd_mult)으로 먼저 보여 줌
+  const fm = (k, i) => (s) => (s.tbl?.[k] || [])[i] ?? (i > 0 ? s.fwd_mult?.[k.toUpperCase()]?.[ys[i]] ?? null : null);
   for (let i = 0; i < 4; i++) {
+    c["per" + i] = { h: `PER<br>${ys[i]}`, v: fm("per", i), f: P(1) };
+    c["pbr" + i] = { h: usd && !i ? "PBR<br>지금" : `PBR<br>${ys[i]}`, v: fm("pbr", i), f: P(2) };  // 미국 첫 칸 = 야후 지금 PBR (예상 BPS 는 무료 자료 없음)
+    c["roe" + i] = { h: `ROE<br>${ys[i]}`, v: t("roe", i), f: R(0) };
+    c["roa" + i] = { h: `ROA<br>${ys[i]}`, v: t("roa", i), f: R(1) };  // 순이익 ÷ 총자산 (사용자 11/28 "ROE 만 보면 빚을 놓친다 — ROE 와 ROA 가 비슷하면 빚이 적은 것")
     c["pf" + i] = { h: `P/FCF<br>${ys[i]}`, v: t("pfcf", i), f: P(1) };
     c["opm" + i] = { h: `OPM<br>${ys[i]}`, v: t("opm", i), f: R(1) };
     c["debt" + i] = { h: `부채비율<br>${ys[i]}`, v: t("debt", i), f: (v) => (v == null ? "-" : n(v) + "%") };
   }
-  for (let i = 0; i < 2; i++) c["dy" + i] = { h: `배당<br>${ys[i + 1]}`, v: t("dy", i), f: (v) => (v == null ? "-" : n(v, 1) + "%") };
-  // 엑셀 '간단 벨류' 지표 (야후 연간 실적: 최근 / 1년 전 / 2년 전)
-  const ago = ["최근 연간", "1년 전", "2년 전"];
+  for (let i = 0; i < 3; i++) c["dy" + i] = { h: `배당<br>${ys[i + 1]}`, v: t("dy", i), f: (v) => (v == null ? "-" : n(v, 1) + "%") };
+  c.dyL = { h: `배당<br>${ys[0]} 확정`, v: t("dy_last"), f: (v) => (v == null ? "-" : n(v, 1) + "%") };  // 작년에 실제 준 배당 ÷ 지금 주가 — 예상 칸과 차이가 크면 특별배당·증액 기대가 들어간 것
+  const li = usd ? 0 : 1;  // ROE ÷ ROA = 자산이 자본의 몇 배인지 (1배에 가까울수록 빚이 적음) — 한국 = 올해 예상, 미국 = 확정 연간
+  c.lev = { h: `ROE÷ROA<br>${ys[li]}`, v: (s) => { const a = s.tbl?.roe?.[li], b = s.tbl?.roa?.[li]; return a > 0 && b > 0 ? a / b : null; }, f: (v) => (v == null ? "-" : `<span class="${v >= 3 ? "neg" : ""}">${n(v, 1)}배</span>`) };
+  // 엑셀 '간단 벨류' 지표 (야후 연간 실적: 최근 / 1년 전 / 2년 전) — GPM 은 증권사 예상치가 무료 자료에 없어 확정 실적만 (머리글에 그 연도, tbl.fy)
+  const fyL = usd ? [] : DASH.stocks.find((s) => s.market === "KR" && s.tbl?.fy?.length)?.tbl.fy || [], ago =  // 미국은 회사마다 회계연도가 달라(엔비디아 1월 결산) 연도를 안 붙임 ["최근 연간", "1년 전", "2년 전"].map((a, i) => (fyL[i] ? `${fyL[i]} 확정` : a));
   const money3 = (v, s) => (v == null ? "-" : `<span class="${v < 0 ? "neg" : ""}">${s.currency === "USD" ? "$" + n(v / 1e9, 1) + "B" : Math.abs(v) >= 1e12 ? n(v / 1e12, 1) + "조" : n(v / 1e8, 0) + "억"}</span>`);
   for (let i = 0; i < 3; i++) {
     c["gpm" + i] = { h: `GPM<br>${ago[i]}`, v: t("gpm", i), f: R(1) };
@@ -1015,8 +1022,12 @@ function cmpCols(mk = MKT) {
   const rs = DASH.stocks.find((s) => s.tbl?.roic_e?.length)?.tbl || {};
   c.roic = { h: `ROIC<br>${rs.roic_fy ? esc(rs.roic_fy) + " 확정" : "최근 연간"}`, v: t("roic"), f: R(0) };
   c.roicT = { h: "ROIC<br>최근 4분기", v: t("roic_ttm"), f: R(0) };
-  for (let i = 0; i < 2; i++) c["roicE" + i] = { h: `ROIC<br>${esc((rs.roic_e?.[i] || [])[0] || (i ? "27E" : "26E"))} 예상`, v: (s) => (s.tbl?.roic_e?.[i] || [])[1] ?? null, f: R(0) };
+  for (let i = 0; i < 3; i++) c["roicE" + i] = { h: `ROIC<br>${esc((rs.roic_e?.[i] || [])[0] || ys[i + 1])} 예상`, v: (s) => (s.tbl?.roic_e?.[i] || [])[1] ?? null, f: R(0) };
   c.psr = { h: `PSR<br>${ys[1]}`, v: t("psr"), f: P(1) };
+  for (let i = 0; i < 3; i++) {
+    c["psr" + i] = { h: `PSR<br>${ys[i + 1]}`, v: (s) => (s.tbl?.psr_y || [])[i] ?? (i ? null : s.tbl?.psr ?? null), f: P(1) };
+    c["fcfE" + i] = { h: `FCF<br>${ys[i + 1]}`, v: t("fcf_e", i), f: money3 };
+  }
   return c;
 }
 const GTAG = { 보유: "💼", 관심: "⭐", 공동: "🤝" };
@@ -1027,11 +1038,11 @@ const CMP_GROUPS = [
   // 맨 앞 = 해외 증권사가 중요하게 보는 칸 (사용자 11/18): PEG · FCF · 영업이익·EPS 다음 해·그다음 해 증가율 · 내년 예상 PBR
   ["sum", "요약", ["cap", "peg", "fcfT", "fcfY", "pf1", "og1", "og2", "eg1", "eg2", "pbr2",  // pf1 = 야후 FCF 가 비는 종목(삼성전자·현대차 등)도 와이즈리포트 예상 FCF 로 보이게
     "|", "salesC", "opC", "per12", "opm1", "roe1", "debt1", "dy0", "dd",
-    "|", "opm0", "opm1", "opm2", "opm3", "|", "roe0", "roe1", "roe2", "|", "debt0", "debt1", "debt2", "debt3", "|", "pf0", "pf1", "pf2", "pf3"]],
+    "|", "opm0", "opm1", "opm2", "opm3", "|", "roe0", "roe1", "roe2", "roe3", "|", "debt0", "debt1", "debt2", "debt3", "|", "pf0", "pf1", "pf2", "pf3"]],
   ["grow", "성장", ["salesC", "sg0", "sg1", "sg2", "opC", "og0", "og1", "og2", "epsC", "eg0", "eg1", "eg2", "op10", "px10", "rr10"]],
-  ["qual", "수익성", ["gpm0", "opm0", "opm1", "opm2", "opm3", "roe0", "roe1", "roe2", "roic", "roicT", "roicE0", "roicE1"]],
-  ["val", "밸류", ["per12", "peg", "per0", "per1", "per2", "pbr0", "pbr1", "pbr2", "psr", "pf0", "pf1", "pf2", "pf3"]],
-  ["fin", "재무·배당", ["nc", "ncp", "ncx", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "debt1", "debt2", "debt3", "dy0", "dy1", "dd"]],
+  ["qual", "수익성", ["gpm2", "gpm1", "gpm0", "|", "opm0", "opm1", "opm2", "opm3", "|", "roe0", "roe1", "roe2", "roe3", "|", "roa0", "roa1", "roa2", "roa3", "lev", "|", "roic", "roicT", "roicE0", "roicE1", "roicE2"]],
+  ["val", "밸류", ["per12", "peg", "|", "per0", "per1", "per2", "per3", "|", "pbr0", "pbr1", "pbr2", "pbr3", "|", "psr0", "psr1", "psr2", "|", "pf0", "pf1", "pf2", "pf3", "|", "dyL", "dy0", "dy1", "dy2"]],
+  ["fin", "재무·배당", ["nc", "ncp", "ncx", "fcfT", "fcfY", "|", "fcf2", "fcf1", "fcf0", "fcfE0", "fcfE1", "fcfE2", "|", "debt0", "debt1", "debt2", "debt3", "|", "dyL", "dy0", "dy1", "dy2", "dd"]],
   ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
   ["all", "전체", null],
 ];
@@ -1040,8 +1051,8 @@ const CMP_GROUPS_US = [
   ["scr", "스크리닝", ["grp", "cap", "gap", "per1", "per2", "per12", "peg", "|", "sg0", "sg1", "|", "eg0", "eg1", "eg2", "epsC"]],  // 미국은 영업이익 예상이 없어 매출·EPS
   ["sum", "요약", ["cap", "peg", "pegF", "pegM", "fcfT", "fcfY", "eg1", "eg2", "pbr0", "|", "sg0", "sg1", "epsC", "per12", "gpm0", "opm0", "roic", "roicE1", "ncx", "dy0", "dd"]],
   ["grow", "성장", ["sg0", "sg1", "epsC", "eg0", "eg1", "eg2", "op10", "px10", "rr10"]],
-  ["qual", "수익성", ["gpm0", "gpm1", "gpm2", "opm0", "roe0", "roic", "roicT", "roicE0", "roicE1"]],
-  ["val", "밸류", ["per12", "peg", "pegF", "pegM", "per0", "per1", "per2", "pbr0", "psr"]],
+  ["qual", "수익성", ["gpm2", "gpm1", "gpm0", "|", "opm0", "roe0", "roa0", "lev", "|", "roic", "roicT", "roicE0", "roicE1", "roicE2"]],
+  ["val", "밸류", ["per12", "peg", "pegF", "pegM", "|", "per0", "per1", "per2", "per3", "|", "pbr0", "psr0", "psr1"]],
   ["fin", "재무·배당", ["nc", "ncp", "ncx", "ncxp", "fcfT", "fcfY", "fcf0", "fcf1", "fcf2", "debt0", "dy0", "dd"]],
   ["som", "소몽", ["smS", "sm_wallet", "sm_oligopoly", "sm_anyone_wins", "sm_good_boss", "sm_giant", "ath", "nev"]],
   ["all", "전체", null],
@@ -1098,7 +1109,7 @@ function renderCmp(T = CMP_T.main) {
       : "PEG = 내년 예상 PER ÷ 앞으로 연평균 성장률 — 영업이익·EPS 중 낮은 쪽 · 25→28E 3년, 첫해가 +50% 넘게 뛰거나 작년이 적자면 26E→28E 2년") + " · ⚠ = 지표·출처끼리 차이가 크거나 성장률 50% 넘음 (아래 종목 칸 📐 줄에 이유)"
       : "PEG = 12MF PER ÷ EPS 3년 연평균 성장률(%)"} (1 아래면 성장에 비해 싼 편, 피터 린치 기준) · * = 이익이 크게 출렁이는 업종이라 PER·PEG 가 실제보다 싸 보일 수 있음 ·
     P/FCF = 지금 시가총액 ÷ 그해 잉여현금흐름 (25 = 확정 실적) · PSR = 시가총액 ÷ 올해 예상 매출 · 순현금 = 현금·단기투자 − 총차입금(최근 분기, 야후) · GPM·ROIC·FCF = 야후 연간 실적 ·
-    ${MK === "US" ? "미국: 추정치는 야후·나스닥 컨센서스(EPS·매출), 나머지는 최근 실적 · 25 PER 은 지금 주가 ÷ 작년 EPS" : "25 PER·PBR 은 그해 말 주가, 26E·27E 는 지금 주가 기준"}`;
+    ${MK === "US" ? "미국: 추정치는 야후·나스닥 컨센서스(EPS·매출), 나머지는 최근 실적 · 25 PER 은 지금 주가 ÷ 작년 EPS" : "25 PER·PBR 은 그해 말 주가, 26E·27E·28E 는 지금 주가 기준 · <b>ROA</b> = 순이익 ÷ 총자산 — ROE 와 비슷하면 빚이 적고, <b>ROE÷ROA</b> 가 클수록(3배 넘으면 빨강) 빚으로 ROE 를 키운 회사 · <b>배당 26E~28E</b> = 증권사 예상 주당배당금(특별배당·증액 기대 포함) ÷ 지금 주가, <b>배당 25 확정</b> = 작년에 실제 준 배당 ÷ 지금 주가 — 둘 차이가 크면 특별배당 기대가 들어간 것 · 삼성전자우 = 실적 칸은 삼성전자와 같고 PER·PBR·배당률만 달라요 (주가가 달라서) · GPM 은 증권사 예상치가 무료 자료에 없어 확정 실적만 · 28E·ROA·예상 FCF 칸은 다음 자료 갱신 뒤 채워져요"}`;
   try { localStorage.setItem(T.save, JSON.stringify(S)); } catch (_) {}
 }
 // 아래 종목 칸으로 스크롤 + 잠깐 테두리 (jumpBar 와 같은 모양) — 칸이 없으면 false

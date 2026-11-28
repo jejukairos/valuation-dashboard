@@ -137,12 +137,17 @@ def kr_row(wise, hist, price, cap, px, own_cap=True):
         "peg": peg, "peg_how": peg_how,
         "opm": [rnd(w(v, "opm"), 1) for v in ys],
         # 25 = 그해 말 주가 기준(와이즈리포트 값), 26E·27E = 지금 주가 ÷ 추정 EPS·BPS
-        "per": [w(y - 1, "per")] + [rnd(price / w(v, "eps")) if (w(v, "eps") or 0) > 0 else None for v in (y, y + 1)],
-        "pbr": [w(y - 1, "pbr")] + [rnd(price / w(v, "bps"), 2) if (w(v, "bps") or 0) > 0 else None for v in (y, y + 1)],
-        "roe": [rnd(w(v, "roe"), 1) for v in ys[:3]],
+        # 사용자 11/28 "밸류·재무도 28E 까지 다": PER·PBR·ROE·배당·PSR·예상 FCF 를 28E 까지 (칸 순서 = years · 배당·PSR·예상 FCF 는 26E 부터)
+        "per": [w(y - 1, "per")] + [rnd(price / w(v, "eps")) if (w(v, "eps") or 0) > 0 else None for v in (y, y + 1, y + 2)],
+        "pbr": [w(y - 1, "pbr")] + [rnd(price / w(v, "bps"), 2) if (w(v, "bps") or 0) > 0 else None for v in (y, y + 1, y + 2)],
+        "roe": [rnd(w(v, "roe"), 1) for v in ys],
+        "roa": [rnd(w(v, "roa"), 1) for v in ys],  # 순이익 ÷ 총자산 — ROE 와 비슷하면 빚이 적음 (사용자 11/28)
+        "dy_last": rnd(w(y - 1, "dps") / price * 100, 2) if w(y - 1, "dps") is not None and price else None,  # 작년에 실제 준 배당 ÷ 지금 주가 (예상 칸과 차이 = 특별배당·증액 기대)
         "debt": [rnd(w(v, "debt"), 0) for v in ys],
         "dd52": _drawdown(px),
-        "dy": [rnd(w(v, "dps") / price * 100, 2) if w(v, "dps") is not None else None for v in (y, y + 1)],
+        "dy": [rnd(w(v, "dps") / price * 100, 2) if w(v, "dps") is not None else None for v in (y, y + 1, y + 2)],
+        "psr_y": [rnd(cap / (w(v, "sales") * 1e8), 2) if (own_cap and cap and (w(v, "sales") or 0) > 0) else None for v in ys[1:]],  # 시가총액 ÷ 그해 예상 매출(억원)
+        "fcf_e": [w(v, "fcf") * 1e8 if w(v, "fcf") is not None else None for v in ys[1:]],  # 예상 잉여현금흐름 (원)
         # P/FCF = 지금 시가총액 ÷ 잉여현금흐름(억원) — 버핏이 말하는 '주주 몫 이익'에 가까운 현금 기준 배수 (25 = 확정 실적)
         "pfcf": [rnd(cap / (w(v, "fcf") * 1e8), 1) if (own_cap and cap and (w(v, "fcf") or 0) > 0) else None for v in ys],
     }
@@ -176,6 +181,8 @@ def us_row(code, hist, price, cap, px, ltg_cmp=None, my_per=None):
             eq = bs.loc["Stockholders Equity", bs.columns[0]]
             out["debt"][0] = rnd(liab / eq * 100, 0) if eq > 0 else None
             out["roe"][0] = rnd(inc.loc["Net Income", c0] / eq * 100, 1) if eq > 0 else None
+            ta = bs.loc["Total Assets", bs.columns[0]] if "Total Assets" in bs.index else None
+            out["roa"] = [rnd(inc.loc["Net Income", c0] / ta * 100, 1) if ta and ta > 0 else None]  # 미국은 확정 연간만 (예상 총자산은 무료 자료 없음)
     except Exception:  # noqa: BLE001
         pass
     info = tk.info
@@ -184,7 +191,7 @@ def us_row(code, hist, price, cap, px, ltg_cmp=None, my_per=None):
     if info.get("dividendRate"):
         out["dy"][0] = rnd(info["dividendRate"] / price * 100, 2)
     eps = lambda yy: (hist.get(yy) or {}).get("eps")  # noqa: E731
-    out["per"] = [rnd(price / eps(v)) if (eps(v) or 0) > 0 else None for v in (y - 1, y, y + 1)]
+    out["per"] = [rnd(price / eps(v)) if (eps(v) or 0) > 0 else None for v in (y - 1, y, y + 1, y + 2)]  # 28E 까지 (사용자 11/28)
     per12 = C.per12(price, hist)
     # EPS 성장률: 작년 실적 → 28E 3년 연평균 (나스닥 추정이 없으면 내년까지 2년 연평균)
     eps_cagr = _cagr(eps(y + 2), eps(y - 1), 3) if eps(y + 2) else _cagr(eps(y + 1), eps(y - 1), 2)
