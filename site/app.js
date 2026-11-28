@@ -4617,7 +4617,19 @@ async function renderFeed() {
     return feedEst(est) + codes.map((c) => stock(oth.filter((x) => x.code === c))).join("") + oth.filter((x) => !(x.code && x.name)).map(row).join(""); };
   // 맨 위 = 오늘 (사용자 11/13 "당일 올라온 게 제일 위") — 예전 '💼 보유 최근 2일' 칸은 어제 것이 오늘보다 위에 와서 지움
   const head = `<div class="kidbox" style="margin-bottom:10px">🐣 최근 7일 바뀐 것 ${it.filter(isData).length}개 (${cnt(it.filter(isData))}) · 오늘 것이 맨 위 · 같은 날 안에서는 보유 → 관심 → 공동 → 시장·업종 순서<br>
-    ⏱ <b>증권사 리포트는 뒤따라와요.</b> 보통 주가가 먼저 움직이고, 목표가는 그 뒤에 바뀌면서 이유가 붙어요. 그래서 '올렸다·내렸다'보다 <b>📐 근거(무엇 × 몇 배)가 새로운지</b>, 다른 사람들도 따라올 만한 논리인지를 봐요. 줄마다 '리포트 전 1개월 주가'를 같이 적어 뒀어요.</div>`;
+    ⏱ <b>증권사 리포트는 뒤따라와요.</b> 보통 주가가 먼저 움직이고, 목표가는 그 뒤에 바뀌면서 이유가 붙어요. 그래서 '올렸다·내렸다'보다 <b>📐 근거(무엇 × 몇 배)가 새로운지</b>, 다른 사람들도 따라올 만한 논리인지를 봐요. 줄마다 '리포트 전 1개월 주가'를 같이 적어 뒀어요.
+    <details style="margin-top:6px"><summary><b>ⓘ 이 탭 소식은 어디서 가져오나요</b></summary><ul class="irl">
+      <li><b>🧾 실적</b> — 금융감독원 전자공시(DART) 잠정 실적 공시 + 회사 IR 자료·컨콜을 읽고 정리한 것</li>
+      <li><b>📑 리포트</b> — 한경 컨센서스(consensus.hankyung.com)의 리포트 목록과 원문 PDF</li>
+      <li><b>🌏 증권사 요약</b> — 텔레그램 리포트 채널: 에픽 AI(ked_epic_ai)·DOC_POOL(요약 + 원문 PDF)·해외 증권사 요약(bumgore·에테르). 근거·어조·리스크는 그 글이나 PDF 앞 8쪽을 Claude가 읽고 요약 — 줄마다 📍에 어디서 읽었는지 적어요</li>
+      <li><b>📈 이익 추정치</b> — 한국은 와이즈리포트 영업이익 컨센서스, 미국은 야후 EPS 컨센서스 (1주 전과 ±3% 넘게 달라진 것만)</li>
+      <li><b>📢 중요 공시</b> — DART 공시 목록</li>
+      <li><b>📦 수출</b> — 관세청 수출입 통계 + 1~10일·20일 잠정치는 교보·다올·TRASS 텔레그램 글</li>
+      <li><b>🏁 시총 순위</b> — 네이버 증권 업종별 시가총액 (평일 하루 두 번)</li>
+      <li><b>📌 사건·🗓 일정</b> — 손으로 적어 둔 메모 (받은 글·공시)</li>
+      <li><b>⏱ 리포트 전 1개월 주가</b> — 우리 주가 자료(한국 네이버·미국 야후 종가)로 계산</li>
+      <li><b>🛠 사이트 반영</b> — 이 사이트를 고친 기록</li>
+    </ul><div class="src">증권사 요약 글은 채널이 다시 쓴 글이라 원문보다 정보가 적고 숫자가 틀릴 때가 있어요. 중요한 숫자는 원문 PDF로 확인해요.</div></details></div>`;
   const day = (d, i) => {
     const xs = it.filter((x) => x.d === d), data = xs.filter(isData), site = xs.filter((x) => !isData(x));
     const grp = Object.keys(FG).map((g) => { const ys = data.filter((x) => x.g === g); return ys.length ? `<div style="margin-top:12px"><b style="font-size:16px">${FG[g]}</b> <span class="src">${ys.length}개</span>${group(ys)}</div>` : ""; }).join("");
@@ -7689,7 +7701,8 @@ function repMerge(code, r) {
     if (!x.firm || x.est_w != null || x.rev || x.sum) continue;
     const y = find(x.d, x.firm, x.tp);
     if (y) { y.links.push(x); y.tp ??= x.tp; y.tp_prev ??= x.tp_prev; y.tp_dir ||= x.dir; }
-    else rows.push({ d: x.d, hm: x.hm, firm: x.firm, t: x.t, tp: x.tp, tp_prev: x.tp_prev, tp_dir: x.dir, links: [x] });
+    if (y) y.who ||= x.who;
+    else rows.push({ d: x.d, hm: x.hm, firm: x.firm, who: x.who, t: x.t, tp: x.tp, tp_prev: x.tp_prev, tp_dir: x.dir, links: [x] });
   }
   for (const m of r?.notes || []) { const y = find(m.d, m.firm); if (y) y.note = m; else rows.push({ d: m.d, firm: m.firm, t: m.t, tp: m.tp, tp_prev: m.tp_prev, rating: m.rating, note: m, links: [] }); }
   for (const g of DG?.stocks?.[code]?.reps || []) {
@@ -7702,7 +7715,31 @@ function repMerge(code, r) {
   [...rows].sort((a, b) => a.d.localeCompare(b.d)).forEach((x) => { const k = fKey(x.firm); if (x.tp && !x.tp_prev && !x.tp_dir && last[k]) x.tp_prev = last[k]; if (x.tp) last[k] = x.tp; });
   // 방향: 목표가 비교 → 채널이 적은 방향 → 미국 의견 변경(신규 = 커버리지 시작, 상향·하향 = 의견 올림·내림) → 제목에 '커버리지 개시'
   rows.forEach((x) => { x.dir = x.tp && x.tp_prev ? (x.tp > x.tp_prev ? "상향" : x.tp < x.tp_prev ? "하향" : "유지") : x.tp_dir || { 신규: "신규", 상향: "상향", 하향: "하향", 유지: "유지", 재확인: "유지" }[x.act] || (/커버리지\s*개시|신규\s*커버|Initiat/i.test(x.t || "") ? "신규" : ""); });
-  return rows.sort((a, b) => b.d.localeCompare(a.d) || (DIR_ORD[a.dir] ?? 3) - (DIR_ORD[b.dir] ?? 3) || (b.hm || "").localeCompare(a.hm || ""));
+  rows.sort((a, b) => b.d.localeCompare(a.d) || (DIR_ORD[a.dir] ?? 3) - (DIR_ORD[b.dir] ?? 3) || (b.hm || "").localeCompare(a.hm || ""));
+  rows.forEach((x, i) => { x.prev = rows.slice(i + 1).filter((y) => fKey(y.firm) === fKey(x.firm) && y.d < x.d).slice(0, 3); });  // 같은 증권사 지난 리포트 (최신이 앞) — 사용자 11/28 "그 증권사·위원의 리포트 추이"
+  return rows;
+}
+// 🧭 같은 증권사 지난 리포트 → 이번: 목표가 길 + 근거·어조·쓴 사람이 바뀌었나 (요약이 있는 리포트끼리만 비교)
+function repHist(x, mkt) {
+  const P = x.prev || [], g = x.dg || {};
+  if (!P.length) return `<div class="rpt src">🧭 이 증권사의 지난 리포트는 자료(최근 7개월)에 없어요</div>`;
+  const path = [...P].reverse().map((y) => `${mdDay(y.d)} ${y.tp ? tpTxt(y.tp, mkt) : "목표가 없음"}`).join(" → ") + ` → <b>이번 ${x.tp ? tpTxt(x.tp, mkt) : "목표가 없음"}</b>`;
+  const p = P.find((y) => y.dg), pg = p?.dg || {}, w0 = P[0].who || P[0].dg?.who, w1 = x.who || g.who, wk = (s) => s.split(/[,·]/)[0].trim();
+  const chg = [g.val_chg ? `근거 바뀜: ${esc(g.val_chg)}` : g.val && pg.val && g.val !== pg.val ? `근거: 전(${mdDay(p.d)}) “${esc(pg.val)}” → 이번 “${esc(g.val)}”` : g.val && pg.val ? "근거 계산식은 전과 같음" : "",
+    g.tone && pg.tone ? (g.tone !== pg.tone ? `어조 ${esc(pg.tone)} → <b>${esc(g.tone)}</b>` : `어조 ${esc(g.tone)} 그대로`) : "",
+    w0 && w1 && wk(w0) !== wk(w1) ? `쓴 사람 ${esc(w0)} → ${esc(w1)}` : ""].filter(Boolean);
+  return `<div class="rpt src">🧭 이 증권사 흐름 ${path}${chg.length ? `<br>&nbsp;&nbsp;&nbsp;&nbsp;${chg.join(" · ")}` : ""}</div>`;
+}
+// 📐 근거를 어디서 읽었나 (사용자 11/28 "원문 근거가 어디에 있는지도") + 계산식에 EPS·BPS 값이 없으면 목표가 ÷ 배수로 거꾸로 계산
+function repSrc(x) {
+  const g = x.dg || {}, u = g.u || "", a = (h, t) => `<a href="${esc(h)}" target="_blank" rel="noopener">${t}</a>`;
+  return g.idx ? `${a(x.u || `https://consensus.hankyung.com/analysis/downpdf?report_idx=${g.idx}`, "원문 PDF")}${g.val_at ? ` ${esc(g.val_at)}` : " 앞 8쪽"}에서 읽음`
+    : /ked_epic_ai/.test(u) ? `${a(u, "텔레그램 에픽 AI 요약 글")}에서 읽음 (원문 PDF 아님)` : /DOC_POOL/.test(u) ? `${a(u, "텔레그램 DOC_POOL 요약 글")}에서 읽음 (원문 PDF는 같은 글에 붙어 있음)`
+    : u ? `${a(u, "텔레그램 해외 증권사 요약 글")}에서 읽음 (원문 아님)` : x.note ? "사용자가 전해 준 글에서 읽음" : "";
+}
+function repImp(val, tp, mkt) {
+  const m = /(EPS|BPS)\s*×[^0-9×]*([\d.]+)\s*배/.exec(val || "");
+  return m && tp && +m[2] && (val.match(/×/g) || []).length === 1 && !/(EPS|BPS)\s*[\d,.]+\s*(원|달러)/.test(val) ? ` <span class="src">→ 거꾸로 계산하면 ${m[1]} 약 <b>${tpTxt(tp / +m[2], mkt)}</b> (목표가 ÷ ${m[2]}배)</span>` : "";
 }
 const CONS_ICO = { 서프라이즈: "🎉", 상회: "👍", 부합: "➖", 하회: "👎", 쇼크: "💥" }, KIND_CLS = { 확정: "", 예상: "warn", 가정: "bad" };
 // 리포트는 후행 (사용자 11/27 "주가가 먼저 움직이고, 목표가는 뒤따라 바꾸며 논리를 끼워 맞춘다 — 이걸 강조"): 리포트 전날까지 20거래일(약 1개월) 주가 변화
@@ -7720,8 +7757,10 @@ function repRow(x, mkt, code) {
   const cons = Object.keys(CONS_ICO).find((k) => (g.cons_tag || "").includes(k));
   const lag = repLag(code || x.code, x.d), lagWhy = lag == null ? "" : x.dir === "하향" && lag <= -10 ? " → 주가가 먼저 내린 뒤 목표가를 내림 (뒤따라감)" : x.dir === "상향" && lag >= 10 ? " → 주가가 먼저 오른 뒤 목표가를 올림 (뒤따라감)"
     : x.dir === "상향" && lag <= -5 ? " → 주가는 내렸는데 목표가를 올림 (드문 경우 · 근거 확인)" : x.dir === "하향" && lag >= 5 ? " → 주가는 올랐는데 목표가를 내림 (드문 경우 · 근거 확인)" : "";
-  const top = [`<div class="rpt">📐 <b>근거</b> ${val ? esc(val) : `<span class="src">${has ? "요약 글에 계산식이 없어요" : "아직 요약 전"}</span>`}</div>`,
-    pts[0] ? `<div class="rpt">💡 <b>포인트</b> ${esc(pts[0])}</div>` : "",
+  const t0 = cleanT(g.t || nt.t || x.t || ""), ttl = /상향\/하향 보고서|리포트 요약$|^\[[^\]]*\]$/.test(t0) ? "" : t0;  // 채널이 붙인 꼬리표('[에이피알 / 화장품]')는 리포트 제목이 아님
+  const src = repSrc(x), orig = x.u || x.links?.some((y) => y.pdf);
+  const top = [`<div class="rpt">📐 <b>근거</b> ${val ? esc(val) + repImp(val, x.tp, mkt) : `<span class="src">${has ? `요약 글에 목표가 계산식이 안 적혀 있어요${orig ? " — 원문 PDF에서 확인" : ""}` : "원문을 아직 못 읽었어요 (이 컴퓨터가 매시간 읽어요)"}</span>`}${src ? `<div class="src">&nbsp;&nbsp;&nbsp;&nbsp;📍 ${src}</div>` : ""}</div>`,
+    pts[0] ? `<div class="rpt">💡 <b>포인트</b> ${esc(pts[0])}</div>` : "", repHist(x, mkt),
     lag != null ? `<div class="rpt src">⏱ 리포트 전 1개월 주가 <b class="${kcol(lag)}">${sg(lag)}</b>${lagWhy}</div>` : ""].join("");
   const tags = [g.est_dir ? `<b style="color:var(${col(g.est_dir)})">${g.est_dir === "상향" ? "📈" : g.est_dir === "하향" ? "📉" : "➖"} 이익 추정 ${esc(g.est_dir)}</b>` : "",
     cons ? `${CONS_ICO[cons]} 실적 ${esc(g.cons_tag)}` : "", (g.insider || []).length ? `<b style="color:var(--bad-ink)">🚨 임원·대주주</b>` : "", g.tone ? `💬 ${esc(g.tone)}` : ""].filter(Boolean);
@@ -7736,8 +7775,8 @@ function repRow(x, mkt, code) {
     (g.insider || []).length ? `<div class="note" style="background:var(--bad-bg)"><b style="color:var(--bad-ink)">🚨 임원·대표·대주주 매도·증여</b>${li(g.insider)}</div>` : "", sec("✦ 핵심", li(pts))].join("")
     : `<div class="src">요약은 아직 없어요 — 이 컴퓨터 예약 작업이 매시간 새 리포트를 요약해요${x.u || x.links?.length ? " · 지금은 원문에서 확인" : ""}</div>`;
   const edge = x.dir === "상향" ? "var(--good)" : x.dir === "하향" ? "var(--bad)" : "transparent";
-  return `<details class="rpd" style="border-left:3px solid ${edge};padding-left:6px"><summary><span class="src">${mdDay(x.d)}</span> <b>${IB_FIRM.test(x.firm || "") && mkt !== "US" ? "🌍 " : ""}${esc(x.firm || "")}</b>${x.who || g.who ? ` <span class="src">${esc(x.who || g.who)}</span>` : ""} ${tpH}${x.rating ? ` · <span class="src">${rateH(x)}</span>` : ""}${has ? " ✍️" : ""}
-    ${(x.t || g.t) && !/상향\/하향 보고서/.test(x.t || "") ? `<div class="src rpt">“${esc(cleanT(g.t || x.t))}”</div>` : ""}${top}${tags.length ? `<div class="rpt" style="font-size:13px">${tags.join(" · ")}</div>` : ""}
+  return `<details class="rpd" style="border-left:3px solid ${edge};padding-left:6px"><summary><span class="src">${mdDay(x.d)}</span> ${tpH}${x.rating ? ` · <span class="src">${rateH(x)}</span>` : ""}${has ? " ✍️" : ""}
+    <div class="rpt">${ttl ? `<b style="font-size:15px">“${esc(ttl)}”</b> — ` : ""}<b>${IB_FIRM.test(x.firm || "") && mkt !== "US" ? "🌍 " : ""}${esc(x.firm || "")}</b> <span class="src">${esc(x.who || g.who || "쓴 사람 이름 없음")}</span></div>${top}${tags.length ? `<div class="rpt" style="font-size:13px">${tags.join(" · ")}</div>` : ""}
     <div class="rpt src">${links.length ? links.join(" · ") : "원문 링크 없음"}${has ? " · 눌러서 어조·리스크·핵심" : ""}</div></summary><div class="rpb">${body}</div></details>`;
 }
 function repRowsHTML(code, r, max = 8, more = true) {

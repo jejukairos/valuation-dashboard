@@ -3,12 +3,15 @@
 사용자 요청 (2026-11-06) 그대로 정리. 리포트 탭과 보유 탭 '오늘·어제 리포트' 줄을 누르면 이 요약이 보여요.
 저장: 이번에 쓴 것만 새 YAML 파일(PC 예약 작업은 `transcripts/reports/new_digest.yaml`)에 쓰면 `tools/rep_digest.py merge <파일>` 이 `config/rep_digest.yaml` 에 합치고 → `tools/rep_digest.py export` → `site/data/rep_digest.json`.
 종목별 지난 흐름·최근 목표가: `transcripts/reports/_ctx.yaml` (todo 가 만듦) — flow 는 이걸 이어서 새로 씀.
-재료: `transcripts/reports/<번호>.txt` (한경 PDF 앞 8쪽 글자, `tools/rep_digest.py todo` 가 만듦) · `transcripts/reports/tg_*.txt` (텔레그램 리포트 요약 글).
+재료: `transcripts/reports/<번호>.txt` (한경 PDF 앞 8쪽 글자, `tools/rep_digest.py todo` 가 만듦) · `transcripts/reports/tg_*.txt` (텔레그램 리포트 요약 글 — `tg_DOC_POOL_*.txt` 는 '요약 + 원문 PDF' 글의 본문, `tools/tg_api_reports.py` 가 만듦. 제목이 "[종목 / 업종]" 뿐이면 `t` 는 본문의 진짜 리포트 제목으로, `who` 도 본문에 있으면 꼭).
 파일 맨 위 `#` 줄에 종목·날짜·증권사·애널리스트·제목·목표가·직전 목표가·idx(한경 번호)·원문 주소가 있어요.
 
 ## 사용자가 가장 먼저 보고 싶은 것 (순서대로)
 1. **목표주가를 올렸나 내렸나, 얼마나** → `tp`, `tp_prev`, `dir`(상향·하향·유지·신규)
 2. **근거(논리)** → `val`: 무엇에 몇 배를 곱했나. 예) "12개월 선행 EPS × 목표 PER 20배", "27년 EPS × PER 13배", "12개월 선행 BPS × PBR 2.3배", "SOTP: 메모리 ○조 + 파운드리 ○조". `val_why`: 왜 그 배수인지 한 줄 (과거 평균·고점, 경쟁사 대비 할인·할증, 성장률 등)
+   - **EPS·BPS 값을 꼭 숫자로** (사용자 11/28 "선행 EPS 값도 적어줘"): "12개월 선행 EPS 22,500원 × 목표 PER 20배" — 글에 값이 없으면 그대로 두기 (화면이 목표가 ÷ 배수로 거꾸로 계산해 붙임)
+   - `val_at`: **그 근거가 원문 어디에 있는지** (사용자 11/28) — 재료의 `[3쪽]` 표시를 보고 "3쪽 밸류에이션 표", "1쪽 요약 글" 처럼. 텔레그램 요약 글이면 빼기 (화면이 '요약 글에서 읽음'이라고 적음)
+   - `val_chg`: 같은 증권사의 바로 전 리포트와 **근거가 바뀌었으면** 한 줄 ("목표 PER 25배 → 28배", "26년 EPS → 27년 EPS 로 기준 연도 넘김") — `_ctx.yaml` 과 `config/rep_digest.yaml` 의 그 증권사 전 리포트를 보고, 모르면 빼기
 3. **어느 증권사의 누가** → `firm`, `who`
 4. **어조** → `tone`: 확신 · 중립 · 조심 중 하나 + `tone_why` 한 줄 ('~할 것'으로 단정하는지, '~라면'·'가정'이 많은지, '불확실'·'지켜볼 필요'가 많은지)
 5. **이익 추정 상향·하향 (절대 빠뜨리지 말 것)** → `est` (숫자 있으면 꼭: "27E 영업이익 2.1조 → 2.3조 +9.5%"), `est_dir`: 상향·하향·유지·혼조

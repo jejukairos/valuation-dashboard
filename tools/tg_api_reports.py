@@ -18,7 +18,8 @@ from tg_reports import DAYS, about, parse  # noqa: E402
 
 SECRETS = Path.home() / ".tg-secrets"
 CHANNELS = {"YoungTiger_stock": "KR", "DOC_POOL": "KR", "aethersemiresearch": "ALL"}  # 사용자 '리포트자료모음' 중 미리보기가 꺼진 3곳 · 에테르 반도체는 한국 종목 해외 리포트도 (사용자 11/3)
-MAX_MSGS = 20000  # 채널당 최대 (7개월이 먼저 끝나면 거기서 멈춤)
+TXT = ROOT / "transcripts" / "reports"
+MAX_MSGS = 20000 # 채널당 최대 (7개월이 먼저 끝나면 거기서 멈춤)
 
 
 def hit(text, names, us):
@@ -30,6 +31,12 @@ def hit(text, names, us):
         elif re.search(rf"{re.escape(n)}(?![가-힣A-Za-z])", text):
             return True
     return False
+
+
+def head(text):
+    """DOC_POOL 글 머리의 '제목: …' · '작성자: 이름 (증권사)' → 진짜 리포트 제목·쓴 사람 (사용자 11/28: 제목과 누가 썼는지 꼭)."""
+    t, w = re.search(r"^제목:\s*(.+)$", text, re.M), re.search(r"^작성자:\s*([^(\n]+)", text, re.M)
+    return {**({"t": t.group(1).strip()} if t else {}), **({"who": w.group(1).strip()} if w and w.group(1).strip() else {})}
 
 
 async def fetch(cut):
@@ -64,7 +71,7 @@ def main():
             import time
             time.sleep(60)
     sy = load_yaml("stocks.yaml")
-    stocks, seen = {}, set()
+    stocks, seen, txt_cut = {}, set(), datetime.now(timezone.utc) - timedelta(days=4)
     for h in [x for k in ("holdings", "watchlist", "joint") for x in (sy.get(k) or [])]:
         code = str(h["code"])
         if h.get("data_code") or code in seen:
@@ -79,8 +86,16 @@ def main():
             for mid, dt, text, pdf in raw.get(ch, []):
                 if hit(text, names, us) and about(text, names):
                     kst = dt.astimezone(timezone(timedelta(hours=9)))
-                    posts.append({"d": kst.strftime("%Y-%m-%d"), "hm": kst.strftime("%H:%M"), "ch": ch,
-                                  "u": f"https://t.me/{ch}/{mid}", **({"pdf": True} if pdf else {}), **parse(text, names)})
+                    p = {"d": kst.strftime("%Y-%m-%d"), "hm": kst.strftime("%H:%M"), "ch": ch,
+                         "u": f"https://t.me/{ch}/{mid}", **({"pdf": True} if pdf else {}), **parse(text, names)}
+                    p.update(head(text) if pdf else {})
+                    posts.append(p)
+                    # 증권사 리포트 글(요약 + PDF)은 글 본문을 한 장 요약 재료로 남김 (사용자 11/28 "근거가 '아직 요약 전'이 말이 돼?") — transcripts/ 는 git 에 안 올라감, rep_digest.py todo 가 집어 감
+                    f = TXT / f"tg_{ch}_{mid}.txt"
+                    if pdf and p.get("firm") and dt >= txt_cut and not f.exists():
+                        TXT.mkdir(parents=True, exist_ok=True)
+                        f.write_text(f"# {h['name']} ({code}) · {p['d']} {p['hm']} · {p['firm']} · 텔레그램 {ch} (요약 글 + 원문 PDF)\n# 제목: {p.get('t', '')}\n"
+                                     f"# 목표가 {p.get('tp')} · 직전 {p.get('tp_prev')} · 방향 {p.get('dir', '')}\n# 원문: {p['u']}\n\n{text}", encoding="utf-8")
         if posts:
             stocks[code] = sorted(posts, key=lambda p: p["d"], reverse=True)[:30]
     write_json(DATA / "tg_api.json", {"updated_at": now_kst().strftime("%Y-%m-%d %H:%M"), "channels": list(CHANNELS),
@@ -102,6 +117,7 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--test"]:
         assert hit("9. 두산(000150) 목표가 상향", ["두산", "000150"], False) and not hit("두산에너빌리티 수주", ["두산"], False)
         assert hit("NVDA beats, $MU next", ["엔비디아", "NVDA"], True) and not hit("NVDAX fund", ["NVDA"], True)
+        assert head("[에이피알 / 화장품]\n제목: 중요한 시기\n작성자: 한유정 (한화투자증권)\n") == {"t": "중요한 시기", "who": "한유정"} and head("그냥 글") == {}
         print("ok")
     else:
         main()

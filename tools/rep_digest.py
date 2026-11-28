@@ -89,7 +89,7 @@ def pdf_text(url, pages=8, cap=14000):
     r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
     r.raise_for_status()
     P = pypdf.PdfReader(io.BytesIO(r.content)).pages
-    return "\n".join((p.extract_text() or "") for p in P[:pages])[:cap], len(P)
+    return "\n".join(f"[{i + 1}쪽]\n{p.extract_text() or ''}" for i, p in enumerate(P[:pages]))[:cap], len(P)  # 쪽 표시 = 근거가 원문 어디에 있는지 (val_at)
 
 
 fk = lambda f: re.sub(r"\s", "", (f or "").replace("한투", "한국"))[:2].upper()  # noqa: E731 - 증권사 앞 두 글자 (app.js fKey 와 같음)
@@ -124,8 +124,21 @@ def todo(days=3, mx=10):
             ok = S[code]["name"] in x.get("t", "") and ((x["ch"] == "ked_epic_ai" and "리서치 요약" in x.get("t", "")) or (x["ch"] in ("bumgore", "aethersemiconductor") and x.get("ib")))  # 에테르 새 채널 (사용자 11/6: 미국·외국계 리포트)
             if ok and x["d"] >= cut and x["u"] not in have_u and not any((code, d, fk(x.get("firm"))) in hk for d in (x["d"], prev(x["d"]))):
                 rows.append((S[code], {**x, "tg": True}))
+    # ③ 텔레그램 API 채널(DOC_POOL)의 '요약 + 원문 PDF' 글 — 한경에도 에픽 요약에도 없는 증권사 리포트 (사용자 11/28: 근거가 '아직 요약 전'이면 안 됨)
+    #    글 본문은 tools/tg_api_reports.py 가 이미 써 둔 파일만 (미리보기가 꺼진 채널이라 여기서는 못 받음) · 같은 종목·날·증권사는 하나만
+    try:
+        A = json.loads((ROOT / "site" / "data" / "tg_api.json").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        A = {}
+    done = {(c, r.get("d"), fk(r.get("firm"))) for c, v in D.items() for r in (v.get("reps") or [])} | {(s["code"], x["d"], fk(x.get("firm"))) for s, x in rows}
+    for code, L in (A.get("stocks") or {}).items():
+        for x in L if code in S else []:
+            k = (code, x["d"], fk(x.get("firm")))
+            if x.get("pdf") and x.get("firm") and x["d"] >= cut and k not in done and k not in hk and (TXT / f"tg_{x['ch']}_{x['u'].rsplit('/', 1)[-1]}.txt").exists():
+                done.add(k)
+                rows.append((S[code], {**x, "tg": True}))
     TXT.mkdir(parents=True, exist_ok=True)
-    sent = set((TXT / ".sent").read_text(encoding="utf-8-sig").split()) if (TXT / ".sent").exists() else set()  # 이미 Claude 에 넘긴 파일 (요약할 게 없다고 뺀 글을 매시간 다시 넘기지 않게)
+    sent =set((TXT / ".sent").read_text(encoding="utf-8-sig").split()) if (TXT / ".sent").exists() else set()  # 이미 Claude 에 넘긴 파일 (요약할 게 없다고 뺀 글을 매시간 다시 넘기지 않게)
     name = lambda x: f"tg_{x['u'].split('t.me/', 1)[-1].replace('/', '_')}.txt" if x.get("tg") else f"{x['u'].rsplit('=', 1)[-1]}.txt"  # noqa: E731
     rows = sorted([p for p in rows if name(p[1]) not in sent], key=lambda p: (-int(p[1]["d"].replace("-", "")), GRP.get(p[0]["group"], 9)))
     out = []
