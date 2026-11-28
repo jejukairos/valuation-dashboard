@@ -195,7 +195,7 @@ holdings:
 watchlist:
   - {name: 현대모비스, market: KR, code: "012330", industry: 자동차부품, methods: [PER], sector: 자동차}
   - {name: 한국전력, market: KR, code: "015760", industry: 전력, methods: [PBR, PER], fair_methods: [PBR]}
-  - {name: 하이브, market: KR, code: "352820", industry: 엔터, methods: [PER]}
+  # 하이브는 2026-11-28 사용자 요청으로 공동자산(joint)으로 옮김 — 관심에 다시 넣지 말 것
   - {name: 대한항공, market: KR, code: "003490", industry: 항공, methods: [PBR, PER], fair_methods: [PBR]}
   - {name: LIG디펜스앤에어로스페이스, market: KR, code: "079550", industry: 방산, methods: [PER], sector: 방산}
   - {name: 한국항공우주, market: KR, code: "047810", industry: 방산, methods: [PER], sector: 방산}
