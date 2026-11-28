@@ -71,6 +71,20 @@ async function pxq(q) {
 
 // 📄 받아 적은 원문: 저장소엔 암호 파일(site/data/irnote/<이름>.bin, tools/irnote_seal.mjs)만 있고,
 // 로그인한 사람만 /irnote/<이름> 으로 풀어 본다. 열쇠는 Cloudflare 환경 변수 IRNOTE_KEY (코드·저장소에 없음).
+// ✏️ 내 차트에 그은 선을 서버에도 저장 (사용자 11/28 "긋고 나면 계속 저장해 줘 — 업데이트 뒤 초기화돼서 불편") — 비밀번호를 넣은 사람만.
+//   Cloudflare KV 를 DRAW 라는 이름으로 연결해야 켜짐 (없으면 {off} → 화면은 그 기기에만 저장). 값 = {열쇠: {v, t 밀리초}}, 열쇠마다 더 새것(t)이 이김.
+export async function drawSync(ctx) {
+  const kv = ctx.env.DRAW;
+  if (!kv) return J({ off: 1 });
+  const cur = JSON.parse((await kv.get("all")) || "{}");
+  if (ctx.request.method !== "PUT") return J(cur);
+  const txt = await ctx.request.text();
+  if (txt.length > 2e6) return J({ err: "너무 큼" }, 413);
+  let n = 0;
+  for (const [k, x] of Object.entries(JSON.parse(txt) || {})) if (/^draw:[\w.^=-]{1,24}$/.test(k) && x && +x.t > (cur[k]?.t || 0)) { cur[k] = { v: x.v, t: +x.t }; n++; }
+  if (n) await kv.put("all", JSON.stringify(cur));
+  return J({ ok: 1, n });
+}
 async function irnote(ctx, name) {
   const H = { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" };
   const k = ctx.env.IRNOTE_KEY;
@@ -133,6 +147,7 @@ s+='쿠키 사용: '+navigator.cookieEnabled+'\\n';o.textContent=s;})();</script
   if (cookie.split(/;\s*/).includes(`${COOKIE}=${good}`)) {
     const path = new URL(ctx.request.url).pathname;
     if (path.startsWith("/irnote/")) return irnote(ctx, path.slice(8));
+    if (path === "/draw-sync") { try { return await drawSync(ctx); } catch { return J({ err: "저장 실패" }, 500); } }
     try {
       if (path.startsWith("/px/")) return await px(path.slice(4));
       if (path === "/pxq") return await pxq(new URL(ctx.request.url).searchParams.get("q") || "");

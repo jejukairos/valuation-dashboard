@@ -18,7 +18,42 @@ const DW = { code: "", name: "", dec: 0, tf: "w", tool: "", sel: -1, pend: null,
 const dwDef = (k) => ({ c: k === "p" ? DW_PEN : "#2962ff", w: k === "p" ? 4 : 1, ...DW.def[k] });
 const DWG = { W: 0, H: 0, pw: 0, ph: 0, ax: 60, bx: 24 };
 const dwGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (_) { return d; } };
-const dwSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* 사생활 보호 창이면 화면에만 */ } };
+// ☁ 서버에도 저장 (사용자 11/28 "긋고 나면 계속 저장해 줘 — 업데이트 뒤 초기화돼서 불편"): 선(draw:코드)·검색 목록·색 기본값·거꾸로 → /draw-sync
+//   (functions/_middleware.js drawSync · Cloudflare KV 'DRAW' 가 연결돼 있을 때만, 아니면 지금처럼 그 기기에만) · 열쇠마다 더 새것(t)이 이김 · 보던 종목·도구 자리·공시 켬은 기기마다
+const DW_LOCAL = /^draw:(last|tb|ts|fil2)$/, DWS = { q: {}, tm: 0, off: false };
+const dwPut = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* 사생활 보호 창이면 화면에만 */ } };
+const dwSet = (k, v, t = Date.now()) => {
+  dwPut(k, v);
+  if (DW_LOCAL.test(k)) return;
+  dwPut("draw:ts", { ...dwGet("draw:ts", {}), [k]: t });
+  if (DWS.off) return;
+  DWS.q[k] = { v, t }; clearTimeout(DWS.tm); DWS.tm = setTimeout(dwPush, 1500);
+};
+async function dwPush() {
+  const q = DWS.q; DWS.q = {}; clearTimeout(DWS.tm);
+  if (DWS.off || !Object.keys(q).length) return;
+  try { const r = await (await fetch("/draw-sync", { method: "PUT", body: JSON.stringify(q), keepalive: true })).json(); if (r.off) DWS.off = true; else if (!r.ok) throw 0; }
+  catch (_) { DWS.q = { ...q, ...DWS.q }; }  // 못 보냈으면 다음 저장 때 같이
+}
+addEventListener("pagehide", dwPush);
+async function dwPull() {  // 처음 열 때: 서버 것이 더 새것이면 받아 오고, 이 기기 것이 더 새것이거나 서버에 없으면 올림
+  let S;
+  try { S = await (await fetch("/draw-sync", { cache: "no-store" })).json(); } catch (_) { return; }
+  const lab = document.getElementById("dwSync");
+  if (!S || S.off || S.err) { DWS.off = !!S?.off; return; }
+  if (lab) lab.textContent = "☁ 서버에도 저장 (다른 기기·브라우저에서도 같은 선)";
+  const ts = dwGet("draw:ts", {}), keys = new Set(Object.keys(S));
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith("draw:") && !DW_LOCAL.test(k)) keys.add(k); } } catch (_) { /* 저장소를 못 읽으면 서버 것만 */ }
+  for (const k of keys) {
+    const x = S[k], loc = dwGet(k, null), lt = ts[k] || 0;
+    if (x && loc != null && !lt && Array.isArray(loc) && Array.isArray(x.v) && loc.length) {  // 이 기능 전에 그은 선 (시각 없음) + 서버에도 있음 → 합침
+      const has = new Set(x.v.map((d) => JSON.stringify(d))); dwSet(k, [...x.v, ...loc.filter((d) => !has.has(JSON.stringify(d)))]);
+    } else if (x && x.t > lt) { dwPut(k, x.v); dwPut("draw:ts", { ...dwGet("draw:ts", {}), [k]: x.t }); }
+    else if (loc != null && (!x || lt > x.t)) dwSet(k, loc, lt || Date.now());
+  }
+  DW.def = dwGet("draw:def", null) || DW.def; DW.extra = dwGet("draw:extra", null) || DW.extra;
+  if (DW.code && !DW.pend) { const dr = dwGet("draw:" + DW.code, []) || []; if (JSON.stringify(dr) !== JSON.stringify(DW.dr)) { DW.dr = dr; DW.snap = JSON.stringify(dr); DW.sel = -1; } dwPickDraw(); dwUi(); if (DW.B) dwSize(); }
+}
 // 📢 중요 공시 표시 (사용자 11/26): data/filings.json (한국 보유·관심·공동, 최근 1년 — 자사주·소각·임원/대주주 매매·공급계약 …) 을 그 날짜 봉 위에 동그라미로
 // '📢 공시' 단추로 켜고 끔 (이 기기에 기억, 작은 캔들에도 같이). 국민연금의 매일 사고팖은 뺌 (타임라인과 같게). FILINGS = app.js 가 상세 화면에서 쓰는 그 자료
 DW.fil = dwGet("draw:fil2", false);  // 기본은 안 보임 (사용자 11/28 "차트 기본값은 공시 안 보이게") — 열쇠 이름을 바꿔 예전에 저장된 켜짐도 꺼짐으로
@@ -381,6 +416,8 @@ function dwInit() {
   DW.tf = DW_TF.some(([k]) => k === last.tf) ? last.tf : "w";
   DW.def = dwGet("draw:def", null) || {};
   DW.extra = dwGet("draw:extra", null) || [{ code: "KOSPI", name: "코스피", idx: 1, keep: 1 }, { code: "KOSDAQ", name: "코스닥", idx: 1, keep: 1 }];
+  try { navigator.storage?.persist?.(); } catch (_) { /* 브라우저가 저장 공간을 비울 때 선이 같이 지워지지 않게 부탁 (안 돼도 그대로) */ }
+  dwPull();
   const cv = $("#dwCv"), box = $("#dwBox"), PT = new Map();
   let g0 = null, pz = null, tapAt = 0;
   new ResizeObserver(dwSize).observe(box);
